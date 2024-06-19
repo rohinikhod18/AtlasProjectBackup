@@ -1,0 +1,73 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+	<int:channel id="FUNDS_OUT.ERROR.CHANNEL"/>
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<task:executor id="FUNDS_OUT.SPLITTER.channel.executor"
+		pool-size="15-25" queue-capacity="5000" keep-alive="15"
+		rejection-policy="CALLER_RUNS" />
+
+	<int:chain id="fundsout.response" input-channel="FUNDS_OUT.RESPONSE"
+		output-channel="nullChannel">
+		<int:service-activator ref="fundsout.replyHandler" />
+	</int:chain>
+
+	<bean id="fundsOutDBService"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl" />
+		
+	<bean
+		id="activityDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl"/>
+	<!-- <bean id="fundsout.EventDB"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.EventDBServiceImpl" /> -->
+	<bean id="fundsout.MsgValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsout.MessageValidator" />
+	<bean id="fundsout.DataValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsout.DataValidator" />
+	<bean id="fundsout.replyHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.ReplyHandler" />
+	<bean id="fundsout.internalRulesTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.InternalRuleServiceTransformer" />
+	<bean id="fundsout.sanctionTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.SanctionTransformer" />
+	<bean id="fundsout.fraugsterTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.FraugsterTransformer" />
+	<!-- <bean id="fundsout.splitter"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.flowcontrol.RequestMessageSplitter" /> -->
+	<bean id="fundsout.responseMessageAggregator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.flowcontrol.FundsOutAggregator" />
+	<!-- <bean id="fundsout.eventDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.EventDBServiceImpl" /> -->
+	<bean id="fundsout.RulesService"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.rules.FundsOutRulesService" />
+	<bean id="fundsout.dataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.DataEnricher" />
+		<bean
+		id="fundsout.customChecksTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.CustomChecksTransformer" />
+		<int:chain
+		id="fundsout.errorChain"
+		input-channel="FUNDS_OUT.ERROR.CHANNEL"
+		output-channel="nullChannel">
+		<int:service-activator id="fundsout.errorHandle"
+			method="logError" ref="fundsout.errorHandler">
+		</int:service-activator>
+	</int:chain>
+	<bean id="fundsout.errorHandler" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutErrorHandler"/>
+</beans>

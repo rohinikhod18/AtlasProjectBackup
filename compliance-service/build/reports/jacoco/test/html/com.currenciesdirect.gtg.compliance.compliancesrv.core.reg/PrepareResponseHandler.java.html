@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PrepareResponseHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.reg</a> &gt; <span class="el_source">PrepareResponseHandler.java</span></div><h1>PrepareResponseHandler.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.reg;
+
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.FundsOutResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+
+<span class="nc" id="L17">public class PrepareResponseHandler {</span>
+
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message) {
+
+<span class="nc" id="L22">		return prepareCreateUpdateResponse(message);</span>
+
+	}
+
+	public Message&lt;MessageContext&gt; prepareCreateUpdateResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L27">		ServiceInterfaceType eventType = message.getPayload().getGatewayMessageExchange().getServiceInterface();</span>
+<span class="nc bnc" id="L28" title="All 3 branches missed.">		switch (eventType) {</span>
+		case PROFILE:
+<span class="nc" id="L30">			setRegistrationRespone(message.getPayload());</span>
+<span class="nc" id="L31">			break;</span>
+		case FUNDSIN:
+		case FUNDSOUT:
+<span class="nc" id="L34">			setFundsoutRespone(message.getPayload());</span>
+<span class="nc" id="L35">			break;</span>
+		default:
+			break;
+		}
+<span class="nc" id="L39">		return message;</span>
+	}
+
+	private void setRegistrationRespone(MessageContext context) {
+<span class="nc" id="L43">		RegistrationResponse response = (RegistrationResponse) context.getGatewayMessageExchange().getResponse();</span>
+	
+<span class="nc bnc" id="L45" title="All 2 branches missed.">		if (response == null) {</span>
+<span class="nc" id="L46">			response = new RegistrationResponse();</span>
+		}
+		//updating response for save to broadcast
+<span class="nc bnc" id="L49" title="All 2 branches missed.">		if (InternalProcessingCode.INV_REQUEST.toString().equals(response.getErrorCode())) {</span>
+<span class="nc" id="L50">			RegistrationServiceRequest registrationServiceRequest = (RegistrationServiceRequest) context</span>
+<span class="nc" id="L51">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L52">			Account account = registrationServiceRequest.getAccount();</span>
+
+<span class="nc" id="L54">			ComplianceAccount complianceAccount = new ComplianceAccount();</span>
+<span class="nc" id="L55">			complianceAccount.setArc(ComplianceReasonCode.MISSINGINFO);</span>
+<span class="nc" id="L56">			complianceAccount.setErrorCode(response.getErrorCode());</span>
+<span class="nc" id="L57">			complianceAccount.setErrorDescription(response.getErrorDescription());</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">			if (null != account ){</span>
+<span class="nc" id="L59">				setComplianceAccountReasonDescription(response, account, complianceAccount);</span>
+			}
+<span class="nc" id="L61">			response.setAccount(complianceAccount);</span>
+<span class="nc" id="L62">			response.setResponseCode(null);</span>
+<span class="nc" id="L63">			response.setResponseDescription(null);</span>
+
+		}
+<span class="nc" id="L66">		response.setCorrelationID(context.getGatewayMessageExchange().getRequest().getCorrelationID());</span>
+<span class="nc" id="L67">		context.getGatewayMessageExchange().setResponse(response);</span>
+<span class="nc" id="L68">	}</span>
+
+	/**
+	 * @param response
+	 * @param account
+	 * @param complianceAccount
+	 */
+	private void setComplianceAccountReasonDescription(RegistrationResponse response, Account account,ComplianceAccount complianceAccount) {
+		
+<span class="nc bnc" id="L77" title="All 2 branches missed.">		if (null != account.getAccSFID()) {</span>
+<span class="nc" id="L78">			complianceAccount.setAccountSFID(account.getAccSFID());</span>
+		}
+<span class="nc bnc" id="L80" title="All 2 branches missed.">		if (null != account.getTradeAccountID()) {</span>
+<span class="nc" id="L81">			complianceAccount.setTradeAccountID(account.getTradeAccountID());</span>
+		}
+<span class="nc bnc" id="L83" title="All 2 branches missed.">		for (Contact contact : account.getContacts()) {</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">			if (null != contact.getContactSFID()) {</span>
+<span class="nc" id="L85">			ComplianceContact complianceContact = new ComplianceContact();</span>
+<span class="nc" id="L86">			complianceContact.setContactSFID(contact.getContactSFID());</span>
+<span class="nc" id="L87">			complianceContact.setResponseCode(response.getResponseCode());</span>
+<span class="nc" id="L88">			complianceContact.setResponseDescription(response.getResponseDescription());</span>
+<span class="nc" id="L89">			complianceAccount.addContact(complianceContact);</span>
+			}
+<span class="nc" id="L91">		}</span>
+<span class="nc" id="L92">	}</span>
+	
+	
+	private void setFundsoutRespone(MessageContext context) {
+<span class="nc" id="L96">		FundsOutResponse response = (FundsOutResponse) context.getGatewayMessageExchange().getResponse();</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">		if (response == null) {</span>
+<span class="nc" id="L98">			response = new FundsOutResponse();</span>
+		}
+<span class="nc" id="L100">		response.setCorrelationID(context.getGatewayMessageExchange().getRequest().getCorrelationID());</span>
+<span class="nc" id="L101">		context.getGatewayMessageExchange().setResponse(response);</span>
+<span class="nc" id="L102">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

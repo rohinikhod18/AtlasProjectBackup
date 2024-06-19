@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>EventDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate</a> &gt; <span class="el_source">EventDBServiceImpl.java</span></div><h1>EventDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.statusupdate.StatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.AbstractDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.DBQueryConstant;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLogSummary;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+<span class="nc" id="L35">public class EventDBServiceImpl extends AbstractDBServiceImpl{</span>
+	
+<span class="nc" id="L37">	private static final Logger LOGGER = LoggerFactory.getLogger(EventDBServiceImpl.class);</span>
+	
+	private static final String PROFILE_STATUS_UPDATE = &quot;PROFILE_STATUS_UPDATE&quot;;
+	
+	/**
+	 * Creates the status update event.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; createStatusUpdateEvent(Message&lt;MessageContext&gt; message){
+<span class="nc" id="L48">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L50">			String orgCode = message.getPayload().getOrgCode();</span>
+<span class="nc" id="L51">			ServiceInterfaceType eventType = message.getPayload().getGatewayMessageExchange().getServiceInterface();</span>
+<span class="nc" id="L52">			OperationEnum operation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+			
+<span class="nc" id="L54">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L55">			String dbEventName = eventType + &quot;_&quot; + operation;</span>
+<span class="nc" id="L56">			Integer createdBy = token.getUserID();</span>
+<span class="nc" id="L57">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L58">			Integer eventId = null;</span>
+<span class="nc" id="L59">			beginTransaction(connection);</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">			if(PROFILE_STATUS_UPDATE.equalsIgnoreCase(dbEventName)) {</span>
+<span class="nc" id="L61">				eventId = handleProfileStatusUpdate(message, connection, orgCode, dbEventName, createdBy);</span>
+			}
+<span class="nc" id="L63">			commitTransaction(connection);</span>
+<span class="nc" id="L64">			message.getPayload().getGatewayMessageExchange().getRequest().addAttribute(Constants.FIELD_EVENTID,eventId);</span>
+		}
+<span class="nc" id="L66">		catch (Exception e) {</span>
+<span class="nc" id="L67">			LOGGER.error(&quot;error in createEvent: {1}&quot;, e);</span>
+<span class="nc" id="L68">			message.getPayload().setFailed(true);</span>
+		} finally {
+			try {
+<span class="nc" id="L71">				closeConnection(connection);</span>
+<span class="nc" id="L72">			} catch (ComplianceException e) {</span>
+<span class="nc" id="L73">				LOGGER.error(&quot;error in createEvent: {1}&quot;, e);</span>
+<span class="nc" id="L74">				message.getPayload().setFailed(true);</span>
+<span class="nc" id="L75">			}</span>
+		}
+<span class="nc" id="L77">		return message;</span>
+	}
+	
+	/**
+	 * Creates the status update event serivce log.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; createStatusUpdateEventSerivceLog(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L87">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+		try {
+<span class="nc" id="L89">			StatusUpdateRequest statusUpdateRequest = messageExchange.getRequest(StatusUpdateRequest.class);</span>
+<span class="nc" id="L90">			EventServiceLog eventServiceLog = (EventServiceLog) statusUpdateRequest.getAdditionalAttribute(Constants.EVENT_SERVICE_LOG);</span>
+<span class="nc" id="L91">			saveIntoEventServiceLog(eventServiceLog);</span>
+<span class="nc" id="L92">			saveIntoEventServiceLogSummary(eventServiceLog);</span>
+<span class="nc" id="L93">		}catch(Exception e) {</span>
+<span class="nc" id="L94">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L95">			LOGGER.error(&quot;Error in EventDBServiceImpl createStatusUpdateEventSerivceLog mapping {1}&quot;, e);</span>
+<span class="nc" id="L96">		}</span>
+<span class="nc" id="L97">		return message;</span>
+	}
+	
+	/**
+	 * Handle profile status update.
+	 *
+	 * @param message the message
+	 * @param connection the connection
+	 * @param orgCode the org code
+	 * @param dbEventName the db event name
+	 * @param createdBy the created by
+	 * @return the integer
+	 * @throws ComplianceException the compliance exception
+	 */
+	private Integer handleProfileStatusUpdate(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			String dbEventName, Integer createdBy) throws ComplianceException {
+		Integer eventId;
+<span class="nc" id="L114">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L115">		StatusUpdateRequest statusUpdateRequest = messageExchange.getRequest(StatusUpdateRequest.class);</span>
+<span class="nc" id="L116">		Account oldAccount = (Account) statusUpdateRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L117">		eventId = saveIntoEvent(connection, orgCode, dbEventName, oldAccount, null, null, createdBy);</span>
+<span class="nc" id="L118">		return eventId;</span>
+	}
+	
+	/**
+	 * Save into event.
+	 *
+	 * @param connection the connection
+	 * @param orgCode the org code
+	 * @param eventType the event type
+	 * @param account the account
+	 * @param paymentInID the payment in ID
+	 * @param paymentOutID the payment out ID
+	 * @param createdBy the created by
+	 * @return the integer
+	 * @throws ComplianceException the compliance exception
+	 */
+	private Integer saveIntoEvent(Connection connection, String orgCode, String eventType, Account account,
+			Integer paymentInID, Integer paymentOutID, Integer createdBy) throws ComplianceException {
+
+<span class="nc" id="L137">		ResultSet rs = null;</span>
+<span class="nc" id="L138">		try (PreparedStatement statement = connection.prepareStatement(</span>
+<span class="nc" id="L139">				DBQueryConstant.INSERT_INTO_EVENT_REGISTRATION.getQuery(), Statement.RETURN_GENERATED_KEYS)) {</span>
+<span class="nc" id="L140">			statement.setString(1, orgCode);</span>
+<span class="nc" id="L141">			statement.setString(2, eventType);</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">			if (null == account.getId())</span>
+<span class="nc" id="L143">				statement.setNull(3, java.sql.Types.INTEGER);</span>
+			else
+<span class="nc" id="L145">				statement.setInt(3, account.getId());</span>
+
+<span class="nc bnc" id="L147" title="All 2 branches missed.">			if (null == account.getVersion())</span>
+<span class="nc" id="L148">				statement.setNull(4, java.sql.Types.INTEGER);</span>
+			else
+<span class="nc" id="L150">				statement.setInt(4, account.getVersion());</span>
+
+<span class="nc bnc" id="L152" title="All 2 branches missed.">			if (null == paymentInID)</span>
+<span class="nc" id="L153">				statement.setNull(5, java.sql.Types.INTEGER);</span>
+			else
+<span class="nc" id="L155">				statement.setInt(5, paymentInID);</span>
+			
+<span class="nc bnc" id="L157" title="All 2 branches missed.">			if (null == paymentOutID)</span>
+<span class="nc" id="L158">				statement.setNull(6, java.sql.Types.INTEGER);</span>
+			else
+<span class="nc" id="L160">				statement.setInt(6, paymentOutID);</span>
+<span class="nc" id="L161">			statement.setInt(7, createdBy);</span>
+<span class="nc" id="L162">			statement.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L163">			statement.executeUpdate();</span>
+<span class="nc" id="L164">			rs = statement.getGeneratedKeys();</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L166">				return rs.getInt(1);</span>
+			}
+<span class="nc" id="L168">		} catch (Exception e) {</span>
+<span class="nc" id="L169">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L171">			closeResultset(rs);</span>
+		}
+<span class="nc" id="L173">		return null;</span>
+	}
+	
+	/**
+	 * Save into event service log.
+	 *
+	 * @param eventServiceLog the event service log
+	 */
+	private void saveIntoEventServiceLog(EventServiceLog eventServiceLog) throws ComplianceException {
+<span class="nc" id="L182">		Connection connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L183">		PreparedStatement eslStmt = null;</span>
+		try {
+<span class="nc" id="L185">			eslStmt = connection.prepareStatement(DBQueryConstant.INSERT_INTO_EVENT_SERVICE_LOG.getQuery());</span>
+<span class="nc" id="L186">			eslStmt.setInt(1, eventServiceLog.getEventId());</span>
+<span class="nc" id="L187">			eslStmt.setInt(2, EntityEnum.getEntityTypeAsInteger(eventServiceLog.getEntityType()));</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">			if (eventServiceLog.getEntityId() != null)</span>
+<span class="nc" id="L189">				eslStmt.setInt(3, eventServiceLog.getEntityId());</span>
+			else
+<span class="nc" id="L191">				eslStmt.setNull(3, Types.INTEGER);</span>
+<span class="nc bnc" id="L192" title="All 2 branches missed.">			if (eventServiceLog.getEntityVersion() != null)</span>
+<span class="nc" id="L193">				eslStmt.setInt(4, eventServiceLog.getEntityVersion());</span>
+			else
+<span class="nc" id="L195">				eslStmt.setNull(4, Types.INTEGER);</span>
+<span class="nc" id="L196">			eslStmt.setString(5, eventServiceLog.getServiceProviderName());</span>
+<span class="nc" id="L197">			eslStmt.setString(6, eventServiceLog.getServiceName());</span>
+<span class="nc" id="L198">			eslStmt.setString(7, &quot;&quot; + eventServiceLog.getProviderResponse());</span>
+<span class="nc" id="L199">			eslStmt.setInt(8, ServiceStatus.getStatusAsInteger(eventServiceLog.getStatus()));</span>
+<span class="nc" id="L200">			eslStmt.setString(9, &quot;&quot; + eventServiceLog.getSummary());</span>
+<span class="nc" id="L201">			eslStmt.setInt(10, eventServiceLog.getCratedBy());</span>
+<span class="nc" id="L202">			eslStmt.setTimestamp(11, eventServiceLog.getCreatedOn());</span>
+<span class="nc" id="L203">			eslStmt.setInt(12, eventServiceLog.getUpdatedBy());</span>
+<span class="nc" id="L204">			eslStmt.setTimestamp(13, eventServiceLog.getUpdatedOn());</span>
+<span class="nc" id="L205">			eslStmt.executeUpdate();</span>
+<span class="nc" id="L206">		} catch (Exception e) {</span>
+<span class="nc" id="L207">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L209">			closePrepareStatement(eslStmt);</span>
+<span class="nc" id="L210">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L212">	}</span>
+	
+	/**
+	 * AT-2248
+	 * 
+	 * This is for single update flow 
+	 * 
+	 * Save into event service log summary.
+	 *
+	 * @param eventServiceLogs the event service logs
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void saveIntoEventServiceLogSummary(EventServiceLog eventServiceLogs) throws ComplianceException {
+<span class="nc" id="L225">		Connection connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L226">		List&lt;EventServiceLogSummary&gt; eventServiceLogSummaryList = new ArrayList&lt;&gt;(); </span>
+		try {
+<span class="nc" id="L228">			Integer eventId = eventServiceLogs.getEventId();</span>
+<span class="nc" id="L229">			eventServiceLogSummaryList = getEventServiceLogDataForCurrentOperation(eventId);</span>
+<span class="nc" id="L230">			insertOrUpdateEventServiceLogSummary(eventServiceLogSummaryList);</span>
+<span class="nc" id="L231">		} catch(Exception e) {</span>
+<span class="nc" id="L232">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L234">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L236">	}</span>
+	
+	/**
+	 * AT-2248
+	 * Gets the event service log data for current operation.
+	 *
+	 * @param eventId the event id
+	 * @return the event service log data for current operation
+	 * @throws ComplianceException the compliance exception
+	 * @throws SQLException the SQL exception
+	 */
+	private List&lt;EventServiceLogSummary&gt; getEventServiceLogDataForCurrentOperation(Integer eventId) throws ComplianceException, SQLException {
+<span class="nc" id="L248">		Connection connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L249">		ResultSet resultSet = null;</span>
+<span class="nc" id="L250">		List&lt;EventServiceLogSummary&gt; eslSummaryList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L251">		try(PreparedStatement preparedStatement = connection.prepareStatement(DBQueryConstant.GET_CURRENT_OPERATION_RECENT_DATA_FROM_EVENT_SERVICE_LOG.getQuery())) {</span>
+<span class="nc" id="L252">			preparedStatement.setInt(1,eventId);</span>
+<span class="nc" id="L253">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">			while(resultSet.next()) {</span>
+<span class="nc" id="L255">				EventServiceLogSummary eslSummary = new EventServiceLogSummary();</span>
+<span class="nc" id="L256">				eslSummary.setEventServiceLogId(resultSet.getInt(&quot;EventServiceLogID&quot;));</span>
+<span class="nc" id="L257">				eslSummary.setEntityType(resultSet.getInt(&quot;EntityType&quot;));</span>
+<span class="nc" id="L258">				eslSummary.setServiceType(resultSet.getInt(&quot;ServiceType&quot;));</span>
+<span class="nc" id="L259">				eslSummary.setStatus(resultSet.getInt(&quot;Status&quot;));</span>
+<span class="nc" id="L260">				eslSummary.setEntityVersion(resultSet.getInt(&quot;EntityVersion&quot;));</span>
+<span class="nc" id="L261">				eslSummary.setEntityId(resultSet.getInt(&quot;EntityID&quot;));</span>
+<span class="nc" id="L262">				eslSummaryList.add(eslSummary);</span>
+<span class="nc" id="L263">			}</span>
+<span class="nc" id="L264">		}catch(Exception e) {</span>
+<span class="nc" id="L265">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		}finally {
+<span class="nc" id="L267">			closeResultset(resultSet);</span>
+<span class="nc" id="L268">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L270">		return eslSummaryList;</span>
+	}
+	
+	/**
+	 * AT-2248
+	 * Insert or update event service log summary.
+	 *
+	 * @param eventServiceLogSummaryList the event service log summary list
+	 * @throws ComplianceException the compliance exception
+	 * @throws SQLException the SQL exception
+	 */
+	private void insertOrUpdateEventServiceLogSummary(List&lt;EventServiceLogSummary&gt; eventServiceLogSummaryList) throws ComplianceException, SQLException{
+<span class="nc" id="L282">		Connection connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L283">		try(PreparedStatement preparedStatement = connection.prepareStatement(DBQueryConstant.INSERT_UPDATE_INTO_EVENT_SERVICE_LOG_SUMMARY.getQuery())) {</span>
+<span class="nc" id="L284">			beginTransaction(connection);</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">			for(EventServiceLogSummary eventServiceLogSummary : eventServiceLogSummaryList) {</span>
+<span class="nc bnc" id="L286" title="All 2 branches missed.">				if(!ServiceStatus.NOT_PERFORMED.getServiceStatusAsInteger().equals(eventServiceLogSummary.getStatus())</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.SERVICE_FAILURE.getServiceStatusAsInteger().equals(eventServiceLogSummary.getStatus())</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.NOT_REQUIRED.getServiceStatusAsInteger().equals(eventServiceLogSummary.getStatus())) {</span>
+<span class="nc" id="L289">					preparedStatement.setInt(1,eventServiceLogSummary.getEntityId());</span>
+<span class="nc" id="L290">					preparedStatement.setInt(2,eventServiceLogSummary.getEntityType());</span>
+<span class="nc" id="L291">					preparedStatement.setInt(3,eventServiceLogSummary.getServiceType());</span>
+<span class="nc" id="L292">					preparedStatement.setInt(4,eventServiceLogSummary.getEventServiceLogId());</span>
+<span class="nc" id="L293">					preparedStatement.setInt(5,eventServiceLogSummary.getStatus());</span>
+<span class="nc" id="L294">					preparedStatement.addBatch();</span>
+				}
+<span class="nc" id="L296">			}</span>
+<span class="nc" id="L297">			preparedStatement.executeBatch();</span>
+<span class="nc" id="L298">			commitTransaction(connection);</span>
+<span class="nc" id="L299">		}catch(Exception e) {</span>
+<span class="nc" id="L300">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		}finally {
+<span class="nc" id="L302">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L304">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

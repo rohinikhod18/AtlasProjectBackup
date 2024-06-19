@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LexisNexisPort.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">kyc-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.kyc.lexisnexisport</a> &gt; <span class="el_source">LexisNexisPort.java</span></div><h1>LexisNexisPort.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.kyc.lexisnexisport;
+
+import java.net.URL;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.xml.namespace.QName;
+import javax.xml.soap.SOAPElement;
+import javax.xml.soap.SOAPMessage;
+
+import org.apache.axis.client.Service;
+import org.apache.axis.message.SOAPHeaderElement;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.Phone;
+import com.currenciesdirect.gtg.compliance.kyc.core.IKYCProviderService;
+import com.currenciesdirect.gtg.compliance.kyc.core.domain.KYCProviderProperty;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCErrors;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCException;
+import com.currenciesdirect.gtg.compliance.kyc.util.Constants;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seisint.webservices.WsIdentity.InstantIDIntl2Request;
+import com.seisint.webservices.WsIdentity.InstantIDIntl2ResponseEx;
+import com.seisint.webservices.WsIdentity.WsIdentityServiceSoapStub;
+
+
+/**
+ * The Class LexisNexisPort.
+ *
+ * @author manish
+ */
+public class LexisNexisPort implements IKYCProviderService, Callable&lt;KYCContactResponse&gt; {
+
+	/** The Constant LOG. */
+<span class="nc" id="L43">	private static final Logger LOG =  LoggerFactory.getLogger(LexisNexisPort.class);</span>
+
+	/** The request. */
+	private KYCContactRequest request;
+
+	/** The property. */
+	private KYCProviderProperty property;
+	
+	/**
+	 * Instantiates a new lexis nexis port.
+	 *
+	 * @param request the request
+	 * @param property the property
+	 */
+<span class="nc" id="L57">	public LexisNexisPort(KYCContactRequest request, KYCProviderProperty property) {</span>
+<span class="nc" id="L58">		this.request = request;</span>
+<span class="nc" id="L59">		this.property = property;</span>
+<span class="nc" id="L60">	}</span>
+	
+	/* (non-Javadoc)
+	 * @see java.util.concurrent.Callable#call()
+	 */
+	@Override
+	public KYCContactResponse call() throws Exception {
+<span class="nc" id="L67">		return checkKYCdetails(request, property);</span>
+	}
+
+	
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.kyc.core.IKYCProviderService#checkKYCdetails(com.currenciesdirect.gtg.compliance.kyc.core.domain.KYCContactRequest, com.currenciesdirect.gtg.compliance.kyc.core.domain.ProviderProperty)
+	 */
+	@Override
+	public KYCContactResponse checkKYCdetails(KYCContactRequest request, KYCProviderProperty property)
+			throws KYCException {
+<span class="nc" id="L78">		KYCContactResponse response = new KYCContactResponse();</span>
+<span class="nc" id="L79">		LexisNexisTransformer lexisNexisTransformer = LexisNexisTransformer.getInstance();</span>
+<span class="nc" id="L80">		String lexisNexisEndpointUrl = null;</span>
+
+		try {
+<span class="nc" id="L83">			keepOnlyAlphaNumbericsInPhone(request.getPhone());</span>
+<span class="nc bnc" id="L84" title="All 4 branches missed.">			if (request.getAddress() != null &amp;&amp; request.getAddress().getPostCode() != null) {</span>
+<span class="nc" id="L85">				request.getAddress().setPostCode(keepOnlyAlphaNumberics(request.getAddress().getPostCode()));</span>
+			}
+<span class="nc" id="L87">			lexisNexisEndpointUrl = property.getEndPointUrl();</span>
+
+<span class="nc" id="L89">			InstantIDIntl2Request idIntl2Request = lexisNexisTransformer.transformRequestObject(request);</span>
+<span class="nc" id="L90">			URL endpointUrl = new URL(lexisNexisEndpointUrl);</span>
+<span class="nc" id="L91">			Service service = new Service();</span>
+<span class="nc" id="L92">			service.getEngine().setOption(SOAPMessage.CHARACTER_SET_ENCODING, &quot;UTF-8&quot;);</span>
+
+<span class="nc" id="L94">			WsIdentityServiceSoapStub wsIdentityServiceSoapStub = new WsIdentityServiceSoapStub(endpointUrl, service);</span>
+<span class="nc" id="L95">			wsIdentityServiceSoapStub.setHeader(getSecurityHeader(property));</span>
+<span class="nc" id="L96">			wsIdentityServiceSoapStub.setTimeout(property.getSocketTimeoutMillis());</span>
+<span class="nc" id="L97">			InstantIDIntl2ResponseEx result = wsIdentityServiceSoapStub.instantIDIntl2(idIntl2Request);</span>
+<span class="nc" id="L98">			ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L99">			String json = mapper.writeValueAsString(result);</span>
+<span class="nc" id="L100">			response.setProviderResponse(json);</span>
+<span class="nc" id="L101">			response.setProviderUniqueRefNo(result.getResponse().getHeader().getQueryId());</span>
+<span class="nc" id="L102">			response.setProviderName(Constants.LEXISNEXIS_PROVIDER);</span>
+<span class="nc" id="L103">			response.setProviderMethod(Constants.LEXISNEXIS_PROVIDER_METHOD);</span>
+<span class="nc" id="L104">			response.setOverallScore(result.getResponse().getResult().getInternationalVerificationIndex());</span>
+<span class="nc" id="L105">			handleLexisNexisResponse(response, result);</span>
+			
+			
+<span class="nc" id="L108">			response.setContactSFId(request.getContactSFId());</span>
+<span class="nc" id="L109">			response.setId(request.getId());</span>
+<span class="nc" id="L110">		} catch (KYCException exception) {</span>
+<span class="nc" id="L111">			response.setBandText(Constants.NOT_PERFORMED);</span>
+<span class="nc" id="L112">			response.setStatus(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L113">			response.setOverallScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L114">			logDebug(exception);</span>
+<span class="nc" id="L115">			response.setContactSFId(request.getContactSFId());</span>
+<span class="nc" id="L116">			response.setId(request.getId());</span>
+<span class="nc" id="L117">			response.setProviderName(Constants.LEXISNEXIS_PROVIDER);</span>
+<span class="nc" id="L118">			response.setProviderMethod(Constants.LEXISNEXIS_PROVIDER_METHOD);</span>
+<span class="nc" id="L119">			response.setErrorCode(exception.getkycErrors().getErrorCode());</span>
+<span class="nc" id="L120">			response.setErrorDescription(exception.getDescription());</span>
+<span class="nc" id="L121">		} catch (Exception e) {</span>
+<span class="nc" id="L122">			LOG.error(&quot; Error in LexisNexisPort : checkKYCdetails()&quot; , e);</span>
+<span class="nc" id="L123">			response.setBandText(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L124">			response.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L125">			response.setOverallScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L126">			response.setContactSFId(request.getContactSFId());</span>
+<span class="nc" id="L127">			response.setId(request.getId());</span>
+<span class="nc" id="L128">			response.setProviderName(Constants.LEXISNEXIS_PROVIDER);</span>
+<span class="nc" id="L129">			response.setProviderMethod(Constants.LEXISNEXIS_PROVIDER_METHOD);</span>
+<span class="nc" id="L130">			response.setErrorCode(KYCErrors.ERROR_WHILE_SENDING_REQUEST_TO_LEXISNEXIS_KYC_PROVIDER.getErrorCode());</span>
+<span class="nc" id="L131">			response.setErrorDescription(KYCErrors.ERROR_WHILE_SENDING_REQUEST_TO_LEXISNEXIS_KYC_PROVIDER.getErrorDescription());</span>
+<span class="nc" id="L132">		}</span>
+<span class="nc bnc" id="L133" title="All 4 branches missed.">		if(property.getAlwaysPass()!=null&amp;&amp;property.getAlwaysPass()){</span>
+<span class="nc" id="L134">			response.setBandText(Constants.PASS);</span>
+<span class="nc" id="L135">			response.setStatus(Constants.PASS);</span>
+		}
+<span class="nc" id="L137">		return response;</span>
+	}
+
+	/**
+	 * Handle lexis nexis response.
+	 *
+	 * @param response the response
+	 * @param result the result
+	 */
+	private void handleLexisNexisResponse(KYCContactResponse response, InstantIDIntl2ResponseEx result) {
+		Integer overAllScore;
+<span class="nc bnc" id="L148" title="All 2 branches missed.">		if (result.getResponse().getResult().getInternationalVerificationIndex() != null) {</span>
+<span class="nc" id="L149">			overAllScore = Integer.parseInt(result.getResponse().getResult().getInternationalVerificationIndex());</span>
+<span class="nc bnc" id="L150" title="All 4 branches missed.">			if (overAllScore &lt;= 50 &amp;&amp; overAllScore &gt;= 40) {</span>
+<span class="nc" id="L151">				response.setBandText(Constants.PASS);</span>
+<span class="nc bnc" id="L152" title="All 4 branches missed.">			} else if (overAllScore &lt;= 40 &amp;&amp; overAllScore &gt;= 30) {</span>
+<span class="nc" id="L153">				response.setBandText(Constants.REFER);</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">			} else if (overAllScore &lt; 30) {</span>
+<span class="nc" id="L155">				response.setBandText(Constants.NO_MATCH);</span>
+			}
+			
+<span class="nc bnc" id="L158" title="All 2 branches missed.">			if(!Constants.PASS.equalsIgnoreCase(response.getBandText())){</span>
+<span class="nc" id="L159">				response.setStatus(Constants.FAIL);</span>
+			}else{
+<span class="nc" id="L161">				response.setStatus(Constants.PASS);</span>
+			}
+		}
+<span class="nc" id="L164">	}</span>
+
+	/**
+	 * Gets the security header.
+	 *
+	 * @param property the property
+	 * @return the security header
+	 * @throws KYCException the KYC exception
+	 */
+	private SOAPHeaderElement getSecurityHeader(KYCProviderProperty property) throws KYCException {
+<span class="nc" id="L174">		String lexisNexisQname = null;</span>
+<span class="nc" id="L175">		String userNameLexisNexis = null;</span>
+<span class="nc" id="L176">		String passWordLexisNexis = null;</span>
+<span class="nc" id="L177">		SOAPHeaderElement headerLexisNexis = null;</span>
+		try {
+<span class="nc" id="L179">			lexisNexisQname = property.getQname();</span>
+<span class="nc" id="L180">			userNameLexisNexis = property.getUserName();</span>
+<span class="nc" id="L181">			passWordLexisNexis = property.getPassWord();</span>
+<span class="nc" id="L182">			QName headerName = new QName(lexisNexisQname, &quot;Security&quot;);</span>
+<span class="nc" id="L183">			headerLexisNexis = new SOAPHeaderElement(headerName);</span>
+<span class="nc" id="L184">			headerLexisNexis.setActor(null);</span>
+<span class="nc" id="L185">			headerLexisNexis.setPrefix(&quot;wsse&quot;);</span>
+<span class="nc" id="L186">			headerLexisNexis.setMustUnderstand(true);</span>
+
+			SOAPElement utElem;
+<span class="nc" id="L189">			utElem = headerLexisNexis.addChildElement(&quot;UsernameToken&quot;);</span>
+<span class="nc" id="L190">			SOAPElement userNameElem = utElem.addChildElement(&quot;Username&quot;);</span>
+<span class="nc" id="L191">			userNameElem.setValue(userNameLexisNexis);</span>
+<span class="nc" id="L192">			SOAPElement passwordElem = utElem.addChildElement(&quot;Password&quot;);</span>
+<span class="nc" id="L193">			passwordElem.setValue(passWordLexisNexis);</span>
+<span class="nc" id="L194">		} catch (Exception exception) {</span>
+<span class="nc" id="L195">			throw new KYCException(KYCErrors.ERROR_GENERATING_SECURITY_HEADER, exception);</span>
+<span class="nc" id="L196">		}</span>
+<span class="nc" id="L197">		return headerLexisNexis;</span>
+	}
+
+
+
+
+	/**
+	 * Log debug.
+	 *
+	 * @param exception the exception
+	 */
+	private void logDebug(Throwable exception) {
+<span class="nc" id="L209">		LOG.debug(&quot;Error in class GBGroup Port :&quot;, exception);</span>
+<span class="nc" id="L210">	}</span>
+	
+	/**
+	 * Keep only alpha numberics in phone.
+	 *
+	 * @param phones the phones
+	 */
+	private  void keepOnlyAlphaNumbericsInPhone(List&lt;Phone&gt; phones){
+<span class="nc bnc" id="L218" title="All 2 branches missed.">		if(phones != null){</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">			for(Phone phone : phones){</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">				if(phone != null){</span>
+<span class="nc" id="L221">					phone.setNumber(keepOnlyNumberics(phone.getNumber()));</span>
+				}
+<span class="nc" id="L223">			}</span>
+		}
+<span class="nc" id="L225">	}</span>
+	
+	/**
+	 * Keep only alpha numberics.
+	 *
+	 * @param orgString the org string
+	 * @return the string
+	 */
+	private String keepOnlyAlphaNumberics(String orgString){
+<span class="nc bnc" id="L234" title="All 4 branches missed.">		if(orgString == null || orgString.trim().isEmpty()){</span>
+<span class="nc" id="L235">			return orgString;</span>
+		}
+<span class="nc" id="L237">		String newString =orgString;</span>
+		
+<span class="nc" id="L239">        Pattern pt = Pattern.compile(&quot;[^a-zA-Z0-9]&quot;);</span>
+<span class="nc" id="L240">        Matcher match= pt.matcher(newString);</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        while(match.find())</span>
+        {
+<span class="nc" id="L243">            String s= match.group();</span>
+<span class="nc" id="L244">            newString=newString.replaceAll(&quot;\\&quot;+s, &quot;&quot;);</span>
+<span class="nc" id="L245">        }</span>
+<span class="nc" id="L246">		return newString;</span>
+		
+	}
+	
+	/**
+	 * Keep only numberics.
+	 *
+	 * @param orgString the org string
+	 * @return the string
+	 */
+	private String keepOnlyNumberics(String orgString){
+<span class="nc bnc" id="L257" title="All 4 branches missed.">		if(orgString == null || orgString.trim().isEmpty()){</span>
+<span class="nc" id="L258">			return orgString;</span>
+		}
+<span class="nc" id="L260">		String newString =orgString.replaceAll(&quot;[a-zA-Z]&quot;, &quot;&quot;);</span>
+		
+<span class="nc" id="L262">        Pattern pt = Pattern.compile(&quot;[^0-9]&quot;);</span>
+<span class="nc" id="L263">        Matcher match= pt.matcher(newString);</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">        while(match.find())</span>
+        {
+<span class="nc" id="L266">            String s= match.group();</span>
+<span class="nc" id="L267">            newString=newString.replaceAll(&quot;\\&quot;+s, &quot;&quot;);</span>
+<span class="nc" id="L268">        }</span>
+<span class="nc" id="L269">		return newString;</span>
+		
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

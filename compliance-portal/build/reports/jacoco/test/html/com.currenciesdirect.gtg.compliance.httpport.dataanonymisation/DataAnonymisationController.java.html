@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataAnonymisationController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.httpport.dataanonymisation</a> &gt; <span class="el_source">DataAnonymisationController.java</span></div><h1>DataAnonymisationController.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.httpport.dataanonymisation;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.ModelAndView;
+
+import com.currenciesdirect.gtg.compliance.core.IAnonymisationService;
+import com.currenciesdirect.gtg.compliance.core.IRegistrationService;
+import com.currenciesdirect.gtg.compliance.core.domain.IRegistrationDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymisationDataRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymisationDto;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymisationFilter;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymisationResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymisationSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationQueueFilter;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationSearchCriteria;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.httpport.BaseController;
+import com.currenciesdirect.gtg.compliance.httpport.ViewControllerConstant;
+import com.currenciesdirect.gtg.compliance.httpport.ViewNameEnum;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.FunctionsAllowed;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.UserPermissionFilterBuilder;
+
+/**
+ * The Class DataAnonymisationController.
+ * 
+ * @author deepakk
+ */
+@Controller
+<span class="fc" id="L47">public class DataAnonymisationController extends BaseController {</span>
+	
+	private static final String DATA_ANONYMISATION_DTO = &quot;dataAnonymisationDto&quot;;
+	
+	@Autowired
+	@Qualifier(&quot;dataAnonymisationServiceImpl&quot;)
+	private IAnonymisationService iAnonymisationService;
+	
+	@Autowired
+	@Qualifier(&quot;registrationServiceImpl&quot;)
+	private IRegistrationService iRegistrationService;
+	
+	
+<span class="fc" id="L60">	private Logger log = LoggerFactory.getLogger(DataAnonymisationController.class);</span>
+	
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_APPROVE_DATA_ANON})
+	@GetMapping(value = &quot;/dataAnon&quot;)
+	public ModelAndView getDataAnonymisationQueue(@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L65">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="fc" id="L66">		DataAnonymisationDto dataAnonymisationDto = null;</span>
+<span class="fc" id="L67">		String jsonUser = JsonConverterUtil.convertToJsonWithNull(user);</span>
+<span class="fc" id="L68">		log.debug(jsonUser);</span>
+		try {
+<span class="fc" id="L70">			DataAnonymisationFilter filter = UserPermissionFilterBuilder</span>
+<span class="fc" id="L71">					.getFilterFromUserPermission(user.getPermissions(), DataAnonymisationFilter.class);</span>
+<span class="fc" id="L72">			filter.setUserProfile(user);</span>
+<span class="fc" id="L73">			DataAnonymisationSearchCriteria searchCriteria = new DataAnonymisationSearchCriteria();</span>
+<span class="fc" id="L74">			searchCriteria.setFilter(filter);</span>
+<span class="fc" id="L75">			modelAndView.setViewName(ViewNameEnum.DATA_ANONYMISATION_QUEUE.getViewName());</span>
+<span class="fc" id="L76">			dataAnonymisationDto = iAnonymisationService.getDataAnonymisationWithCriteria(searchCriteria);</span>
+<span class="fc" id="L77">			dataAnonymisationDto.setUser(user);</span>
+<span class="fc" id="L78">			modelAndView.addObject(DATA_ANONYMISATION_DTO, dataAnonymisationDto);</span>
+<span class="nc" id="L79">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L80">			log.debug(&quot;&quot;, e);</span>
+<span class="nc" id="L81">			dataAnonymisationDto = new DataAnonymisationDto();</span>
+<span class="nc" id="L82">			dataAnonymisationDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L83">			dataAnonymisationDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L84">		}</span>
+<span class="fc" id="L85">		return modelAndView;</span>
+	}
+	
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/dataAnonDetails&quot;)
+	public ModelAndView getRegistrationDetails(@RequestParam(value = &quot;contactId&quot;, required = false) Integer contactId,
+			@RequestParam(value = &quot;custType&quot;, required = false) String custType,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria,
+			@RequestParam(value = &quot;source&quot;, required = false) String source,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+
+<span class="fc" id="L98">		ModelAndView modelAndView = new ModelAndView();</span>
+		IRegistrationDetails registrationDetailsDto;
+		try {
+<span class="fc" id="L101">			RegistrationSearchCriteria searchCriteriaobj = JsonConverterUtil</span>
+<span class="fc" id="L102">					.convertToObject(RegistrationSearchCriteria.class, searchCriteria);</span>
+<span class="pc bpc" id="L103" title="1 of 2 branches missed.">			if (searchCriteriaobj == null) {</span>
+<span class="nc" id="L104">				searchCriteriaobj = new RegistrationSearchCriteria();</span>
+<span class="nc" id="L105">				searchCriteriaobj.setFilter(new RegistrationQueueFilter());</span>
+			}
+<span class="fc" id="L107">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="fc" id="L108">					user.getPermissions());</span>
+<span class="fc" id="L109">			searchCriteriaobj.getFilter().setUserProfile(user);</span>
+
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">			if ((&quot;PFX&quot;).equals(custType)) {</span>
+<span class="fc" id="L112">				modelAndView.setViewName(ViewNameEnum.REGISTRATIN_DETAILS.getViewName());</span>
+			} else {
+<span class="nc" id="L114">				modelAndView.setViewName(ViewNameEnum.CFX_REGISTRATION_DETAILS.getViewName());</span>
+			}
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">			if (isValidRequest(contactId, custType)) {</span>
+<span class="fc" id="L117">				registrationDetailsDto = iRegistrationService.getRegistrationDetails(contactId, custType,</span>
+						searchCriteriaobj);
+<span class="fc" id="L119">				registrationDetailsDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteriaobj));</span>
+			} else {
+<span class="nc" id="L121">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+<span class="nc" id="L123">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L124">			log.debug(&quot;&quot;, e);</span>
+<span class="nc" id="L125">			registrationDetailsDto = new RegistrationDetailsDto();</span>
+<span class="nc" id="L126">			registrationDetailsDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L127">			registrationDetailsDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L128">		}</span>
+<span class="fc" id="L129">		registrationDetailsDto.setIsPagenationRequired(Boolean.TRUE);</span>
+<span class="fc" id="L130">		registrationDetailsDto.setUser(user);</span>
+<span class="fc" id="L131">		registrationDetailsDto.setSource(source);</span>
+<span class="fc" id="L132">		modelAndView.addObject(&quot;regDetails&quot;, registrationDetailsDto);</span>
+<span class="fc" id="L133">		return modelAndView;</span>
+	}
+	
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_REGISTRTION_QUQUE })
+	@PostMapping(value = &quot;/dataAnonQueue&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public DataAnonymisationDto getDataAnonymisationWithCriteria(@RequestBody DataAnonymisationSearchCriteria request,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L143">		DataAnonymisationDto dataAnonymisationDto = null;</span>
+		try {
+<span class="fc" id="L145">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(request.getFilter(), user.getPermissions());</span>
+<span class="fc" id="L146">			request.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L147">			dataAnonymisationDto = iAnonymisationService.getDataAnonymisationWithCriteria(request);</span>
+<span class="fc" id="L148">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L149">			log.debug(&quot;&quot;, e);</span>
+<span class="fc" id="L150">			dataAnonymisationDto = new DataAnonymisationDto();</span>
+<span class="fc" id="L151">			dataAnonymisationDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L152">			dataAnonymisationDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L153">		}</span>
+<span class="fc" id="L154">		dataAnonymisationDto.setUser(user);</span>
+<span class="fc" id="L155">		return dataAnonymisationDto;</span>
+	}
+	
+	private boolean isValidRequest(Integer contactId, String custType) {
+<span class="pc bpc" id="L159" title="2 of 4 branches missed.">		return (null != contactId &amp;&amp; !isNullOrEmpty(custType));</span>
+	}
+	
+	private boolean isNullOrEmpty(String str) {
+<span class="fc" id="L163">		boolean result = true;</span>
+<span class="pc bpc" id="L164" title="2 of 4 branches missed.">		if (str != null &amp;&amp; !str.isEmpty())</span>
+<span class="fc" id="L165">			return false;</span>
+
+<span class="nc" id="L167">		return result;</span>
+	}
+	
+	@PostMapping(value=&quot;/getDataAnonymize&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public boolean getDataAnonymize(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestBody DataAnonymisationDataRequest dataAnonymizeRequest) {
+<span class="fc" id="L176">		boolean dataAnon = false;</span>
+		try {
+<span class="fc" id="L178">			dataAnon = iAnonymisationService.getDataAnonymize(user, dataAnonymizeRequest);</span>
+		}
+<span class="nc" id="L180">		catch(Exception e) {</span>
+<span class="nc" id="L181">			log.debug(&quot;Exception in getDataAnonymize in DataAnonymisationController {1}&quot;, e);</span>
+<span class="fc" id="L182">		}</span>
+<span class="fc" id="L183">		return dataAnon;</span>
+	}
+
+
+	@PostMapping(value=&quot;/updateDataAnon&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public DataAnonymisationResponse updateDataAnonymisation(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestBody DataAnonymisationDataRequest request) {
+		
+<span class="nc" id="L194">		DataAnonymisationResponse dataAnonymisationResponce = new DataAnonymisationResponse();</span>
+		try {
+<span class="nc" id="L196">			dataAnonymisationResponce = iAnonymisationService.updateDataAnonymisation(user, request);</span>
+		}
+<span class="nc" id="L198">		catch(Exception e) {</span>
+<span class="nc" id="L199">			log.error(&quot;Exception in updateDataAnonymisation in DataAnonymisationController {1}&quot;, e);</span>
+<span class="nc" id="L200">		}</span>
+<span class="nc" id="L201">		return dataAnonymisationResponce;</span>
+	}
+
+	
+
+	@PostMapping(value=&quot;/cancelDataAnon&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public boolean cancelDataAnonymisation(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestBody DataAnonymisationDataRequest request) {
+		
+<span class="fc" id="L213">		boolean dataAnon=false;</span>
+		try {
+<span class="fc" id="L215">			dataAnon = iAnonymisationService.cancelDataAnonymisation(user, request);</span>
+		}
+<span class="nc" id="L217">		catch(Exception e) {</span>
+<span class="nc" id="L218">			log.error(&quot;Exception in cancelDataAnonymisation in DataAnonymisationController {1}&quot;, e);</span>
+<span class="fc" id="L219">		}</span>
+<span class="fc" id="L220">		return dataAnon;</span>
+	}
+	
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_APPROVE_DATA_ANON})
+	@PostMapping(value = &quot;/getDataAnonHistory&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public DataAnonymisationDto getDataAnonHistory(@RequestBody DataAnonymisationDataRequest request) {
+
+<span class="fc" id="L230">		DataAnonymisationDto dataAnonymisationDto = null;</span>
+		try {
+<span class="fc" id="L232">			dataAnonymisationDto = iAnonymisationService.getDataAnonHistory(request);</span>
+<span class="fc" id="L233">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L234">			log.debug(&quot; {1}&quot;, e);</span>
+<span class="fc" id="L235">			dataAnonymisationDto = new DataAnonymisationDto();</span>
+<span class="fc" id="L236">			dataAnonymisationDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L237">			dataAnonymisationDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L238">		}</span>
+<span class="fc" id="L239">		return dataAnonymisationDto;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

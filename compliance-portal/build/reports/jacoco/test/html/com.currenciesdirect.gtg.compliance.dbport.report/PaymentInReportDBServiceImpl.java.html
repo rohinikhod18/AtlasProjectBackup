@@ -1,0 +1,591 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PaymentInReportDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport.report</a> &gt; <span class="el_source">PaymentInReportDBServiceImpl.java</span></div><h1>PaymentInReportDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport.report;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.Page;
+import com.currenciesdirect.gtg.compliance.core.domain.Sort;
+import com.currenciesdirect.gtg.compliance.core.domain.SourceEnum;
+import com.currenciesdirect.gtg.compliance.core.domain.TransactionValuesEnum;
+import com.currenciesdirect.gtg.compliance.core.domain.Watchlist;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInQueueData;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.report.PaymentInReportSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.savedsearch.SavedSearch;
+import com.currenciesdirect.gtg.compliance.core.report.IPaymentInReportDBService;
+import com.currenciesdirect.gtg.compliance.dbport.AbstractDBServiceLevel2;
+import com.currenciesdirect.gtg.compliance.dbport.FilterQueryBuilder;
+import com.currenciesdirect.gtg.compliance.dbport.PayInQueDBColumns;
+import com.currenciesdirect.gtg.compliance.dbport.RegQueDBColumns;
+import com.currenciesdirect.gtg.compliance.dbport.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.PaymentMethodEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.ServiceStatusEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.WatchListCategoryEnum;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+
+/**
+ * The Class PaymentInReportDBServiceImpl.
+ */
+@Component(&quot;payInReportDBServiceImpl&quot;)
+<span class="fc" id="L44">public class PaymentInReportDBServiceImpl extends AbstractDBServiceLevel2 implements IPaymentInReportDBService {</span>
+	
+	private PaymentInQueueDto getPaymentInData(Connection con, int offSet, int rowsToFetch,
+			String query, String queryCount) throws CompliancePortalException {
+<span class="fc" id="L48">		List&lt;PaymentInQueueData&gt; paymentInQueueDataList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L49">		PaymentInQueueDto paymentInQueueDto =new PaymentInQueueDto();</span>
+<span class="fc" id="L50">		PreparedStatement stmt = null;</span>
+<span class="fc" id="L51">		PreparedStatement countStmt = null;</span>
+<span class="fc" id="L52">		ResultSet rs = null;</span>
+<span class="fc" id="L53">		ResultSet countRs = null;</span>
+<span class="fc" id="L54">		Integer totalRecords = 0;</span>
+		try {
+<span class="fc" id="L56">			stmt = con.prepareStatement(query);</span>
+<span class="fc" id="L57">			stmt.setInt(1, offSet);</span>
+<span class="fc" id="L58">			stmt.setInt(2, rowsToFetch);</span>
+<span class="fc" id="L59">			rs = stmt.executeQuery();</span>
+			
+<span class="fc bfc" id="L61" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L62">				setpaymentInReportDataList(paymentInQueueDataList, rs);</span>
+			}
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">			if (queryCount != null) {</span>
+<span class="nc" id="L65">				countStmt = con.prepareStatement(queryCount);</span>
+<span class="nc" id="L66">				countRs = countStmt.executeQuery();</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">				if (countRs.next()) {</span>
+<span class="nc" id="L68">					totalRecords = countRs.getInt(RegQueDBColumns.TOTALROWS.getName());</span>
+				}
+<span class="nc" id="L70">				paymentInQueueDto.setTotalRecords(totalRecords);</span>
+
+			}
+<span class="fc" id="L73">			paymentInQueueDto.setPaymentInQueue(paymentInQueueDataList);</span>
+			
+<span class="fc" id="L75">		} catch (Exception e) {</span>
+<span class="fc" id="L76">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L78">			closeResultset(rs);</span>
+<span class="fc" id="L79">			closePrepareStatement(stmt);</span>
+<span class="fc" id="L80">			closeResultset(countRs);</span>
+<span class="fc" id="L81">			closePrepareStatement(countStmt);</span>
+		}
+<span class="fc" id="L83">		return paymentInQueueDto;</span>
+	}
+
+	private void setpaymentInReportDataList(List&lt;PaymentInQueueData&gt; paymentInQueueDataList, ResultSet rs) throws SQLException {
+<span class="fc" id="L87">				PaymentInQueueData paymentInQueueData = new PaymentInQueueData();</span>
+<span class="fc" id="L88">				paymentInQueueData.setTransactionId(rs.getString(PayInReportQueueDBColumns.TRANSACTIONID.getName()));</span>
+<span class="fc" id="L89">				paymentInQueueData.setClientId(rs.getString(PayInReportQueueDBColumns.TRADEACCOUNTNUM.getName()));</span>
+<span class="fc" id="L90">				paymentInQueueData.setAccountId(rs.getInt(PayInReportQueueDBColumns.ACCOUNTID.getName()));</span>
+<span class="fc" id="L91">				paymentInQueueData.setContactId(rs.getInt(PayInReportQueueDBColumns.CONTACTID.getName()));</span>
+
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">				if (null != rs.getTimestamp(PayInReportQueueDBColumns.DATE.getName())) {</span>
+<span class="fc" id="L94">					paymentInQueueData.setDate(DateTimeFormatter.dateTimeFormatter(rs.getTimestamp(PayInReportQueueDBColumns.DATE.getName())));</span>
+				}
+<span class="fc" id="L96">				paymentInQueueData.setContactName(rs.getString(PayInReportQueueDBColumns.CLIENTNAME.getName()));</span>
+<span class="fc" id="L97">				paymentInQueueData.setType(CustomerTypeEnum.getUiStatusFromDatabaseStatus(rs.getInt(PayInReportQueueDBColumns.TYPE.getName())));</span>
+<span class="fc" id="L98">				paymentInQueueData.setSellCurrency(rs.getString(PayInReportQueueDBColumns.SELLCURRENCY.getName()));</span>
+				/**Code changed to show amount upto 2 decimal places on queue*/
+<span class="fc" id="L100">				String amount = rs.getString(PayInReportQueueDBColumns.AMOUNT.getName());</span>
+<span class="pc bpc" id="L101" title="3 of 4 branches missed.">				if (amount != null &amp;&amp; amount.contains(&quot;.&quot;)) {</span>
+<span class="nc" id="L102">					amount = amount.substring(0, amount.indexOf('.')+3);</span>
+<span class="nc" id="L103">					paymentInQueueData.setAmount(com.currenciesdirect.gtg.compliance.util.StringUtils.getNumberFormat(amount));</span>
+				} else {
+<span class="fc" id="L105">					paymentInQueueData.setAmount(com.currenciesdirect.gtg.compliance.util.StringUtils.getNumberFormat(amount));</span>
+				}
+<span class="fc" id="L107">				paymentInQueueData.setMethod(rs.getString(PayInReportQueueDBColumns.METHOD.getName()));</span>
+<span class="fc" id="L108">				paymentInQueueData.setCountry(rs.getString(PayInReportQueueDBColumns.COUNTRY.getName()));</span>
+<span class="fc" id="L109">				String countryFullName = rs.getString(PayInReportQueueDBColumns.COUNTRY_DISPLAY_NAME.getName());</span>
+<span class="fc" id="L110">				setCountryFullName(paymentInQueueData, countryFullName);</span>
+<span class="fc" id="L111">				paymentInQueueData.setOverallStatus(rs.getString(PayInReportQueueDBColumns.OVERALLSTATUS.getName()));</span>
+<span class="fc" id="L112">				paymentInQueueData.setWatchlist(ServiceStatusEnum</span>
+<span class="fc" id="L113">				.getStatusFromDatabaseStatus(rs.getInt(PayInReportQueueDBColumns.WATCHLISTSTATUS.getName())));</span>
+<span class="fc" id="L114">				paymentInQueueData.setFraugster(ServiceStatusEnum</span>
+<span class="fc" id="L115">				.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.FRAUGSTERSTATUS.getName())));</span>
+<span class="fc" id="L116">				paymentInQueueData.setSanction(ServiceStatusEnum</span>
+<span class="fc" id="L117">				.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.SANCTIONSTATUS.getName())));</span>
+<span class="fc" id="L118">				paymentInQueueData.setBlacklist(ServiceStatusEnum</span>
+<span class="fc" id="L119">				.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.BLACKLISTSTATUS.getName())));</span>
+<span class="fc" id="L120">				paymentInQueueData.setCustomCheck(ServiceStatusEnum</span>
+<span class="fc" id="L121">				.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.CUSTOMCHECKSTATUS.getName())));</span>
+<span class="fc" id="L122">				paymentInQueueData.setIntuitionStatus(ServiceStatusEnum</span>
+<span class="fc" id="L123">				.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.INTUITIONSTATUS.getName()))); //AT-4607</span>
+				// hidden values on UI
+<span class="fc" id="L125">				Integer payInId = rs.getInt(PayInReportQueueDBColumns.PAYMENTINID.getName());</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">				if (payInId != null) {</span>
+<span class="fc" id="L127">					paymentInQueueData.setPaymentInId(payInId.toString());</span>
+				}
+<span class="fc" id="L129">				paymentInQueueData.setOrganization(rs.getString(PayInReportQueueDBColumns.ORGANIZATION.getName()));</span>
+<span class="fc" id="L130">				paymentInQueueData.setRiskStatus(ServiceStatusEnum</span>
+<span class="fc" id="L131">						.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.RISKSTATUS.getName())));</span>
+<span class="fc" id="L132">				paymentInQueueData.setLegalEntity(rs.getString(PayInReportQueueDBColumns.LEGALENTITY.getName()));</span>
+<span class="fc" id="L133">				String lockedBy = rs.getString(PayInReportQueueDBColumns.LOCKED_BY.getName());</span>
+<span class="pc bpc" id="L134" title="4 of 6 branches missed.">				if (lockedBy != null &amp;&amp; !lockedBy.isEmpty() &amp;&amp; !lockedBy.equalsIgnoreCase(Constants.DUMMY_USER)) {</span>
+<span class="nc" id="L135">					paymentInQueueData</span>
+<span class="nc" id="L136">							.setUserResourceLockId(rs.getInt(PayInReportQueueDBColumns.USER_RESOURCE_LOCK_ID.getName()));</span>
+<span class="nc" id="L137">					paymentInQueueData.setLocked(Boolean.TRUE);</span>
+<span class="nc" id="L138">					paymentInQueueData.setLockedBy(lockedBy);</span>
+				}
+<span class="fc" id="L140">				paymentInQueueDataList.add(paymentInQueueData);</span>
+<span class="fc" id="L141">			}</span>
+	
+	private String getPaymentInReportQuery(String baseQuery, String contactFilterQuery, String accountFilterQuery, 
+			String payInAttributeFilterQuery, String payInFilterQuery) {
+<span class="fc" id="L145">		return (baseQuery.replace(&quot;{PAYMENTIN_REPORT_CONTACT_FILTER}&quot;, contactFilterQuery)</span>
+<span class="fc" id="L146">				.replace(&quot;{PAYMENTIN_REPORT_ACCOUNT_FILTER}&quot;, accountFilterQuery)</span>
+<span class="fc" id="L147">				.replace(&quot;{PAYMENTIN_ATTRIBUTE_FILTER}&quot;, payInAttributeFilterQuery)</span>
+<span class="fc" id="L148">				.replace(&quot;{PAYMENTIN_REPORT_FILTER}&quot;, payInFilterQuery) );</span>
+	}
+
+	@Override
+	public PaymentInQueueDto getPaymentInReportWithCriteria(PaymentInReportSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+<span class="fc" id="L154">		int offset = SearchCriteriaUtil.getPageOffsetRows(searchCriteria);</span>
+<span class="fc" id="L155">		int minRowNum = SearchCriteriaUtil.getMinRowNumber(searchCriteria);</span>
+<span class="fc" id="L156">		int rowsToFetch = SearchCriteriaUtil.getPageSize();</span>
+<span class="fc" id="L157">		String payInReport = &quot;PaymentInReport&quot;;</span>
+		PaymentInQueueDto paymentInQueueDto ;
+<span class="fc" id="L159">		Connection connection = null;</span>
+<span class="fc" id="L160">		PaymentInReportContactFilterQueryBuilder contactFilter = new PaymentInReportContactFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L161">				PaymentInReportQueryConstant.PAYMENTIN_REPORT_CONTACT_ATTRIBUTE_FILTER.getQuery(),</span>
+				 true);
+<span class="fc" id="L163">		String contactFilterQuery = getPayInContactFilterQuery(contactFilter, searchCriteria);</span>
+<span class="fc" id="L164">		String accountFilterQuery = getPayInAccountFilterQuery(searchCriteria);</span>
+<span class="fc" id="L165">		String payInAttributeFilterQuery = getPayInAttributeFilterQuery(searchCriteria);</span>
+<span class="fc" id="L166">		FilterQueryBuilder paymentInFilter=getPayInReportFilterQuery(searchCriteria);</span>
+<span class="fc" id="L167">		String contact = getContactFilterJoin(contactFilterQuery);</span>
+<span class="fc" id="L168">		String account = getAccountFilterJoin(accountFilterQuery);</span>
+<span class="fc" id="L169">		String attribute = getAttributeFilterJoin(payInAttributeFilterQuery);</span>
+<span class="fc" id="L170">		String org = getOrganizationJoin(searchCriteria);</span>
+<span class="fc" id="L171">		String legalEntity = getLegalEntityJoin(searchCriteria);</span>
+<span class="fc" id="L172">		String user = getUserJoin(searchCriteria);</span>
+<span class="fc" id="L173">		String country = getCountryJoin(searchCriteria);</span>
+<span class="fc" id="L174">		String joinRG=getRGJoin(searchCriteria);</span>
+<span class="fc" id="L175">		String payInFilterQuery = paymentInFilter.getQuery();</span>
+		
+<span class="pc bpc" id="L177" title="3 of 4 branches missed.">		if(contactFilter.isFilterAppliedForAccountAndContact() &amp;&amp; account.length() &gt; 1 ){</span>
+<span class="nc" id="L178">			payInFilterQuery = getAccountContactJoin(payInFilterQuery);</span>
+		}else{
+<span class="fc" id="L180">			contact = contact.replace(&quot;LEFT&quot;, &quot;&quot;);</span>
+<span class="fc" id="L181">			account = account.replace(&quot;LEFT&quot;, &quot;&quot;);</span>
+		}
+		
+<span class="fc" id="L184">		 payInAttributeFilterQuery =  payInAttributeFilterQuery.replace(&quot;{COUNTRY_JOIN}&quot;, country);</span>
+		
+<span class="fc" id="L186">			 payInFilterQuery = payInFilterQuery .replace(&quot;{CONTACT_FILTER_JOIN}&quot;, contact)</span>
+<span class="fc" id="L187">						.replace(&quot;{ACCOUNT_FILTER_JOIN}&quot;, account)</span>
+<span class="fc" id="L188">						.replace(&quot;{ATTRIBUTE_FILTER_JOIN}&quot;, attribute)</span>
+<span class="fc" id="L189">						.replace(&quot;{ORG_TABLE_JOIN}&quot;, org)</span>
+<span class="fc" id="L190">						.replace(&quot;{LEGAL_ENTITY_TABLE_JOIN}&quot;,legalEntity)</span>
+<span class="fc" id="L191">						.replace(&quot;{RG_FILTER_JOIN}&quot;,joinRG)</span>
+<span class="fc" id="L192">						.replace(&quot;{USER_JOIN}&quot;,user);</span>
+		 
+<span class="fc" id="L194">		String paymentInReportQuery = getPaymentInReportQuery(PaymentInReportQueryConstant.GET_PAYMENTIN_REPORT.getQuery(),</span>
+				contactFilterQuery, accountFilterQuery, payInAttributeFilterQuery, payInFilterQuery);
+		
+<span class="fc" id="L197">		paymentInReportQuery = executeSort(searchCriteria.getFilter().getSort(),paymentInReportQuery);</span>
+		
+<span class="fc" id="L199">		String countQuery = getPaymentInReportQuery(PaymentInReportQueryConstant.PAYMENTIN_REPORT_COUNT.getQuery(),</span>
+				contactFilterQuery, accountFilterQuery, payInAttributeFilterQuery, payInFilterQuery);
+		
+<span class="pc bpc" id="L202" title="2 of 4 branches missed.">		if(searchCriteria.getIsLandingPage() != null &amp;&amp; searchCriteria.getIsLandingPage()){</span>
+<span class="fc" id="L203">			countQuery = null;</span>
+		}
+		try {
+<span class="fc" id="L206">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L207">			paymentInQueueDto  = getPaymentInData( connection, offset, rowsToFetch,paymentInReportQuery, countQuery);</span>
+<span class="fc" id="L208">			Integer totalRecords = 0;</span>
+<span class="fc" id="L209">			totalRecords = paymentInQueueDto.getTotalRecords();</span>
+<span class="fc" id="L210">			Integer pageSize = SearchCriteriaUtil.getPageSize();</span>
+<span class="fc" id="L211">				getPageAndOtherDetails(searchCriteria, minRowNum, paymentInQueueDto, connection, totalRecords,</span>
+						pageSize);
+<span class="fc" id="L213">			SavedSearch savedSearch = null;</span>
+<span class="fc" id="L214">			savedSearch = getSaveSearches(searchCriteria.getFilter().getUserProfile().getId(),payInReport,connection);</span>
+<span class="fc" id="L215">			paymentInQueueDto.setSavedSearch(savedSearch);</span>
+<span class="fc" id="L216">		} catch (Exception e) {</span>
+<span class="fc" id="L217">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L219">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L221">		return paymentInQueueDto;</span>
+	}
+	
+	private String executeSort(Sort sortPayIn,String query) {
+<span class="fc" id="L225">		String colName = &quot;TransactionDate&quot;;</span>
+<span class="fc" id="L226">		boolean isAsc = false;</span>
+<span class="pc bpc" id="L227" title="3 of 4 branches missed.">		if(sortPayIn != null &amp;&amp; sortPayIn.getIsAscend() != null){</span>
+<span class="nc" id="L228">			isAsc = sortPayIn.getIsAscend();</span>
+		}
+		
+<span class="pc bpc" id="L231" title="5 of 6 branches missed.">		if(sortPayIn != null &amp;&amp; sortPayIn.getFieldName() != null &amp;&amp;  !sortPayIn.getFieldName().isEmpty()){</span>
+<span class="nc" id="L232">			colName = sortPayIn.getFieldName();</span>
+		}
+		
+<span class="fc" id="L235">		String columnNameQuery = &quot;payin.TransactionDate&quot;;</span>
+<span class="pc bpc" id="L236" title="1 of 2 branches missed.">		if(&quot;TransactionDate&quot;.equalsIgnoreCase(colName)){</span>
+<span class="fc" id="L237">			columnNameQuery = &quot;payin.TransactionDate&quot;;</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">		} else if (&quot;tradeaccountnumber&quot;.equalsIgnoreCase(colName)){</span>
+<span class="nc" id="L239">			columnNameQuery = &quot;acc.tradeaccountnumber&quot;;</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">		} else if (&quot;type&quot;.equalsIgnoreCase(colName)){</span>
+<span class="nc" id="L241">			columnNameQuery = &quot;acc.type&quot;;</span>
+		}
+		
+<span class="fc" id="L244">		return addSort(columnNameQuery, isAsc,query);</span>
+		
+		
+	}
+
+	private void getPageAndOtherDetails(PaymentInReportSearchCriteria searchCriteria, int minRowNum,
+			PaymentInQueueDto paymentInQueueDto, Connection connection, Integer totalRecords, Integer pageSize)
+			throws CompliancePortalException {
+<span class="pc bpc" id="L252" title="1 of 2 branches missed.">		if(totalRecords != null){</span>
+			Integer totalPages;
+<span class="nc" id="L254">			totalPages = totalRecords / pageSize;</span>
+<span class="nc bnc" id="L255" title="All 2 branches missed.">			if (totalRecords % pageSize != 0) {</span>
+<span class="nc" id="L256">				totalPages += 1;</span>
+			}
+<span class="nc" id="L258">			Page page = new Page();</span>
+<span class="nc" id="L259">			page.setMinRecord(minRowNum);</span>
+<span class="nc" id="L260">			page.setMaxRecord(minRowNum + paymentInQueueDto.getPaymentInQueue().size() - 1);</span>
+<span class="nc" id="L261">			page.setTotalPages(totalPages);</span>
+<span class="nc" id="L262">			page.setTotalRecords(totalRecords);</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">			if (page.getTotalRecords() == 0) {</span>
+<span class="nc" id="L264">				page.setMinRecord(0);</span>
+			}
+			// added by neelesh pant
+<span class="nc" id="L267">			page.setCurrentPage(SearchCriteriaUtil.getCurrentPage(searchCriteria));</span>
+<span class="nc" id="L268">			paymentInQueueDto.setPage(page);</span>
+		}
+		List&lt;String&gt; organization;
+<span class="fc" id="L271">		organization = getOrganization(connection);</span>
+<span class="fc" id="L272">		paymentInQueueDto.setOrganization(organization);</span>
+		List&lt;String&gt; currency;
+<span class="fc" id="L274">		currency = getCurrency(connection);</span>
+<span class="fc" id="L275">		paymentInQueueDto.setCurrency(currency);</span>
+		List&lt;String&gt; countryofFund;
+<span class="fc" id="L277">		countryofFund = getAllCountries(connection);</span>
+<span class="fc" id="L278">		paymentInQueueDto.setCountry(countryofFund);</span>
+<span class="fc" id="L279">		paymentInQueueDto.setSource(SourceEnum.getSourceValues());</span>
+<span class="fc" id="L280">		paymentInQueueDto.setTransValue(TransactionValuesEnum.getTransactionValues());</span>
+<span class="fc" id="L281">		paymentInQueueDto.setPaymentMethod(PaymentMethodEnum.getPaymentMethodValues());</span>
+		Watchlist watchList;
+<span class="fc" id="L283">		boolean category1 = searchCriteria.getFilter().getUserProfile().getPermissions().getCanManageWatchListCategory1();</span>
+<span class="fc" id="L284">		boolean category2 = searchCriteria.getFilter().getUserProfile().getPermissions().getCanManageWatchListCategory2();</span>
+<span class="fc" id="L285">		watchList = getWatchListReasonId(connection , category1 , category2);</span>
+<span class="fc" id="L286">		paymentInQueueDto.setWatchList(watchList);</span>
+		List&lt;String&gt; owner;
+<span class="fc" id="L288">		owner = getLockedUserName(connection);</span>
+<span class="fc" id="L289">		paymentInQueueDto.setOwner(owner);</span>
+		List&lt;String&gt; paymentStatus;
+<span class="fc" id="L291">		paymentStatus = getPaymentStatus(connection);</span>
+<span class="fc" id="L292">		paymentInQueueDto.setPaymentStatus(paymentStatus);</span>
+<span class="fc" id="L293">		List&lt;String&gt; legalEntity = getLegalEntity(connection);</span>
+<span class="fc" id="L294">		paymentInQueueDto.setLegalEntity(legalEntity);</span>
+<span class="fc" id="L295">		searchCriteria.setPage(paymentInQueueDto.getPage());</span>
+<span class="fc" id="L296">		paymentInQueueDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteria));</span>
+<span class="fc" id="L297">	}</span>
+
+	private String getAccountContactJoin(String payinFilterQuery) {
+		String payInFilterQueryResult;
+<span class="nc bnc" id="L301" title="All 2 branches missed.">		if(payinFilterQuery.contains(Constants.WHERE)){</span>
+<span class="nc" id="L302">			payInFilterQueryResult = payinFilterQuery+&quot; AND &quot;+ PaymentInReportQueryConstant.REPORT_FILTER_NULL_CHECK.getQuery();</span>
+		}else{
+<span class="nc" id="L304">			payInFilterQueryResult = payinFilterQuery+&quot; WHERE &quot;+ PaymentInReportQueryConstant.REPORT_FILTER_NULL_CHECK.getQuery();</span>
+		}
+<span class="nc" id="L306">		return payInFilterQueryResult;</span>
+	}
+
+	private String getCountryJoin(PaymentInReportSearchCriteria searchCriteria) {
+<span class="fc" id="L310">		String countryJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L311" title="1 of 2 branches missed.">		if(null != searchCriteria.getFilter().getCountryofFund() &amp;&amp;</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">				searchCriteria.getFilter().getCountryofFund().length&gt;0 ){</span>
+<span class="nc" id="L313">			countryJoin = PaymentInReportQueryConstant.COUNTRY_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L315">		return countryJoin;</span>
+	}
+	//AT-1646 RG filter changes
+	private String getRGJoin(PaymentInReportSearchCriteria searchCriteria) {
+<span class="fc" id="L319">		String rgJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L320" title="1 of 2 branches missed.">		if (null != searchCriteria.getFilter().getRiskStatus()</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">				&amp;&amp; searchCriteria.getFilter().getRiskStatus().length &gt; 0) {</span>
+<span class="nc" id="L322">			rgJoin = PaymentInReportQueryConstant.RG_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L324">		return rgJoin;</span>
+	}
+
+	private String getUserJoin(PaymentInReportSearchCriteria searchCriteria) {
+<span class="fc" id="L328">		String userJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L329" title="1 of 2 branches missed.">		if(null != searchCriteria.getFilter().getOwner() &amp;&amp;</span>
+<span class="nc bnc" id="L330" title="All 2 branches missed.">				searchCriteria.getFilter().getOwner().length&gt;0){</span>
+<span class="nc" id="L331">			userJoin = PaymentInReportQueryConstant.USER_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L333">		return userJoin;</span>
+	}
+
+	private String getOrganizationJoin(PaymentInReportSearchCriteria searchCriteria) {
+<span class="fc" id="L337">		String orgJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L338" title="1 of 2 branches missed.">		if(null != searchCriteria.getFilter().getOrganization() &amp;&amp; </span>
+<span class="nc bnc" id="L339" title="All 2 branches missed.">				searchCriteria.getFilter().getOrganization().length&gt;0){</span>
+<span class="nc" id="L340">			orgJoin = PaymentInReportQueryConstant.ORG_TABLE_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L342">		return orgJoin;</span>
+	}
+	
+	private String getLegalEntityJoin(PaymentInReportSearchCriteria searchCriteria) {
+<span class="fc" id="L346">		String legalEntityJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L347" title="1 of 2 branches missed.">		if(null != searchCriteria.getFilter().getLegalEntity() &amp;&amp; </span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">				searchCriteria.getFilter().getLegalEntity().length&gt;0) {</span>
+<span class="nc" id="L349">			legalEntityJoin = PaymentInReportQueryConstant.LEGAL_ENTITY_TABLE_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L351">		return legalEntityJoin;</span>
+	}
+
+	private String getAttributeFilterJoin(String payInAttributeFilterQuery) {
+<span class="fc" id="L355">		String attributeJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L356" title="1 of 2 branches missed.">		if(payInAttributeFilterQuery.contains(Constants.WHERE)){</span>
+<span class="nc" id="L357">			attributeJoin = PaymentInReportQueryConstant.PAYMENTIN_REPORT_ATTRIBUTE_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L359">		return attributeJoin;</span>
+	}
+
+	private String getAccountFilterJoin(String accountFilterQuery) {
+<span class="fc" id="L363">		String accountJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L364" title="1 of 2 branches missed.">		if(accountFilterQuery.contains(Constants.WHERE)){</span>
+<span class="nc" id="L365">			accountJoin = PaymentInReportQueryConstant.PAYMENTIN_REPORT_ACCOUNT_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L367">		return accountJoin;</span>
+	}
+
+	private String getContactFilterJoin(String contactFilterQuery) {
+<span class="fc" id="L371">		String contactJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L372" title="2 of 4 branches missed.">		if(contactFilterQuery.contains(Constants.WHERE) || contactFilterQuery.contains(&quot;category&quot;)){</span>
+<span class="nc" id="L373">			contactJoin = PaymentInReportQueryConstant.PAYMENTIN_REPORT_CONTACT_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L375">		return contactJoin;</span>
+	}
+
+	private FilterQueryBuilder getPayInReportFilterQuery(PaymentInReportSearchCriteria searchCriteria) {
+<span class="fc" id="L379">		return new PaymentInReportFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L380">				PaymentInReportQueryConstant.PAYMENTIN_REPORT_FILTER.getQuery(),Boolean.TRUE);</span>
+	}
+	
+	private String getPayInAttributeFilterQuery(PaymentInReportSearchCriteria searchCriteria) {
+<span class="fc" id="L384">		FilterQueryBuilder payInAttributeFilter = new PaymentInReportAtttributeFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L385">				PaymentInReportQueryConstant.PAYMENTIN_REPORT_ATTRIBUTE_FILTER.getQuery(), Boolean.TRUE);</span>
+<span class="fc" id="L386">		return payInAttributeFilter.getQuery();</span>
+	}
+
+	private String getPayInAccountFilterQuery(PaymentInReportSearchCriteria searchCriteria) {
+<span class="fc" id="L390">		FilterQueryBuilder accountFilter = new PaymentInReportAccountFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L391">				PaymentInReportQueryConstant.PAYMENTIN_REPORT_ACCOUNT_ATTRIBUTE_FILTER.getQuery(),</span>
+				 true);
+<span class="fc" id="L393">		return  accountFilter.getQuery();</span>
+		}
+
+	private String getPayInContactFilterQuery(PaymentInReportContactFilterQueryBuilder contactFilter,
+				PaymentInReportSearchCriteria searchCriteria) {
+<span class="fc" id="L398">		String watchListFilter = &quot;&quot;;</span>
+<span class="fc" id="L399">		String filter=StringUtils.arrayToCommaDelimitedString(searchCriteria.getFilter().getWatchListReason());</span>
+<span class="fc" id="L400">		String contactFilterQuery = contactFilter.getQuery();</span>
+<span class="fc" id="L401">		String watchListCategoryFilter = getWatchListCategoryFilter(searchCriteria);</span>
+<span class="pc bpc" id="L402" title="1 of 2 branches missed.">		if(null!= watchListCategoryFilter ){</span>
+<span class="nc" id="L403">			contactFilterQuery = contactFilterQuery.replace(&quot;{WATCHLIST_CATEGORY_FILTER}&quot;, watchListCategoryFilter)  ;</span>
+		}else{
+<span class="fc" id="L405">			contactFilterQuery = contactFilterQuery.replace(&quot;{WATCHLIST_CATEGORY_FILTER}&quot;, &quot;&quot;)  ;</span>
+		}
+<span class="pc bpc" id="L407" title="2 of 4 branches missed.">		if(null != filter &amp;&amp; filter.length()&gt;0){</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">			if(contactFilterQuery.contains(Constants.WHERE)){</span>
+<span class="nc" id="L409">				watchListFilter = &quot;AND &quot;+ PaymentInReportQueryConstant.WATCHLIST_FILTER.getQuery()</span>
+<span class="nc" id="L410">						.replace(&quot;?&quot;, filter);</span>
+			}else{
+<span class="nc" id="L412">				watchListFilter = &quot; WHERE &quot; + PaymentInReportQueryConstant.WATCHLIST_FILTER.getQuery()</span>
+<span class="nc" id="L413">				.replace(&quot;?&quot;, filter);</span>
+			}
+		}
+<span class="fc" id="L416">		contactFilterQuery = contactFilterQuery.replace(&quot;{WATCHLIST_FILTER}&quot;, watchListFilter);</span>
+		
+<span class="fc" id="L418">		String countryJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L419" title="1 of 2 branches missed.">		if(contactFilter.isCountryOfResidenceFilterApplied()){</span>
+<span class="nc" id="L420">			countryJoin = PaymentInReportQueryConstant.PAYMENTIN_REPORT_COUNTRY_OF_RESIDENCE_FILTER.getQuery();</span>
+		}
+<span class="fc" id="L422">		contactFilterQuery = contactFilterQuery.replace(&quot;{PAYMENTIN_REPORT_COUNTRY_OF_RESIDENCE_FILTER}&quot;, countryJoin);</span>
+		
+<span class="fc" id="L424">		return contactFilterQuery;</span>
+	}
+	
+	private String getWatchListCategoryFilter(PaymentInReportSearchCriteria payInSearchCriteria) {
+<span class="fc" id="L428">		String status = null;</span>
+<span class="fc" id="L429">		boolean hasPermissionAll = false;</span>
+<span class="pc bpc" id="L430" title="1 of 2 branches missed.">		if (payInSearchCriteria.getFilter().getUserProfile().getPermissions().getCanManageWatchListCategory1()) {</span>
+<span class="fc" id="L431">			status = WatchListCategoryEnum.CATEGORY_1.getCategoryDbStatus().toString();</span>
+		}
+<span class="pc bpc" id="L433" title="1 of 2 branches missed.">		if (payInSearchCriteria.getFilter().getUserProfile().getPermissions().getCanManageWatchListCategory2()) {</span>
+<span class="pc bpc" id="L434" title="1 of 2 branches missed.">			if (null != status)</span>
+<span class="fc" id="L435">				hasPermissionAll = true;</span>
+			else
+<span class="nc" id="L437">				status = WatchListCategoryEnum.CATEGORY_2.getCategoryDbStatus().toString();</span>
+
+		}
+<span class="pc bpc" id="L440" title="1 of 2 branches missed.">		if (hasPermissionAll)</span>
+<span class="fc" id="L441">			status = null;</span>
+		else {
+<span class="nc bnc" id="L443" title="All 2 branches missed.">			if (null != status)</span>
+<span class="nc" id="L444">				status = PaymentInReportQueryConstant.WATCHLIST_CATEGORY_FILTER.getQuery().replace(&quot;?&quot;, status);</span>
+		}
+
+<span class="fc" id="L447">		return status;</span>
+	}
+
+	@Override
+	public ActivityLogs getActivityLogs(ActivityLogRequest request) {
+<span class="nc" id="L452">		return null;</span>
+	}
+
+	@Override
+	public PaymentInQueueDto getPaymentInQueueWholeData(PaymentInReportSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+
+<span class="fc" id="L459">		Connection connection = null;</span>
+		PaymentInQueueDto paymentInQueueDto;
+		try {
+<span class="fc" id="L462">			PaymentInReportContactFilterQueryBuilder contactFilter = new PaymentInReportContactFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L463">					PaymentInReportQueryConstant.PAYMENTIN_REPORT_CONTACT_ATTRIBUTE_FILTER.getQuery(),</span>
+					 true);
+<span class="fc" id="L465">			String contactFilterQuery = getPayInContactFilterQuery(contactFilter, searchCriteria);</span>
+<span class="fc" id="L466">			String accountFilterQuery = getPayInAccountFilterQuery(searchCriteria);</span>
+<span class="fc" id="L467">			String payInAttributeFilterQuery = getPayInAttributeFilterQuery(searchCriteria);</span>
+<span class="fc" id="L468">			FilterQueryBuilder paymentInFilter=getPayInReportFilterQuery(searchCriteria);</span>
+<span class="fc" id="L469">			String contactJoin = getContactFilterJoin(contactFilterQuery);</span>
+<span class="fc" id="L470">			String accountJoin = getAccountFilterJoin(accountFilterQuery);</span>
+<span class="fc" id="L471">			String attributeJoin = getAttributeFilterJoin(payInAttributeFilterQuery);</span>
+<span class="fc" id="L472">			String orgJoin = getOrganizationJoin(searchCriteria);</span>
+<span class="fc" id="L473">			String legalEntityJoin = getLegalEntityJoin(searchCriteria);</span>
+<span class="fc" id="L474">			String userJoin = getUserJoin(searchCriteria);</span>
+<span class="fc" id="L475">			String countryJoin = getCountryJoin(searchCriteria);</span>
+<span class="fc" id="L476">			String joinRG=getRGJoin(searchCriteria); //added For AT-3227</span>
+			 
+<span class="fc" id="L478">			String payinFilterQuery = paymentInFilter.getQuery();</span>
+
+<span class="pc bpc" id="L480" title="3 of 4 branches missed.">			if(contactFilter.isFilterAppliedForAccountAndContact() &amp;&amp; accountJoin.length() &gt; 1 ){</span>
+<span class="nc" id="L481">				payinFilterQuery = getAccountContactJoin(payinFilterQuery);</span>
+			} else {
+<span class="fc" id="L483">				contactJoin = contactJoin.replace(&quot;LEFT&quot;, &quot;&quot;);</span>
+<span class="fc" id="L484">				accountJoin = accountJoin.replace(&quot;LEFT&quot;, &quot;&quot;);</span>
+			}
+
+<span class="fc" id="L487">			payInAttributeFilterQuery = payInAttributeFilterQuery.replace(&quot;{COUNTRY_JOIN}&quot;, countryJoin);</span>
+			
+<span class="fc" id="L489">					payinFilterQuery = payinFilterQuery.replace(&quot;{CONTACT_FILTER_JOIN}&quot;, contactJoin)</span>
+<span class="fc" id="L490">							.replace(&quot;{ACCOUNT_FILTER_JOIN}&quot;, accountJoin).replace(&quot;{ATTRIBUTE_FILTER_JOIN}&quot;, attributeJoin)</span>
+<span class="fc" id="L491">							.replace(&quot;{ORG_TABLE_JOIN}&quot;, orgJoin).replace(&quot;{LEGAL_ENTITY_TABLE_JOIN}&quot;,legalEntityJoin)</span>
+<span class="fc" id="L492">							.replace(&quot;{USER_JOIN}&quot;, userJoin).replace(&quot;{RG_FILTER_JOIN}&quot;,joinRG);</span>
+			
+<span class="fc" id="L494">			String paymentInReportQuery = getPaymentInReportQuery(PaymentInReportQueryConstant.GET_PAYMENTIN_REPORT_DATA.getQuery(),</span>
+					contactFilterQuery, accountFilterQuery, payInAttributeFilterQuery, payinFilterQuery);
+
+<span class="fc" id="L497">			paymentInReportQuery = executeSort(searchCriteria.getFilter().getSort(),paymentInReportQuery);</span>
+			
+<span class="fc" id="L499">			paymentInQueueDto = new PaymentInQueueDto();</span>
+
+<span class="fc" id="L501">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L502">			paymentInQueueDto.setPaymentInQueue(getPaymentInQueueWholeData(connection, paymentInReportQuery));</span>
+
+<span class="fc" id="L504">		} catch (Exception e) {</span>
+<span class="fc" id="L505">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L507">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L509">		return paymentInQueueDto;</span>
+		
+	}
+
+	
+	private List&lt;PaymentInQueueData&gt; getPaymentInQueueWholeData(Connection connection,String query) throws CompliancePortalException {
+<span class="fc" id="L515">		List&lt;PaymentInQueueData&gt; paymentInQueueDataList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L516">		PreparedStatement statement = null;</span>
+<span class="fc" id="L517">		ResultSet rs = null;</span>
+		try {
+<span class="fc" id="L519">			statement = connection.prepareStatement(query);</span>
+<span class="fc" id="L520">			rs = statement.executeQuery();</span>
+<span class="fc bfc" id="L521" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L522">				PaymentInQueueData paymentInQueueData = new PaymentInQueueData();</span>
+<span class="fc" id="L523">				paymentInQueueData.setTransactionId(rs.getString(PayInQueDBColumns.TRANSACTIONID.getName()));</span>
+<span class="fc" id="L524">				paymentInQueueData.setClientId(rs.getString(PayInQueDBColumns.TRADEACCOUNTNUM.getName()));</span>
+<span class="fc" id="L525">				paymentInQueueData.setAccountId(rs.getInt(PayInQueDBColumns.ACCOUNTID.getName()));</span>
+<span class="fc" id="L526">				paymentInQueueData.setContactId(rs.getInt(PayInQueDBColumns.CONTACTID.getName()));</span>
+<span class="fc" id="L527">			    paymentInQueueData.setInitialStatus(rs.getString(PayInQueDBColumns.INITIALSTATUS.getName()));//AT-3472</span>
+<span class="pc bpc" id="L528" title="1 of 2 branches missed.">				if (null != rs.getTimestamp(PayInQueDBColumns.DATE.getName())) {</span>
+<span class="fc" id="L529">				paymentInQueueData.setDate(DateTimeFormatter.dateTimeFormatter(rs.getTimestamp(PayInReportQueueDBColumns.DATE.getName())));</span>
+				}
+				
+<span class="fc" id="L532">				paymentInQueueData.setContactName(rs.getString(PayInQueDBColumns.CLIENTNAME.getName()));</span>
+<span class="fc" id="L533">				paymentInQueueData.setType(rs.getString(PayInQueDBColumns.TYPE.getName()));</span>
+<span class="fc" id="L534">				paymentInQueueData.setSellCurrency(rs.getString(PayInQueDBColumns.SELLCURRENCY.getName()));</span>
+
+<span class="fc" id="L536">				Integer amount = rs.getInt(PayInQueDBColumns.AMOUNT.getName());</span>
+<span class="pc bpc" id="L537" title="1 of 2 branches missed.">				if (amount != null) {</span>
+<span class="fc" id="L538">					paymentInQueueData.setAmount(amount.toString());</span>
+				}
+
+<span class="fc" id="L541">				paymentInQueueData.setMethod(rs.getString(PayInQueDBColumns.METHOD.getName()));</span>
+<span class="fc" id="L542">				paymentInQueueData.setCountry(rs.getString(PayInQueDBColumns.COUNTRY.getName()));</span>
+<span class="fc" id="L543">				String countryFullName = rs.getString(PayInQueDBColumns.COUNTRY_DISPLAY_NAME.getName());</span>
+<span class="fc" id="L544">				setCountryFullName(paymentInQueueData, countryFullName);</span>
+<span class="fc" id="L545">				paymentInQueueData.setOverallStatus(rs.getString(PayInQueDBColumns.OVERALLSTATUS.getName()));</span>
+<span class="fc" id="L546">				paymentInQueueData.setWatchlist(ServiceStatusEnum.getUiStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.WATCHLISTSTATUS.getName())));</span>
+<span class="pc bpc" id="L547" title="1 of 2 branches missed.">				if(paymentInQueueData.getWatchlist() == null){</span>
+<span class="nc" id="L548">					paymentInQueueData.setWatchlist(Constants.DASH_UI);</span>
+				}
+<span class="fc" id="L550">				paymentInQueueData.setFraugster(ServiceStatusEnum.getUiStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.FRAUGSTERSTATUS.getName())));</span>
+<span class="fc" id="L551">				paymentInQueueData.setSanction(ServiceStatusEnum.getUiStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.SANCTIONSTATUS.getName())));</span>
+<span class="fc" id="L552">				paymentInQueueData.setBlacklist(ServiceStatusEnum.getUiStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.BLACKLISTSTATUS.getName())));</span>
+<span class="fc" id="L553">				paymentInQueueData.setCustomCheck(ServiceStatusEnum.getUiStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.CUSTOMCHECKSTATUS.getName())));</span>
+<span class="fc" id="L554">				paymentInQueueData.setRiskStatus(ServiceStatusEnum</span>
+<span class="fc" id="L555">						.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.RISKSTATUS.getName())));</span>
+<span class="fc" id="L556">				paymentInQueueData.setIntuitionStatus(ServiceStatusEnum.getUiStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.INTUITIONSTATUS.getName()))); //AT-4717</span>
+				// hidden values on UI
+<span class="fc" id="L558">				Integer paymentInId = rs.getInt(PayInQueDBColumns.PAYMENTINID.getName());</span>
+<span class="pc bpc" id="L559" title="1 of 2 branches missed.">				if (paymentInId != null) {</span>
+<span class="fc" id="L560">					paymentInQueueData.setPaymentInId(paymentInId.toString());</span>
+				}
+<span class="fc" id="L562">				paymentInQueueData.setOrganization(rs.getString(PayInQueDBColumns.ORGANIZATION.getName()));</span>
+<span class="fc" id="L563">				paymentInQueueData.setLegalEntity(rs.getString(PayInQueDBColumns.LEGALENTITY.getName())); //Added for AT-3011</span>
+<span class="fc" id="L564">				String lockBy = rs.getString(PayInQueDBColumns.LOCKED_BY.getName());</span>
+<span class="pc bpc" id="L565" title="4 of 6 branches missed.">				if (lockBy != null &amp;&amp; !lockBy.isEmpty() &amp;&amp; !lockBy.equalsIgnoreCase(Constants.DUMMY_USER)) {</span>
+<span class="nc" id="L566">					paymentInQueueData</span>
+<span class="nc" id="L567">							.setUserResourceLockId(rs.getInt(PayInQueDBColumns.USER_RESOURCE_LOCK_ID.getName()));</span>
+<span class="nc" id="L568">					paymentInQueueData.setLocked(Boolean.TRUE);</span>
+<span class="nc" id="L569">					paymentInQueueData.setLockedBy(lockBy);</span>
+				}
+<span class="fc" id="L571">				paymentInQueueDataList.add(paymentInQueueData);</span>
+<span class="fc" id="L572">			}</span>
+<span class="fc" id="L573">		} catch (Exception e) {</span>
+<span class="fc" id="L574">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L576">			closeResultset(rs);</span>
+<span class="fc" id="L577">			closePrepareStatement(statement);</span>
+		}
+<span class="fc" id="L579">		return paymentInQueueDataList;</span>
+	}
+
+	private void setCountryFullName(PaymentInQueueData paymentInQueueData, String countryFullName) {
+<span class="pc bpc" id="L583" title="1 of 2 branches missed.">		if (null != countryFullName){</span>
+<span class="fc" id="L584">			paymentInQueueData.setCountryFullName(countryFullName);</span>
+		}else {
+<span class="nc" id="L586">			paymentInQueueData.setCountryFullName(Constants.DASH_UI);</span>
+		}
+<span class="fc" id="L588">	}</span>
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

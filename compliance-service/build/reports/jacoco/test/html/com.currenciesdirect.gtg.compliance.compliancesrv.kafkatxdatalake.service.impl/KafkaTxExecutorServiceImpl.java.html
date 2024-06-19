@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>KafkaTxExecutorServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.kafkatxdatalake.service.impl</a> &gt; <span class="el_source">KafkaTxExecutorServiceImpl.java</span></div><h1>KafkaTxExecutorServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.kafkatxdatalake.service.impl;
+
+import java.util.concurrent.ExecutorService;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.messaging.Message;
+import org.springframework.stereotype.Service;
+
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.KafkaDataLakeTxDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.TransactionMonitoringMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.kafkatxdatalake.service.FundsInKafkaService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.kafkatxdatalake.service.FundsOutKafkaService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.kafkatxdatalake.service.KafkaTxExecutorService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.commons.domain.ReprocessFailedDetails;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.FundsInCustomCheckResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.FundsOutCustomCheckResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FundsInFraugsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FundsOutFruagsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsInBlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsOutBlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsOutPaymentReferenceResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessage;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.FundsInSanctionResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.FundsOutSanctionResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionPaymentStatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringUpdatePaymentStatusRequest;
+import com.currenciesdirect.kafka.transaction.CDTransaction;
+import com.currenciesdirect.kafkaproducertemplate.producer.SimpleKafkaProducer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+
+/**
+ * @author prashant.verma
+ */
+@Service
+<span class="nc" id="L50">public class KafkaTxExecutorServiceImpl implements KafkaTxExecutorService{</span>
+
+	@Autowired
+	@Qualifier(&quot;KafkaTxExecutorService&quot;) 
+	private ExecutorService kafkaTxExecutorService;
+	
+    @Autowired
+    SimpleKafkaProducer kafkaClientService;
+
+	@Autowired
+	private FundsInKafkaService fundsInKafkaService;
+
+	@Autowired
+	private FundsOutKafkaService fundsOutKafkaService;
+
+	@Autowired
+	KafkaDataLakeTxDBServiceImpl kafkaDataLakeTxDBServiceImpl;
+
+	@Value(&quot;${datalake.tx.kafka.topic}&quot;)
+	public String topic;
+	
+	@Value(&quot;${datalake.tx.kafka.enable}&quot;)
+	public String datalakeTxKafkaEnable;
+	
+<span class="nc" id="L74">	private static final Logger LOG = LoggerFactory.getLogger(KafkaTxExecutorServiceImpl.class);</span>
+
+	@SuppressWarnings(&quot;unlikely-arg-type&quot;)
+	public Message&lt;MessageContext&gt; executeKafkaTx(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L78">		String method = &quot;KafkaTxExecutorServiceImpl - executeKafkaTx() : &quot;;</span>
+<span class="nc" id="L79">		LOG.info(method+&quot;------- executeKafkaTx(Message&lt;MessageContext&gt; message) : Start --------\n&quot;);</span>
+		
+		try {
+<span class="nc" id="L82">			LOG.info(method+&quot;------- message : &quot;+message+&quot; --------\n&quot;);</span>
+<span class="nc" id="L83">			OperationEnum operation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+<span class="nc" id="L84">			ServiceInterfaceType serviceType = message.getPayload().getGatewayMessageExchange().getServiceInterface();</span>
+			
+<span class="nc" id="L86">			String transactionId = message.getPayload().getTransactionId();</span>
+<span class="nc" id="L87">			ServiceMessage messageRequest = message.getPayload().getGatewayMessageExchange().getRequest();</span>
+						
+<span class="nc" id="L89">			executeKafkaTx(operation, serviceType, transactionId, messageRequest);</span>
+<span class="nc" id="L90">		} catch (Exception e) {</span>
+<span class="nc" id="L91">			LOG.error(method+&quot; -----------  Got exception in executeTask(Message&lt;MessageContext&gt; message) request to kafka ---------&quot;, e);</span>
+<span class="nc" id="L92">		}</span>
+<span class="nc" id="L93">		LOG.info(method+&quot;------- executeKafkaTx(Message&lt;MessageContext&gt; message) : End --------\n&quot;);</span>
+<span class="nc" id="L94">		return message;</span>
+	}
+
+	public void executeKafkaTx(OperationEnum operation, ServiceInterfaceType serviceType,
+			String transactionId, ServiceMessage messageRequest) {
+		
+<span class="nc" id="L100">		String method = &quot;KafkaTxExecutorServiceImpl - executeKafkaTx() : &quot;;</span>
+<span class="nc" id="L101">		LOG.info(method+&quot;------- executeKafkaTx() : Start --------\n&quot;);</span>
+<span class="nc" id="L102">		LOG.info(method + &quot;------- Feature flag datalake.tx.kafka.enable : &quot;+datalakeTxKafkaEnable+&quot; --------\n&quot;);</span>
+		
+<span class="nc bnc" id="L104" title="All 2 branches missed.">		if(!(&quot;true&quot;.equalsIgnoreCase(datalakeTxKafkaEnable))) {</span>
+<span class="nc" id="L105">			LOG.info(method + &quot;------- Feature DatalakeTxKafka is Disabled --------\n&quot;);</span>
+<span class="nc" id="L106">			return;</span>
+		}
+		
+<span class="nc" id="L109">		LOG.info(method + &quot;------- sending tx request to kafka Start --------\n&quot;);</span>
+<span class="nc" id="L110">		LOG.info(method + &quot;------- topic : &quot;+topic+&quot; --------\n&quot;);</span>
+
+<span class="nc" id="L112">		kafkaTxExecutorService.submit(()-&gt;{</span>
+			try {
+				
+<span class="nc" id="L115">				CDTransaction cdTransaction = null;</span>
+<span class="nc" id="L116">				String messageId = null;</span>
+
+<span class="nc" id="L118">				LOG.info(method+&quot;------- operation : &quot;+operation+&quot; -------- service : &quot;+serviceType+&quot; -------- \n&quot;);</span>
+
+<span class="nc bnc" id="L120" title="All 2 branches missed.">				if(ServiceInterfaceType.FUNDSIN.equals(serviceType)) {</span>
+<span class="nc" id="L121">						Integer tradePaymentId = getFundsInTransactionIDFromPayload(messageRequest);</span>
+<span class="nc" id="L122">						cdTransaction = fundsInKafkaService.populatePaymentInTxDetails(tradePaymentId);</span>
+<span class="nc" id="L123">						String operationType = Constants.MODIFY;</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">						if(operation.equals(OperationEnum.FUNDS_IN)) {</span>
+<span class="nc" id="L125">							operationType= Constants.CREATE;</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">						}else if (operation.equals(OperationEnum.DELETE_OPI)) {</span>
+<span class="nc" id="L127">							operationType= Constants.DELETE;</span>
+						}
+<span class="nc" id="L129">						setCdTransactionHdrForKafka(cdTransaction, transactionId, OperationEnum.FUNDS_IN, operationType);</span>
+<span class="nc" id="L130">				}</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">				else if (ServiceInterfaceType.PROFILE.equals(serviceType) ) {</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">				    	if(operation.equals(OperationEnum.SANCTION_UPDATE)) {</span>
+<span class="nc" id="L133">				    		cdTransaction = getTransactionForSanctionUpdate(messageRequest, transactionId);</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">				    	}else if(operation.equals(OperationEnum.TRANSACTION_MONITORING_MQ_RESEND)) {</span>
+<span class="nc" id="L135">				    		cdTransaction = getTransactionForTMRequest(messageRequest, transactionId);</span>
+				    	}
+<span class="nc bnc" id="L137" title="All 2 branches missed.">				} else if (ServiceInterfaceType.INTUITION.equals(serviceType)) {</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">    				    if(operation.equals(OperationEnum.STATUS_UPDATE)) {</span>
+<span class="nc" id="L139">    				    	cdTransaction= getTransactionForStatusUpdate(messageRequest, transactionId);</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">    				    }else if(operation.equals(OperationEnum.TRANSACTION_MONITORING_MQ_RESEND)) {</span>
+<span class="nc" id="L141">    				    	cdTransaction= getTransactionForTMRequest(messageRequest, transactionId);</span>
+    				    }
+<span class="nc bnc" id="L143" title="All 2 branches missed.">				}else if(ServiceInterfaceType.FUNDSOUT.equals(serviceType)) {</span>
+<span class="nc" id="L144">					Integer tradePaymentId = getFundsOutTransactionIDFromPayload(messageRequest);</span>
+<span class="nc" id="L145">					cdTransaction = fundsOutKafkaService.populatePaymentOutTxDetails(tradePaymentId);</span>
+<span class="nc" id="L146">						String operationType = Constants.MODIFY;</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">						if(operation.equals(OperationEnum.FUNDS_OUT)) {</span>
+<span class="nc" id="L148">							operationType= Constants.CREATE;</span>
+<span class="nc bnc" id="L149" title="All 2 branches missed.">						}else if (operation.equals(OperationEnum.DELETE_OPI)) {</span>
+<span class="nc" id="L150">							operationType= Constants.DELETE;</span>
+						}
+<span class="nc" id="L152">						setCdTransactionHdrForKafka(cdTransaction, transactionId, OperationEnum.FUNDS_OUT, operationType);					</span>
+				}
+				try {
+<span class="nc bnc" id="L155" title="All 2 branches missed.">					if(cdTransaction != null) {</span>
+						//String kafkaMessage = cdTransaction.toString();
+<span class="nc" id="L157">						messageId = cdTransaction.getMessageHeader().getCdId();</span>
+<span class="nc" id="L158">						LOG.info(method+&quot;------- sending tx request to kafka Start --------\n&quot;);</span>
+<span class="nc" id="L159">						LOG.info(method+&quot; ------- message id : &quot;+messageId+&quot; --------\n&quot;);</span>
+
+<span class="nc" id="L161">						kafkaClientService.sendMessage(topic, cdTransaction, messageId);</span>
+<span class="nc" id="L162">						LOG.info(method+&quot;------- Message Successfully submitted to producer !--------\n&quot;);</span>
+					} else {
+<span class="nc" id="L164">						LOG.error(method+&quot; -----------  Got cdTransaction : &quot; + cdTransaction);</span>
+					}
+<span class="nc" id="L166">				}catch(Exception e) {</span>
+<span class="nc" id="L167">					LOG.error(method+&quot; -----------  Got exception in sending tx request to kafka ---------&quot;, e);</span>
+<span class="nc" id="L168">					long auditId = kafkaDataLakeTxDBServiceImpl.auditFailedKafkaRequest(cdTransaction, messageId, topic);</span>
+<span class="nc" id="L169">					LOG.info(method+&quot; -----------  Audited failed tx request with auditId : &quot;+auditId);</span>
+<span class="nc" id="L170">				}</span>
+<span class="nc" id="L171">				LOG.info(method+&quot; -----------  sending tx request to kafka End ---------\n&quot;);</span>
+
+
+<span class="nc" id="L174">			}catch(Exception e) {</span>
+<span class="nc" id="L175">				LOG.error(method+&quot; -----------  Got exception in executeTask request to kafka ---------&quot;, e);</span>
+<span class="nc" id="L176">			}</span>
+<span class="nc" id="L177">		});</span>
+<span class="nc" id="L178">		LOG.info(method+&quot;------- executeKafkaTx() : End --------\n&quot;);</span>
+<span class="nc" id="L179">	}</span>
+
+	private CDTransaction getTransactionForSanctionUpdate(ServiceMessage messageRequest, String transactionId )throws ComplianceException {
+<span class="nc" id="L182">		CDTransaction cdTransaction = null;</span>
+<span class="nc" id="L183">		OperationEnum operationType= OperationEnum.FUNDS_IN;</span>
+<span class="nc" id="L184">		SanctionUpdateRequest sanctionUpdateRequest = (SanctionUpdateRequest) messageRequest;</span>
+<span class="nc" id="L185">		LOG.info(&quot;SanctionUpdateRequest-----ResourceId:&quot;,sanctionUpdateRequest.getResourceId());</span>
+<span class="nc" id="L186">		Integer tradePaymentId = sanctionUpdateRequest.getResourceId();</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">		if(sanctionUpdateRequest.getResourceType().equalsIgnoreCase(Constants.FUNDSIN)){</span>
+<span class="nc" id="L188">		    cdTransaction = fundsInKafkaService.populatePaymentInTxDetails(tradePaymentId);</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">		}else if(sanctionUpdateRequest.getResourceType().equalsIgnoreCase(Constants.FUNDSOUT)) {</span>
+<span class="nc" id="L190">		    operationType= OperationEnum.FUNDS_OUT;</span>
+<span class="nc" id="L191">		    cdTransaction = fundsOutKafkaService.populatePaymentOutTxDetails(tradePaymentId);</span>
+		}
+<span class="nc" id="L193">	    setCdTransactionHdrForKafka(cdTransaction, transactionId, operationType, Constants.MODIFY);</span>
+<span class="nc" id="L194">	    return cdTransaction;</span>
+	}
+	
+	private CDTransaction getTransactionForStatusUpdate(ServiceMessage messageRequest, String transactionId ) throws ComplianceException{
+<span class="nc" id="L198">		CDTransaction cdTransaction = null;</span>
+<span class="nc" id="L199">		OperationEnum operationType= OperationEnum.FUNDS_IN;</span>
+<span class="nc" id="L200">        IntuitionPaymentStatusUpdateRequest payStatusUpdateRequest = (IntuitionPaymentStatusUpdateRequest) messageRequest;</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">       if(payStatusUpdateRequest.getTrxType().equalsIgnoreCase(Constants.FUNDSIN)){</span>
+<span class="nc" id="L202">		   FundsInCreateRequest fundsInRequest = (FundsInCreateRequest) payStatusUpdateRequest</span>
+<span class="nc" id="L203">			   .getAdditionalAttribute(&quot;fundsInRequest&quot;);</span>
+<span class="nc" id="L204">		   LOG.info(&quot;IntuitionPaymentStatusUpdateRequest--FundsInCreateRequest---PaymentFundsInId:&quot;,fundsInRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L205">		   cdTransaction = fundsInKafkaService.populatePaymentInTxDetails(fundsInRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L206">       }else {</span>
+<span class="nc" id="L207">    	   FundsOutRequest fundsOutRequest = (FundsOutRequest) payStatusUpdateRequest.getAdditionalAttribute(&quot;fundsOutRequest&quot;);</span>
+<span class="nc" id="L208">    	   LOG.info(&quot;IntuitionPaymentStatusUpdateRequest--FundsOutRequest---PaymentFundsoutId:&quot;,fundsOutRequest.getPaymentFundsoutId());</span>
+<span class="nc" id="L209">    	   operationType= OperationEnum.FUNDS_OUT;</span>
+<span class="nc" id="L210">    	   cdTransaction = fundsOutKafkaService.populatePaymentOutTxDetails(fundsOutRequest.getPaymentFundsoutId());</span>
+       }
+<span class="nc" id="L212">       setCdTransactionHdrForKafka(cdTransaction, transactionId, operationType, Constants.MODIFY);</span>
+<span class="nc" id="L213">       return cdTransaction;</span>
+	}
+	
+	private CDTransaction getTransactionForTMRequest(ServiceMessage messageRequest, String transactionId ) throws ComplianceException{
+<span class="nc" id="L217">		CDTransaction cdTransaction = null;</span>
+<span class="nc" id="L218">		OperationEnum operationType= OperationEnum.FUNDS_IN;</span>
+<span class="nc" id="L219">		TransactionMonitoringMQRequest transactionMonitoringMQRequest = (TransactionMonitoringMQRequest) messageRequest;</span>
+<span class="nc" id="L220">		Integer tradePaymentId=null;</span>
+<span class="nc" id="L221">		String requestType = transactionMonitoringMQRequest.getRequestType();</span>
+<span class="nc bnc" id="L222" title="All 4 branches missed.">		if (requestType.equalsIgnoreCase(&quot;payment_in&quot;) || requestType.equalsIgnoreCase(&quot;payment_in_update&quot;)) {</span>
+<span class="nc" id="L223">				tradePaymentId = fundsInKafkaService.getTradePaymentIDFromFundsInID(transactionMonitoringMQRequest.getPaymentInID());</span>
+<span class="nc" id="L224">				LOG.info(&quot;getTransactionForTMRequest------TransactionMonitoringMQRequest-----TradePaymentId:&quot;,tradePaymentId);</span>
+<span class="nc" id="L225">				cdTransaction = fundsInKafkaService.populatePaymentInTxDetails(tradePaymentId);</span>
+		
+<span class="nc bnc" id="L227" title="All 4 branches missed.">		}else if(requestType.equalsIgnoreCase(&quot;payment_out&quot;) || requestType.equalsIgnoreCase(&quot;payment_out_update&quot;)) {</span>
+<span class="nc" id="L228">			    tradePaymentId = fundsOutKafkaService.getTradePaymentIDFromFundsOutID(transactionMonitoringMQRequest.getPaymentOutID());</span>
+<span class="nc" id="L229">			    LOG.info(&quot;getTransactionForTMRequest--------TransactionMonitoringMQRequest-----TradePaymentId:&quot;,tradePaymentId);</span>
+<span class="nc" id="L230">			    operationType= OperationEnum.FUNDS_OUT;</span>
+<span class="nc" id="L231">			    cdTransaction = fundsOutKafkaService.populatePaymentOutTxDetails(tradePaymentId);		</span>
+		}
+<span class="nc" id="L233">		setCdTransactionHdrForKafka(cdTransaction, transactionId, operationType, Constants.MODIFY);</span>
+<span class="nc" id="L234">		return cdTransaction;</span>
+	}
+
+	private Integer getFundsInTransactionIDFromPayload(ServiceMessage message) {
+<span class="nc bnc" id="L238" title="All 2 branches missed.">		if (message instanceof FundsInBlacklistResendRequest) {</span>
+<span class="nc" id="L239">			FundsInBlacklistResendRequest fundsInRequest = (FundsInBlacklistResendRequest) message;</span>
+<span class="nc" id="L240">			LOG.info(&quot;FundsInBlacklistResendRequest-----PaymentFundsInId:&quot;,fundsInRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L241">			return fundsInRequest.getPaymentFundsInId();</span>
+
+<span class="nc bnc" id="L243" title="All 2 branches missed.">		}else if (message instanceof FundsInCustomCheckResendRequest) {</span>
+<span class="nc" id="L244">			FundsInCustomCheckResendRequest fundsInRequest = (FundsInCustomCheckResendRequest) message;</span>
+<span class="nc" id="L245">			LOG.info(&quot;FundsInCustomCheckResendRequest-----PaymentFundsInId:&quot;,fundsInRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L246">			return fundsInRequest.getPaymentFundsInId();</span>
+
+<span class="nc bnc" id="L248" title="All 2 branches missed.">		}else if (message instanceof FundsInDeleteRequest) {</span>
+<span class="nc" id="L249">			FundsInDeleteRequest fundsInRequest = (FundsInDeleteRequest) message;</span>
+<span class="nc" id="L250">			LOG.info(&quot;FundsInDeleteRequest-----PaymentFundsInId:&quot;,fundsInRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L251">			return fundsInRequest.getPaymentFundsInId();</span>
+
+<span class="nc bnc" id="L253" title="All 2 branches missed.">		}else if (message instanceof FundsInFraugsterResendRequest) {</span>
+<span class="nc" id="L254">			FundsInFraugsterResendRequest fundsInRequest = (FundsInFraugsterResendRequest) message;</span>
+<span class="nc" id="L255">			LOG.info(&quot;FundsInFraugsterResendRequest-----PaymentFundsInId:&quot;,fundsInRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L256">			return fundsInRequest.getPaymentFundsInId();</span>
+
+<span class="nc bnc" id="L258" title="All 2 branches missed.">		}else if (message instanceof FundsInSanctionResendRequest) {</span>
+<span class="nc" id="L259">			FundsInSanctionResendRequest fundsInRequest = (FundsInSanctionResendRequest) message;</span>
+<span class="nc" id="L260">			LOG.info(&quot;FundsInSanctionResendRequest-----PaymentFundsInId:&quot;,fundsInRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L261">			return fundsInRequest.getPaymentFundsInId();</span>
+
+<span class="nc bnc" id="L263" title="All 2 branches missed.">		}else if (message instanceof IntuitionPaymentStatusUpdateRequest) {</span>
+<span class="nc" id="L264">			IntuitionPaymentStatusUpdateRequest fundsInRequest = (IntuitionPaymentStatusUpdateRequest) message;</span>
+<span class="nc" id="L265">			LOG.info(&quot;IntuitionPaymentStatusUpdateRequest-----TradePaymentID:&quot;,fundsInRequest.getTradePaymentID());</span>
+<span class="nc" id="L266">			return Integer.valueOf(fundsInRequest.getTradePaymentID());</span>
+			
+<span class="nc bnc" id="L268" title="All 2 branches missed.">		}else if (message instanceof TransactionMonitoringUpdatePaymentStatusRequest) {</span>
+<span class="nc" id="L269">			TransactionMonitoringUpdatePaymentStatusRequest fundsInRequest = (TransactionMonitoringUpdatePaymentStatusRequest) message;</span>
+<span class="nc" id="L270">			LOG.info(&quot;TransactionMonitoringUpdatePaymentStatusRequest-----TradePaymentId:&quot;,fundsInRequest.getTradePaymentId());</span>
+<span class="nc" id="L271">			return fundsInRequest.getTradePaymentId();</span>
+
+<span class="nc bnc" id="L273" title="All 2 branches missed.">		}else if (message instanceof TransactionMonitoringMQRequest) {</span>
+<span class="nc" id="L274">			TransactionMonitoringMQRequest fundsInRequest = (TransactionMonitoringMQRequest) message;</span>
+<span class="nc" id="L275">			LOG.info(&quot;TransactionMonitoringMQRequest-----PaymentInID:&quot;,fundsInRequest.getPaymentInID());</span>
+<span class="nc" id="L276">			return fundsInRequest.getPaymentInID();</span>
+
+<span class="nc bnc" id="L278" title="All 2 branches missed.">		}else if (message instanceof ReprocessFailedDetails) {</span>
+<span class="nc" id="L279">			ReprocessFailedDetails fundsInRequest = (ReprocessFailedDetails) message;</span>
+<span class="nc" id="L280">			LOG.info(&quot;ReprocessFailedDetails-----TransId:&quot;,fundsInRequest.getTransId());</span>
+<span class="nc" id="L281">			return fundsInRequest.getTransId();</span>
+			
+		}else {
+<span class="nc" id="L284">			FundsInCreateRequest fundsInRequest = (FundsInCreateRequest) message;</span>
+<span class="nc" id="L285">			LOG.info(&quot;FundsInCreateRequest-----PaymentFundsInId:&quot;,fundsInRequest.getTrade().getPaymentFundsInId());</span>
+<span class="nc" id="L286">			return fundsInRequest.getTrade().getPaymentFundsInId();</span>
+		}
+		
+	}
+	private Integer getFundsOutTransactionIDFromPayload(ServiceMessage message) {
+<span class="nc bnc" id="L291" title="All 2 branches missed.">		if (message instanceof FundsOutBlacklistResendRequest) {</span>
+<span class="nc" id="L292">			FundsOutBlacklistResendRequest fundsOutRequest = (FundsOutBlacklistResendRequest) message;</span>
+<span class="nc" id="L293">			LOG.info(&quot;FundsOutBlacklistResendRequest-----PaymentFundsOutId:&quot;,fundsOutRequest.getPaymentFundsoutId());</span>
+<span class="nc" id="L294">			return fundsOutRequest.getPaymentFundsoutId();</span>
+
+<span class="nc bnc" id="L296" title="All 2 branches missed.">		}else if (message instanceof FundsOutPaymentReferenceResendRequest) {</span>
+<span class="nc" id="L297">		    FundsOutPaymentReferenceResendRequest fundsOutRequest = (FundsOutPaymentReferenceResendRequest) message;</span>
+<span class="nc" id="L298">			LOG.info(&quot;FundsOutPaymentReferenceResendRequest-----PaymentFundsOutId:&quot;,fundsOutRequest.getPaymentFundsoutId());</span>
+<span class="nc" id="L299">			return fundsOutRequest.getPaymentFundsoutId();</span>
+
+<span class="nc bnc" id="L301" title="All 2 branches missed.">		}else if (message instanceof FundsOutCustomCheckResendRequest) {</span>
+<span class="nc" id="L302">			FundsOutCustomCheckResendRequest fundsOutRequest = (FundsOutCustomCheckResendRequest) message;</span>
+<span class="nc" id="L303">			LOG.info(&quot;FundsOutCustomCheckResendRequest-----PaymentFundsOutId:&quot;,fundsOutRequest.getPaymentFundsoutId());</span>
+<span class="nc" id="L304">			return fundsOutRequest.getPaymentFundsoutId();</span>
+
+<span class="nc bnc" id="L306" title="All 2 branches missed.">		}else if (message instanceof FundsOutDeleteRequest) {</span>
+<span class="nc" id="L307">			FundsOutDeleteRequest fundsOutRequest = (FundsOutDeleteRequest) message;</span>
+<span class="nc" id="L308">			LOG.info(&quot;FundsOutDeleteRequest-----PaymentFundsOutId:&quot;,fundsOutRequest.getPaymentFundsoutId());</span>
+<span class="nc" id="L309">			return fundsOutRequest.getPaymentFundsoutId();</span>
+
+<span class="nc bnc" id="L311" title="All 2 branches missed.">		}else if (message instanceof FundsOutFruagsterResendRequest) {</span>
+<span class="nc" id="L312">			FundsOutFruagsterResendRequest fundsOutRequest = (FundsOutFruagsterResendRequest) message;</span>
+<span class="nc" id="L313">			LOG.info(&quot;FundsOutFruagsterResendRequest-----PaymentFundsOutId:&quot;,fundsOutRequest.getPaymentFundsoutId());</span>
+<span class="nc" id="L314">			return fundsOutRequest.getPaymentFundsoutId();</span>
+
+<span class="nc bnc" id="L316" title="All 2 branches missed.">		}else if (message instanceof FundsOutSanctionResendRequest) {</span>
+<span class="nc" id="L317">			FundsOutSanctionResendRequest fundsOutRequest = (FundsOutSanctionResendRequest) message;</span>
+<span class="nc" id="L318">			LOG.info(&quot;FundsOutSanctionResendRequest-----PaymentFundsOutId:&quot;,fundsOutRequest.getPaymentFundsoutId());</span>
+<span class="nc" id="L319">			return fundsOutRequest.getPaymentFundsoutId();</span>
+
+<span class="nc bnc" id="L321" title="All 2 branches missed.">		}else if (message instanceof IntuitionPaymentStatusUpdateRequest) {</span>
+<span class="nc" id="L322">			IntuitionPaymentStatusUpdateRequest fundsOutRequest = (IntuitionPaymentStatusUpdateRequest) message;</span>
+<span class="nc" id="L323">			LOG.info(&quot;IntuitionPaymentStatusUpdateRequest-----TradePaymentID:&quot;,fundsOutRequest.getTradePaymentID());</span>
+<span class="nc" id="L324">			return Integer.valueOf(fundsOutRequest.getTradePaymentID());</span>
+			
+<span class="nc bnc" id="L326" title="All 2 branches missed.">		}else if (message instanceof TransactionMonitoringUpdatePaymentStatusRequest) {</span>
+<span class="nc" id="L327">			TransactionMonitoringUpdatePaymentStatusRequest fundsOutRequest = (TransactionMonitoringUpdatePaymentStatusRequest) message;</span>
+<span class="nc" id="L328">			LOG.info(&quot;TransactionMonitoringUpdatePaymentStatusRequest-----TradePaymentId:&quot;,fundsOutRequest.getTradePaymentId());</span>
+<span class="nc" id="L329">			return fundsOutRequest.getTradePaymentId();</span>
+
+<span class="nc bnc" id="L331" title="All 2 branches missed.">		}else if (message instanceof TransactionMonitoringMQRequest) {</span>
+<span class="nc" id="L332">			TransactionMonitoringMQRequest fundsOutRequest = (TransactionMonitoringMQRequest) message;</span>
+<span class="nc" id="L333">			LOG.info(&quot;TransactionMonitoringMQRequest-----PaymentOutID:&quot;,fundsOutRequest.getPaymentOutID());</span>
+<span class="nc" id="L334">			return fundsOutRequest.getPaymentOutID();</span>
+
+<span class="nc bnc" id="L336" title="All 2 branches missed.">		}else if (message instanceof ReprocessFailedDetails) {</span>
+<span class="nc" id="L337">			ReprocessFailedDetails fundsOutRequest = (ReprocessFailedDetails) message;</span>
+<span class="nc" id="L338">			LOG.info(&quot;ReprocessFailedDetails-----TransId:&quot;,fundsOutRequest.getTransId());</span>
+<span class="nc" id="L339">			return fundsOutRequest.getTransId();</span>
+			
+<span class="nc bnc" id="L341" title="All 2 branches missed.">		}else if (message instanceof FundsOutUpdateRequest) {</span>
+<span class="nc" id="L342">			FundsOutUpdateRequest fundsOutRequest = (FundsOutUpdateRequest) message;</span>
+<span class="nc" id="L343">			LOG.info(&quot;FundsOutUpdateRequest-----TransId:&quot;,fundsOutRequest.getPaymentFundsoutId());</span>
+<span class="nc" id="L344">			return fundsOutRequest.getPaymentFundsoutId();</span>
+			
+		}else {
+<span class="nc" id="L347">			FundsOutRequest fundsOutRequest = (FundsOutRequest) message;</span>
+<span class="nc" id="L348">			LOG.info(&quot;FundsOutRequest-----PaymentFundsOutId:&quot;,fundsOutRequest.getPaymentFundsoutId());</span>
+<span class="nc" id="L349">			return fundsOutRequest.getPaymentFundsoutId();</span>
+		}
+		
+	}
+
+	
+	private void setCdTransactionHdrForKafka(CDTransaction cdTransaction, String transactionId, OperationEnum operationType, String activity) {
+<span class="nc bnc" id="L356" title="All 2 branches missed.">		if(cdTransaction==null) {</span>
+<span class="nc" id="L357">			return;</span>
+		}
+<span class="nc" id="L359">		cdTransaction.getMessageHeader().setTransactionName(operationType.toString());</span>
+<span class="nc" id="L360">		cdTransaction.getMessageHeader().setTransactionSequenceId(transactionId);</span>
+<span class="nc" id="L361">		cdTransaction.getMessageHeader().setOperation(activity);</span>
+<span class="nc" id="L362">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

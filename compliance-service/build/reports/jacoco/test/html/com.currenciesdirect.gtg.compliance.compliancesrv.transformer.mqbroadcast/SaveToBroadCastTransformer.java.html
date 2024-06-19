@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SaveToBroadCastTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.mqbroadcast</a> &gt; <span class="el_source">SaveToBroadCastTransformer.java</span></div><h1>SaveToBroadCastTransformer.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.mqbroadcast;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.statusupdate.StatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsin.response.FundsInCreateResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.FundsOutResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.BroadcastEventToDB;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.MQEntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+/**
+ * The Class SaveToBroadCastTransformer.
+ *
+ * @author manish
+ */
+<span class="nc" id="L41">public class SaveToBroadCastTransformer {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L44">	private static final Logger LOG = LoggerFactory.getLogger(SaveToBroadCastTransformer.class);</span>
+
+	/**
+	 * Transform request.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L56">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L57">			BroadcastEventToDB broadcastEventToDB = new BroadcastEventToDB();</span>
+<span class="nc" id="L58">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L59">			OperationEnum operationEnum = messageExchange.getOperation();</span>
+<span class="nc" id="L60">			RegistrationResponse baseResponse = new RegistrationResponse(); </span>
+<span class="nc bnc" id="L61" title="All 2 branches missed.">			if(OperationEnum.STATUS_UPDATE!=operationEnum) {</span>
+<span class="nc" id="L62">				baseResponse = (RegistrationResponse) message.getPayload().getGatewayMessageExchange().getResponse();</span>
+			}
+<span class="nc bnc" id="L64" title="All 5 branches missed.">			switch (operationEnum) {</span>
+			case NEW_REGISTRATION:
+<span class="nc" id="L66">				broadcastEventToDB.setEntityType(MQEntityTypeEnum.SIGNUP);</span>
+<span class="nc" id="L67">				break;</span>
+			case ADD_CONTACT:
+<span class="nc" id="L69">				broadcastEventToDB.setEntityType(MQEntityTypeEnum.ADDCONTACT);</span>
+<span class="nc" id="L70">				break;</span>
+			case UPDATE_ACCOUNT:
+<span class="nc" id="L72">				broadcastEventToDB.setEntityType(MQEntityTypeEnum.UPDATE);</span>
+<span class="nc" id="L73">				break;</span>
+			case STATUS_UPDATE:
+<span class="nc" id="L75">				baseResponse = (RegistrationResponse)messageExchange.getRequest().getAdditionalAttribute(Constants.FIELD_BROADCAST_RESPONSE);</span>
+<span class="nc" id="L76">				broadcastEventToDB.setEntityType(MQEntityTypeEnum.UPDATE);</span>
+<span class="nc" id="L77">				StatusUpdateRequest statusUpdateRequest = messageExchange.getRequest(StatusUpdateRequest.class);</span>
+<span class="nc" id="L78">				Account oldAccount = (Account) statusUpdateRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L79">				RegistrationServiceRequest regRequest = new RegistrationServiceRequest();</span>
+<span class="nc" id="L80">				regRequest.setAccount(oldAccount);</span>
+<span class="nc" id="L81">				regRequest.setOrgCode(statusUpdateRequest.getOrgCode());</span>
+<span class="nc" id="L82">				messageExchange.setRequest(regRequest);</span>
+<span class="nc" id="L83">				break;</span>
+			default:
+				break;
+			}
+<span class="nc" id="L87">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L88">			Account account = registrationRequest.getAccount();</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">			broadcastEventToDB.setAccountId(account == null ? null : account.getId());</span>
+<span class="nc" id="L90">			broadcastEventToDB.setOrgCode(registrationRequest.getOrgCode());</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">			if(Boolean.TRUE.equals(registrationRequest.getIsBroadCastRequired())) {</span>
+<span class="nc" id="L92">				isCFXBroadcastTrueThenRemoveContact(broadcastEventToDB, baseResponse, account);</span>
+			}
+<span class="nc" id="L94">			broadcastEventToDB.setStatusJson(baseResponse);</span>
+<span class="nc" id="L95">			broadcastEventToDB.setDeliveryStatus(&quot;NEW&quot;);</span>
+<span class="nc" id="L96">			broadcastEventToDB.setCreatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L97">			broadcastEventToDB.setDeliveredOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L98">			broadcastEventToDB.setDeliverOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L99">			broadcastEventToDB.setCreatedBy(token.getUserID());</span>
+<span class="nc" id="L100">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L101">			ccExchange.setRequest(broadcastEventToDB);</span>
+<span class="nc" id="L102">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SAVE_TO_BROADCAST_SERVICE);</span>
+<span class="nc" id="L103">			message.getPayload().appendMessageExchange(ccExchange);</span>
+
+<span class="nc" id="L105">		} catch (Exception e) {</span>
+<span class="nc" id="L106">			LOG.error(&quot;Error in SaveToBroadCastTransformer  class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L107">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L108">		}</span>
+<span class="nc" id="L109">		return message;</span>
+	}
+
+	/**
+	 * @param broadcastEventToDB
+	 * @param baseResponse
+	 * @param account
+	 */
+	private void isCFXBroadcastTrueThenRemoveContact(BroadcastEventToDB broadcastEventToDB,
+			RegistrationResponse baseResponse, Account account) {
+<span class="nc bnc" id="L119" title="All 2 branches missed.">		if(( MQEntityTypeEnum.SIGNUP==broadcastEventToDB.getEntityType()	</span>
+<span class="nc bnc" id="L120" title="All 4 branches missed.">				|| MQEntityTypeEnum.ADDCONTACT==broadcastEventToDB.getEntityType())</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">				&amp;&amp; (null != account &amp;&amp; Constants.CFX.equals(account.getCustType()))) {</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">			if( MQEntityTypeEnum.SIGNUP==broadcastEventToDB.getEntityType()) {</span>
+<span class="nc" id="L123">				baseResponse.getAccount().setEventType(Constants.SIGN_UP);</span>
+			}
+<span class="nc bnc" id="L125" title="All 2 branches missed.">			if(MQEntityTypeEnum.ADDCONTACT==broadcastEventToDB.getEntityType()) {</span>
+<span class="nc" id="L126">				baseResponse.getAccount().setEventType(Constants.ADD_CONTACT);</span>
+			}
+<span class="nc" id="L128">			setContactsToNullForSignupAndAddContact(baseResponse,account);</span>
+		}					
+<span class="nc bnc" id="L130" title="All 4 branches missed.">		if(MQEntityTypeEnum.UPDATE==broadcastEventToDB.getEntityType()</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">				&amp;&amp; (null != account &amp;&amp; Constants.CFX.equals(account.getCustType()))) {</span>
+<span class="nc" id="L132">			baseResponse.getAccount().setEventType(Constants.UPDATE);</span>
+<span class="nc" id="L133">			setContactsToNullForUpdate(baseResponse,account);</span>
+		}
+<span class="nc" id="L135">	}</span>
+
+	private void setContactsToNullForUpdate(RegistrationResponse baseResponse, Account account) {
+<span class="nc" id="L138">		String cSfId = &quot;&quot;;</span>
+		String responseCode;
+		String responseDesc;
+<span class="nc" id="L141">		ComplianceContact complianceContactForSpecific = new ComplianceContact();</span>
+<span class="nc" id="L142">		ComplianceContact complianceContactForOther = new ComplianceContact();</span>
+
+<span class="nc bnc" id="L144" title="All 2 branches missed.">		for (Contact contact : account.getContacts()) {</span>
+<span class="nc" id="L145">			cSfId = contact.getContactSFID();</span>
+<span class="nc" id="L146">		}</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">		if (ComplianceReasonCode.BLACKLISTED.getReasonCode().equals(baseResponse.getAccount().getResponseCode())) {</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">			for (ComplianceContact contact : baseResponse.getAccount().getContacts()) {</span>
+<span class="nc bnc" id="L149" title="All 4 branches missed.">				if (null != cSfId &amp;&amp; cSfId.equals(contact.getContactSFID())</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">						&amp;&amp; ComplianceReasonCode.BLACKLISTED.getReasonCode().equals(contact.getResponseCode())) {</span>
+<span class="nc" id="L151">					responseCode = contact.getResponseCode();</span>
+<span class="nc" id="L152">					responseDesc = contact.getResponseDescription();</span>
+<span class="nc" id="L153">					complianceContactForSpecific.setContactSFID(cSfId);</span>
+<span class="nc" id="L154">					complianceContactForSpecific.setResponseCode(responseCode);</span>
+<span class="nc" id="L155">					complianceContactForSpecific.setResponseDescription(responseDesc);</span>
+				}
+<span class="nc" id="L157">			}</span>
+<span class="nc" id="L158">			complianceContactForOther.setResponseCode(ComplianceReasonCode.BLACKLISTED_OTHER.getReasonCode());</span>
+<span class="nc" id="L159">			complianceContactForOther</span>
+<span class="nc" id="L160">					.setResponseDescription(ComplianceReasonCode.BLACKLISTED_OTHER.getReasonDescription());</span>
+		} else {
+<span class="nc bnc" id="L162" title="All 2 branches missed.">			for (ComplianceContact contact : baseResponse.getAccount().getContacts()) {</span>
+<span class="nc bnc" id="L163" title="All 4 branches missed.">				if (null != cSfId &amp;&amp; cSfId.equals(contact.getContactSFID())) {</span>
+<span class="nc" id="L164">					responseCode = contact.getResponseCode();</span>
+<span class="nc" id="L165">					responseDesc = contact.getResponseDescription();</span>
+<span class="nc" id="L166">					complianceContactForSpecific.setContactSFID(cSfId);</span>
+<span class="nc" id="L167">					complianceContactForSpecific.setResponseCode(responseCode);</span>
+<span class="nc" id="L168">					complianceContactForSpecific.setResponseDescription(responseDesc);</span>
+				}
+<span class="nc" id="L170">			}</span>
+<span class="nc" id="L171">			complianceContactForOther.setResponseCode(baseResponse.getAccount().getResponseCode());</span>
+<span class="nc" id="L172">			complianceContactForOther.setResponseDescription(baseResponse.getAccount().getResponseDescription());</span>
+		}
+<span class="nc" id="L174">		baseResponse.getAccount().setSpecificContact(complianceContactForSpecific);</span>
+<span class="nc" id="L175">		baseResponse.getAccount().setOtherContacts(complianceContactForOther);</span>
+<span class="nc" id="L176">		baseResponse.getAccount().setCustType(Constants.CFX);</span>
+<span class="nc" id="L177">		baseResponse.getAccount().setContacts(null);</span>
+<span class="nc" id="L178">	}</span>
+
+	/**
+	 * 
+	 * @param baseResponse
+	 * @param account
+	 */
+	private void setContactsToNullForSignupAndAddContact(RegistrationResponse baseResponse, Account account) {
+<span class="nc" id="L186">		List&lt;String&gt; cSfId = new ArrayList&lt;&gt;();</span>
+		String responseCode;
+		String responseDesc;
+<span class="nc" id="L189">		ComplianceContact complianceContactForSpecific = new ComplianceContact();</span>
+<span class="nc" id="L190">		ComplianceContact complianceContactForOther = new ComplianceContact();</span>
+
+<span class="nc bnc" id="L192" title="All 2 branches missed.">		for (Contact contact : account.getContacts()) {</span>
+<span class="nc" id="L193">			String e = contact.getContactSFID();</span>
+<span class="nc" id="L194">			cSfId.add(e);</span>
+<span class="nc" id="L195">		}</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">		if (ComplianceReasonCode.BLACKLISTED.getReasonCode().equals(baseResponse.getAccount().getResponseCode())) {</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">			for (ComplianceContact contact : baseResponse.getAccount().getContacts()) {</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">				if (cSfId.contains(contact.getContactSFID())</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">						&amp;&amp; ComplianceReasonCode.BLACKLISTED.getReasonCode().equals(contact.getResponseCode())) {</span>
+<span class="nc" id="L200">					responseCode = contact.getResponseCode();</span>
+<span class="nc" id="L201">					responseDesc = contact.getResponseDescription();</span>
+<span class="nc" id="L202">					complianceContactForSpecific.setContactSFID(cSfId.get(cSfId.indexOf(contact.getContactSFID())));</span>
+<span class="nc" id="L203">					complianceContactForSpecific.setResponseCode(responseCode);</span>
+<span class="nc" id="L204">					complianceContactForSpecific.setResponseDescription(responseDesc);</span>
+				}
+<span class="nc" id="L206">			}</span>
+<span class="nc" id="L207">			complianceContactForOther.setResponseCode(ComplianceReasonCode.BLACKLISTED_OTHER.getReasonCode());</span>
+<span class="nc" id="L208">			complianceContactForOther</span>
+<span class="nc" id="L209">					.setResponseDescription(ComplianceReasonCode.BLACKLISTED_OTHER.getReasonDescription());</span>
+		} else {
+<span class="nc" id="L211">			complianceContactForSpecific.setResponseCode(baseResponse.getAccount().getResponseCode());</span>
+<span class="nc" id="L212">			complianceContactForSpecific.setResponseDescription(baseResponse.getAccount().getResponseDescription());</span>
+<span class="nc" id="L213">			complianceContactForOther.setResponseCode(baseResponse.getAccount().getResponseCode());</span>
+<span class="nc" id="L214">			complianceContactForOther.setResponseDescription(baseResponse.getAccount().getResponseDescription());</span>
+		}
+<span class="nc" id="L216">		baseResponse.getAccount().setSpecificContact(complianceContactForSpecific);</span>
+<span class="nc" id="L217">		baseResponse.getAccount().setOtherContacts(complianceContactForOther);</span>
+<span class="nc" id="L218">		baseResponse.getAccount().setCustType(Constants.CFX);</span>
+<span class="nc" id="L219">		baseResponse.getAccount().setContacts(null);</span>
+<span class="nc" id="L220">	}</span>
+
+	/**
+	 * Transform request for failed fund out.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; transformRequestForFailedFundOut(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L232">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L233">			BroadcastEventToDB broadcastEventToDB = new BroadcastEventToDB();</span>
+<span class="nc" id="L234">			FundsOutResponse fundsOutResponse = (FundsOutResponse) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L235">					.getResponse();</span>
+<span class="nc" id="L236">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+
+<span class="nc" id="L238">			FundsOutRequest fundsOutRequest = (FundsOutRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L239">			Account account = (Account) fundsOutRequest.getAdditionalAttribute(&quot;account&quot;);</span>
+<span class="nc" id="L240">			Contact contact = (Contact) fundsOutRequest.getAdditionalAttribute(&quot;contact&quot;);</span>
+
+<span class="nc" id="L242">			broadcastEventToDB.setAccountId(account.getId());</span>
+<span class="nc" id="L243">			broadcastEventToDB.setContactId(contact.getId());</span>
+<span class="nc" id="L244">			broadcastEventToDB.setPaymentOutId(fundsOutRequest.getFundsOutId());</span>
+<span class="nc" id="L245">			broadcastEventToDB.setOrgCode(fundsOutRequest.getOrgCode());</span>
+<span class="nc" id="L246">			broadcastEventToDB.setStatusJson(fundsOutResponse);</span>
+<span class="nc" id="L247">			broadcastEventToDB.setDeliveryStatus(&quot;NEW&quot;);</span>
+<span class="nc" id="L248">			broadcastEventToDB.setCreatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L249">			broadcastEventToDB.setDeliveredOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L250">			broadcastEventToDB.setDeliverOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L251">			broadcastEventToDB.setCreatedBy(token.getUserID());</span>
+<span class="nc" id="L252">			broadcastEventToDB.setEntityType(MQEntityTypeEnum.PAYMENTOUT);</span>
+<span class="nc" id="L253">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L254">			ccExchange.setRequest(broadcastEventToDB);</span>
+<span class="nc" id="L255">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SAVE_TO_BROADCAST_SERVICE);</span>
+<span class="nc" id="L256">			message.getPayload().appendMessageExchange(ccExchange);</span>
+
+<span class="nc" id="L258">		} catch (Exception e) {</span>
+<span class="nc" id="L259">			LOG.error(&quot;Error in SaveToBroadCastTransformer  class : transformRequestForFailedFundOut -&quot;, e);</span>
+<span class="nc" id="L260">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L261">		}</span>
+<span class="nc" id="L262">		return message;</span>
+	}
+
+	/**
+	 * Transform request for service failed registration.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; transformRequestForServiceFailedRegistration(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L275">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L276">			BroadcastEventToDB broadcastEventToDB = new BroadcastEventToDB();</span>
+<span class="nc" id="L277">			BaseResponse baseResponse = (BaseResponse) message.getPayload().getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L278">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+
+<span class="nc" id="L280">			broadcastEventToDB.setEntityType(MQEntityTypeEnum.UPDATE);</span>
+<span class="nc" id="L281">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L282">			Account account = registrationRequest.getAccount();</span>
+<span class="nc bnc" id="L283" title="All 2 branches missed.">			broadcastEventToDB.setAccountId(account == null ? null : account.getId());</span>
+
+<span class="nc" id="L285">			broadcastEventToDB.setOrgCode(registrationRequest.getOrgCode());</span>
+<span class="nc" id="L286">			broadcastEventToDB.setStatusJson(baseResponse);</span>
+<span class="nc" id="L287">			broadcastEventToDB.setDeliveryStatus(&quot;NEW&quot;);</span>
+<span class="nc" id="L288">			broadcastEventToDB.setCreatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L289">			broadcastEventToDB.setDeliveredOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L290">			broadcastEventToDB.setDeliverOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L291">			broadcastEventToDB.setCreatedBy(token.getUserID());</span>
+<span class="nc" id="L292">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L293">			ccExchange.setRequest(broadcastEventToDB);</span>
+<span class="nc" id="L294">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SAVE_TO_BROADCAST_SERVICE);</span>
+<span class="nc" id="L295">			message.getPayload().appendMessageExchange(ccExchange);</span>
+
+<span class="nc" id="L297">		} catch (Exception e) {</span>
+<span class="nc" id="L298">			LOG.error(&quot;Error in SaveToBroadCastTransformer  class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L299">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L300">		}</span>
+<span class="nc" id="L301">		return message;</span>
+	}
+
+	/**
+	 * Transform request for failed fund in.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; transformRequestForFailedFundIn(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L314">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L315">			BroadcastEventToDB broadcastEventToDB = new BroadcastEventToDB();</span>
+<span class="nc" id="L316">			FundsInCreateResponse fundsInResponse = (FundsInCreateResponse) message.getPayload()</span>
+<span class="nc" id="L317">					.getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L318">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+
+<span class="nc" id="L320">			FundsInCreateRequest fundsInRequest = (FundsInCreateRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L321">			Account account = (Account) fundsInRequest.getAdditionalAttribute(&quot;account&quot;);</span>
+<span class="nc" id="L322">			Contact contact = (Contact) fundsInRequest.getAdditionalAttribute(&quot;contact&quot;);</span>
+
+<span class="nc" id="L324">			broadcastEventToDB.setAccountId(account.getId());</span>
+<span class="nc" id="L325">			broadcastEventToDB.setContactId(contact.getId());</span>
+<span class="nc" id="L326">			broadcastEventToDB.setPaymentInId(fundsInRequest.getFundsInId());</span>
+<span class="nc" id="L327">			broadcastEventToDB.setOrgCode(fundsInRequest.getOrgCode());</span>
+<span class="nc" id="L328">			broadcastEventToDB.setStatusJson(fundsInResponse);</span>
+<span class="nc" id="L329">			broadcastEventToDB.setDeliveryStatus(&quot;NEW&quot;);</span>
+<span class="nc" id="L330">			broadcastEventToDB.setCreatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L331">			broadcastEventToDB.setDeliveredOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L332">			broadcastEventToDB.setDeliverOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L333">			broadcastEventToDB.setCreatedBy(token.getUserID());</span>
+<span class="nc" id="L334">			broadcastEventToDB.setEntityType(MQEntityTypeEnum.PAYMENTIN);</span>
+<span class="nc" id="L335">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L336">			ccExchange.setRequest(broadcastEventToDB);</span>
+<span class="nc" id="L337">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SAVE_TO_BROADCAST_SERVICE);</span>
+<span class="nc" id="L338">			message.getPayload().appendMessageExchange(ccExchange);</span>
+
+<span class="nc" id="L340">		} catch (Exception e) {</span>
+<span class="nc" id="L341">			LOG.error(&quot;Error in SaveToBroadCastTransformer  class : transformRequestForFailedFundIn -&quot;, e);</span>
+<span class="nc" id="L342">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L343">		}</span>
+<span class="nc" id="L344">		return message;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

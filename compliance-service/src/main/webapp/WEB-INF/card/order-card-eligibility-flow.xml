@@ -1,0 +1,125 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:p="http://www.springframework.org/schema/p"
+  xmlns:int="http://www.springframework.org/schema/integration"
+  xmlns:int-http="http://www.springframework.org/schema/integration/http"
+  xmlns:util="http://www.springframework.org/schema/util"
+  xmlns:task="http://www.springframework.org/schema/task"
+  xmlns:context="http://www.springframework.org/schema/context"
+  xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+  <context:component-scan
+    base-package="com.currenciesdirect.gtg.compliance.compliancesrv"/>
+  <int:channel id="CARD.CHECK_CARD_ELIGIBILITY.in.channel"/>
+  <int:channel id="CARD.ELIGIBILITY_CHECK_RESPONSE.CHANNEL"/>
+  <int:channel id="CARD.ERROR.CHANNEL"/>
+  <int:channel id="CARD.ELIGIBILITY_TRANSFORM.CHANNEL"/>
+
+  <int:chain
+    id="CARD.INIT.CHAIN.ID"
+    input-channel="CARD.CHECK_CARD_ELIGIBILITY.in.channel">
+    <int:header-enricher id="CARD.HEADER_ENRICHER.ID">
+      <int:header
+        name="correlationID"
+        expression="T(java.util.UUID).randomUUID()"/>
+      <int:header
+        name="username"
+        expression="headers['username']"/>
+    </int:header-enricher>
+    <int:service-activator ref="cardMessageValidator" id="CARD.VALIDATOR.ID"/>
+    <int:router
+      id="CARD.VALIDATION.ROUTER.ID"
+      expression="payload.getValidationResult()">
+      <int:mapping
+        value="FAIL"
+        channel="CARD.ELIGIBILITY_CHECK_RESPONSE.CHANNEL"/>
+      <int:mapping
+        value="SUCCESS"
+        channel="CARD.ELIGIBILITY_CHECK.CHANNEL"/>
+    </int:router>
+  </int:chain>
+
+  <int:chain id="CARD.ELIGIBILITY_CHECK.CHAIN.ID" input-channel="CARD.ELIGIBILITY_CHECK.CHANNEL"
+    output-channel="CARD.ELIGIBILITY_TRANSFORM.CHANNEL">
+
+    <int:service-activator
+      id="CARD.ENRICHER.ID"
+      ref="orderCardUpdateRegistrationDataEnricher"
+      method="process"/>
+      
+    <int:filter discard-channel="CARD.ERROR.CHANNEL" expression="!payload.isFailed()" />
+
+    <int:service-activator
+      method="createEvent"
+      ref="eventDBServiceImpl">
+    </int:service-activator>
+
+    <int:transformer
+      ref="transactionMonitoringTransformer" method="transformRequest" />
+    <int:service-activator
+      id="REG.TRANSACTIONMONITORING" method="sendRequest">
+      <bean
+        class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+        p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_SERVICE')}"
+        p:method="POST"
+        p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+        p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupRequest"
+        p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse" />
+    </int:service-activator>
+
+    <int:transformer
+      ref="transactionMonitoringTransformer" method="transformResponse" />
+
+    <int:service-activator ref="eventDBServiceImpl"
+      method="createTransactionMonitoringEventSerivceLog"/>
+    
+    <int:service-activator ref="orderCardTransformer"
+	      method="updateAccountTMFlag"/>
+	      
+	<int:service-activator ref="newRegistrationDBServiceImpl"
+			method="updateAccountTMFlag"/>
+	
+    <int:filter discard-channel="CARD.ERROR.CHANNEL" expression="!payload.isFailed()" />
+  </int:chain>
+
+  <int:chain id="CARD.ELIGIBILITY_TRANSFORM.CHAIN.ID" input-channel="CARD.ELIGIBILITY_TRANSFORM.CHANNEL"
+    output-channel="CARD.ELIGIBILITY_CHECK_RESPONSE.CHANNEL">
+    <int:transformer
+      ref="orderCardTransformer" method="transformResponse" />
+    <int:filter discard-channel="CARD.ERROR.CHANNEL" expression="!payload.isFailed()" />
+  </int:chain>
+
+  <int:chain input-channel="CARD.ELIGIBILITY_CHECK_RESPONSE.CHANNEL" output-channel="nullChannel">
+    <int:service-activator id="CARD.RESPONSE.BUILDER.ID" ref="cardResponseBuilder"
+      method="process"/>
+    <int:filter discard-channel="CARD.ERROR.CHANNEL" expression="!payload.isFailed()"/>
+  </int:chain>
+
+  <int:chain id="CARD.ERROR.CHAIN.ID" input-channel="CARD.ERROR.CHANNEL"
+    output-channel="nullChannel">
+    <int:service-activator id="CARD.RESEND.ERROR.HANDLER.ID"
+      method="logError" ref="cardErrorhandler">
+    </int:service-activator>
+  </int:chain>
+
+  <bean id="cardMessageValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.card.MessageValidator"/>
+  <bean id="orderCardUpdateRegistrationDataEnricher"
+    class="com.currenciesdirect.gtg.compliance.compliancesrv.core.card.DataEnricher" />
+  <bean id="cardResponseBuilder"
+    class="com.currenciesdirect.gtg.compliance.compliancesrv.core.card.OrderCardResponseBuilder"/>
+  <bean id="cardErrorhandler"
+    class="com.currenciesdirect.gtg.compliance.compliancesrv.core.card.OrderCardErrorHandler"/>
+  <bean id="orderCardTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.card.OrderCardTransformer"/>
+  <bean id="fundsInDBService" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsInDBServiceImpl" />
+</beans>

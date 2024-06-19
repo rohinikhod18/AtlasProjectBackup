@@ -1,0 +1,640 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<int:channel id="PROFILE.NEW_REGISTRATION.in.channel" />
+	<int:channel id="PROFILE.ADD_CONTACT.in.channel" />
+	
+	 <int:bridge input-channel="PROFILE.NEW_REGISTRATION.in.channel" output-channel="REGISTRATION.NEW_REGISTRATION.in.channel"/>
+	 <int:bridge input-channel="PROFILE.ADD_CONTACT.in.channel" output-channel="REGISTRATION.NEW_REGISTRATION.in.channel"/>
+
+	<int:channel id="REGISTRATION.NEW_REGISTRATION.in.channel" />
+	<int:channel id="REGISTRATION.DATA.VALIDATION.in.channel" />
+	<int:channel id="REGISTRATION.DATA.PERSISTENCE.in.channel" />
+	<int:channel id="REGISTRATION.INTERNALRULES" />
+	<int:channel id="REGISTRATION.INTERNALRULES.IN" />
+	<int:channel id="REGISTRATION.INTERNALRULES.OUT" />
+	<int:channel id="SPLITTER.in.Channel" />
+	<int:channel id="REGISTRATION.Services.in.Channel">
+		<int:dispatcher task-executor="SPLITTER.channel.executor" />
+	</int:channel>
+	<int:channel id="REGISTRATION.Services.out.Channel" />
+	<int:channel id="REGISTRATION.out.channel" />
+	<int:channel id="REGISTRATION.out.withoutBroadcast.channel" />
+	<int:channel id="REG.CONTACT.BROADCASTSPLITTER.in.Channel" />
+	<int:channel id="REG.CONTACT.NEWBROADCAST.NEWREPLY.IN" />
+	
+	<task:executor
+		id="SPLITTER.channel.executor"
+		pool-size="15-25"
+		queue-capacity="5000"
+		keep-alive="15"
+		rejection-policy="CALLER_RUNS" />
+
+	<int:chain
+		id="reg.initChain"
+		input-channel="REGISTRATION.NEW_REGISTRATION.in.channel">
+		<int:header-enricher id="SIGNUP.HeaderEnricher">
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header
+				name="username"
+				expression="headers['username']" />
+		</int:header-enricher>
+		<int:service-activator
+			ref="messageValidator"
+			id="SIGNUP.VALIDATOR" />
+		<int:router
+			id="postValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="REGISTRATION.DATA.VALIDATION.in.channel">
+			<int:mapping
+				value="FAIL"
+				channel="REG.CONTACT.BROADCAST.DECISION.IN" />
+			<int:mapping
+				value="SUCCESS"
+				channel="REGISTRATION.DATA.VALIDATION.in.channel" />
+		</int:router>
+	</int:chain>
+
+	<int:chain
+		id="signup.dataValidations"
+		input-channel="REGISTRATION.DATA.VALIDATION.in.channel">
+		<int:service-activator
+			id="regDataEnricher"
+			ref="regDataEnricher"
+			method="process"/>
+		<int:service-activator
+			id="signup.regDataValidator"
+			ref="regDataValidator"
+			method="process"/>	
+		<int:router
+			id="signup.postDataValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="REGISTRATION.INTERNALRULES">
+			<int:mapping
+				value="FAIL"
+				channel="REG.CONTACT.BROADCAST.DECISION.IN" />
+			<int:mapping
+				value="SUCCESS"
+				channel="REGISTRATION.DATA.PERSISTENCE.in.channel" />
+		</int:router>	
+	</int:chain>
+	
+	<int:chain
+		id="profile.data.persistence"
+		input-channel="REGISTRATION.DATA.PERSISTENCE.in.channel"
+		output-channel="REGISTRATION.INTERNALRULES">
+		
+		<int:service-activator
+			id="SAVE.REG"
+			ref="newRegistrationDBServiceImpl"
+			method="saveNewRegistration" />
+		<int:service-activator
+			id="SAVE.EVENT"
+			method="createEvent"
+			ref="eventDBServiceImpl" >
+		</int:service-activator>
+		<int:service-activator
+			id="SAVE.DEVICEINFO"
+			method="saveDeviceInfo">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.DeviceInfoImpl" />
+		</int:service-activator>
+		<int:transformer
+			ref="internalRuleServiceTransformer"
+			method="transformRequest" />
+		<int:filter discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />	
+	</int:chain>
+	
+	<int:chain
+		id="profile.internalRules.decision"
+		input-channel="REGISTRATION.INTERNALRULES">
+		
+		<int:router
+			default-output-channel="REGISTRATION.INTERNALRULES.IN"
+			resolution-required="false"
+			expression="payload.getInternaRulesRequestSize() gt 0">
+			<int:mapping
+				value="true"
+				channel="REGISTRATION.INTERNALRULES.IN" />
+			<int:mapping
+				value="false"
+				channel="REGISTRATION.INTERNALRULES.OUT" />
+		</int:router>
+	</int:chain>	
+		
+	<int:chain
+		id="profile.internalRules.provider"
+		input-channel="REGISTRATION.INTERNALRULES.IN"
+		output-channel="REGISTRATION.INTERNALRULES.OUT">
+			
+		<int:service-activator
+			id="SIGNUP.InternalRuleService"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('INTERNAL_RULE_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).INTERNAL_RULE_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse" />
+		</int:service-activator>
+	</int:chain>
+	
+	<!-- changes done for NOT_REQUIRED added output-channel="REG.TRANSFORM.REQUEST" status by Abhijit G -->
+	<int:chain
+		id="profile.internalRules.response"
+		input-channel="REGISTRATION.INTERNALRULES.OUT" output-channel="REG.TRANSFORM.REQUEST">
+		<int:transformer
+			ref="internalRuleServiceTransformer"
+			method="transformResponse" />
+			<int:service-activator
+			id="NEW_PROFILE.UPDATE.CONTACT.ATTRIBUTES"
+			ref="updateRegistrationDBServiceImpl"
+			method="updateContactAttributes">
+		</int:service-activator>
+	<int:filter discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />
+	</int:chain>
+
+	<int:channel id="REG.TRANSFORM.REQUEST" />
+	
+	<!-- changes done for NOT_REQUIRED status by Abhijit G -->
+	<!-- Transforms Remaining service request after geting internalRuleService response. -->
+	<int:chain id="transformRequest"
+				input-channel="REG.TRANSFORM.REQUEST" output-channel="SPLITTER.in.Channel">
+		<int:transformer
+			ref="kycTransformer"
+			method="transformRequest" />
+		<int:transformer
+			ref="fraugsterTransformer"
+			method="transformRequest" />
+		<int:transformer
+			ref="sanctionTransformer"
+			method="transformRequest" /> 
+		<int:filter discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />	
+		<!-- commnted below code for AT-995: perform fraugster even blacklist check fails -->
+		<!-- <int:router
+			id="postInternalRule"
+			expression="payload.getInternalRuleServiceStatus()"
+			default-output-channel="SPLITTER.in.Channel">
+			<int:mapping
+				value="PASS"
+				channel="SPLITTER.in.Channel" />
+			<int:mapping
+				value="FAIL"
+				channel="REG.Rules.IN" />
+		</int:router> -->
+	</int:chain>
+	
+	<int:chain
+		id="splitRequest"
+		input-channel="SPLITTER.in.Channel"
+		output-channel="REGISTRATION.Services.in.Channel">
+		<int:header-enricher>
+			<int:header
+				name="numberOfCopiesToMake"
+				expression="3" />
+		</int:header-enricher>
+		<int:splitter ref= "requestSplitter"/>
+	</int:chain>
+
+<!-- START - REGISTRATION Service Flow check custype.. if CFX dnt call kyc-->
+		<int:channel id="REGISTRATION.CFXCHECK.KYC.IN" />
+	<int:channel id="REGISTRATION.CFXCHECK.KYC.OUT" />
+	<int:chain
+		id="registration.KYC.CHAIN.START"
+		input-channel="REGISTRATION.Services.in.Channel">
+			<int:router
+			default-output-channel="REGISTRATION.CFXCHECK.KYC.IN"
+			resolution-required="false"
+			expression="payload.getKYCRequestSize() gt 0">
+			<int:mapping
+				value="true"
+				channel="REGISTRATION.CFXCHECK.KYC.IN" />
+			<int:mapping
+				value="false"
+				channel="REGISTRATION.CFXCHECK.KYC.OUT" />
+		</int:router>
+		</int:chain>
+	<int:chain
+		id="KycChain"
+		input-channel="REGISTRATION.CFXCHECK.KYC.IN"
+		output-channel="REGISTRATION.CFXCHECK.KYC.OUT">
+		<int:service-activator
+			id="KYC"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('KYC_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).KYC_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderResponse" />
+		</int:service-activator>
+	</int:chain>
+	
+	 <int:chain
+		input-channel="REGISTRATION.CFXCHECK.KYC.OUT"
+		output-channel="REGISTRATION.Services.out.Channel">
+		<int:transformer
+			ref="kycTransformer"
+			method="transformResponse" />
+	</int:chain>
+	
+	<int:chain
+		id="REG.FRAUGSTER.CHAIN"
+		input-channel="REGISTRATION.Services.in.Channel"
+		output-channel="REGISTRATION.Services.out.Channel">
+		<int:service-activator
+			id="REG.FRAUGSTER"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('FRAUGSTER_SIGNUP_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).FRAUGSTER_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fraugsterTransformer"
+			method="transformResponse" />
+	</int:chain>
+	
+	
+	<!-- START - SANCTION Service Flow -->
+	<int:channel id="REG.CONTACT.SANCTION.IN" />
+	<int:channel id="REG.CONTACT.SANCTION.OUT" />
+	<int:chain
+		id="REG.SANCTION.DECISION.CHAIN"
+		input-channel="REGISTRATION.Services.in.Channel">
+		<int:router
+			default-output-channel="REG.CONTACT.SANCTION.IN"
+			resolution-required="false"
+			expression="payload.getSanctionRequestSize() gt 0">
+			<int:mapping
+				value="false"
+				channel="REG.CONTACT.SANCTION.OUT" />
+			<int:mapping
+				value="true"
+				channel="REG.CONTACT.SANCTION.IN" />
+		</int:router>
+	</int:chain>
+
+	<int:chain
+		input-channel="REG.CONTACT.SANCTION.IN"
+		output-channel="REG.CONTACT.SANCTION.OUT">
+		<int:service-activator
+			id="REG.SANCTION"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('SANCTION_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).SANCTION_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.ContactRegSanctionRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse" />
+		</int:service-activator>
+	</int:chain>
+
+	<int:chain
+		input-channel="REG.CONTACT.SANCTION.OUT"
+		output-channel="REGISTRATION.Services.out.Channel">
+		<int:transformer
+			ref="sanctionTransformer"
+			method="transformResponse" />
+	</int:chain>
+	
+	<int:chain
+		id="AggregatorChain"
+		input-channel="REGISTRATION.Services.out.Channel"
+		output-channel="REG.Rules.IN">
+		<int:aggregator
+			id="registrationAggregator"
+			ref="responseMessageAggregator"
+			method="complieResponse"
+			correlation-strategy="responseMessageAggregator"
+			correlation-strategy-method="correlatingResponseMsgs"
+			expire-groups-upon-timeout="false"
+			send-partial-result-on-expiry="true"
+			expire-groups-upon-completion="false"
+			discard-channel="REGISTRATION.ERRORHANDLER">
+		</int:aggregator>
+	<int:filter discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />	
+	</int:chain>
+	
+	
+	
+<!-- release-strategy="timeout" 
+	<int:chain
+		id="AggregatorChain"
+		input-channel="REGISTRATION.Services.out.Channel"
+		output-channel="REG.Rules.IN">
+		<int:aggregator
+			id="registrationAggregator"
+			ref="responseMessageAggregator"
+			method="complieResponse"
+			correlation-strategy="responseMessageAggregator"
+			correlation-strategy-method="correlatingResponseMsgs"
+			group-timeout="6000"
+			expire-groups-upon-timeout="false"
+			send-partial-result-on-expiry="false">
+		</int:aggregator>
+	</int:chain>
+-->
+<!-- 	release-strategy="timeout" 	<bean
+		id="timeout"
+		class="org.springframework.integration.aggregator.TimeoutCountSequenceSizeReleaseStrategy">
+		<constructor-arg
+			name="threshold"
+			value="3" />
+		<constructor-arg
+			name="timeout"
+			value="6000" />
+	</bean>-->
+
+	<int:channel id="REG.Rules.IN" />
+
+	<int:chain
+		id="RegRuleServiceChain"
+		input-channel="REG.Rules.IN"
+		output-channel="REG.PERFORM.INTUITION">
+	<!-- 	<int:service-activator
+			id="SAVE.EVENT.SERVICE"
+			ref="eventDBServiceImpl"
+			method="createEventSerivceLog">
+		</int:service-activator> -->
+		<int:service-activator 
+			ref ="watchListRules">
+		<!-- <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.WatchListRules"/> -->
+		</int:service-activator>
+		
+		<int:service-activator
+			id="rulesService"
+			ref="rulesService" />
+			
+		<int:service-activator
+			id="SAVE.EVENT.SERVICE"
+			ref="eventDBServiceImpl"
+			method="createEventSerivceLog">
+		</int:service-activator>
+		
+		<int:service-activator
+			id="NEW_PROFILE.COMPLIANCE.STATUS"
+			ref="newRegistrationDBServiceImpl"
+			method="updateComplianceStatus">
+		</int:service-activator>
+		<int:service-activator
+			id="profile.activitylog"
+			ref="activityDBServiceImpl"
+			method="createSTPProfileActivity" />
+			
+		<int:filter discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />	
+	</int:chain>
+			
+	<int:chain
+		id="reg.intuition.decideCheck"
+		input-channel="REG.PERFORM.INTUITION"	>
+	
+		<int:router
+			default-output-channel="REG.CONTACT.BROADCAST.DECISION.IN"
+			resolution-required="false"
+			expression="payload.isIntuitionEligible()">
+			<int:mapping
+				value="false"
+				channel="REG.CONTACT.BROADCAST.DECISION.IN" />
+			<int:mapping
+				value="true"
+				channel="REG.Intuition.IN" />
+		</int:router>
+	</int:chain>
+			
+	
+	<int:chain
+		id="RegIntuitionServiceChain"
+		input-channel="REG.Intuition.IN"
+		output-channel="REG.CONTACT.BROADCAST.DECISION.IN">
+		
+		<int:transformer
+			ref="transactionMonitoringTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="REG.TRANSACTIONMONITORING"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="transactionMonitoringTransformer"
+			method="transformResponse" />
+			
+		<int:service-activator
+			ref="eventDBServiceImpl"
+			method="createTransactionMonitoringEventSerivceLog">
+		</int:service-activator>
+		
+		<int:service-activator
+			ref="newRegistrationDBServiceImpl"
+			method="updateAccountTMFlag">
+		</int:service-activator>
+		</int:chain>
+	
+	 <int:channel id="REG.CONTACT.BROADCAST.DECISION.IN" />	
+	 <int:chain
+		id="isBroadcast.check"
+		input-channel="REG.CONTACT.BROADCAST.DECISION.IN">			
+		<int:service-activator ref="prepareResponseHandler" />
+		 <int:router
+				resolution-required="true"
+				expression="payload.isBroadcastRequired()">
+				<int:mapping
+					value="false"
+					channel="REGISTRATION.out.channel" />
+				<int:mapping
+					value="true"
+					channel="REG.CONTACT.BROADCASTSPLITTER.in.Channel" />
+			</int:router>
+	</int:chain> 
+			 
+	<!-- Splitter added to split message for storing response without contact in StatusBroadcastQueue and
+	     sending with contact response to reply handler for response basit s.-->
+	<int:chain
+		input-channel="REG.CONTACT.BROADCASTSPLITTER.in.Channel"
+		output-channel="REG.CONTACT.NEWBROADCAST.NEWREPLY.IN">
+		<int:header-enricher>
+			<int:header name="numberOfCopiesToMake" expression="2"
+				overwrite="true" />
+		</int:header-enricher>
+		<int:splitter id="splitter2" ref="requestSplitter" />
+	</int:chain>
+			 
+	<int:channel id="REG.CONTACT.NEWBROADCAST.NEWREPLY.IN" />			 
+	<int:chain
+		id="regBroadCastChain"
+		input-channel="REG.CONTACT.NEWBROADCAST.NEWREPLY.IN"
+		output-channel="nullChannel">
+		
+		<int:transformer
+			id="NEW_PROFILE.BROADCAST.TRANSFORM"
+			ref="saveToBroadCastTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="NEW_PROFILE.SAVETOBROADCAST"
+			ref="reg.BroadCastQueueDBServiceImpl"
+			method="saveIntoBroadcastQueue">
+		</int:service-activator>
+		<int:filter discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain
+		id="regPrepareResponseChain1"
+		input-channel="REG.CONTACT.NEWBROADCAST.NEWREPLY.IN"
+		output-channel="nullChannel">			
+		
+		<int:service-activator	ref="messageReplyHandler" />
+	</int:chain>
+	
+	<int:chain
+		id="regPrepareResponseChain2"
+		input-channel="REGISTRATION.out.channel"
+		output-channel="nullChannel">			
+		
+		<int:service-activator	ref="messageReplyHandler" />
+		<int:transformer
+			id="NEW_PROFILE.BROADCAST.TRANSFORM"
+			ref="saveToBroadCastTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="REG.DATALAKE"
+			method="sendRequestToDataLake">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('DATA_LAKE')}"
+				p:method="POST" />
+		</int:service-activator>
+		
+		
+	</int:chain>
+	
+	<int:chain 
+		id="failedRegHandlerChain"
+		input-channel="failed-registrations">
+		<int:service-activator
+			ref="messageReplyHandler"
+			method="onFail" />
+	</int:chain>
+	
+	<int:chain id="dataLakeChain" 
+	input-channel="REG_DATA_LAKE.IN.CHANNEL"
+	output-channel="REGISTRATION.out.channel">
+	<int:transformer
+			id="NEW_PROFILE.BROADCAST.TRANSFORM"
+			ref="saveToBroadCastTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="REG.DATALAKE"
+			method="sendRequestToDataLake">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('DATA_LAKE')}"
+				p:method="POST" />
+		</int:service-activator>
+	</int:chain>
+
+	<!--Bean Definations start -->
+	<bean
+		id="reg.BroadCastQueueDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.BroadCastQueueDBServiceImpl" />
+	<bean
+		id="saveToBroadCastTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.mqbroadcast.SaveToBroadCastTransformer" />
+	<bean
+		id="internalRuleServiceTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.InternalRuleServiceTransformer" />
+	<bean
+		id="messageValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.reg.MessageValidator" />
+	<bean
+		id="regDataValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.reg.DataValidator" />
+	<bean
+		id="regDataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.reg.DataEnricher" />
+	<bean
+		id="prepareResponseHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.reg.PrepareResponseHandler" />
+	<bean
+		id="messageReplyHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.reg.ReplyHandler" />
+	<bean
+		id="responseMessageAggregator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.flowcontrol.ResponseMessageAggregator" />
+	<bean
+		id="validationFilter"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.flowcontrol.filter.ValidationFilter" />
+	<bean
+		id="kycTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.KYCTransformer" />
+	<bean
+		id="fraugsterTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.FraugsterTransformer" />
+	<bean
+		id="sanctionTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.SanctionTransformer" />	
+	<bean
+		id="newRegistrationDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl" />
+	<bean
+		id="updateRegistrationDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.UpdateRegistrationDBServiceImpl" />
+	<bean
+		id="activityDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl"/>
+	
+	<bean
+		id="eventDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.EventDBServiceImpl" />
+	<bean
+		id="rulesService"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.rules.RegistrationRulesService" />
+	<bean
+		id="providerProperties"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.ProvideCacheLoader"
+		init-method="getInstance" />
+	<bean
+		id="requestSplitter"
+	    class="com.currenciesdirect.gtg.compliance.compliancesrv.flowcontrol.RequestMessageSplitter" />
+	<bean 
+		id="watchListRules" 
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.WatchListRules"/>
+	<bean 
+		id="transactionMonitoringTransformer" 
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.TransactionMonitoringTransformer"/>
+</beans>

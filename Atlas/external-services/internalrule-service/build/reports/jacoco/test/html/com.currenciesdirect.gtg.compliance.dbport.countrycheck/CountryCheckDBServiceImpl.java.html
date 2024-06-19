@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CountryCheckDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">internalrule-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport.countrycheck</a> &gt; <span class="el_source">CountryCheckDBServiceImpl.java</span></div><h1>CountryCheckDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport.countrycheck;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.core.countrycheck.ICountryCheckDBService;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.CountryCheckContactResponse;
+import com.currenciesdirect.gtg.compliance.dbport.AbstractDao;
+import com.currenciesdirect.gtg.compliance.exception.countrycheck.CountryCheckErrors;
+import com.currenciesdirect.gtg.compliance.exception.countrycheck.CountryCheckException;
+import com.currenciesdirect.gtg.compliance.util.Constants;
+
+/**
+ * The Class CountryCheckDBServiceImpl.
+ */
+@SuppressWarnings(&quot;squid:S3077&quot;)
+public class CountryCheckDBServiceImpl extends AbstractDao implements ICountryCheckDBService {
+
+	/** The i DB service. */
+<span class="fc" id="L24">	private static volatile ICountryCheckDBService iDBService = null;</span>
+
+	/** The Constant LOG. */
+<span class="fc" id="L27">	private static final Logger LOG = LoggerFactory.getLogger(CountryCheckDBServiceImpl.class);</span>
+
+	/**
+	 * Instantiates a new country check DB service impl.
+	 */
+	private CountryCheckDBServiceImpl() {
+	}
+
+	/**
+	 * Gets the single instance of CountryCheckDBServiceImpl.
+	 *
+	 * @return single instance of CountryCheckDBServiceImpl
+	 */
+	public static ICountryCheckDBService getInstance() {
+<span class="fc bfc" id="L41" title="All 2 branches covered.">		if (iDBService == null) {</span>
+<span class="fc" id="L42">			synchronized (CountryCheckDBServiceImpl.class) {</span>
+<span class="pc bpc" id="L43" title="1 of 2 branches missed.">				if (iDBService == null) {</span>
+<span class="fc" id="L44">					iDBService = new CountryCheckDBServiceImpl();</span>
+				}
+<span class="fc" id="L46">			}</span>
+		}
+<span class="fc" id="L48">		return iDBService;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.countrycheck.
+	 * ICountryCheckDBService#getCountryCheckResponse(java.lang.String)
+	 */
+	@Override
+	public CountryCheckContactResponse getCountryCheckResponse(String country) throws CountryCheckException {
+
+<span class="fc" id="L60">		CountryCheckContactResponse response = null;</span>
+<span class="fc" id="L61">		ResultSet rs = null;</span>
+<span class="fc" id="L62">		try (Connection connection = getConnection();</span>
+<span class="fc" id="L63">				PreparedStatement preparedStatement = connection</span>
+<span class="fc" id="L64">						.prepareStatement(DBQueryConstant.GET_COUNTRY_STATUS.getQuery())) {</span>
+<span class="fc" id="L65">			preparedStatement.setString(1, country);</span>
+<span class="fc" id="L66">			String riskLevel = null;</span>
+<span class="fc" id="L67">			rs = preparedStatement.executeQuery();</span>
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">			if (rs.next()) {</span>
+<span class="fc" id="L69">				riskLevel = rs.getString(&quot;RiskLevel&quot;);</span>
+			}
+<span class="fc" id="L71">			response = new CountryCheckContactResponse();</span>
+<span class="fc" id="L72">			response.setCountry(country);</span>
+<span class="fc bfc" id="L73" title="All 2 branches covered.">			if (riskLevel == null) {</span>
+<span class="fc" id="L74">				response.setStatus(CountryCheckErrors.ERROR_COUNTRY_NOT_FOUND.getErrorDescription());</span>
+<span class="fc" id="L75">				return response;</span>
+			}
+<span class="fc" id="L77">			response.setRiskLevel(riskLevel);</span>
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">			if (RiskLevel.HIGHT_RISK.getRisk().equals(riskLevel)) {</span>
+<span class="nc" id="L79">				response.setStatus(Constants.WATCHLIST);</span>
+<span class="pc bpc" id="L80" title="1 of 2 branches missed.">			} else if (RiskLevel.SANCTION_RISK.getRisk().equals(riskLevel)) {</span>
+<span class="nc" id="L81">				response.setStatus(Constants.FAIL);</span>
+			} else {
+<span class="fc" id="L83">				response.setStatus(Constants.PASS);</span>
+			}
+
+<span class="nc" id="L86">		} catch (Exception e) {</span>
+<span class="nc" id="L87">			throw new CountryCheckException(CountryCheckErrors.ERROR_WHILE_SEARCHING_DATA, e);</span>
+		} finally {
+			try {
+<span class="fc" id="L90">				closeResultset(rs);</span>
+<span class="nc" id="L91">			} catch (Exception e) {</span>
+
+<span class="nc" id="L93">				LOG.error(&quot;Error in FraugsterDBServiceIMPL:getFraugsterProviderInitConfigProperty() &quot;, e);</span>
+<span class="fc" id="L94">			}</span>
+		}
+<span class="fc" id="L96">		return response;</span>
+	}
+
+	/**
+	 * The Enum RiskLevel.
+	 */
+<span class="fc" id="L102">	public enum RiskLevel {</span>
+
+		/** The hight risk. */
+<span class="fc" id="L105">		HIGHT_RISK(&quot;H&quot;),</span>
+		/** The low risk. */
+<span class="fc" id="L107">		LOW_RISK(&quot;L&quot;),</span>
+		/** The sanction risk. */
+<span class="fc" id="L109">		SANCTION_RISK(&quot;S&quot;);</span>
+
+		/** The risk. */
+		private String risk;
+
+		/**
+		 * Instantiates a new risk level.
+		 *
+		 * @param risk
+		 *            the risk
+		 */
+<span class="fc" id="L120">		RiskLevel(String risk) {</span>
+<span class="fc" id="L121">			this.risk = risk;</span>
+<span class="fc" id="L122">		}</span>
+
+		/**
+		 * Gets the risk.
+		 *
+		 * @return the risk
+		 */
+		public String getRisk() {
+<span class="fc" id="L130">			return this.risk;</span>
+		}
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

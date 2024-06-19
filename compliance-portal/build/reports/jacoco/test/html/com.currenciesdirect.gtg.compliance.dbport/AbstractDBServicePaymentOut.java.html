@@ -1,0 +1,1326 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbstractDBServicePaymentOut.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">AbstractDBServicePaymentOut.java</span></div><h1>AbstractDBServicePaymentOut.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityTemplateEnum;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistPayRefSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.BaseUpdateDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.BroadcastEventToDB;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.CountryCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.EuPoiCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.Fraugster;
+import com.currenciesdirect.gtg.compliance.core.domain.FurtherPaymentInDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.FurtherPaymentOutDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.Intuition;
+import com.currenciesdirect.gtg.compliance.core.domain.IntuitionPaymentResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.IDomain;
+import com.currenciesdirect.gtg.compliance.core.domain.Kyc;
+import com.currenciesdirect.gtg.compliance.core.domain.PaginationData;
+import com.currenciesdirect.gtg.compliance.core.domain.PaginationDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentReferenceCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentUpdateDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.Sanction;
+import com.currenciesdirect.gtg.compliance.core.domain.UploadDocumentTypeDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.VelocityCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.WatchListData;
+import com.currenciesdirect.gtg.compliance.core.domain.WatchListDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.Watchlist;
+import com.currenciesdirect.gtg.compliance.core.domain.WatchlistUpdateRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.WhitelistCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.kyc.KYCSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.CustomCheckSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutCustomCheck;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.ProfileActivityLogDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.sanction.SanctionSummary;
+import com.currenciesdirect.gtg.compliance.dbport.enums.BroadCastEntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.BroadCastStatusEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.EntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.FragusterWatchListEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.FraugsterReasonsEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.PaymentComplianceStatus;
+import com.currenciesdirect.gtg.compliance.dbport.enums.ServiceStatusEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.WatchListCategoryEnum;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.DecimalFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.StringUtils;
+
+/**
+ * The Class AbstractDBServicePaymentOut.
+ */
+<span class="fc" id="L72">public abstract class AbstractDBServicePaymentOut extends AbstractDBServiceLevel2 {</span>
+	
+	/** The Constant LOGGER. */
+<span class="fc" id="L75">	private static final Logger LOGGER = LoggerFactory.getLogger(AbstractDBServicePaymentOut.class);</span>
+
+	private static final String PRE_WATCHLIST = &quot;{PRE_WATCHLIST}&quot;;
+	private static final String CURRENT_WATCHLIST = &quot;{CURRENT_WATCHLIST}&quot;;
+	
+	protected Watchlist getAccountWatchlist(Integer accountId, Connection connection) throws CompliancePortalException {
+
+<span class="nc" id="L82">		Watchlist watchlist = new Watchlist();</span>
+<span class="nc" id="L83">		List&lt;WatchListData&gt; watchlistDataList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L84">		watchlist.setWatchlistData(watchlistDataList);</span>
+<span class="nc" id="L85">		PreparedStatement statement = null;</span>
+<span class="nc" id="L86">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L88">			statement = connection.prepareStatement(RegistrationQueryConstant.GET_ACCOUNT_WATCHLIST.getQuery());</span>
+<span class="nc" id="L89">			statement.setInt(1, accountId);</span>
+<span class="nc" id="L90">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L92">				WatchListData watchlistData = new WatchListData();</span>
+<span class="nc" id="L93">				watchlistData.setName(rs.getString(Constants.WATCHLISTNAME));</span>
+<span class="nc" id="L94">				watchlistData.setContactId(rs.getInt(Constants.CONTACTID));</span>
+<span class="nc" id="L95">				watchlistData.setValue(Boolean.TRUE);</span>
+<span class="nc" id="L96">				watchlistDataList.add(watchlistData);</span>
+<span class="nc" id="L97">			}</span>
+
+<span class="nc" id="L99">		} catch (Exception e) {</span>
+<span class="nc" id="L100">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L102">			closeResultset(rs);</span>
+<span class="nc" id="L103">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L105">		return watchlist;</span>
+	}
+
+	protected Watchlist getAccountWatchlistWithSelected(Integer accountId, Integer contactId, String custType,  Connection connection, UserProfile profile)
+			throws CompliancePortalException {
+
+<span class="fc" id="L111">		Watchlist watchlist = new Watchlist();</span>
+<span class="fc" id="L112">		List&lt;WatchListData&gt; watchlistDataList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L113">		watchlist.setWatchlistData(watchlistDataList);</span>
+<span class="fc" id="L114">		PreparedStatement statement = null;</span>
+<span class="fc" id="L115">		ResultSet rs = null;</span>
+<span class="fc" id="L116">		boolean category1 = profile.getPermissions().getCanManageWatchListCategory1();</span>
+<span class="fc" id="L117">		boolean category2 = profile.getPermissions().getCanManageWatchListCategory2();</span>
+		try {
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">			if(Constants.CUST_TYPE_PFX.equalsIgnoreCase(custType)){</span>
+<span class="fc" id="L120">				statement = getPrepareStatementForContactWatchlist(contactId, connection, category1, category2);</span>
+			}else{
+<span class="nc" id="L122">				statement = getPrepareStatementForWatchlist(accountId, connection, category1, category2);</span>
+			}
+<span class="fc" id="L124">			rs = statement.executeQuery();</span>
+<span class="fc bfc" id="L125" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L126">				WatchListData watchlistData = new WatchListData();</span>
+<span class="fc" id="L127">				watchlistData.setName(rs.getString(Constants.WATCHLISTNAME));</span>
+<span class="fc" id="L128">				watchlistData.setContactId(rs.getInt(Constants.CONTACTID));</span>
+<span class="fc" id="L129">				Integer contactIdDb = rs.getInt(Constants.CONTACTID);</span>
+<span class="pc bpc" id="L130" title="1 of 2 branches missed.">				if (contactIdDb != -1) {</span>
+<span class="nc" id="L131">					watchlistData.setValue(Boolean.TRUE);</span>
+				} else {
+<span class="fc" id="L133">					watchlistData.setValue(Boolean.FALSE);</span>
+				}
+<span class="fc" id="L135">				watchlistDataList.add(watchlistData);</span>
+<span class="fc" id="L136">			}</span>
+
+<span class="nc" id="L138">		} catch (Exception e) {</span>
+<span class="nc" id="L139">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L141">			closeResultset(rs);</span>
+<span class="fc" id="L142">			closePrepareStatement(statement);</span>
+		}
+<span class="fc" id="L144">		return watchlist;</span>
+	}
+
+	 /**
+	 * @param contactId
+	 * @param connection
+	 * @param category1
+	 * @param category2
+	 * @return
+	 * @throws SQLException
+	 */
+	@SuppressWarnings(&quot;squid:S2095&quot;)
+	private PreparedStatement getPrepareStatementForContactWatchlist(Integer contactId, Connection connection,
+			boolean category1, boolean category2) throws SQLException {
+		PreparedStatement statement;
+		// if only one of category is enabled, then add second param to
+		// query
+		// else no filter needed
+<span class="fc" id="L162">		String accountWatchlistQuery = &quot;&quot;;</span>
+<span class="fc" id="L163">		int result = 0;</span>
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">		if ((category1 == category2)) {</span>
+<span class="fc" id="L165">			accountWatchlistQuery = RegistrationQueryConstant.GET_CONTACT_WATCHLIST_WITH_SELECTED.getQuery();</span>
+		} else {
+<span class="nc" id="L167">			accountWatchlistQuery = RegistrationQueryConstant.GET_CONTACT_WATCHLIST_CATEGORY_WITH_SELECTED.getQuery();</span>
+<span class="nc bnc" id="L168" title="All 4 branches missed.">			if (category1 &amp;&amp; !category2) {</span>
+<span class="nc" id="L169">				result = WatchListCategoryEnum.CATEGORY_1.getCategoryDbStatus();</span>
+
+<span class="nc bnc" id="L171" title="All 4 branches missed.">			} else if (!category1 &amp;&amp; category2) {</span>
+<span class="nc" id="L172">				result = WatchListCategoryEnum.CATEGORY_2.getCategoryDbStatus();</span>
+			}
+		}
+
+<span class="fc" id="L176">		statement = connection.prepareStatement(accountWatchlistQuery);</span>
+
+<span class="fc" id="L178">		statement.setInt(1, contactId);</span>
+<span class="pc bpc" id="L179" title="5 of 8 branches missed.">		if ((!category1 &amp;&amp; category2) || (category1 &amp;&amp; !category2))</span>
+<span class="nc" id="L180">			statement.setInt(2, result);</span>
+<span class="fc" id="L181">		return statement;</span>
+	}
+	
+	/**
+	 * @param accountId
+	 * @param connection
+	 * @param category1
+	 * @param category2
+	 * @return
+	 * @throws SQLException
+	 */
+	@SuppressWarnings(&quot;squid:S2095&quot;)
+	private PreparedStatement getPrepareStatementForWatchlist(Integer accountId, Connection connection,
+			boolean category1, boolean category2) throws SQLException {
+		PreparedStatement statement;
+		// if only one of category is enabled, then add second param to
+		// query
+		// else no filter needed
+<span class="nc" id="L199">		String accountWatchlistQuery = &quot;&quot;;</span>
+<span class="nc" id="L200">		int result = 0;</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">		if ((category1 == category2)) {</span>
+<span class="nc" id="L202">			accountWatchlistQuery = RegistrationQueryConstant.GET_ACCOUNT_WATCHLIST_WITH_SELECTED.getQuery();</span>
+		} else {
+<span class="nc" id="L204">			accountWatchlistQuery = RegistrationQueryConstant.GET_ACCOUNT_WATCHLIST_CATEGORY_WITH_SELECTED.getQuery();</span>
+<span class="nc bnc" id="L205" title="All 4 branches missed.">			if (category1 &amp;&amp; !category2) {</span>
+<span class="nc" id="L206">				result = WatchListCategoryEnum.CATEGORY_1.getCategoryDbStatus();</span>
+
+<span class="nc bnc" id="L208" title="All 4 branches missed.">			} else if (!category1 &amp;&amp; category2) {</span>
+<span class="nc" id="L209">				result = WatchListCategoryEnum.CATEGORY_2.getCategoryDbStatus();</span>
+			}
+		}
+
+<span class="nc" id="L213">		statement = connection.prepareStatement(accountWatchlistQuery);</span>
+
+<span class="nc" id="L215">		statement.setInt(1, accountId);</span>
+<span class="nc bnc" id="L216" title="All 8 branches missed.">		if ((!category1 &amp;&amp; category2) || (category1 &amp;&amp; !category2))</span>
+<span class="nc" id="L217">			statement.setInt(2, result);</span>
+<span class="nc" id="L218">		return statement;</span>
+	}
+
+	protected Boolean saveIntoBroadcastQueue(BroadcastEventToDB broadcastEventToDB, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L223">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L225">			preparedStatement = connection</span>
+<span class="nc" id="L226">					.prepareStatement(RegistrationQueryConstant.SAVE_INTO_BROADCAST_QUEUE.getQuery());</span>
+<span class="nc" id="L227">			preparedStatement.setString(1, broadcastEventToDB.getOrgCode());</span>
+<span class="nc" id="L228">			preparedStatement.setInt(2,</span>
+<span class="nc" id="L229">					BroadCastEntityTypeEnum.getBraodCastEntityTypeAsInteger(broadcastEventToDB.getEntityType()));</span>
+<span class="nc" id="L230">			preparedStatement.setInt(3, broadcastEventToDB.getAccountId());</span>
+<span class="nc bnc" id="L231" title="All 2 branches missed.">			if (broadcastEventToDB.getContactId() != null) {</span>
+<span class="nc" id="L232">				preparedStatement.setInt(4, broadcastEventToDB.getContactId());</span>
+			} else {
+<span class="nc" id="L234">				preparedStatement.setNull(4, Types.INTEGER);</span>
+			}
+<span class="nc bnc" id="L236" title="All 2 branches missed.">			if (broadcastEventToDB.getPaymentInId() != null) {</span>
+<span class="nc" id="L237">				preparedStatement.setInt(5, broadcastEventToDB.getPaymentInId());</span>
+			} else {
+<span class="nc" id="L239">				preparedStatement.setNull(5, Types.INTEGER);</span>
+			}
+<span class="nc bnc" id="L241" title="All 2 branches missed.">			if (broadcastEventToDB.getPaymentOutId() != null) {</span>
+<span class="nc" id="L242">				preparedStatement.setInt(6, broadcastEventToDB.getPaymentOutId());</span>
+			} else {
+<span class="nc" id="L244">				preparedStatement.setNull(6, Types.INTEGER);</span>
+			}
+<span class="nc" id="L246">			preparedStatement.setString(7, broadcastEventToDB.getStatusJson());</span>
+<span class="nc" id="L247">			preparedStatement.setInt(8,</span>
+<span class="nc" id="L248">					BroadCastStatusEnum.getBraodCastStatusAsInteger(broadcastEventToDB.getDeliveryStatus()));</span>
+<span class="nc" id="L249">			preparedStatement.setTimestamp(9, broadcastEventToDB.getDeliverOn());</span>
+<span class="nc" id="L250">			preparedStatement.setString(10, broadcastEventToDB.getCreatedBy());</span>
+<span class="nc" id="L251">			preparedStatement.setTimestamp(11, broadcastEventToDB.getCreatedOn());</span>
+<span class="nc" id="L252">			int count = preparedStatement.executeUpdate();</span>
+<span class="nc" id="L253">			boolean result = true;</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L255">				result = false;</span>
+			}
+<span class="nc" id="L257">			return result;</span>
+<span class="nc" id="L258">		} catch (Exception e) {</span>
+<span class="nc" id="L259">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_SAVING_DATA_INTO_BROADCAST_QUEUE, e);</span>
+		} finally {
+<span class="nc" id="L261">			closePrepareStatement(preparedStatement);</span>
+		}
+	}
+
+	protected List&lt;IDomain&gt; getMoreKycDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="nc" id="L266">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc bnc" id="L268" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L269">				Kyc kyc = new Kyc();</span>
+<span class="nc" id="L270">				KYCSummary kycSummary = JsonConverterUtil.convertToObject(KYCSummary.class,</span>
+<span class="nc" id="L271">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="nc" id="L272">				kyc.setId(resultSet.getInt(&quot;id&quot;)); // ESL id</span>
+<span class="nc" id="L273">				kyc.setCheckedOn(DateTimeFormatter.dateTimeFormatter(kycSummary.getCheckedOn()));</span>
+<span class="nc" id="L274">				kyc.setDob(kycSummary.getDob());</span>
+<span class="nc" id="L275">				kyc.setEidCheck(kycSummary.getEidCheck());</span>
+<span class="nc" id="L276">				kyc.setVerifiactionResult(kycSummary.getVerifiactionResult());</span>
+<span class="nc" id="L277">				kyc.setReferenceId(kycSummary.getReferenceId());</span>
+<span class="nc" id="L278">				boolean status = Constants.PASS.equals(kycSummary.getStatus());</span>
+				/** Added changes to set status as Not_Required on UI -Saylee */
+<span class="nc bnc" id="L280" title="All 2 branches missed.">				if (Constants.NOT_REQUIRED.equalsIgnoreCase(kycSummary.getStatus())) {</span>
+<span class="nc" id="L281">					kyc.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L282">					kyc.setStatusValue(Constants.NOT_REQUIRED_UI);</span>
+				} else {
+<span class="nc" id="L284">					kyc.setIsRequired(Boolean.TRUE);</span>
+<span class="nc" id="L285">					kyc.setStatusValue(kycSummary.getStatus());</span>
+<span class="nc" id="L286">					kyc.setStatus(status);</span>
+				}
+<span class="nc" id="L288">				kyc.setEntityType(</span>
+<span class="nc" id="L289">						EntityTypeEnum.getUiStatusFromDatabaseStatus(resultSet.getInt(Constants.ENTITY_TYPE)));</span>
+<span class="nc" id="L290">				domainList.add((IDomain) kyc);</span>
+<span class="nc" id="L291">			}</span>
+<span class="nc" id="L292">			return domainList;</span>
+
+<span class="nc" id="L294">		} catch (Exception e) {</span>
+<span class="nc" id="L295">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+	}
+
+	protected List&lt;IDomain&gt; getMoreSanctionDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="fc" id="L300">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc bfc" id="L302" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L303">				Sanction sanc = new Sanction();</span>
+<span class="fc" id="L304">				SanctionSummary sancSummary = JsonConverterUtil.convertToObject(SanctionSummary.class,</span>
+<span class="fc" id="L305">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="fc" id="L306">				sanc.setUpdatedBy(resultSet.getString(&quot;updatedBy&quot;));</span>
+<span class="fc" id="L307">				sanc.setEventServiceLogId(resultSet.getInt(&quot;id&quot;)); // Set esl id</span>
+<span class="fc" id="L308">				sanc.setUpdatedOn(DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+<span class="fc" id="L309">				sanc.setSanctionId(sancSummary.getSanctionId());</span>
+<span class="fc" id="L310">				sanc.setOfacList(sancSummary.getOfacList());</span>
+<span class="fc" id="L311">				sanc.setWorldCheck(sancSummary.getWorldCheck());</span>
+<span class="fc" id="L312">				boolean status = &quot;PASS&quot;.equals(sancSummary.getStatus());</span>
+				/** Added changes to set status as Not_Required on UI -Saylee */
+<span class="pc bpc" id="L314" title="1 of 2 branches missed.">				if (Constants.NOT_REQUIRED.equalsIgnoreCase(sancSummary.getStatus())) {</span>
+<span class="nc" id="L315">					sanc.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L316">					sanc.setStatusValue(Constants.NOT_REQUIRED_UI);</span>
+				} else {
+<span class="fc" id="L318">					sanc.setIsRequired(Boolean.TRUE);</span>
+<span class="fc" id="L319">					sanc.setStatusValue(sancSummary.getStatus());</span>
+<span class="fc" id="L320">					sanc.setStatus(status);</span>
+				}
+<span class="fc" id="L322">				sanc.setEntityType(</span>
+<span class="fc" id="L323">						EntityTypeEnum.getUiStatusFromDatabaseStatus(resultSet.getInt(Constants.ENTITY_TYPE)));</span>
+<span class="fc" id="L324">				domainList.add((IDomain) sanc);</span>
+<span class="fc" id="L325">			}</span>
+<span class="fc" id="L326">			return domainList;</span>
+<span class="nc" id="L327">		} catch (Exception e) {</span>
+<span class="nc" id="L328">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+
+	}
+
+	protected List&lt;IDomain&gt; getMoreFraugsterDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="fc" id="L334">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc bfc" id="L336" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L337">				Fraugster fraug = new Fraugster();</span>
+<span class="fc" id="L338">				FraugsterSummary fraugSummary = JsonConverterUtil.convertToObject(FraugsterSummary.class,</span>
+<span class="fc" id="L339">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="pc bpc" id="L340" title="2 of 4 branches missed.">				boolean status = fraugSummary.getStatus() != null &amp;&amp; Constants.PASS.equals(fraugSummary.getStatus());</span>
+<span class="fc" id="L341">				fraug.setCreatedOn(DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+<span class="fc" id="L342">				fraug.setUpdatedBy(resultSet.getString(&quot;updatedBy&quot;));</span>
+<span class="fc" id="L343">				fraug.setFraugsterId(fraugSummary.getFrgTransId());</span>
+<span class="fc" id="L344">				fraug.setScore(fraugSummary.getScore());</span>
+<span class="fc" id="L345">				fraug.setStatus(status);</span>
+<span class="fc" id="L346">				fraug.setId(resultSet.getInt(&quot;id&quot;)); // fix AT-373 - Umesh</span>
+<span class="fc" id="L347">				domainList.add((IDomain) fraug);</span>
+<span class="fc" id="L348">			}</span>
+<span class="fc" id="L349">			return domainList;</span>
+<span class="nc" id="L350">		} catch (Exception e) {</span>
+<span class="nc" id="L351">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+	}
+
+	@Override
+	protected List&lt;String&gt; getOrganization(Connection connection) throws CompliancePortalException {
+<span class="nc" id="L357">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L358">		ResultSet resultSet = null;</span>
+<span class="nc" id="L359">		List&lt;String&gt; organization = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L361">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_ORGANIZATION.getQuery());</span>
+<span class="nc" id="L362">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L363" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L364">				organization.add(resultSet.getString(RegQueDBColumns.CODE.getName()));</span>
+			}
+
+<span class="nc" id="L367">		} catch (Exception e) {</span>
+<span class="nc" id="L368">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L370">			closeResultset(resultSet);</span>
+<span class="nc" id="L371">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="nc" id="L374">		return organization;</span>
+	}
+
+	@Override
+	protected List&lt;String&gt; getCurrency(Connection connection) throws CompliancePortalException {
+<span class="nc" id="L379">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L380">		ResultSet resultSet = null;</span>
+<span class="nc" id="L381">		List&lt;String&gt; currency = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L383">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_CURRENCY.getQuery());</span>
+<span class="nc" id="L384">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L385" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L386">				currency.add(resultSet.getString(RegQueDBColumns.CURRENCY.getName()));</span>
+			}
+
+<span class="nc" id="L389">		} catch (Exception e) {</span>
+<span class="nc" id="L390">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L392">			closeResultset(resultSet);</span>
+<span class="nc" id="L393">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="nc" id="L396">		return currency;</span>
+	}
+
+	@Override
+	protected List&lt;String&gt; getAllCountries(Connection connection) throws CompliancePortalException {
+<span class="nc" id="L401">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L402">		ResultSet resultSet = null;</span>
+<span class="nc" id="L403">		List&lt;String&gt; countries = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L405">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_COUNTRY_LIST.getQuery());</span>
+<span class="nc" id="L406">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L408">				countries.add(resultSet.getString(&quot;Country&quot;));</span>
+			}
+<span class="nc" id="L410">		} catch (Exception e) {</span>
+<span class="nc" id="L411">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L413">			closeResultset(resultSet);</span>
+<span class="nc" id="L414">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L416">		return countries;</span>
+	}
+
+	protected List&lt;IDomain&gt; getViewMoreFurtherPaymentInDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="fc" id="L420">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc bfc" id="L422" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L423">				FurtherPaymentInDetails paymentInDetails = new FurtherPaymentInDetails();</span>
+				/**
+				 * We are setting account name and number according to payment
+				 * method 1) If payment method is 'SWITCH/DEBIT' then we will
+				 * show Card holder name and card number on UI else account name
+				 * and debtor account number. 2)For methods other than
+				 * SWITCH/DEBIT there is possibility that debtor_account_no is
+				 * empty then we will show '-' for that.
+				 */
+<span class="fc" id="L432">				paymentInDetails.setPaymentId(resultSet.getInt(&quot;pyiid&quot;));</span>
+<span class="pc bpc" id="L433" title="1 of 2 branches missed.">				if (&quot;SWITCH/DEBIT&quot;.equalsIgnoreCase(resultSet.getString(Constants.PAYMENT_METHOD_IN))) {</span>
+<span class="fc" id="L434">					paymentInDetails.setAccountName(resultSet.getString(&quot;Ccfirstname&quot;));</span>
+				} else {
+<span class="nc" id="L436">					setDebtorName(paymentInDetails, resultSet.getString(&quot;DebtorName&quot;));</span>
+				}
+<span class="fc" id="L438">				String debtorAccountNumber = resultSet.getString(&quot;DebtorAccountNumber&quot;);</span>
+<span class="pc bpc" id="L439" title="2 of 4 branches missed.">				if (null != debtorAccountNumber &amp;&amp; !debtorAccountNumber.isEmpty())</span>
+<span class="fc" id="L440">					paymentInDetails.setAccount(debtorAccountNumber);</span>
+				else
+<span class="nc" id="L442">					paymentInDetails.setAccount(&quot;-&quot;);</span>
+
+<span class="fc" id="L444">				paymentInDetails.setDateOfPayment(</span>
+<span class="fc" id="L445">						DateTimeFormatter.removeTimeFromDate(resultSet.getTimestamp(Constants.DATE_OF_PAYMENT)));</span>
+<span class="fc" id="L446">				paymentInDetails.setAmount(StringUtils</span>
+<span class="fc" id="L447">						.getNumberFormat(DecimalFormatter.convertToFourDigit(resultSet.getString(Constants.AMOUNT))));</span>
+<span class="fc" id="L448">				paymentInDetails.setSellCurrency(resultSet.getString(&quot;SellCurrency&quot;));</span>
+<span class="fc" id="L449">				paymentInDetails.setMethod(resultSet.getString(&quot;PaymentMethodin&quot;));</span>
+<span class="fc" id="L450">				paymentInDetails.setTradeContractNumber(resultSet.getString(Constants.TRADE_CONTRACT_NUMBER));</span>
+				//AT-1731 - SnehaZagade
+<span class="fc" id="L452">				paymentInDetails.setBankName(resultSet.getString(&quot;BankName&quot;));</span>
+<span class="fc" id="L453">				setRiskGuardianScore(paymentInDetails, resultSet.getString(&quot;RiskScore&quot;), resultSet.getString(&quot;TScore&quot;));</span>
+<span class="fc" id="L454">				domainList.add(paymentInDetails);</span>
+<span class="fc" id="L455">			}</span>
+<span class="fc" id="L456">			return domainList;</span>
+<span class="nc" id="L457">		} catch (Exception e) {</span>
+<span class="nc" id="L458">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+	}
+
+	/**
+	 * Purpose: If tScore field of risk score is empty or null then we need to
+	 * show &quot;-&quot; on UI else we will show that score.
+	 * 
+	 * Implementation: 1)We are checking 'tScore' field of fundsInCreateRequest.
+	 * If it is null then we are setting risk score as &quot;-&quot; otherwise actual
+	 * score to it.
+	 * 
+	 * - code changed by Vishal J
+	 */
+	protected List&lt;IDomain&gt; getFurtherPaymentOutDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="fc" id="L473">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc bfc" id="L475" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L476">				FurtherPaymentOutDetails paymentOutDetails = new FurtherPaymentOutDetails();</span>
+<span class="fc" id="L477">				paymentOutDetails.setPaymentId(resultSet.getInt(&quot;poid&quot;));</span>
+<span class="pc bpc" id="L478" title="1 of 2 branches missed.">				if (null != resultSet.getString(Constants.BENEFICIARY_LAST_NAME)</span>
+<span class="pc bpc" id="L479" title="1 of 2 branches missed.">						&amp;&amp; !resultSet.getString(Constants.BENEFICIARY_LAST_NAME).isEmpty()) {</span>
+<span class="fc" id="L480">					String beneficiaryName = new StringBuilder()</span>
+<span class="fc" id="L481">							.append(resultSet.getString(Constants.BENEFICIARY_FIRST_NAME)).append(&quot; &quot;)</span>
+<span class="fc" id="L482">							.append(resultSet.getString(Constants.BENEFICIARY_LAST_NAME)).toString();</span>
+<span class="fc" id="L483">					paymentOutDetails.setAccountName(beneficiaryName);</span>
+<span class="fc" id="L484">				} else {</span>
+<span class="nc" id="L485">					paymentOutDetails.setAccountName(resultSet.getString(Constants.BENEFICIARY_FIRST_NAME));</span>
+				}
+<span class="fc" id="L487">				paymentOutDetails.setAccount(resultSet.getString(&quot;AccountNumber&quot;));</span>
+<span class="pc bpc" id="L488" title="1 of 2 branches missed.">				if (null != resultSet.getTimestamp(Constants.DATE_OF_PAYMENT)) {</span>
+<span class="fc" id="L489">					paymentOutDetails.setDateOfPayment(</span>
+<span class="fc" id="L490">							DateTimeFormatter.removeTimeFromDate(resultSet.getTimestamp(Constants.DATE_OF_PAYMENT)));</span>
+				} else {
+<span class="nc" id="L492">					paymentOutDetails.setDateOfPayment(Constants.DASH_DETAILS_PAGE);</span>
+				}
+<span class="fc" id="L494">				paymentOutDetails.setAmount(StringUtils</span>
+<span class="fc" id="L495">						.getNumberFormat(DecimalFormatter.convertToFourDigit(resultSet.getString(Constants.AMOUNT))));</span>
+<span class="fc" id="L496">				paymentOutDetails.setBuyCurrency(resultSet.getString(&quot;BuyCurrency&quot;));</span>
+<span class="fc" id="L497">				paymentOutDetails.setValuedate(DateTimeFormatter.dateFormat(resultSet.getString(&quot;MaturityDate&quot;)));</span>
+<span class="fc" id="L498">				paymentOutDetails.setTradeContractNumber(resultSet.getString(Constants.TRADE_CONTRACT_NUMBER));</span>
+<span class="fc" id="L499">				paymentOutDetails.setPaymentReference(resultSet.getString(Constants.PAYMENT_REFERENCE));</span>
+				//AT-1731 - SnehaZagade
+<span class="fc" id="L501">				paymentOutDetails.setBankName(resultSet.getString(&quot;BankName&quot;));</span>
+<span class="fc" id="L502">				domainList.add(paymentOutDetails);</span>
+<span class="fc" id="L503">			}</span>
+<span class="fc" id="L504">			return domainList;</span>
+<span class="nc" id="L505">		} catch (Exception e) {</span>
+<span class="nc" id="L506">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+
+	}
+
+	protected List&lt;IDomain&gt; getMoreCustomCheckDetailsForPayment(ResultSet resultSet) throws CompliancePortalException {
+<span class="fc" id="L512">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc bfc" id="L514" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L515">				PaymentOutCustomCheck customCheck = new PaymentOutCustomCheck();</span>
+<span class="fc" id="L516">				VelocityCheck velocityCheck = new VelocityCheck();</span>
+<span class="fc" id="L517">				WhitelistCheck whitelistCheck = new WhitelistCheck();</span>
+<span class="fc" id="L518">				EuPoiCheck euPoiCheck = new EuPoiCheck();</span>
+<span class="fc" id="L519">				customCheck.setVelocityCheck(velocityCheck);</span>
+<span class="fc" id="L520">				customCheck.setWhiteListCheck(whitelistCheck);</span>
+<span class="fc" id="L521">				CustomCheckSummary customCheckSummary = JsonConverterUtil.convertToObject(CustomCheckSummary.class,</span>
+<span class="fc" id="L522">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="fc" id="L523">				getWhiteListandVelocityCheckSummary(velocityCheck, whitelistCheck,euPoiCheck, customCheckSummary);</span>
+<span class="fc" id="L524">				customCheck.setEntityType(</span>
+<span class="fc" id="L525">						EntityTypeEnum.getUiStatusFromDatabaseStatus(resultSet.getInt(Constants.ENTITY_TYPE)));</span>
+<span class="fc" id="L526">				customCheck.setEnitityId(resultSet.getString(&quot;entityid&quot;));</span>
+<span class="fc" id="L527">				customCheck.setId(resultSet.getInt(&quot;id&quot;));</span>
+<span class="fc" id="L528">				customCheck.setStatus(resultSet.getString(&quot;status&quot;));</span>
+<span class="fc" id="L529">				customCheck.setEuPoiCheck(euPoiCheck);</span>
+				//Add for AT-3161
+<span class="pc bpc" id="L531" title="1 of 2 branches missed.">				if (customCheckSummary != null) {</span>
+<span class="fc" id="L532">					customCheck.setFraudPredictStatus(customCheckSummary.getFraudPredictStatus());</span>
+				}
+<span class="pc bpc" id="L534" title="1 of 2 branches missed.">				if (resultSet.getString(Constants.UPDATED_ON) != null) {</span>
+<span class="fc" id="L535">					customCheck.setCheckedOn(</span>
+<span class="fc" id="L536">							DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+				}
+<span class="fc" id="L538">				domainList.add((IDomain) customCheck);</span>
+<span class="fc" id="L539">			}</span>
+<span class="fc" id="L540">			return domainList;</span>
+<span class="nc" id="L541">		} catch (Exception e) {</span>
+<span class="nc" id="L542">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+	}
+
+	/**
+	 * @param velocityCheck
+	 * @param whitelistCheck
+	 * @param customCheckSummary
+	 */
+	private void getWhiteListandVelocityCheckSummary(VelocityCheck velocityCheck, WhitelistCheck whitelistCheck,
+			EuPoiCheck euPoiCheck,CustomCheckSummary customCheckSummary) {
+<span class="pc bpc" id="L553" title="1 of 2 branches missed.">		if (customCheckSummary != null) {</span>
+<span class="pc bpc" id="L554" title="1 of 2 branches missed.">			if (customCheckSummary.getWhiteListCheck() != null) {</span>
+<span class="fc" id="L555">				whitelistCheck.setCurrency(customCheckSummary.getWhiteListCheck().getCurrency());</span>
+<span class="fc" id="L556">				if (Constants.NOT_REQUIRED</span>
+<span class="pc bpc" id="L557" title="1 of 2 branches missed.">						.equalsIgnoreCase(customCheckSummary.getWhiteListCheck().getReasonOfTransfer())) {</span>
+<span class="fc" id="L558">					whitelistCheck.setReasonOfTransfer(Constants.NOT_REQUIRED_UI);</span>
+				} else {
+<span class="nc" id="L560">					whitelistCheck.setReasonOfTransfer(customCheckSummary.getWhiteListCheck().getReasonOfTransfer());</span>
+				}
+<span class="fc" id="L562">				whitelistCheck.setThirdParty(customCheckSummary.getWhiteListCheck().getThirdParty());</span>
+			}
+<span class="fc" id="L564">			setAmountRangeStatus(whitelistCheck, customCheckSummary);</span>
+<span class="pc bpc" id="L565" title="1 of 2 branches missed.">			if (customCheckSummary.getVelocityCheck() != null) {</span>
+<span class="fc" id="L566">				setVelocityAmountCheckStatus(velocityCheck, customCheckSummary);</span>
+<span class="fc" id="L567">				velocityCheck.setBeneCheck(customCheckSummary.getVelocityCheck().getBeneCheck());</span>
+<span class="fc" id="L568">				String noOfFundsOutTxnStatus = customCheckSummary.getVelocityCheck().getNoOffundsoutTxn();</span>
+<span class="fc" id="L569">				setNoOfFundsOutTxnStatus(velocityCheck, customCheckSummary, noOfFundsOutTxnStatus);</span>
+<span class="fc" id="L570">				velocityCheck.setMatchedAccNumber(customCheckSummary.getVelocityCheck().getMatchedAccNumber());</span>
+			}
+			
+<span class="fc" id="L573">           setEUPoiCheckStatus(euPoiCheck, customCheckSummary);</span>
+           
+		}
+<span class="fc" id="L576">	}</span>
+
+	private void setEUPoiCheckStatus(EuPoiCheck euPoiCheck, CustomCheckSummary customCheckSummary) {
+<span class="pc bpc" id="L579" title="1 of 2 branches missed.">		if(customCheckSummary.getEuPoiCheck()!=null)</span>
+           {
+<span class="nc bnc" id="L581" title="All 2 branches missed.">        	   if(Constants.NOT_REQUIRED.equalsIgnoreCase(customCheckSummary.getEuPoiCheck().getStatus()))</span>
+        	   {
+<span class="nc" id="L583">        		   euPoiCheck.setStatus(ServiceStatusEnum.getUiStatusFromDatabaseStatus(Constants.NOT_REQUIRED));//AT- 3349</span>
+				} else {
+<span class="nc" id="L585">					euPoiCheck.setStatus(customCheckSummary.getEuPoiCheck().getStatus());</span>
+				}
+           }
+           else
+           {
+<span class="fc" id="L590">        	   euPoiCheck.setStatus(&quot;- - -&quot;);</span>
+           }
+<span class="fc" id="L592">	}</span>
+
+	/**
+	 * Sets the amount range status.
+	 *
+	 * @param whitelistCheck
+	 *            the whitelist check
+	 * @param customCheckSummary
+	 *            the custom check summary
+	 */
+	private void setAmountRangeStatus(WhitelistCheck whitelistCheck, CustomCheckSummary customCheckSummary) {
+<span class="fc" id="L603">		String amountrangeStatus = customCheckSummary.getWhiteListCheck().getAmoutRange();</span>
+<span class="pc bpc" id="L604" title="1 of 2 branches missed.">		if (Constants.FAIL.equalsIgnoreCase(amountrangeStatus)</span>
+<span class="nc bnc" id="L605" title="All 2 branches missed.">				&amp;&amp; null != customCheckSummary.getWhiteListCheck().getMaxAmount()) {</span>
+<span class="nc" id="L606">			whitelistCheck.setAmoutRange(customCheckSummary.getWhiteListCheck().getAmoutRange());</span>
+<span class="nc" id="L607">			whitelistCheck.setMaxAmount(</span>
+<span class="nc" id="L608">					StringUtils.getNumberFormat(customCheckSummary.getWhiteListCheck().getMaxAmount().toString()));</span>
+		} else {
+<span class="fc" id="L610">			whitelistCheck.setAmoutRange(customCheckSummary.getWhiteListCheck().getAmoutRange());</span>
+		}
+
+<span class="fc" id="L613">	}</span>
+
+	/**
+	 * Sets the velocity amount check status.
+	 *
+	 * @param velocityCheck
+	 *            the velocity check
+	 * @param customCheckSummary
+	 *            the custom check summary
+	 */
+	private void setVelocityAmountCheckStatus(VelocityCheck velocityCheck, CustomCheckSummary customCheckSummary) {
+<span class="fc" id="L624">		String permittedAmountCheckStatus = customCheckSummary.getVelocityCheck().getPermittedAmoutcheck();</span>
+<span class="pc bpc" id="L625" title="1 of 2 branches missed.">		if (Constants.FAIL.equalsIgnoreCase(permittedAmountCheckStatus)</span>
+<span class="nc bnc" id="L626" title="All 2 branches missed.">				&amp;&amp; null != customCheckSummary.getVelocityCheck().getMaxAmount()) {</span>
+<span class="nc" id="L627">			velocityCheck.setPermittedAmoutcheck(customCheckSummary.getVelocityCheck().getPermittedAmoutcheck());</span>
+<span class="nc" id="L628">			velocityCheck.setMaxAmount(</span>
+<span class="nc" id="L629">					StringUtils.getNumberFormat(customCheckSummary.getVelocityCheck().getMaxAmount().toString()));</span>
+		} else {
+<span class="fc" id="L631">			velocityCheck.setPermittedAmoutcheck(customCheckSummary.getVelocityCheck().getPermittedAmoutcheck());</span>
+		}
+<span class="fc" id="L633">	}</span>
+
+	/**
+	 * Method added to show reason of FAIL for No. Of transaction check at the
+	 * time of Payment Out -Vishal J
+	 */
+	private void setNoOfFundsOutTxnStatus(VelocityCheck velocityCheck, CustomCheckSummary customCheckSummary,
+			String noOfFundsOutTxnStatus) {
+<span class="pc bpc" id="L641" title="1 of 2 branches missed.">		if (Constants.FAIL.equals(noOfFundsOutTxnStatus)) {</span>
+<span class="fc" id="L642">			velocityCheck.setNoOffundsoutTxn(customCheckSummary.getVelocityCheck().getNoOffundsoutTxn() + &quot; &quot;</span>
+<span class="fc" id="L643">					+ customCheckSummary.getVelocityCheck().getNoOfFundsOutTxnDetails());</span>
+		} else {
+<span class="nc" id="L645">			velocityCheck.setNoOffundsoutTxn(customCheckSummary.getVelocityCheck().getNoOffundsoutTxn());</span>
+		}
+<span class="fc" id="L647">	}</span>
+
+	protected List&lt;IDomain&gt; getMoreCountryCheckDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="nc" id="L650">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc bnc" id="L652" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L653">				CountryCheck countryCheck = new CountryCheck();</span>
+<span class="nc" id="L654">				countryCheck.setEntityType(resultSet.getString(&quot;entityid&quot;));</span>
+<span class="nc" id="L655">				countryCheck.setId(resultSet.getInt(&quot;id&quot;));</span>
+<span class="nc" id="L656">				countryCheck.setStatus(ServiceStatusEnum.getUiStatusFromDatabaseStatus(resultSet.getInt(&quot;status&quot;)));</span>
+<span class="nc" id="L657">				countryCheck</span>
+<span class="nc" id="L658">						.setCheckedOn(DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+<span class="nc" id="L659">				domainList.add((IDomain) countryCheck);</span>
+<span class="nc" id="L660">			}</span>
+<span class="nc" id="L661">			return domainList;</span>
+<span class="nc" id="L662">		} catch (Exception e) {</span>
+<span class="nc" id="L663">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+	}
+
+	protected List&lt;UploadDocumentTypeDBDto&gt; getUploadDocumentList(Connection connection)
+			throws CompliancePortalException {
+<span class="fc" id="L669">		List&lt;UploadDocumentTypeDBDto&gt; documentType = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L670">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L671">		ResultSet resultSet = null;</span>
+		try {
+<span class="fc" id="L673">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_DOCUMENT_LIST.getQuery());</span>
+<span class="fc" id="L674">			resultSet = preparedStatement.executeQuery();</span>
+<span class="pc bpc" id="L675" title="1 of 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L676">				UploadDocumentTypeDBDto uploadDocument = new UploadDocumentTypeDBDto();</span>
+<span class="nc" id="L677">				uploadDocument.setId(resultSet.getInt(&quot;Id&quot;));</span>
+<span class="nc" id="L678">				uploadDocument.setDocumentName(resultSet.getString(&quot;Name&quot;));</span>
+<span class="nc" id="L679">				documentType.add(uploadDocument);</span>
+<span class="nc" id="L680">			}</span>
+<span class="fc" id="L681">			return documentType;</span>
+<span class="nc" id="L682">		} catch (Exception e) {</span>
+<span class="nc" id="L683">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L685">			closeResultset(resultSet);</span>
+<span class="fc" id="L686">			closePrepareStatement(preparedStatement);</span>
+		}
+	}
+
+	/**
+	 * @param accountId
+	 * @param custType
+	 * @param id
+	 * @return paginationData
+	 */
+	protected PaginationData getPaginationData(String accountId, String custType, String id) {
+<span class="nc" id="L697">		PaginationData paginationData = new PaginationData();</span>
+<span class="nc" id="L698">		paginationData.setAccountid(accountId);</span>
+<span class="nc" id="L699">		paginationData.setCustType(custType);</span>
+<span class="nc" id="L700">		paginationData.setId(id);</span>
+<span class="nc" id="L701">		return paginationData;</span>
+	}
+
+	/**
+	 * @param connection
+	 * @param registrationSearchCriteria
+	 * @param query
+	 * @return PaginationDetails
+	 * @throws CompliancePortalException
+	 */
+	protected PaginationDetails getPaginationDetailQuery(Connection connection,
+			RegistrationSearchCriteria registrationSearchCriteria, String query) throws CompliancePortalException {
+
+<span class="nc" id="L714">		PreparedStatement statement = null;</span>
+<span class="nc" id="L715">		ResultSet rs = null;</span>
+<span class="nc" id="L716">		PaginationDetails paginationDetails = new PaginationDetails();</span>
+
+		try {
+<span class="nc" id="L719">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L720">			statement.setInt(1, 1);</span>
+<span class="nc" id="L721">			statement.setInt(2, registrationSearchCriteria.getPage().getCurrentRecord() - 1);</span>
+<span class="nc" id="L722">			statement.setInt(3, registrationSearchCriteria.getPage().getCurrentRecord() + 1);</span>
+<span class="nc" id="L723">			statement.setInt(4, registrationSearchCriteria.getPage().getTotalRecords());</span>
+
+<span class="nc" id="L725">			rs = statement.executeQuery();</span>
+
+<span class="nc bnc" id="L727" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L728" title="All 2 branches missed.">				if (registrationSearchCriteria.getPage().getCurrentRecord() - 1 == rs.getInt(Constants.ROWNUM)) {</span>
+<span class="nc" id="L729">					paginationDetails.setPrevRecord(getPaginationData(rs.getString(Constants.DB_ACCOUNT_ID),</span>
+<span class="nc" id="L730">							rs.getString(&quot;type&quot;), rs.getString(Constants.DB_CONTACT_ID)));</span>
+
+				}
+<span class="nc bnc" id="L733" title="All 2 branches missed.">				if (registrationSearchCriteria.getPage().getCurrentRecord() + 1 == rs.getInt(Constants.ROWNUM)) {</span>
+<span class="nc" id="L734">					paginationDetails.setNextRecord(getPaginationData(rs.getString(Constants.DB_ACCOUNT_ID),</span>
+<span class="nc" id="L735">							rs.getString(&quot;type&quot;), rs.getString(Constants.DB_CONTACT_ID)));</span>
+
+				}
+<span class="nc bnc" id="L738" title="All 2 branches missed.">				if (registrationSearchCriteria.getPage().getTotalRecords() == rs.getInt(Constants.ROWNUM)) {</span>
+<span class="nc" id="L739">					paginationDetails.setTotalRecords(getPaginationData(rs.getString(Constants.DB_ACCOUNT_ID),</span>
+<span class="nc" id="L740">							rs.getString(&quot;type&quot;), rs.getString(Constants.DB_CONTACT_ID)));</span>
+				}
+<span class="nc bnc" id="L742" title="All 2 branches missed.">				if (1 == rs.getInt(Constants.ROWNUM)) {</span>
+<span class="nc" id="L743">					paginationDetails.setFirstRecord(getPaginationData(rs.getString(Constants.DB_ACCOUNT_ID),</span>
+<span class="nc" id="L744">							rs.getString(&quot;type&quot;), rs.getString(Constants.DB_CONTACT_ID)));</span>
+				}
+			}
+<span class="nc" id="L747">		} catch (Exception e) {</span>
+<span class="nc" id="L748">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L750">			closeResultset(rs);</span>
+<span class="nc" id="L751">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L753">		return paginationDetails;</span>
+
+	}
+
+	/**
+	 * @param baseUpdateDBDto
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	protected void addWatchlistLog(BaseUpdateDBDto baseUpdateDBDto) throws CompliancePortalException {
+
+<span class="nc" id="L764">		List&lt;String&gt; delWatchlist = baseUpdateDBDto.getDeletedWatchlist();</span>
+<span class="nc" id="L765">		List&lt;String&gt; addedWatchlist = baseUpdateDBDto.getAddWatchlist();</span>
+
+		try {
+<span class="nc" id="L768">			String log = getLogFromWatchlist(baseUpdateDBDto, delWatchlist, addedWatchlist);</span>
+<span class="nc bnc" id="L769" title="All 2 branches missed.">			if (log != null) {</span>
+<span class="nc" id="L770">				ProfileActivityLogDto watchlistActivity = getProfileActivityLog(baseUpdateDBDto, log,</span>
+						ActivityType.PROFILE_WATCHLIST);
+<span class="nc bnc" id="L772" title="All 2 branches missed.">				if (watchlistActivity.getAccountId() != null) {</span>
+<span class="nc" id="L773">					baseUpdateDBDto.getActivityLog().add(watchlistActivity);</span>
+				}
+			}
+<span class="nc" id="L776">		} catch (Exception e) {</span>
+<span class="nc" id="L777">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+<span class="nc" id="L778">		}</span>
+<span class="nc" id="L779">	}</span>
+
+	private String getLogFromWatchlist(BaseUpdateDBDto baseUpdateDBDto, List&lt;String&gt; delWatchlist,
+			List&lt;String&gt; addedWatchlist) {
+<span class="nc" id="L783">		String preWatchlist = getPreviousWatchlist(baseUpdateDBDto.getWatchlist());</span>
+<span class="nc bnc" id="L784" title="All 4 branches missed.">		if (delWatchlist.isEmpty() &amp;&amp; addedWatchlist.isEmpty()) {</span>
+<span class="nc" id="L785">			return null;</span>
+<span class="nc bnc" id="L786" title="All 4 branches missed.">		} else if (!addedWatchlist.isEmpty() &amp;&amp; !delWatchlist.isEmpty()) {</span>
+<span class="nc" id="L787">			return getActivityLogsForAddAndDeleteWatchlist(preWatchlist, addedWatchlist, delWatchlist);</span>
+<span class="nc bnc" id="L788" title="All 2 branches missed.">		} else if (!addedWatchlist.isEmpty()) {</span>
+<span class="nc" id="L789">			return getActivityLogsForAddedWatchlist(preWatchlist, addedWatchlist);</span>
+		} else {
+<span class="nc" id="L791">			return getActivityLogsForDeletedWatchlist(preWatchlist, delWatchlist);</span>
+		}
+	}
+
+	private String getActivityLogsForAddAndDeleteWatchlist(String preWatchlist, List&lt;String&gt; addedWatchlistList,
+			List&lt;String&gt; delWatchlistList) {
+<span class="nc" id="L797">		String result = null;</span>
+<span class="nc bnc" id="L798" title="All 2 branches missed.">		if (null == preWatchlist)</span>
+<span class="nc" id="L799">			return result;</span>
+<span class="nc" id="L800">		ArrayList&lt;String&gt; arrayList = new ArrayList&lt;&gt;(Arrays.asList(preWatchlist.split(&quot;,&quot;)));</span>
+<span class="nc" id="L801">		ArrayList&lt;String&gt; current = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L802">		current.addAll(arrayList);</span>
+<span class="nc bnc" id="L803" title="All 2 branches missed.">		for (String s : addedWatchlistList) {</span>
+<span class="nc" id="L804">			current.add(s);</span>
+<span class="nc" id="L805">		}</span>
+<span class="nc bnc" id="L806" title="All 2 branches missed.">		for (String s : arrayList) {</span>
+<span class="nc bnc" id="L807" title="All 2 branches missed.">			if (delWatchlistList.contains(s)) {</span>
+<span class="nc" id="L808">				current.remove(s);</span>
+			}
+<span class="nc" id="L810">		}</span>
+<span class="nc" id="L811">		String currents = current.toString();</span>
+<span class="nc" id="L812">		String prevWatch = preWatchlist.replace(&quot;,&quot;, &quot;, &quot;);</span>
+<span class="nc" id="L813">		currents = currents.substring(1, currents.length() - 1);</span>
+<span class="nc" id="L814">		result = ActivityTemplateEnum.WATHCLIST.getTemplate().replace(PRE_WATCHLIST, prevWatch)</span>
+<span class="nc" id="L815">				.replace(CURRENT_WATCHLIST, currents);</span>
+<span class="nc" id="L816">		return result;</span>
+	}
+
+	private String getActivityLogsForDeletedWatchlist(String preWatchlist, List&lt;String&gt; deletedWatchlistList) {
+<span class="nc bnc" id="L820" title="All 2 branches missed.">		if (null == preWatchlist)</span>
+<span class="nc" id="L821">			return null;</span>
+<span class="nc" id="L822">		ArrayList&lt;String&gt; arrayList = new ArrayList&lt;&gt;(Arrays.asList(preWatchlist.split(&quot;,&quot;)));</span>
+<span class="nc" id="L823">		ArrayList&lt;String&gt; current = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L825" title="All 2 branches missed.">		for (String s : arrayList) {</span>
+<span class="nc bnc" id="L826" title="All 2 branches missed.">			if (!deletedWatchlistList.contains(s)) {</span>
+<span class="nc" id="L827">				current.add(s);</span>
+			}
+<span class="nc" id="L829">		}</span>
+
+<span class="nc" id="L831">		String prevWatch = preWatchlist.replace(&quot;,&quot;, &quot;, &quot;);</span>
+<span class="nc bnc" id="L832" title="All 2 branches missed.">		if (current.isEmpty()) {</span>
+<span class="nc" id="L833">			return ActivityTemplateEnum.ALL_WATHCLIST_DELETED.getTemplate().replace(PRE_WATCHLIST, prevWatch);</span>
+
+		}
+
+<span class="nc" id="L837">		String currents = current.toString();</span>
+<span class="nc" id="L838">		currents = currents.substring(1, currents.length() - 1).replace(&quot;, &quot;, &quot;, &quot;);</span>
+<span class="nc" id="L839">		return ActivityTemplateEnum.WATHCLIST.getTemplate().replace(PRE_WATCHLIST, prevWatch).replace(CURRENT_WATCHLIST,</span>
+				currents);
+	}
+
+	private ProfileActivityLogDto getProfileActivityLog(BaseUpdateDBDto baseUpdateDBDto, String log,
+			ActivityType activityType) {
+
+<span class="nc" id="L846">		ProfileActivityLogDto activityLogDto = new ProfileActivityLogDto();</span>
+<span class="nc" id="L847">		activityLogDto.setAccountId(baseUpdateDBDto.getAccountId());</span>
+<span class="nc" id="L848">		activityLogDto.setContactId(baseUpdateDBDto.getContactId());</span>
+<span class="nc" id="L849">		activityLogDto.setOrgCode(baseUpdateDBDto.getOrgCode());</span>
+<span class="nc" id="L850">		activityLogDto.setComment(baseUpdateDBDto.getComment());</span>
+<span class="nc" id="L851">		activityLogDto.setActivityBy(baseUpdateDBDto.getCreatedBy());</span>
+<span class="nc" id="L852">		activityLogDto.setCreatedBy(baseUpdateDBDto.getCreatedBy());</span>
+<span class="nc" id="L853">		activityLogDto.setUpdatedBy(baseUpdateDBDto.getCreatedBy());</span>
+<span class="nc" id="L854">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L855">		activityLogDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L856">		activityLogDto.setTimeStatmp(timestamp);</span>
+<span class="nc" id="L857">		activityLogDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L858">		ActivityLogDetailDto activityLogDetailDto = new ActivityLogDetailDto();</span>
+<span class="nc" id="L859">		activityLogDto.setActivityLogDetailDto(activityLogDetailDto);</span>
+<span class="nc" id="L860">		activityLogDetailDto.setActivityType(activityType);</span>
+<span class="nc" id="L861">		activityLogDetailDto.setLog(log);</span>
+<span class="nc" id="L862">		activityLogDetailDto.setCreatedBy(baseUpdateDBDto.getCreatedBy());</span>
+<span class="nc" id="L863">		activityLogDetailDto.setUpdatedBy(baseUpdateDBDto.getCreatedBy());</span>
+<span class="nc" id="L864">		activityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L865">		activityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L866">		return activityLogDto;</span>
+	}
+
+	private String getPreviousWatchlist(WatchlistUpdateRequest[] request) {
+<span class="nc" id="L870">		StringBuilder preWatchlist = new StringBuilder();</span>
+<span class="nc" id="L871">		boolean isEle = false;</span>
+<span class="nc bnc" id="L872" title="All 2 branches missed.">		for (WatchlistUpdateRequest watchlist : request) {</span>
+
+<span class="nc bnc" id="L874" title="All 4 branches missed.">			if (watchlist.getName() == null || watchlist.getName().isEmpty()) {</span>
+<span class="nc" id="L875">				continue;</span>
+			}
+
+<span class="nc bnc" id="L878" title="All 2 branches missed.">			if (Boolean.TRUE.equals(watchlist.getPreValue())) {</span>
+<span class="nc" id="L879">				isEle = true;</span>
+<span class="nc" id="L880">				preWatchlist.append(watchlist.getName()).append(&quot;,&quot;);</span>
+			}
+		}
+<span class="nc bnc" id="L883" title="All 2 branches missed.">		if (isEle) {</span>
+<span class="nc" id="L884">			preWatchlist.setLength(preWatchlist.length() - 1);</span>
+		}
+<span class="nc bnc" id="L886" title="All 2 branches missed.">		if (preWatchlist.length() != 0) {</span>
+<span class="nc" id="L887">			return preWatchlist.toString();</span>
+		}
+<span class="nc" id="L889">		return null;</span>
+
+	}
+
+	private String getActivityLogsForAddedWatchlist(String preWatchlist, List&lt;String&gt; addedWatchlistList) {
+<span class="nc" id="L894">		ArrayList&lt;String&gt; current = new ArrayList&lt;&gt;();</span>
+		String addWatchlistFormat;
+<span class="nc bnc" id="L896" title="All 4 branches missed.">		if (preWatchlist != null &amp;&amp; !preWatchlist.isEmpty()) {</span>
+<span class="nc" id="L897">			ArrayList&lt;String&gt; arrayList = new ArrayList&lt;&gt;(Arrays.asList(preWatchlist.split(&quot;,&quot;)));</span>
+<span class="nc" id="L898">			current.addAll(arrayList);</span>
+<span class="nc bnc" id="L899" title="All 2 branches missed.">			for (String s : addedWatchlistList) {</span>
+<span class="nc" id="L900">				current.add(s);</span>
+<span class="nc" id="L901">			}</span>
+<span class="nc" id="L902">		} else {</span>
+<span class="nc" id="L903">			current.addAll(addedWatchlistList);</span>
+		}
+
+<span class="nc" id="L906">		String currents = current.toString();</span>
+<span class="nc" id="L907">		currents = currents.substring(1, currents.length() - 1).replace(&quot;, &quot;, &quot;, &quot;);</span>
+<span class="nc bnc" id="L908" title="All 2 branches missed.">		if (preWatchlist != null) {</span>
+<span class="nc" id="L909">			String prevWatch = preWatchlist.replace(&quot;,&quot;, &quot;, &quot;);</span>
+<span class="nc" id="L910">			addWatchlistFormat = ActivityTemplateEnum.WATHCLIST.getTemplate().replace(PRE_WATCHLIST, prevWatch);</span>
+<span class="nc" id="L911">		} else {</span>
+<span class="nc" id="L912">			addWatchlistFormat = ActivityTemplateEnum.ADD_WATCHLIST.getTemplate();</span>
+		}
+<span class="nc" id="L914">		return addWatchlistFormat.replace(CURRENT_WATCHLIST, currents);</span>
+	}
+
+	/**
+	 * @param requestHandlerDto
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	protected void deleteWatchlist(BaseUpdateDBDto requestHandlerDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L924">		Integer accountId = requestHandlerDto.getAccountId();</span>
+<span class="nc" id="L925">		Integer contactId = requestHandlerDto.getContactId();</span>
+<span class="nc" id="L926">		List&lt;String&gt; delWatchlist = requestHandlerDto.getDeletedWatchlist();</span>
+
+<span class="nc bnc" id="L928" title="All 4 branches missed.">		if (delWatchlist != null &amp;&amp; !delWatchlist.isEmpty()) {</span>
+<span class="nc" id="L929">			String[] delwatchlistArray = delWatchlist.toArray(new String[delWatchlist.size()]);</span>
+<span class="nc" id="L930">			CriteriaBuilder builder = new CriteriaBuilder(RegistrationQueryConstant.GET_WATCHLIST_REASON.getQuery());</span>
+<span class="nc" id="L931">			String query = builder.addCriteria(&quot;Reason&quot;, delwatchlistArray, &quot;AND&quot;, ClauseType.IN).build();</span>
+			//Changes for AT-2986
+<span class="nc bnc" id="L933" title="All 2 branches missed.">			if(requestHandlerDto.getCustType().equals(&quot;PFX&quot;)){</span>
+<span class="nc" id="L934">				query = &quot;DELETE ContactWatchList WHERE Contact =&quot; + contactId + &quot; AND Reason IN(&quot; + query + &quot;)&quot;;</span>
+			}else{
+<span class="nc" id="L936">			query = &quot;DELETE ContactWatchList WHERE Contact IN (SELECT Id FROM Contact WHERE AccountId =&quot; + accountId</span>
+					+ &quot;) AND Reason IN(&quot; + query + &quot;)&quot;;
+			}
+<span class="nc" id="L939">			deletePaymentReasonOrWatchlist(query, connection);</span>
+		}
+<span class="nc" id="L941">	}</span>
+
+	
+	/**
+	 * @param baseUpdateDBDto
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	protected void addProfileActivityLogs(BaseUpdateDBDto baseUpdateDBDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L951">		List&lt;ProfileActivityLogDto&gt; activityLogs = baseUpdateDBDto.getActivityLog();</span>
+<span class="nc bnc" id="L952" title="All 4 branches missed.">		if (activityLogs != null &amp;&amp; !activityLogs.isEmpty()) {</span>
+<span class="nc" id="L953">			insertProfileActivityLogs(activityLogs, connection);</span>
+<span class="nc" id="L954">			insertProfileActivityLogDetail(activityLogs, connection);</span>
+		}
+<span class="nc" id="L956">	}</span>
+
+	/**
+	 * Insert Profile Activity Log Detail
+	 * 
+	 * @param activityLogDtos
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	public void insertProfileActivityLogDetail(List&lt;ProfileActivityLogDto&gt; activityLogDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L968">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L970">			statement = connection</span>
+<span class="nc" id="L971">					.prepareStatement(RegistrationQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL.getQuery());</span>
+<span class="nc bnc" id="L972" title="All 2 branches missed.">			for (ProfileActivityLogDto profileActivityLog : activityLogDto) {</span>
+<span class="nc" id="L973">				ActivityLogDetailDto actvtyLogDetailDto = profileActivityLog.getActivityLogDetailDto();</span>
+<span class="nc" id="L974">				statement.setInt(1, actvtyLogDetailDto.getActivityId());</span>
+<span class="nc" id="L975">				statement.setString(2, actvtyLogDetailDto.getActivityType().getModule());</span>
+<span class="nc" id="L976">				statement.setString(3, actvtyLogDetailDto.getActivityType().getType());</span>
+<span class="nc" id="L977">				statement.setNString(4, actvtyLogDetailDto.getLog());</span>
+<span class="nc" id="L978">				statement.setNString(5, actvtyLogDetailDto.getCreatedBy());</span>
+<span class="nc" id="L979">				statement.setTimestamp(6, actvtyLogDetailDto.getCreatedOn());</span>
+<span class="nc" id="L980">				statement.setNString(7, actvtyLogDetailDto.getUpdatedBy());</span>
+<span class="nc" id="L981">				statement.setTimestamp(8, actvtyLogDetailDto.getUpdatedOn());</span>
+<span class="nc" id="L982">				statement.addBatch();</span>
+<span class="nc" id="L983">			}</span>
+<span class="nc" id="L984">			int[] count = statement.executeBatch();</span>
+<span class="nc bnc" id="L985" title="All 2 branches missed.">			for (int c : count) {</span>
+<span class="nc bnc" id="L986" title="All 2 branches missed.">				if (c == 0) {</span>
+<span class="nc" id="L987">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				}
+			}
+
+<span class="nc" id="L991">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L992">			throw e;</span>
+<span class="nc" id="L993">		} catch (Exception e) {</span>
+<span class="nc" id="L994">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L996">			closePrepareStatement(statement);</span>
+		}
+
+<span class="nc" id="L999">	}</span>
+
+	/**
+	 * @param query
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	protected void deletePaymentReasonOrWatchlist(String query, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L1007">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L1009">			preparedStatement = connection.prepareStatement(query);</span>
+<span class="nc" id="L1010">			int delRowCnt = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L1011" title="All 2 branches missed.">			if (delRowCnt == 0) {</span>
+<span class="nc" id="L1012">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+<span class="nc" id="L1014">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L1015">			throw exception;</span>
+<span class="nc" id="L1016">		} catch (Exception e) {</span>
+<span class="nc" id="L1017">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_DELETING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L1019">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L1021">	}</span>
+
+	protected String getResponseStatus(PaymentUpdateDBDto paymentUpdateDBDto) {
+
+<span class="nc bnc" id="L1025" title="All 4 branches missed.">		if (paymentUpdateDBDto.getAddReasons() != null &amp;&amp; !(paymentUpdateDBDto.getAddReasons().isEmpty())) {</span>
+<span class="nc" id="L1026">			return paymentUpdateDBDto.getAddReasons().get(0);</span>
+
+<span class="nc bnc" id="L1028" title="All 2 branches missed.">		} else if (paymentUpdateDBDto.getPreviousReason() != null</span>
+<span class="nc bnc" id="L1029" title="All 2 branches missed.">				&amp;&amp; !(paymentUpdateDBDto.getPreviousReason().isEmpty())) {</span>
+<span class="nc" id="L1030">			return paymentUpdateDBDto.getPreviousReason().get(0);</span>
+
+		} else {
+<span class="nc" id="L1033">			return Constants.STATUS_UPDATED_MANUALLY;</span>
+		}
+	}
+
+	protected PaymentComplianceStatus getPaymentComplianceStatus(String paymentInStatus) {
+		try {
+<span class="nc" id="L1039">			return PaymentComplianceStatus.valueOf(paymentInStatus.toUpperCase());</span>
+<span class="nc" id="L1040">		} catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L1041">			LOGGER.warn(&quot;Exception :{1}&quot;, e);</span>
+<span class="nc" id="L1042">			return null;</span>
+		}
+	}
+
+	protected void updateWorkFlowTime(Integer resourceId, Connection connection) throws CompliancePortalException {
+
+<span class="nc" id="L1048">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L1050">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.UPDATE_WORKFLOW_TIME.getQuery());</span>
+<span class="nc" id="L1051">			preparedStatement.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1052">			preparedStatement.setInt(2, resourceId);</span>
+<span class="nc" id="L1053">			int count = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L1054" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L1055">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+
+<span class="nc" id="L1058">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L1059">			throw exception;</span>
+<span class="nc" id="L1060">		} catch (Exception e) {</span>
+<span class="nc" id="L1061">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L1063">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="nc" id="L1066">	}</span>
+
+	protected void updateWatchlistStatus(BaseUpdateDBDto requestHandlerDto, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L1071">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc bnc" id="L1073" title="All 2 branches missed.">			if(requestHandlerDto.getCustType().equals(&quot;PFX&quot;)){</span>
+<span class="nc" id="L1074">				preparedStatement = connection</span>
+<span class="nc" id="L1075">						.prepareStatement(RegistrationQueryConstant.UPDATE_WATCHLISTSTATUS_CONTACT.getQuery());</span>
+<span class="nc" id="L1076">				preparedStatement.setInt(5, requestHandlerDto.getContactId());</span>
+			}else{
+<span class="nc" id="L1078">				preparedStatement = connection</span>
+<span class="nc" id="L1079">						.prepareStatement(RegistrationQueryConstant.UPDATE_WATCHLISTSTATUS_ACCOUNT.getQuery());</span>
+<span class="nc" id="L1080">				preparedStatement.setInt(5, requestHandlerDto.getAccountId());</span>
+			}
+<span class="nc" id="L1082">			preparedStatement.setString(1, requestHandlerDto.getCreatedBy());</span>
+<span class="nc" id="L1083">			preparedStatement.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc bnc" id="L1084" title="All 2 branches missed.">			if (requestHandlerDto.getOverallPaymentInWatchlistStatus().getDatabaseStatus().equals(2)) {</span>
+<span class="nc" id="L1085">				preparedStatement.setInt(3, ServiceStatusEnum.FAIL.getDatabaseStatus());</span>
+<span class="nc bnc" id="L1086" title="All 2 branches missed.">			} else if (requestHandlerDto.getOverallPaymentInWatchlistStatus().getDatabaseStatus().equals(7)) {</span>
+<span class="nc" id="L1087">				preparedStatement.setInt(3, ServiceStatusEnum.WATCH_LIST.getDatabaseStatus());</span>
+			}  else {
+<span class="nc" id="L1089">				preparedStatement.setInt(3, ServiceStatusEnum.PASS.getDatabaseStatus());</span>
+			}
+
+<span class="nc bnc" id="L1092" title="All 2 branches missed.">			if (requestHandlerDto.getOverallPaymentOutWatchlistStatus().getDatabaseStatus().equals(2)) {</span>
+<span class="nc" id="L1093">				preparedStatement.setInt(4, ServiceStatusEnum.FAIL.getDatabaseStatus());</span>
+<span class="nc bnc" id="L1094" title="All 2 branches missed.">			} else if (requestHandlerDto.getOverallPaymentOutWatchlistStatus().getDatabaseStatus().equals(7)) {</span>
+<span class="nc" id="L1095">				preparedStatement.setInt(4, ServiceStatusEnum.WATCH_LIST.getDatabaseStatus());</span>
+			}  else {
+<span class="nc" id="L1097">				preparedStatement.setInt(4, ServiceStatusEnum.PASS.getDatabaseStatus());</span>
+			}
+
+<span class="nc" id="L1100">			int count = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L1101" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L1102">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+<span class="nc" id="L1104">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L1105">			throw exception;</span>
+<span class="nc" id="L1106">		} catch (Exception e) {</span>
+<span class="nc" id="L1107">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L1109">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="nc" id="L1112">	}</span>
+
+	protected void getWatchListStatus(BaseUpdateDBDto requestHandlerDto, Connection readOnlyConn)
+			throws CompliancePortalException {
+
+<span class="nc" id="L1117">		List&lt;WatchListDetails&gt; watchListPaymentReasons = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1118">		List&lt;String&gt; toatalContactWatchListReason = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1119">		List&lt;String&gt; finalWatchList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L1121">			requestHandlerDto.setOverallPaymentInWatchlistStatus(ServiceStatusEnum.PASS);</span>
+<span class="nc" id="L1122">			requestHandlerDto.setOverallPaymentOutWatchlistStatus(ServiceStatusEnum.PASS);</span>
+<span class="nc" id="L1123">			getPaymentWatchListReasons(readOnlyConn, watchListPaymentReasons);</span>
+<span class="nc" id="L1124">			getTotalContactWatchListReasons(readOnlyConn, toatalContactWatchListReason,</span>
+					requestHandlerDto);
+<span class="nc" id="L1126">			List&lt;String&gt; delWatchlist = requestHandlerDto.getDeletedWatchlist();</span>
+<span class="nc" id="L1127">			List&lt;String&gt; addWatchlist = requestHandlerDto.getAddWatchlist();</span>
+
+<span class="nc bnc" id="L1129" title="All 2 branches missed.">			if (!toatalContactWatchListReason.isEmpty()) {</span>
+<span class="nc" id="L1130">				finalWatchList.addAll(toatalContactWatchListReason);</span>
+			}
+
+<span class="nc" id="L1133">			removeDeletedReasonFromWatchList(toatalContactWatchListReason, delWatchlist, finalWatchList);</span>
+<span class="nc" id="L1134">			addReasonToWatchList(finalWatchList, addWatchlist);</span>
+<span class="nc" id="L1135">			getFinalWatchListStatus(requestHandlerDto, watchListPaymentReasons, finalWatchList);</span>
+			
+<span class="nc" id="L1137">			requestHandlerDto.setIsWatchlistUpdated(Boolean.FALSE);</span>
+<span class="nc bnc" id="L1138" title="All 4 branches missed.">			if(!delWatchlist.isEmpty() || !addWatchlist.isEmpty()) {</span>
+<span class="nc" id="L1139">				requestHandlerDto.setIsWatchlistUpdated(Boolean.TRUE);</span>
+			}
+
+<span class="nc" id="L1142">		} catch (Exception e) {</span>
+<span class="nc" id="L1143">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L1144">		}</span>
+
+<span class="nc" id="L1146">	}</span>
+
+	@Override
+	protected String addSort(String columnName, boolean isAsc, String query) {
+<span class="nc" id="L1150">		String orderByCon = &quot;{ORDER_TYPE}&quot;;</span>
+<span class="nc bnc" id="L1151" title="All 2 branches missed.">		if (columnName != null) {</span>
+<span class="nc" id="L1152">			query = query.replace(&quot;{SORT_FIELD_NAME}&quot;, columnName);</span>
+<span class="nc bnc" id="L1153" title="All 2 branches missed.">			if (isAsc) {</span>
+<span class="nc" id="L1154">				query = query.replace(orderByCon, &quot;ASC&quot;);</span>
+			} else {
+<span class="nc" id="L1156">				query = query.replace(orderByCon, &quot;DESC&quot;);</span>
+			}
+		}
+<span class="nc" id="L1159">		return query;</span>
+	}
+
+	protected String getAlertComplianceLog(Integer accountId) throws CompliancePortalException {
+<span class="fc" id="L1163">		String alertComplianceLog = Constants.DASH_DETAILS_PAGE;</span>
+<span class="fc" id="L1164">		PreparedStatement prepareStatement = null;</span>
+<span class="fc" id="L1165">		ResultSet resultSet = null;</span>
+<span class="fc" id="L1166">		Connection connection = null;</span>
+
+		try {
+<span class="fc" id="L1169">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L1170">			prepareStatement = connection</span>
+<span class="fc" id="L1171">					.prepareStatement(RegistrationQueryConstant.GET_ALERT_COMPLIANCE_LOG.getQuery());</span>
+<span class="fc" id="L1172">			prepareStatement.setInt(1, accountId);</span>
+<span class="fc" id="L1173">			resultSet = prepareStatement.executeQuery();</span>
+<span class="pc bpc" id="L1174" title="1 of 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1175">				alertComplianceLog = resultSet.getString(&quot;Comments&quot;);</span>
+			}
+
+<span class="nc" id="L1178">		} catch (Exception e) {</span>
+<span class="nc" id="L1179">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L1181">			closeResultset(resultSet);</span>
+<span class="fc" id="L1182">			closePrepareStatement(prepareStatement);</span>
+<span class="fc" id="L1183">			closeConnection(connection);</span>
+		}
+
+<span class="fc" id="L1186">		return alertComplianceLog;</span>
+	}
+
+	protected void setFraugsterData(BaseUpdateDBDto baseUpdateDBDto, Connection conn, Connection readOnlyConn,
+			Integer eventType, String status) throws CompliancePortalException {
+		try {
+			String asyncStatus;
+
+<span class="nc bnc" id="L1194" title="All 2 branches missed.">			if (Constants.CLEAR.equalsIgnoreCase(status)) {</span>
+<span class="nc" id="L1195">				List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogForPayment(readOnlyConn,</span>
+<span class="nc" id="L1196">						baseUpdateDBDto.getContactId(), eventType);</span>
+<span class="nc" id="L1197">				updateFraugsterSchedularDataOnReasonAdded(baseUpdateDBDto, null, conn, summaryList);</span>
+<span class="nc" id="L1198">			} else {</span>
+
+<span class="nc" id="L1200">				Boolean isWatchListAdded = isWatchListAdded(baseUpdateDBDto);</span>
+<span class="nc" id="L1201">				Boolean isWatchListRemoved = isWatchListRemoved(baseUpdateDBDto);</span>
+
+<span class="nc bnc" id="L1203" title="All 2 branches missed.">				if (Boolean.TRUE.equals(isWatchListAdded)) {</span>
+
+<span class="nc" id="L1205">					asyncStatus = FragusterWatchListEnum.FRAUGSTER_HIGH_RISK_OF_FRAUD.getWatchlistCode();</span>
+<span class="nc" id="L1206">					List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogByAccountId(readOnlyConn,</span>
+<span class="nc" id="L1207">							baseUpdateDBDto.getAccountId());</span>
+<span class="nc" id="L1208">					updateFraugsterSchedularDataOnWLAdded(baseUpdateDBDto, asyncStatus, conn, summaryList);</span>
+
+<span class="nc bnc" id="L1210" title="All 2 branches missed.">				} else if (Boolean.TRUE.equals(isWatchListRemoved)) {</span>
+
+<span class="nc" id="L1212">					asyncStatus = FragusterWatchListEnum.APPROVED.getWatchlistCode();</span>
+<span class="nc" id="L1213">					List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogByAccountId(readOnlyConn,</span>
+<span class="nc" id="L1214">							baseUpdateDBDto.getAccountId());</span>
+<span class="nc" id="L1215">					updateFraugsterSchedularDataOnWLAdded(baseUpdateDBDto, asyncStatus, conn, summaryList);</span>
+				}
+
+<span class="nc bnc" id="L1218" title="All 4 branches missed.">				if (Boolean.FALSE.equals(isWatchListAdded) &amp;&amp; Boolean.FALSE.equals(isWatchListRemoved)) {</span>
+<span class="nc" id="L1219">					setAsyncStatusForPaymentReason(baseUpdateDBDto, conn, readOnlyConn, eventType);</span>
+				}
+			}
+
+<span class="nc" id="L1223">		} catch (Exception e) {</span>
+<span class="nc" id="L1224">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L1225">		}</span>
+<span class="nc" id="L1226">	}</span>
+
+	private String setAsyncStatusForPaymentReason(BaseUpdateDBDto baseUpdateDBDto, Connection conn,
+			Connection readOnlyConn, Integer eventType) throws CompliancePortalException {
+
+<span class="nc" id="L1231">		Boolean isReasonAdded = Boolean.FALSE;</span>
+<span class="nc" id="L1232">		Boolean isReasonRemoved = Boolean.FALSE;</span>
+<span class="nc" id="L1233">		String asyncStatus = FragusterWatchListEnum.APPROVED.getWatchlistCode();</span>
+
+		try {
+<span class="nc" id="L1236">			isReasonAdded = isReasonAddded(baseUpdateDBDto);</span>
+<span class="nc" id="L1237">			isReasonRemoved = isReasonRemoved(baseUpdateDBDto);</span>
+
+<span class="nc bnc" id="L1239" title="All 2 branches missed.">			if (Boolean.TRUE.equals(isReasonAdded)) {</span>
+<span class="nc bnc" id="L1240" title="All 2 branches missed.">				for (String reason : baseUpdateDBDto.getAddReasons()) {</span>
+<span class="nc" id="L1241">					asyncStatus = FraugsterReasonsEnum.getFraugsterReasonCode(reason);</span>
+<span class="nc" id="L1242">				}</span>
+<span class="nc" id="L1243">				List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogForPayment(readOnlyConn,</span>
+<span class="nc" id="L1244">						baseUpdateDBDto.getContactId(), eventType);</span>
+<span class="nc" id="L1245">				updateFraugsterSchedularDataOnReasonAdded(baseUpdateDBDto, asyncStatus, conn, summaryList);</span>
+
+<span class="nc bnc" id="L1247" title="All 2 branches missed.">			} else if (Boolean.TRUE.equals(isReasonRemoved)) {</span>
+<span class="nc" id="L1248">				asyncStatus = FraugsterReasonsEnum.APPROVED.getReasonCode();</span>
+<span class="nc" id="L1249">				List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogForPayment(readOnlyConn,</span>
+<span class="nc" id="L1250">						baseUpdateDBDto.getContactId(), eventType);</span>
+<span class="nc" id="L1251">				updateFraugsterSchedularDataOnReasonAdded(baseUpdateDBDto, asyncStatus, conn, summaryList);</span>
+			}
+
+<span class="nc" id="L1254">		} catch (Exception e) {</span>
+<span class="nc" id="L1255">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L1256">		}</span>
+
+<span class="nc" id="L1258">		return asyncStatus;</span>
+	}
+	
+	//Added for AT-3658
+	protected List&lt;IDomain&gt; getMorePaymentReferenceCheckDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="nc" id="L1263">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc bnc" id="L1265" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1266">				PaymentReferenceCheck paymentReferenceCheck = new PaymentReferenceCheck();</span>
+<span class="nc" id="L1267">				BlacklistPayRefSummary blacklistPayRefSummary = JsonConverterUtil.convertToObject(BlacklistPayRefSummary.class,</span>
+<span class="nc" id="L1268">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="nc" id="L1269">				paymentReferenceCheck.setCheckedOn(DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+<span class="nc" id="L1270">				paymentReferenceCheck.setPaymentReference(blacklistPayRefSummary.getPaymentReference());</span>
+<span class="nc" id="L1271">				paymentReferenceCheck.setClosenessScore(blacklistPayRefSummary.getTokenSetRatio());</span>
+<span class="nc" id="L1272">				paymentReferenceCheck.setOverallStatus(blacklistPayRefSummary.getStatus());</span>
+<span class="nc" id="L1273">				paymentReferenceCheck.setMatchedKeyword(blacklistPayRefSummary.getSanctionText());</span>
+<span class="nc" id="L1274">				paymentReferenceCheck.setId(resultSet.getInt(&quot;id&quot;));</span>
+<span class="nc" id="L1275">				domainList.add((IDomain) paymentReferenceCheck);</span>
+<span class="nc" id="L1276">			}</span>
+<span class="nc" id="L1277">			return domainList;</span>
+<span class="nc" id="L1278">		} catch (Exception e) {</span>
+<span class="nc" id="L1279">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+	}
+	
+	//Added for AT-4306
+	protected List&lt;IDomain&gt; getMoreIntuitionCheckDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="nc" id="L1285">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc bnc" id="L1287" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1288">				IntuitionPaymentResponse intuition = new IntuitionPaymentResponse();</span>
+<span class="nc" id="L1289">				TransactionMonitoringPaymentsSummary intuitionSummary = JsonConverterUtil</span>
+<span class="nc" id="L1290">						.convertToObject(TransactionMonitoringPaymentsSummary.class, resultSet.getString(Constants.SUMMARY));</span>
+<span class="nc" id="L1291">				intuition</span>
+<span class="nc" id="L1292">						.setCreatedOn(DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+<span class="nc" id="L1293">				intuition.setCorrelationId(intuitionSummary.getCorrelationId());</span>
+<span class="nc" id="L1294">				intuition.setClientRiskLevel(intuitionSummary.getClientRiskLevel());</span>
+<span class="nc" id="L1295">				intuition.setClientRuleScore(intuitionSummary.getClientRiskScore());</span>
+<span class="nc" id="L1296">				intuition.setRuleRiskLevel(intuitionSummary.getRuleRiskLevel());</span>
+<span class="nc" id="L1297">				intuition.setRuleScore(intuitionSummary.getRuleScore());</span>
+<span class="nc" id="L1298">				intuition.setStatus(intuitionSummary.getStatus());</span>
+				//Add for AT-5028
+<span class="nc bnc" id="L1300" title="All 4 branches missed.">				if (intuitionSummary.getAction() == null &amp;&amp; (intuitionSummary.getStatus().equalsIgnoreCase(Constants.CLEAN)</span>
+<span class="nc bnc" id="L1301" title="All 2 branches missed.">						|| intuitionSummary.getStatus().equalsIgnoreCase(Constants.CLEAR))) {</span>
+<span class="nc" id="L1302">					intuition.setDecision(intuitionSummary.getStatus());</span>
+<span class="nc bnc" id="L1303" title="All 4 branches missed.">				} else if (intuitionSummary.getAction() == null &amp;&amp; intuitionSummary.getStatus().equalsIgnoreCase(Constants.HOLD)) {</span>
+<span class="nc" id="L1304">					intuition.setDecision(intuitionSummary.getStatus());</span>
+<span class="nc bnc" id="L1305" title="All 2 branches missed.">				} else if (intuitionSummary.getAction() != null</span>
+<span class="nc bnc" id="L1306" title="All 2 branches missed.">						&amp;&amp; (intuitionSummary.getAction().equalsIgnoreCase(Constants.CLEAR)</span>
+<span class="nc bnc" id="L1307" title="All 2 branches missed.">								|| intuitionSummary.getAction().equalsIgnoreCase(Constants.CLEAN))</span>
+<span class="nc bnc" id="L1308" title="All 2 branches missed.">						&amp;&amp; intuitionSummary.getStatus().equalsIgnoreCase(Constants.HOLD)) {</span>
+<span class="nc" id="L1309">					intuition.setDecision(intuitionSummary.getAction());</span>
+<span class="nc bnc" id="L1310" title="All 4 branches missed.">				} else if (intuitionSummary.getAction() != null &amp;&amp; (intuitionSummary.getAction().equalsIgnoreCase(Constants.REJECT)</span>
+<span class="nc bnc" id="L1311" title="All 2 branches missed.">						|| intuitionSummary.getAction().equalsIgnoreCase(Constants.SEIZE))</span>
+<span class="nc bnc" id="L1312" title="All 2 branches missed.">						&amp;&amp; intuitionSummary.getStatus().equalsIgnoreCase(Constants.HOLD)) {</span>
+<span class="nc" id="L1313">					intuition.setDecision(intuitionSummary.getAction());</span>
+				}
+				
+<span class="nc" id="L1316">				intuition.setUpdatedBy(intuitionSummary.getUserId());</span>
+<span class="nc" id="L1317">				intuition.setId(resultSet.getInt(&quot;id&quot;));</span>
+<span class="nc" id="L1318">				domainList.add((IDomain) intuition);</span>
+<span class="nc" id="L1319">			}</span>
+<span class="nc" id="L1320">			return domainList;</span>
+<span class="nc" id="L1321">		} catch (Exception e) {</span>
+<span class="nc" id="L1322">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

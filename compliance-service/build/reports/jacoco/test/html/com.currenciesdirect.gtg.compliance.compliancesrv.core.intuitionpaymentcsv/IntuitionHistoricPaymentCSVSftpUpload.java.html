@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IntuitionHistoricPaymentCSVSftpUpload.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.intuitionpaymentcsv</a> &gt; <span class="el_source">IntuitionHistoricPaymentCSVSftpUpload.java</span></div><h1>IntuitionHistoricPaymentCSVSftpUpload.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.intuitionpaymentcsv;
+
+import org.slf4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionHistoricPaymentsRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.Session;
+
+<span class="nc" id="L15">public class IntuitionHistoricPaymentCSVSftpUpload {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L18">	private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(IntuitionHistoricPaymentCSVSftpUpload.class);</span>
+
+	/** The Constant INTUITION_HISTORIC_PAYMENT_SFTP_SERVER. */
+<span class="nc" id="L21">	private static final String INTUITION_HISTORIC_PAYMENT_SFTP_SERVER = System</span>
+<span class="nc" id="L22">			.getProperty(&quot;intuition.historic.payment.sftp.server&quot;);</span>
+
+	/** The Constant INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_USER. */
+<span class="nc" id="L25">	private static final String INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_USER = System</span>
+<span class="nc" id="L26">			.getProperty(&quot;intuition.historic.payment.sftp.user&quot;);</span>
+	
+	/** The Constant INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_PORT. */
+<span class="nc" id="L29">	private static final Integer INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_PORT = Integer.parseInt(System</span>
+<span class="nc" id="L30">			.getProperty(&quot;intuition.historic.payment.sftp.port&quot;));</span>
+
+	/** The Constant INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_PASSWORD. */
+<span class="nc" id="L33">	private static final String INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_PASSWORD = System</span>
+<span class="nc" id="L34">			.getProperty(&quot;intuition.historic.payment.sftp.password&quot;);</span>
+
+	/** The Constant INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_DIRECTORY. */
+<span class="nc" id="L37">	private static final String INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_DIRECTORY = System</span>
+<span class="nc" id="L38">			.getProperty(&quot;intuition.historic.payment.sftp.directory&quot;);</span>
+	
+<span class="nc" id="L40">	private int retryCount = 3;</span>
+
+<span class="nc" id="L42">	private int retryCounter = 1;</span>
+	
+	/** The email alert. */
+	@Autowired
+	private IntuitionHistoricPaymentEmailAlert emailAlert;
+
+	/**
+	 * Upload csv fileto intuition sftp server.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; uploadCsvFiletoIntuitionSftpServer(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L55">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L56">		IntuitionHistoricPaymentsRequest intuitionPaymentRequest = (IntuitionHistoricPaymentsRequest) messageExchange</span>
+<span class="nc" id="L57">				.getRequest();</span>
+
+<span class="nc" id="L59">		String paymentInLocalFileLocation = (String) intuitionPaymentRequest</span>
+<span class="nc" id="L60">				.getAdditionalAttribute(&quot;IntuitionHistoricPaymentInLocalFile&quot;);</span>
+<span class="nc" id="L61">		String paymentInLocalFileName = (String) intuitionPaymentRequest</span>
+<span class="nc" id="L62">				.getAdditionalAttribute(&quot;IntuitionHistoricPaymentInLocalFileName&quot;);</span>
+		
+<span class="nc" id="L64">		String paymentOutLocalFileLocation = (String) intuitionPaymentRequest</span>
+<span class="nc" id="L65">				.getAdditionalAttribute(&quot;IntuitionHistoricPaymentOutLocalFile&quot;);</span>
+<span class="nc" id="L66">		String paymentOutLocalFileName = (String) intuitionPaymentRequest</span>
+<span class="nc" id="L67">				.getAdditionalAttribute(&quot;IntuitionHistoricPaymentOutLocalFileName&quot;);</span>
+
+<span class="nc" id="L69">		ChannelSftp channelSftp = new ChannelSftp();</span>
+		try {
+<span class="nc" id="L71">			channelSftp = getSftpSession();</span>
+<span class="nc" id="L72">			channelSftp.connect();</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">			if ((boolean) intuitionPaymentRequest.getAdditionalAttribute(&quot;IntuitionHistoricPaymentInLocalSave&quot;)) {</span>
+<span class="nc" id="L74">				String paymentInRemoteDirPath = INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_DIRECTORY</span>
+						+ paymentInLocalFileName;
+<span class="nc" id="L76">				LOG.warn(&quot;Remote Directory : {} &quot;, paymentInRemoteDirPath);</span>
+<span class="nc" id="L77">				channelSftp.put(paymentInLocalFileLocation, paymentInRemoteDirPath);</span>
+			}
+
+<span class="nc bnc" id="L80" title="All 2 branches missed.">			if ((boolean) intuitionPaymentRequest.getAdditionalAttribute(&quot;IntuitionHistoricPaymentOutLocalSave&quot;)) {</span>
+<span class="nc" id="L81">				String paymentOutRemoteDirPath = INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_DIRECTORY</span>
+						+ paymentOutLocalFileName;
+<span class="nc" id="L83">				LOG.warn(&quot;Remote Directory : {} &quot;, paymentOutRemoteDirPath);</span>
+<span class="nc" id="L84">				channelSftp.put(paymentOutLocalFileLocation, paymentOutRemoteDirPath);</span>
+			}
+			
+<span class="nc" id="L87">			LOG.info(</span>
+					&quot;-------------------------- Intuition Historic Payment File Successfully uploaded to SFTP Server -------------&quot;);
+<span class="nc" id="L89">		} catch (Exception e) {</span>
+<span class="nc" id="L90">			LOG.error(&quot;Error in IntuitionHistoricPaymentCSVSftpUpload in uploadCsvFiletoIntuitionSftpServer method &quot;,</span>
+					e);
+			
+<span class="nc bnc" id="L93" title="All 2 branches missed.">			if(retryCounter &lt; retryCount) {</span>
+<span class="nc" id="L94">				retryCounter++; </span>
+<span class="nc" id="L95">				uploadCsvFiletoIntuitionSftpServer(message);</span>
+<span class="nc" id="L96">				retryCounter++;</span>
+			}
+			
+<span class="nc bnc" id="L99" title="All 2 branches missed.">			if (retryCounter &gt; retryCount) {</span>
+<span class="nc" id="L100">				emailAlert.sendEmailAlertForHistoricPaymentError(</span>
+						&quot;Intuition Historic Payment upload error - batch file sftp upload&quot;,
+						&quot;Intuition (Transaction monitoring) Historical Payment upload failed due to batch file sftp upload error on &quot;
+<span class="nc" id="L103">								+ new java.text.SimpleDateFormat(&quot;yyyy-MM-dd&quot;).format(new java.util.Date())</span>
+								+ &quot;. Please alert compliance officer to upload manually on Intuition server.&quot;);
+			}
+
+<span class="nc" id="L107">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L109">			channelSftp.exit();</span>
+		}
+
+<span class="nc" id="L112">		return message;</span>
+	}
+
+	/**
+	 * Gets the sftp session.
+	 *
+	 * @return the sftp session
+	 * @throws JSchException the j sch exception
+	 */
+	private ChannelSftp getSftpSession() throws JSchException {
+<span class="nc" id="L122">		JSch jsch = new JSch();</span>
+<span class="nc" id="L123">		String remoteHost = INTUITION_HISTORIC_PAYMENT_SFTP_SERVER;</span>
+<span class="nc" id="L124">		Session jschSession = jsch.getSession(INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_USER, remoteHost, INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_PORT);</span>
+<span class="nc" id="L125">		jschSession.setPassword(INTUITION_HISTORIC_PAYMENT_SFTP_SERVER_PASSWORD);</span>
+<span class="nc" id="L126">		java.util.Properties config = new java.util.Properties();</span>
+<span class="nc" id="L127">		config.put(&quot;StrictHostKeyChecking&quot;, &quot;no&quot;);</span>
+<span class="nc" id="L128">		jschSession.setConfig(config);</span>
+<span class="nc" id="L129">		jschSession.connect();</span>
+<span class="nc" id="L130">		return (ChannelSftp) jschSession.openChannel(&quot;sftp&quot;);</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

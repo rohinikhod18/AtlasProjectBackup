@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationErrorHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.card</a> &gt; <span class="el_source">RegistrationErrorHandler.java</span></div><h1>RegistrationErrorHandler.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.card;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessageResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import java.sql.Timestamp;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.Message;
+import org.springframework.web.context.request.async.DeferredResult;
+
+<span class="nc" id="L24">public class RegistrationErrorHandler {</span>
+	public Message&lt;MessageContext&gt; logError(Message&lt;MessageContext&gt; message) {
+		
+<span class="nc" id="L27">		MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L28">				.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+		
+<span class="nc" id="L30">		TransactionMonitoringSignupResponse response = createResponse(exchange);</span>
+		
+		@SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L33">		DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message.getHeaders()</span>
+<span class="nc" id="L34">				.get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+		ResponseEntity&lt;ServiceMessageResponse&gt; responseEntity;
+<span class="nc" id="L36">		responseEntity = new ResponseEntity&lt;&gt;(response, HttpStatus.OK);</span>
+<span class="nc" id="L37">		deferredResult.setResult(responseEntity);</span>
+<span class="nc" id="L38">		return message;</span>
+	}
+
+	private TransactionMonitoringSignupResponse createResponse(MessageExchange exchange) {
+		
+<span class="nc" id="L43">		TransactionMonitoringSignupResponse response = exchange.getResponse(TransactionMonitoringSignupResponse.class);</span>
+<span class="nc" id="L44">		TransactionMonitoringAccountSignupResponse tmSingUpAccountResponse = response.getTransactionMonitoringAccountSignupResponse();</span>
+<span class="nc" id="L45">		TransactionMonitoringSignupRequest request = (TransactionMonitoringSignupRequest) exchange.getRequest();</span>
+		
+<span class="nc" id="L47">		EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L48">				ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L49">				request.getTransactionMonitoringAccountRequest().getId());</span>
+		
+<span class="nc" id="L51">		TransactionMonitoringAccountProviderResponse tmAccountProviderResponse = tmSingUpAccountResponse.getTransactionMonitoringAccountProviderResponse();</span>
+<span class="nc" id="L52">		TransactionMonitoringAccountSummary accSummary = JsonConverterUtil</span>
+<span class="nc" id="L53">				.convertToObject(TransactionMonitoringAccountSummary.class, eventServiceLog.getSummary());</span>
+
+<span class="nc" id="L55">		tmSingUpAccountResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L56">		accSummary.setAccountId(tmSingUpAccountResponse.getAccountId());	</span>
+<span class="nc" id="L57">		accSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L58">		accSummary.setHttpStatus(tmSingUpAccountResponse.getHttpStatus());	</span>
+
+<span class="nc" id="L60">		tmAccountProviderResponse.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L61">		eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmAccountProviderResponse));</span>
+<span class="nc" id="L62">		eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L63">		eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(accSummary));</span>
+<span class="nc" id="L64">		eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L65">		return response;</span>
+	}
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

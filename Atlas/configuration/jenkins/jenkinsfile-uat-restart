@@ -1,0 +1,39 @@
+pipeline {
+    agent any
+    stages {
+        stage('Start') {
+            steps {
+                sendSlackNotifications 'STARTED'
+            }
+        }
+        stage('Info') {
+            steps {
+               echo "workspace directory is ${env.WORKSPACE} : Just restart"
+            }
+        }
+        stage("Restart SIT Server") {
+            steps {
+                echo "Deploy in UAT from snapshot"
+                    script {
+                        ansibleTower(
+                            towerServer: 'Ansible_Tower_Integration',
+                            towerCredentialsId: '',
+                            templateType: 'workflow',
+                            jobTemplate: 'atlas-uat-workflow',
+                            verbose: true,
+                            async: false
+                        )
+                    }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs deleteDirs: true, notFailBuild: true
+            sendSlackNotifications currentBuild.result
+        }
+        failure{
+            sendEmail("yogeshwar.vhatkar@bnt-soft.com")
+        }
+    }
+}

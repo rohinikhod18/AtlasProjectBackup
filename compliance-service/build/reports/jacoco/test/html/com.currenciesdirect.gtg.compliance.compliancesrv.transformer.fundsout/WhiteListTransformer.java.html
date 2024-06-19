@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WhiteListTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout</a> &gt; <span class="el_source">WhiteListTransformer.java</span></div><h1>WhiteListTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.VelocityCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.WhiteListCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.Beneficiary;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.whitelist.AccountWhiteList;
+import com.currenciesdirect.gtg.compliance.commons.domain.whitelist.ApprovedCurrencyAmountRangePair;
+import com.currenciesdirect.gtg.compliance.commons.domain.whitelist.HighRiskCountry;
+import com.currenciesdirect.gtg.compliance.commons.domain.whitelist.UdateWhiteListRequest;
+import com.currenciesdirect.gtg.compliance.commons.util.StringUtils;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+/**
+ * The Class WhiteListTransformer.
+ */
+<span class="nc" id="L27">public class WhiteListTransformer extends AbstractTransformer {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L30">	private static final Logger LOG = LoggerFactory.getLogger(WhiteListTransformer.class);</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer#
+	 * transformRequest(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L40">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L41">		UdateWhiteListRequest request = (UdateWhiteListRequest) messageExchange.getRequest();</span>
+
+		try {
+<span class="nc" id="L44">			FundsOutRequest fundsOutRequest = (FundsOutRequest) request.getAdditionalAttribute(&quot;oldRequest&quot;);</span>
+<span class="nc" id="L45">			AccountWhiteList whiteList = new AccountWhiteList();</span>
+<span class="nc" id="L46">			whiteList.setOrgCode(fundsOutRequest.getOrgCode());</span>
+<span class="nc" id="L47">			whiteList.setAccountId(fundsOutRequest.getAccId());</span>
+<span class="nc" id="L48">			ApprovedCurrencyAmountRangePair buyCurrencyAmount = new ApprovedCurrencyAmountRangePair();</span>
+<span class="nc" id="L49">			buyCurrencyAmount.setCode(fundsOutRequest.getTrade().getBuyCurrency());</span>
+<span class="nc" id="L50">			buyCurrencyAmount.setTxnAmountUpperLimit(fundsOutRequest.getBeneficiary().getAmount());</span>
+<span class="nc" id="L51">			whiteList.getApprovedBuyCurrencyAmountRangeList().add(buyCurrencyAmount);</span>
+<span class="nc" id="L52">			whiteList.getApprovedReasonOfTransList().add(fundsOutRequest.getTrade().getPurposeOfTrade());</span>
+<span class="nc bnc" id="L53" title="All 2 branches missed.">			if (request.isUSClientListBBeneAccNumber()) {</span>
+<span class="nc" id="L54">				whiteList.getUsClientListBBeneAccNumber().add(fundsOutRequest.getBeneficiary().getAccountNumber());</span>
+			}
+			/** Code added to resolve AT-1122 */
+			/**
+			 * Bene Name+AccountNumber+Country should be whitelisted if this
+			 * combination does not match, payment should be on HOLD
+			 *
+			 * Use code for Concantenated string &amp; Displayname for pretty print
+			 * on UI ex: John Doe, Account: 12345, Country: United Kingdom (UK)
+			 **/
+<span class="nc" id="L64">			Beneficiary bene = fundsOutRequest.getBeneficiary();</span>
+<span class="nc bnc" id="L65" title="All 4 branches missed.">			if (null != request.getCountryRiskLevel() &amp;&amp; !request.getCountryRiskLevel().isEmpty()</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">					&amp;&amp; request.getCountryRiskLevel().indexOf(&quot;High&quot;) &gt; -1) {</span>
+<span class="nc" id="L67">				HighRiskCountry hrc = new HighRiskCountry();</span>
+
+<span class="nc" id="L69">				StringBuilder code = new StringBuilder();</span>
+<span class="nc" id="L70">				code.append(bene.getFullName()).append(bene.getAccountNumber()).append(bene.getCountry());</span>
+<span class="nc" id="L71">				hrc.setCountryCode(code.toString());</span>
+<span class="nc" id="L72">				StringBuilder pretty = new StringBuilder();</span>
+<span class="nc" id="L73">				pretty.append(bene.getFullName()).append(&quot;, Account:&quot;).append(bene.getAccountNumber())</span>
+<span class="nc" id="L74">						.append(&quot;, Country:&quot;)</span>
+<span class="nc" id="L75">						.append((String) request.getAdditionalAttribute(Constants.COUNTRY_DISPLAY_NAME)).append('(')</span>
+<span class="nc" id="L76">						.append(bene.getCountry()).append(')');</span>
+<span class="nc" id="L77">				hrc.setDisplayName(pretty.toString());</span>
+<span class="nc" id="L78">				whiteList.getApprovedHighRiskCountryList().add(hrc);</span>
+			}
+<span class="nc bnc" id="L80" title="All 2 branches missed.">			if (!StringUtils.isNullOrTrimEmpty(request.getBeneCheckStatus())</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">					&amp;&amp; request.getBeneCheckStatus().startsWith(ServiceStatus.FAIL.getServiceStatusAsString())) {</span>
+<span class="nc" id="L82">				whiteList.getApprovedOPIAccountNumber().add(bene.getAccountNumber());</span>
+			}
+<span class="nc" id="L84">			CustomCheckResponse serviceResponse = new CustomCheckResponse();</span>
+<span class="nc" id="L85">			VelocityCheckResponse vResponse = new VelocityCheckResponse();</span>
+<span class="nc" id="L86">			vResponse.setBeneCheck(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L87">			vResponse.setNoOffundsoutTxn(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L88">			vResponse.setPermittedAmoutcheck(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L89">			vResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L90">			serviceResponse.setVelocityCheck(vResponse);</span>
+<span class="nc" id="L91">			WhiteListCheckResponse wResponse = new WhiteListCheckResponse();</span>
+<span class="nc" id="L92">			wResponse.setAmoutRange(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L93">			wResponse.setCurrency(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L94">			wResponse.setReasonOfTransfer(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L95">			serviceResponse.setWhiteListCheck(wResponse);</span>
+<span class="nc" id="L96">			serviceResponse.setOverallStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+
+<span class="nc" id="L98">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L99">			ccExchange.setRequest(whiteList);</span>
+<span class="nc" id="L100">			ccExchange.setResponse(serviceResponse);</span>
+<span class="nc" id="L101">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+<span class="nc" id="L102">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L103">		} catch (Exception e) {</span>
+<span class="nc" id="L104">			LOG.error(&quot;Error in CustomChecks transformer class, transformRequest method&quot;, e);</span>
+<span class="nc" id="L105">		}</span>
+<span class="nc" id="L106">		return message;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer#
+	 * transformResponse(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L117">		MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+		try {
+<span class="nc" id="L119">			CustomCheckResponse serviceResponse = (CustomCheckResponse) exchange.getResponse();</span>
+<span class="nc" id="L120">			LOG.debug(&quot; {}&quot;, serviceResponse);</span>
+<span class="nc" id="L121">		} catch (Exception e) {</span>
+<span class="nc" id="L122">			LOG.error(&quot;Error in CustomChecks transformer class : transformResponse -&quot;, e);</span>
+<span class="nc" id="L123">			CustomCheckResponse defaultServiceResponse = new CustomCheckResponse();</span>
+<span class="nc" id="L124">			VelocityCheckResponse defaultVResponse = new VelocityCheckResponse();</span>
+<span class="nc" id="L125">			defaultVResponse.setBeneCheck(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L126">			defaultVResponse.setNoOffundsoutTxn(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L127">			defaultVResponse.setPermittedAmoutcheck(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L128">			defaultVResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L129">			defaultServiceResponse.setVelocityCheck(defaultVResponse);</span>
+<span class="nc" id="L130">			WhiteListCheckResponse defaultWResponse = new WhiteListCheckResponse();</span>
+<span class="nc" id="L131">			defaultWResponse.setAmoutRange(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L132">			defaultWResponse.setCurrency(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L133">			defaultWResponse.setReasonOfTransfer(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L134">			defaultServiceResponse.setWhiteListCheck(defaultWResponse);</span>
+<span class="nc" id="L135">			defaultServiceResponse.setOverallStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L136">			exchange.setResponse(defaultServiceResponse);</span>
+<span class="nc" id="L137">		}</span>
+<span class="nc" id="L138">		return message;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

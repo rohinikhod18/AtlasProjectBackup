@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SanctionUpdateDataEnricher.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.sanction</a> &gt; <span class="el_source">SanctionUpdateDataEnricher.java</span></div><h1>SanctionUpdateDataEnricher.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.sanction;
+
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.Header;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateData;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.AbstractDataEnricher;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+/**
+ * The Class SanctionUpdateDataEnricher.
+ */
+<span class="nc" id="L25">public class SanctionUpdateDataEnricher  extends AbstractDataEnricher{</span>
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L28">	private static final Logger LOGGER = LoggerFactory.getLogger(SanctionUpdateDataEnricher.class);</span>
+
+	private static final String ENRICH_DATA_ERROR = &quot;Error while EnrichData&quot;;
+
+	@Autowired
+	private IEventDBService eventDBService;
+
+	/**
+	 * Process.
+	 *
+	 * @param message the message
+	 * @param correlationID the correlation ID
+	 * @return the message
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+<span class="nc" id="L44">		SanctionUpdateRequest sanctionUpdateRequest=null;</span>
+<span class="nc" id="L45">		MessageExchange messageExchange = null;</span>
+		try{
+<span class="nc" id="L47">			getUserTableId(message);</span>
+<span class="nc" id="L48">			messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+
+<span class="nc" id="L50">			sanctionUpdateRequest = messageExchange.getRequest(SanctionUpdateRequest.class);</span>
+			
+<span class="nc" id="L52">			ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc" id="L53">			OperationEnum operation = messageExchange.getOperation();</span>
+			
+<span class="nc bnc" id="L55" title="All 4 branches missed.">			if(serviceInterfaceType == ServiceInterfaceType.PROFILE &amp;&amp; operation == OperationEnum.SANCTION_UPDATE){</span>
+
+				
+<span class="nc bnc" id="L58" title="All 2 branches missed.">				for (SanctionUpdateData data : sanctionUpdateRequest.getSanctions()) {</span>
+
+<span class="nc" id="L60">					checkSanctionUpdateRequest(message, sanctionUpdateRequest, data);</span>
+<span class="nc" id="L61">				}</span>
+			}
+			
+<span class="nc" id="L64">		}catch (Exception e) {</span>
+<span class="nc" id="L65">			LOGGER.error(ENRICH_DATA_ERROR, e);</span>
+<span class="nc" id="L66">		}</span>
+<span class="nc" id="L67">		return message;</span>
+	}
+
+
+
+	/**
+	 * @param message
+	 * @param sanctionUpdateRequest
+	 * @param data
+	 * @throws ComplianceException
+	 */
+	private void checkSanctionUpdateRequest(Message&lt;MessageContext&gt; message,
+			SanctionUpdateRequest sanctionUpdateRequest, SanctionUpdateData data) throws ComplianceException {
+<span class="nc bnc" id="L80" title="All 2 branches missed.">		if (sanctionUpdateRequest.getResourceType().equalsIgnoreCase(ServiceInterfaceType.PROFILE.name())) {</span>
+<span class="nc" id="L81">			getEventForSanctionUpdate(data.getEventServiceLogId(), Constants.SANCTION,</span>
+					message);
+<span class="nc" id="L83">		} else if (sanctionUpdateRequest.getResourceType()</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">				.equalsIgnoreCase(ServiceInterfaceType.FUNDSOUT.name())) {</span>
+<span class="nc" id="L85">			getEventForFundsOutSanctionUpdate(data.getEventServiceLogId(),</span>
+					Constants.SANCTION, message);
+<span class="nc" id="L87">		} else if (sanctionUpdateRequest.getResourceType()</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">				.equalsIgnoreCase(ServiceInterfaceType.FUNDSIN.name())) {</span>
+<span class="nc" id="L89">			getEventForFundsInSanctionUpdate(data.getEventServiceLogId(),</span>
+					Constants.SANCTION, message);
+		}
+<span class="nc" id="L92">	}</span>
+	
+	
+	
+	private void getEventForSanctionUpdate(Integer eventServiceLogId,String serviceName,Message&lt;MessageContext&gt; message) throws ComplianceException{
+<span class="nc bnc" id="L97" title="All 2 branches missed.">		if(eventServiceLogId != null){</span>
+<span class="nc" id="L98">			eventDBService.getEventSerivceLogByIdAndService(eventServiceLogId,serviceName,message);</span>
+		}
+<span class="nc" id="L100">	}</span>
+	
+	private void getEventForFundsOutSanctionUpdate(Integer eventServiceLogId,String serviceName,Message&lt;MessageContext&gt; message) throws ComplianceException{
+<span class="nc bnc" id="L103" title="All 2 branches missed.">		if(eventServiceLogId != null){</span>
+<span class="nc" id="L104">			eventDBService.getFundsOutEventSerivceLogByIdAndService(eventServiceLogId,serviceName,message);</span>
+		}
+<span class="nc" id="L106">	}</span>
+	
+	private  void getEventForFundsInSanctionUpdate(Integer eventServiceLogId,String serviceName,Message&lt;MessageContext&gt; message) throws ComplianceException{
+<span class="nc bnc" id="L109" title="All 2 branches missed.">		if(eventServiceLogId != null){</span>
+<span class="nc" id="L110">			eventDBService.getFundsInEventSerivceLogByIdAndService(eventServiceLogId,serviceName,message);</span>
+		}
+<span class="nc" id="L112">	}</span>
+
+	public IEventDBService getEventDBService() {
+<span class="nc" id="L115">		return eventDBService;</span>
+	}
+
+	public void setEventDBService(IEventDBService eventDBService) {
+<span class="nc" id="L119">		this.eventDBService = eventDBService;</span>
+<span class="nc" id="L120">	}</span>
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

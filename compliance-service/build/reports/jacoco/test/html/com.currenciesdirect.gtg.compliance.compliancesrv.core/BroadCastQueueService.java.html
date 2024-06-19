@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BroadCastQueueService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core</a> &gt; <span class="el_source">BroadCastQueueService.java</span></div><h1>BroadCastQueueService.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.core;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.web.context.request.async.DeferredResult;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessageResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.BroadCastQueueDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.BroadCastQueueRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MQMessageContext;
+
+/**
+ * The Class BroadCastQueueService.
+ *
+ * @author manish
+ */
+<span class="nc" id="L33">public class BroadCastQueueService {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L36">	private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(BroadCastQueueService.class);</span>
+
+	/** The application context. */
+	@Autowired
+	private ApplicationContext applicationContext;
+
+	/**
+	 * Do message broadcasting.
+	 */
+	public void doMessageBroadcasting() {
+<span class="nc" id="L46">		BroadCastQueueRequest broadCastQueueRequest = new BroadCastQueueRequest();</span>
+<span class="nc" id="L47">		MQMessageContext messageContext = new MQMessageContext();</span>
+<span class="nc" id="L48">		messageContext.setRequest(broadCastQueueRequest);</span>
+<span class="nc" id="L49">		BroadCastQueueDBServiceImpl broadCastQueueDBServiceImpl = applicationContext</span>
+<span class="nc" id="L50">				.getBean(&quot;BroadCastQueueDBServiceImpl&quot;, BroadCastQueueDBServiceImpl.class);</span>
+		try {
+<span class="nc bnc" id="L52" title="All 2 branches missed.">			while (Boolean.TRUE.equals(broadCastQueueDBServiceImpl.isMessageForBroadcast())) {</span>
+<span class="nc" id="L53">				executeWorkflow(messageContext);</span>
+			}
+<span class="nc" id="L55">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L56">			LOG.error(&quot;Error in executing broadcast service&quot;, e);</span>
+<span class="nc" id="L57">		}</span>
+<span class="nc" id="L58">	}</span>
+
+	/**
+	 * Execute workflow.
+	 *
+	 * @param messageContext
+	 *            the message context
+	 * @return the deferred result
+	 */
+	public DeferredResult&lt;ResponseEntity&gt; executeWorkflow(final MQMessageContext messageContext) {
+
+<span class="nc" id="L69">		DeferredResult&lt;ResponseEntity&gt; deferredResult = new DeferredResult&lt;&gt;(-1L);// 8000L,</span>
+																					// &quot;timeout
+																					// occured&quot;
+<span class="nc" id="L72">		Map&lt;String, Object&gt; messageHeaders = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L73">		messageHeaders.put(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT, deferredResult);</span>
+<span class="nc" id="L74">		Message&lt;MQMessageContext&gt; message = MessageBuilder.withPayload(messageContext).copyHeaders(messageHeaders)</span>
+<span class="nc" id="L75">				.build();</span>
+
+<span class="nc" id="L77">		MessageChannel messageChannel = getInMessageChannel();</span>
+<span class="nc bnc" id="L78" title="All 2 branches missed.">		if (messageChannel != null)</span>
+<span class="nc" id="L79">			messageChannel.send(message);</span>
+<span class="nc" id="L80">		return deferredResult;</span>
+	}
+
+	/**
+	 * Gets the in message channel.
+	 *
+	 * @return the in message channel
+	 */
+	private MessageChannel getInMessageChannel() {
+<span class="nc" id="L89">		MessageChannel messageChannel = null;</span>
+		try {
+<span class="nc" id="L91">			messageChannel = applicationContext.getBean(&quot;PUSH.MQ.IN.CHANNEL&quot;, MessageChannel.class);</span>
+<span class="nc" id="L92">		} catch (NoSuchBeanDefinitionException nbde) {</span>
+<span class="nc" id="L93">			LOG.error(&quot;Error in BroadCastQueueService&quot;, nbde);</span>
+<span class="nc" id="L94">		}</span>
+<span class="nc" id="L95">		return messageChannel;</span>
+	}
+
+	/**
+	 * Handle response.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MQMessageContext&gt; handleResponse(Message&lt;MQMessageContext&gt; message) {
+<span class="nc bnc" id="L106" title="All 2 branches missed.">		if (Boolean.TRUE.equals(message.getPayload().getNoMessageLeft())) {</span>
+<span class="nc" id="L107">			LOG.debug(&quot;NO MESSAGE LEFT FOR BROADCAST&quot;);</span>
+		} else {
+<span class="nc" id="L109">			LOG.debug(&quot;PUSH MQ EXECUTED SUCCESSFULLY&quot;);</span>
+		}
+
+<span class="nc" id="L112">		DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message.getHeaders()</span>
+<span class="nc" id="L113">				.get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+
+<span class="nc" id="L115">		BaseResponse regResponse = new BaseResponse();</span>
+<span class="nc" id="L116">		ResponseEntity&lt;ServiceMessageResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(regResponse, HttpStatus.OK);</span>
+
+<span class="nc" id="L118">		deferredResult.setResult(responseEntity);</span>
+
+<span class="nc" id="L120">		return message;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

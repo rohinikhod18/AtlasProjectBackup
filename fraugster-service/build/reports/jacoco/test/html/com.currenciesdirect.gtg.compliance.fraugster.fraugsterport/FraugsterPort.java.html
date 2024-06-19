@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FraugsterPort.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">fraugster-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.fraugster.fraugsterport</a> &gt; <span class="el_source">FraugsterPort.java</span></div><h1>FraugsterPort.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.fraugster.fraugsterport;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.Invocation.Builder;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
+import org.jboss.resteasy.client.jaxrs.ResteasyClient;
+import org.jboss.resteasy.client.jaxrs.ResteasyWebTarget;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fraudpredict.request.ProviderSignUpRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.fraugster.core.IFraugsterProviderService;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterOnUpdateProviderRequest;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterPaymentsInProviderRequest;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterPaymentsOutProviderRequest;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterProviderProperty;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterSearchDataResponse;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterSessionToken;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterSignupProviderRequest;
+import com.currenciesdirect.gtg.compliance.fraugster.exception.FraugsterErrors;
+import com.currenciesdirect.gtg.compliance.fraugster.exception.FraugsterException;
+import com.currenciesdirect.gtg.compliance.fraugster.util.Constants;
+import com.currenciesdirect.gtg.compliance.fraugster.util.ObjectUtils;
+
+/**
+ * The Class FraugsterPort.
+ * 
+ * @author abhijitg
+ */
+public class FraugsterPort implements IFraugsterProviderService {
+
+	/** The Constant LOG. */
+<span class="nc" id="L46">	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(FraugsterPort.class);</span>
+
+	/** The i fraugster provider service. */
+<span class="nc" id="L49">	private static IFraugsterProviderService iFraugsterProviderService = null;</span>
+
+	/** The resteasy client handler. */
+<span class="nc" id="L52">	private ResteasyClientHandler resteasyClientHandler = ResteasyClientHandler.getInstance();</span>
+
+	/** The fraugster transformer. */
+<span class="nc" id="L55">	private FraugsterTransformer fraugsterTransformer = FraugsterTransformer.getInstance();</span>
+
+	/**
+	 * Instantiates a new fraugster port.
+	 */
+<span class="nc" id="L60">	private FraugsterPort() {</span>
+<span class="nc" id="L61">	}</span>
+
+	/**
+	 * Gets the single instance of FraugsterPort.
+	 *
+	 * @return single instance of FraugsterPort
+	 */
+	public static IFraugsterProviderService getInstance() {
+<span class="nc bnc" id="L69" title="All 2 branches missed.">		if (iFraugsterProviderService == null) {</span>
+<span class="nc" id="L70">			iFraugsterProviderService = new FraugsterPort();</span>
+		}
+<span class="nc" id="L72">		return iFraugsterProviderService;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.fraugster.core.
+	 * IFraugsterProviderService#doFraugsterCheck(com.currenciesdirect.gtg.
+	 * compliance.fraugster.core.domain.IndentityFraudDetectionRequest)
+	 */
+	@Override
+	public FraugsterSignupContactResponse doFraugsterSignupCheck(FraugsterSignupContactRequest request,
+			FraugsterProviderProperty fraugsterProviderProperty, FraugsterSessionToken sessionToken) throws FraugsterException {
+<span class="nc" id="L85">		Response response = null;</span>
+<span class="nc" id="L86">		ResteasyClient client = null;</span>
+<span class="nc" id="L87">		FraugsterSignupContactResponse fraudDetectionResponse = new FraugsterSignupContactResponse();</span>
+<span class="nc" id="L88">		FraugsterSignupProviderRequest fraugsterSignupProviderRequest = null;</span>
+<span class="nc" id="L89">		ProviderSignUpRequest providerSignUpRequest = null;</span>
+<span class="nc" id="L90">		FraugsterSearchDataResponse dataResponse = new FraugsterSearchDataResponse();</span>
+   try {
+		
+			 
+<span class="nc" id="L94">				LOG.debug(&quot;FraugsterPort STARTED : doFraugsterCheck() &quot;);</span>
+<span class="nc" id="L95">				client = resteasyClientHandler.getRetEasyClient();</span>
+	
+<span class="nc" id="L97">				fraugsterSignupProviderRequest = fraugsterTransformer.transformNewSignupRequest(request);</span>
+<span class="nc" id="L98">				ObjectUtils.setNullFieldsToDefault(providerSignUpRequest);</span>
+				
+<span class="nc" id="L100">				fraugsterSignupProviderRequest</span>
+<span class="nc" id="L101">						.setCustDOB(DateTimeFormatter.getDateInRFC3339(fraugsterSignupProviderRequest.getCustDOB()));</span>
+<span class="nc" id="L102">				fraugsterSignupProviderRequest.setCustSignupTs(</span>
+<span class="nc" id="L103">						DateTimeFormatter.getDateTimeInRFC3339(fraugsterSignupProviderRequest.getCustSignupTs()));</span>
+<span class="nc" id="L104">				fraugsterSignupProviderRequest.setDlExpiryDate(</span>
+<span class="nc" id="L105">						DateTimeFormatter.getDateInRFC3339(fraugsterSignupProviderRequest.getDlExpiryDate()));</span>
+<span class="nc" id="L106">				fraugsterSignupProviderRequest</span>
+<span class="nc" id="L107">						.setOsTs(DateTimeFormatter.getDateTimeInRFC3339(fraugsterSignupProviderRequest.getOsTs()));</span>
+<span class="nc" id="L108">				ResteasyWebTarget target1 = client.target(fraugsterProviderProperty.getEndPointUrl());</span>
+<span class="nc" id="L109">				Builder clientrequest = target1.request().header(HttpHeaders.AUTHORIZATION,</span>
+<span class="nc" id="L110">						Constants.SESSION_TOKEN + &quot; &quot;  + sessionToken.getSessionToken());</span>
+<span class="nc" id="L111">				response = clientrequest.post(Entity.entity(fraugsterSignupProviderRequest, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L112">				dataResponse = handleFraugsterServerTansactionResponse(response);</span>
+<span class="nc" id="L113">				fraudDetectionResponse = fraugsterTransformer.transformNewSignupResponse(dataResponse);</span>
+		 		
+<span class="nc" id="L115">		} catch (FraugsterException e) {</span>
+<span class="nc" id="L116">			LOG.error(&quot;Error in  FraugsterPort : doFraugsterSignupCheck() &quot;, e);</span>
+<span class="nc" id="L117">		} catch (Exception e) {</span>
+<span class="nc" id="L118">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_SIGNUP, e);</span>
+		} finally {
+<span class="nc bnc" id="L120" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L121">				response.close();</span>
+			}
+		}
+<span class="nc" id="L124">		return fraudDetectionResponse;</span>
+	}
+
+	
+	
+
+	private FraugsterSearchDataResponse handleFraugsterServerTansactionResponse(Response response)
+			throws FraugsterException {
+<span class="nc" id="L132">		FraugsterSearchDataResponse dataResponse = new FraugsterSearchDataResponse();</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">		if(null != response) {</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">			if (response.getStatus() == 200) {</span>
+<span class="nc" id="L135">				dataResponse = response.readEntity(FraugsterSearchDataResponse.class);</span>
+			}
+<span class="nc bnc" id="L137" title="All 2 branches missed.">			else if (response.getStatus() == 401) {</span>
+<span class="nc" id="L138">				throw new FraugsterException(FraugsterErrors.UNAUTHORIZED_EXCEPTION);</span>
+			} 
+<span class="nc bnc" id="L140" title="All 2 branches missed.">			else if (response.getStatus() == 429) {</span>
+<span class="nc" id="L141">				throw new FraugsterException(FraugsterErrors.SERVER_THROTTLER_EXCEPTION);</span>
+			}
+<span class="nc bnc" id="L143" title="All 2 branches missed.">		   else if (response.getStatus() == 500) {</span>
+<span class="nc" id="L144">				throw new FraugsterException(FraugsterErrors.FRAUGSTER_SERVER_GENERIC_EXCEPTION);</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">			} else if (response.getStatus() == 400) {</span>
+<span class="nc" id="L146">				throw new FraugsterException(FraugsterErrors.FRAUGSTER_SERVER_INVALID_REQUEST_EXCEPTION);</span>
+			}
+		} else {
+<span class="nc" id="L149">			throw new FraugsterException(FraugsterErrors.UNAUTHORIZED_EXCEPTION);</span>
+		}
+<span class="nc" id="L151">		return dataResponse;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.fraugster.core.IFraugsterProviderService#doLogin(com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterProviderProperty)
+	 */
+	@Override
+	public FraugsterSessionToken doLogin(FraugsterProviderProperty fraugsterProviderProperty) throws FraugsterException {
+
+<span class="nc" id="L160">		FraugsterSessionToken sessionToken = new FraugsterSessionToken();</span>
+<span class="nc" id="L161">		Response response = null;</span>
+<span class="nc" id="L162">		ResteasyClient client = null;</span>
+<span class="nc" id="L163">		String credentials = null;</span>
+<span class="nc" id="L164">		String base64encoded = null;</span>
+		try {
+<span class="nc" id="L166">			client = resteasyClientHandler.getRetEasyClient();</span>
+<span class="nc" id="L167">			credentials = fraugsterProviderProperty.getUserName() + &quot;:&quot; + fraugsterProviderProperty.getPassWord();</span>
+<span class="nc" id="L168">			base64encoded = Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));</span>
+<span class="nc" id="L169">			ResteasyWebTarget target1 = client.target(fraugsterProviderProperty.getEndPointUrl());</span>
+<span class="nc" id="L170">			Builder clientrequest = target1.request().header(HttpHeaders.AUTHORIZATION, &quot;Basic &quot; + base64encoded);</span>
+<span class="nc" id="L171">			clientrequest.accept(&quot;application/json;charset=UTF-8&quot;);</span>
+<span class="nc" id="L172">			response = clientrequest.post(null);</span>
+<span class="nc" id="L173">			sessionToken = handleFraugsterServerLoginResponse(response);</span>
+<span class="nc" id="L174">		} catch (Exception e) {</span>
+<span class="nc" id="L175">			LOG.error(&quot;Error in  FraugsterPort : doLogin() &quot;, e);</span>
+		} finally {
+<span class="nc bnc" id="L177" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L178">				response.close();</span>
+			}
+		}
+<span class="nc" id="L181">		return sessionToken;</span>
+	}
+
+	/**
+	 * Handle fraugster server login response.
+	 *
+	 * @param response the response
+	 * @return the fraugster session token
+	 * @throws FraugsterException the fraugster exception
+	 */
+	private FraugsterSessionToken handleFraugsterServerLoginResponse(Response response) throws FraugsterException {
+		FraugsterSessionToken sessionToken;
+<span class="nc bnc" id="L193" title="All 2 branches missed.">		if (response.getStatus() == 200) {</span>
+<span class="nc" id="L194">			sessionToken = response.readEntity(FraugsterSessionToken.class);</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">		} else if (response.getStatus() == 401) {</span>
+<span class="nc" id="L196">			throw new FraugsterException(FraugsterErrors.UNAUTHORIZED_EXCEPTION);</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">		} else if (response.getStatus() == 429) {</span>
+<span class="nc" id="L198">			throw new FraugsterException(FraugsterErrors.SERVER_THROTTLER_EXCEPTION);</span>
+		} else {
+<span class="nc" id="L200">			throw new FraugsterException(FraugsterErrors.FRAUGSTER_SERVER_GENERIC_EXCEPTION);</span>
+		}
+<span class="nc" id="L202">		return sessionToken;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.fraugster.core.IFraugsterProviderService#doLogout(com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterProviderProperty, com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterSessionToken)
+	 */
+	@Override
+	public Boolean doLogout(FraugsterProviderProperty fraugsterProviderProperty, FraugsterSessionToken sessionToken)
+			throws FraugsterException {
+<span class="nc" id="L211">		Response response = null;</span>
+<span class="nc" id="L212">		ResteasyClient client = null;</span>
+<span class="nc" id="L213">		Boolean status = Boolean.FALSE;</span>
+		try {
+<span class="nc" id="L215">			client = resteasyClientHandler.getRetEasyClient();</span>
+
+<span class="nc" id="L217">			ResteasyWebTarget target1 = client.target(fraugsterProviderProperty.getEndPointUrl());</span>
+<span class="nc" id="L218">			Builder clientrequest = target1.request().header(HttpHeaders.AUTHORIZATION,</span>
+<span class="nc" id="L219">					Constants.SESSION_TOKEN + &quot; &quot;  + sessionToken.getSessionToken());</span>
+
+<span class="nc" id="L221">			response = clientrequest.delete();</span>
+<span class="nc" id="L222">			status = handleFraugsterServerLogutResponse(response);</span>
+<span class="nc" id="L223">		} catch (Exception e) {</span>
+<span class="nc" id="L224">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_LOGOUT, e);</span>
+		} finally {
+<span class="nc bnc" id="L226" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L227">				response.close();</span>
+			}
+		}
+<span class="nc" id="L230">		return status;</span>
+	}
+
+	/**
+	 * Handle fraugster server logut response.
+	 *
+	 * @param response the response
+	 * @return the boolean
+	 * @throws FraugsterException the fraugster exception
+	 */
+	private Boolean handleFraugsterServerLogutResponse(Response response) throws FraugsterException {
+		boolean status;
+<span class="nc bnc" id="L242" title="All 2 branches missed.">		if (response.getStatus() == 200) {</span>
+<span class="nc" id="L243">			status = true;</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">		} else if (response.getStatus() == 401) {</span>
+<span class="nc" id="L245">			throw new FraugsterException(FraugsterErrors.UNAUTHORIZED_EXCEPTION);</span>
+<span class="nc bnc" id="L246" title="All 2 branches missed.">		} else if (response.getStatus() == 429) {</span>
+<span class="nc" id="L247">			throw new FraugsterException(FraugsterErrors.SERVER_THROTTLER_EXCEPTION);</span>
+		} else {
+<span class="nc" id="L249">			throw new FraugsterException(FraugsterErrors.FRAUGSTER_SERVER_GENERIC_EXCEPTION);</span>
+		}
+<span class="nc" id="L251">		return status;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.fraugster.core.IFraugsterProviderService#doFraugsterOnUpdateCheck(com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterOnUpdateContactRequest, com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterProviderProperty, com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterSessionToken)
+	 */
+	@Override
+	public FraugsterOnUpdateContactResponse doFraugsterOnUpdateCheck(FraugsterOnUpdateContactRequest request,
+			FraugsterProviderProperty fraugsterProviderProperty, FraugsterSessionToken sessionToken) throws FraugsterException {
+
+<span class="nc" id="L261">		Response response = null;</span>
+<span class="nc" id="L262">		ResteasyClient client = null;</span>
+<span class="nc" id="L263">		FraugsterOnUpdateContactResponse fraudDetectionResponse = new FraugsterOnUpdateContactResponse();</span>
+<span class="nc" id="L264">		FraugsterOnUpdateProviderRequest fraugsterOnUpdateProviderRequest = null;</span>
+<span class="nc" id="L265">		FraugsterSearchDataResponse dataResponse = new FraugsterSearchDataResponse();</span>
+		try {
+<span class="nc" id="L267">			LOG.debug(&quot;FraugsterPort STRATED : doFraugsterOnUpdateCheck() &quot;);</span>
+<span class="nc" id="L268">			client = resteasyClientHandler.getRetEasyClient();</span>
+<span class="nc" id="L269">			fraugsterOnUpdateProviderRequest = fraugsterTransformer.transformOnUpdateRequest(request);</span>
+<span class="nc" id="L270">			ObjectUtils.setNullFieldsToDefault(fraugsterOnUpdateProviderRequest);</span>
+<span class="nc" id="L271">			fraugsterOnUpdateProviderRequest</span>
+<span class="nc" id="L272">					.setCustDOB(DateTimeFormatter.getDateInRFC3339(fraugsterOnUpdateProviderRequest.getCustDOB()));</span>
+<span class="nc" id="L273">			fraugsterOnUpdateProviderRequest.setCustSignupTs(</span>
+<span class="nc" id="L274">					DateTimeFormatter.getDateTimeInRFC3339(fraugsterOnUpdateProviderRequest.getCustSignupTs()));</span>
+<span class="nc" id="L275">			fraugsterOnUpdateProviderRequest.setDlExpiryDate(</span>
+<span class="nc" id="L276">					DateTimeFormatter.getDateInRFC3339(fraugsterOnUpdateProviderRequest.getDlExpiryDate()));</span>
+<span class="nc" id="L277">			fraugsterOnUpdateProviderRequest</span>
+<span class="nc" id="L278">					.setOsTs(DateTimeFormatter.getDateTimeInRFC3339(fraugsterOnUpdateProviderRequest.getOsTs()));</span>
+<span class="nc" id="L279">			ResteasyWebTarget target1 = client.target(fraugsterProviderProperty.getEndPointUrl());</span>
+<span class="nc" id="L280">			Builder clientrequest = target1.request().header(HttpHeaders.AUTHORIZATION,</span>
+<span class="nc" id="L281">					Constants.SESSION_TOKEN + &quot; &quot; + sessionToken.getSessionToken());</span>
+<span class="nc" id="L282">			response = clientrequest.post(Entity.entity(fraugsterOnUpdateProviderRequest, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L283">			dataResponse = handleFraugsterServerTansactionResponse(response);</span>
+<span class="nc" id="L284">			fraudDetectionResponse = fraugsterTransformer.transformOnUpdateResponse(dataResponse);</span>
+<span class="nc" id="L285">		} catch (FraugsterException e) {</span>
+<span class="nc" id="L286">			throw e;</span>
+<span class="nc" id="L287">		} catch (Exception e) {</span>
+<span class="nc" id="L288">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_ONUPDATE, e);</span>
+		} finally {
+<span class="nc bnc" id="L290" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L291">				response.close();</span>
+			}
+		}
+<span class="nc" id="L294">		return fraudDetectionResponse;</span>
+
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.fraugster.core.IFraugsterProviderService#doFraugsterPaymentsOutCheck(com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterPaymentsOutContactRequest, com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterProviderProperty, com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterSessionToken)
+	 */
+	@Override
+	public FraugsterPaymentsOutContactResponse doFraugsterPaymentsOutCheck(FraugsterPaymentsOutContactRequest request,
+			FraugsterProviderProperty fraugsterProviderProperty, FraugsterSessionToken sessionToken) throws FraugsterException {
+<span class="nc" id="L304">		Response response = null;</span>
+<span class="nc" id="L305">		ResteasyClient client = null;</span>
+<span class="nc" id="L306">		FraugsterPaymentsOutContactResponse fraudDetectionResponse = new FraugsterPaymentsOutContactResponse();</span>
+<span class="nc" id="L307">		FraugsterPaymentsOutProviderRequest fraugsterPaymentsOutProviderRequest = null;</span>
+<span class="nc" id="L308">		FraugsterSearchDataResponse dataResponse = new FraugsterSearchDataResponse();</span>
+		try {
+<span class="nc" id="L310">			LOG.debug(&quot;FraugsterPort STRATED : doFraugsterPaymentsOutCheck() &quot;);</span>
+<span class="nc" id="L311">			client = resteasyClientHandler.getRetEasyClient();</span>
+<span class="nc" id="L312">			fraugsterPaymentsOutProviderRequest = fraugsterTransformer.transformPaymentsOutRequest(request);</span>
+<span class="nc" id="L313">			ObjectUtils.setNullFieldsToDefault(fraugsterPaymentsOutProviderRequest);</span>
+<span class="nc" id="L314">			fraugsterPaymentsOutProviderRequest.setCustSignupTs(</span>
+<span class="nc" id="L315">					DateTimeFormatter.getDateTimeInRFC3339(fraugsterPaymentsOutProviderRequest.getCustSignupTs()));</span>
+<span class="nc" id="L316">			fraugsterPaymentsOutProviderRequest.setOpiCreatedDate(</span>
+<span class="nc" id="L317">					DateTimeFormatter.getDateInRFC3339(fraugsterPaymentsOutProviderRequest.getOpiCreatedDate()));</span>
+<span class="nc" id="L318">			fraugsterPaymentsOutProviderRequest</span>
+<span class="nc" id="L319">					.setOsTs(DateTimeFormatter.getDateTimeInRFC3339(fraugsterPaymentsOutProviderRequest.getOsTs()));</span>
+<span class="nc" id="L320">			fraugsterPaymentsOutProviderRequest.setTransTs(</span>
+<span class="nc" id="L321">					DateTimeFormatter.getDateTimeInRFC3339(fraugsterPaymentsOutProviderRequest.getTransTs()));</span>
+<span class="nc" id="L322">			ResteasyWebTarget target1 = client.target(fraugsterProviderProperty.getEndPointUrl());</span>
+<span class="nc" id="L323">			Builder clientrequest = target1.request().header(HttpHeaders.AUTHORIZATION,</span>
+<span class="nc" id="L324">					Constants.SESSION_TOKEN + &quot; &quot;  + sessionToken.getSessionToken());</span>
+<span class="nc" id="L325">			response = clientrequest</span>
+<span class="nc" id="L326">					.post(Entity.entity(fraugsterPaymentsOutProviderRequest, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L327">			dataResponse = handleFraugsterServerTansactionResponse(response);</span>
+<span class="nc" id="L328">			fraudDetectionResponse = fraugsterTransformer.transformPaymentsOutResponse(dataResponse);</span>
+<span class="nc" id="L329">		} catch (FraugsterException e) {</span>
+<span class="nc" id="L330">			throw e;</span>
+<span class="nc" id="L331">		} catch (Exception e) {</span>
+<span class="nc" id="L332">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_PAYMENTOUT, e);</span>
+		} finally {
+<span class="nc bnc" id="L334" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L335">				response.close();</span>
+			}
+		}
+<span class="nc" id="L338">		return fraudDetectionResponse;</span>
+
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.fraugster.core.IFraugsterProviderService#doFraugsterPaymentsInCheck(com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterPaymentsInContactRequest, com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterProviderProperty, com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterSessionToken)
+	 */
+	@Override
+	public FraugsterPaymentsInContactResponse doFraugsterPaymentsInCheck(FraugsterPaymentsInContactRequest request,
+			FraugsterProviderProperty fraugsterProviderProperty, FraugsterSessionToken sessionToken) throws FraugsterException {
+<span class="nc" id="L348">		Response response = null;</span>
+<span class="nc" id="L349">		ResteasyClient client = null;</span>
+<span class="nc" id="L350">		FraugsterPaymentsInContactResponse fraudDetectionResponse = new FraugsterPaymentsInContactResponse();</span>
+<span class="nc" id="L351">		FraugsterPaymentsInProviderRequest fraugsterPaymentsInProviderRequest = null;</span>
+<span class="nc" id="L352">		FraugsterSearchDataResponse dataResponse = new FraugsterSearchDataResponse();</span>
+		try {
+<span class="nc" id="L354">			LOG.debug(&quot;FraugsterPort STRATED : doFraugsterPaymentsInCheck() &quot;);</span>
+<span class="nc" id="L355">			client = resteasyClientHandler.getRetEasyClient();</span>
+<span class="nc" id="L356">			fraugsterPaymentsInProviderRequest = fraugsterTransformer.transformPaymentsInRequest(request);</span>
+<span class="nc" id="L357">			ObjectUtils.setNullFieldsToDefault(fraugsterPaymentsInProviderRequest);</span>
+<span class="nc" id="L358">			fraugsterPaymentsInProviderRequest.setCustSignupTs(</span>
+<span class="nc" id="L359">					DateTimeFormatter.getDateTimeInRFC3339(fraugsterPaymentsInProviderRequest.getCustSignupTs()));</span>
+<span class="nc" id="L360">			fraugsterPaymentsInProviderRequest.setDebitCardAddedDate(DateTimeFormatter</span>
+<span class="nc" id="L361">					.getDateTimeInRFC3339(fraugsterPaymentsInProviderRequest.getDebitCardAddedDate()));</span>
+<span class="nc" id="L362">			fraugsterPaymentsInProviderRequest.setChequeClearanceDate(DateTimeFormatter</span>
+<span class="nc" id="L363">					.getDateTimeInRFC3339(fraugsterPaymentsInProviderRequest.getChequeClearanceDate()));</span>
+<span class="nc" id="L364">			fraugsterPaymentsInProviderRequest</span>
+<span class="nc" id="L365">					.setOsTs(DateTimeFormatter.getDateTimeInRFC3339(fraugsterPaymentsInProviderRequest.getOsTs()));</span>
+<span class="nc" id="L366">			fraugsterPaymentsInProviderRequest.setTransTs(</span>
+<span class="nc" id="L367">					DateTimeFormatter.getDateTimeInRFC3339(fraugsterPaymentsInProviderRequest.getTransTs()));</span>
+<span class="nc" id="L368">			ResteasyWebTarget target1 = client.target(fraugsterProviderProperty.getEndPointUrl());</span>
+<span class="nc" id="L369">			Builder clientrequest = target1.request().header(HttpHeaders.AUTHORIZATION,</span>
+<span class="nc" id="L370">					Constants.SESSION_TOKEN  + &quot; &quot; + sessionToken.getSessionToken());</span>
+<span class="nc" id="L371">			response = clientrequest</span>
+<span class="nc" id="L372">					.post(Entity.entity(fraugsterPaymentsInProviderRequest, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L373">			dataResponse = handleFraugsterServerTansactionResponse(response);</span>
+<span class="nc" id="L374">			fraudDetectionResponse = fraugsterTransformer.transformPaymentsInResponse(dataResponse);</span>
+<span class="nc" id="L375">		} catch (FraugsterException e) {</span>
+<span class="nc" id="L376">			throw e;</span>
+<span class="nc" id="L377">		} catch (Exception e) {</span>
+<span class="nc" id="L378">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_PAYMENTIN, e);</span>
+		} finally {
+<span class="nc bnc" id="L380" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L381">				response.close();</span>
+			}
+		}
+<span class="nc" id="L384">		return fraudDetectionResponse;</span>
+
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,828 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationReportDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport.report</a> &gt; <span class="el_source">RegistrationReportDBServiceImpl.java</span></div><h1>RegistrationReportDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport.report;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.OnfidoStatusEnum;
+import com.currenciesdirect.gtg.compliance.core.domain.Page;
+import com.currenciesdirect.gtg.compliance.core.domain.Sort;
+import com.currenciesdirect.gtg.compliance.core.domain.SourceEnum;
+import com.currenciesdirect.gtg.compliance.core.domain.TransactionValuesEnum;
+import com.currenciesdirect.gtg.compliance.core.domain.Watchlist;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationQueueData;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.report.RegistrationReportSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.savedsearch.SavedSearch;
+import com.currenciesdirect.gtg.compliance.core.report.IRegistrationReportDBService;
+import com.currenciesdirect.gtg.compliance.dbport.AbstractDBServiceLevel2;
+import com.currenciesdirect.gtg.compliance.dbport.FilterQueryBuilder;
+import com.currenciesdirect.gtg.compliance.dbport.RegQueDBColumns;
+import com.currenciesdirect.gtg.compliance.dbport.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.ServiceStatusEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.WatchListCategoryEnum;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+
+/**
+ * 
+ * The class RegistrationReportDBServiceImpl
+ *
+ */
+@Component(&quot;regReportDBServiceImpl&quot;)
+<span class="fc" id="L46">public class RegistrationReportDBServiceImpl extends AbstractDBServiceLevel2 implements IRegistrationReportDBService {</span>
+
+	private static final String WHERE = &quot;WHERE&quot;;
+	private static final String AND = &quot; AND &quot;;
+	private static final String WATCHLIST_CATEGORY_FILTER = &quot;{WATCHLIST_CATEGORY_FILTER}&quot;;
+	
+	private String getRegistrationReportQuery(String baseQuery, String contactFilterQuery, 
+			String accountFilterQuery, String regFilterQuery, String legalEntityJoin) {
+<span class="fc" id="L54">		return (baseQuery.replace(&quot;{REGISTRATION_QUEUE_CONTACT_FILTER}&quot;, contactFilterQuery)</span>
+<span class="fc" id="L55">				.replace(&quot;{REGISTRATION_QUEUE_ACCOUNT_FILTER}&quot;, accountFilterQuery)</span>
+<span class="fc" id="L56">				.replace(&quot;{REGISTRATION_QUEUE_FILTER}&quot;, regFilterQuery)</span>
+<span class="fc" id="L57">				.replace(&quot;{JOIN_LEGAL_ENTITY}&quot;, legalEntityJoin));</span>
+	}
+
+
+	private String setLegalEntityJoin(RegistrationReportSearchCriteria searchCriteria)
+	{
+<span class="fc" id="L63">		String legalEntityJoin=&quot;&quot;;</span>
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">		if (null != searchCriteria.getFilter().getLegalEntity()</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">				&amp;&amp; searchCriteria.getFilter().getLegalEntity().length &gt; 0) {</span>
+<span class="nc" id="L66">			String[] legalEntity =searchCriteria.getFilter().getLegalEntity();</span>
+<span class="nc" id="L67">			String value = appendAllValues(legalEntity);</span>
+<span class="nc" id="L68">			 legalEntityJoin = &quot;JOIN LegalEntity le ON acc.LegalEntityID = le.ID AND le.code In (&quot;+ value + &quot;)&quot;;</span>
+		}
+<span class="fc" id="L70">		return legalEntityJoin;</span>
+	}
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.core.IRegistrationQueueDBService#
+	 * getRegistrationQueue(com.currenciesdirect.gtg.compliance.core.domain.
+	 * SearchCriteria)
+	 */
+	@Override
+	public RegistrationQueueDto getRegistrationQueueWithCriteria(RegistrationReportSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+<span class="fc" id="L83">		int offset = SearchCriteriaUtil.getPageOffsetRows(searchCriteria);</span>
+<span class="fc" id="L84">		int minRowNum = SearchCriteriaUtil.getMinRowNumber(searchCriteria);</span>
+<span class="fc" id="L85">		int rowsToFetch = SearchCriteriaUtil.getPageSize();</span>
+<span class="fc" id="L86">		String regReport = &quot;RegistrationReport&quot;;</span>
+<span class="fc" id="L87">		RegReportContactFilterQueryBuilder contactFilter = new RegReportContactFilterQueryBuilder(</span>
+<span class="fc" id="L88">				searchCriteria.getFilter(),</span>
+<span class="fc" id="L89">				RegistrationReportQueryConstant.REGISTRATION_REPORT_CONTACT_FILTER.getQuery(), true);</span>
+
+<span class="fc" id="L91">		String contactFilterQuery = contactFilter.getQuery();</span>
+<span class="fc" id="L92">		String watchListCategoryFilter = getWatchListCategoryFilter(searchCriteria);</span>
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">		if (null != watchListCategoryFilter) {</span>
+<span class="nc" id="L94">			contactFilterQuery = contactFilterQuery.replace(WATCHLIST_CATEGORY_FILTER, watchListCategoryFilter);</span>
+		} else {
+<span class="fc" id="L96">			contactFilterQuery = contactFilterQuery.replace(WATCHLIST_CATEGORY_FILTER, &quot;&quot;);</span>
+		}
+
+<span class="fc" id="L99">		contactFilterQuery = buildContactFilterQuery(searchCriteria, contactFilterQuery);</span>
+
+<span class="fc" id="L101">		String accountFilterQuery = buildAccountFilterQuery(searchCriteria);</span>
+
+<span class="fc" id="L103">		String regFilterQuery = buildAccountAndContactAttributeFilterQuery(searchCriteria, contactFilter,</span>
+				contactFilterQuery, watchListCategoryFilter, accountFilterQuery);
+		
+		//ADD for AT-3269
+<span class="fc" id="L107">		String legalEntityJoin =setLegalEntityJoin(searchCriteria);</span>
+<span class="fc" id="L108">		String listQuery = getRegistrationReportQuery(RegistrationReportQueryConstant.GET_REGISTRATION_REPORT.getQuery(), </span>
+				contactFilterQuery, accountFilterQuery, regFilterQuery, legalEntityJoin);
+
+<span class="fc" id="L111">		listQuery = executeSort(searchCriteria.getFilter().getSort(), listQuery);</span>
+
+<span class="fc" id="L113">		String countQuery = getRegistrationReportQuery(RegistrationReportQueryConstant.GET_REGISTRATION_REPORT_COUNT.getQuery(), </span>
+				contactFilterQuery, accountFilterQuery, regFilterQuery, legalEntityJoin);
+
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">		if (Boolean.TRUE.equals(searchCriteria.getIsLandingPage())) {</span>
+<span class="nc" id="L117">			countQuery = null;</span>
+		}
+<span class="fc" id="L119">		RegistrationQueueDto registrationQueueDto = new RegistrationQueueDto();</span>
+<span class="fc" id="L120">		Connection connection = null;</span>
+		try {
+<span class="fc" id="L122">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L123">			List&lt;RegistrationQueueData&gt; regQueueData = getRegisrationQueueData(connection, offset, rowsToFetch,</span>
+					listQuery, countQuery);
+<span class="fc" id="L125">			registrationQueueDto.setRegistrationQueue(regQueueData);</span>
+
+<span class="fc" id="L127">			Integer pageSize = SearchCriteriaUtil.getPageSize();</span>
+<span class="fc" id="L128">			Integer totalRecords = 0;</span>
+<span class="pc bpc" id="L129" title="2 of 4 branches missed.">			if (null != regQueueData &amp;&amp; !regQueueData.isEmpty()) {</span>
+<span class="fc" id="L130">				totalRecords = regQueueData.get(0).getTotalRecords();</span>
+			}
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">			if (totalRecords != null) {</span>
+<span class="fc" id="L133">				Integer totalPages = totalRecords / pageSize;</span>
+<span class="pc bpc" id="L134" title="1 of 2 branches missed.">				if (totalRecords % pageSize != 0) {</span>
+<span class="nc" id="L135">					totalPages += 1;</span>
+				}
+<span class="fc" id="L137">				Page page = new Page();</span>
+<span class="pc bpc" id="L138" title="1 of 2 branches missed.">				if (totalRecords == 0) {</span>
+<span class="fc" id="L139">					page.setMinRecord(0);</span>
+				} else {
+<span class="nc" id="L141">					page.setMinRecord(minRowNum);</span>
+				}
+
+<span class="fc" id="L144">				int tMaxRecord = minRowNum + registrationQueueDto.getRegistrationQueue().size() - 1;</span>
+<span class="pc bpc" id="L145" title="1 of 2 branches missed.">				if (tMaxRecord &lt; totalRecords)</span>
+<span class="nc" id="L146">					page.setMaxRecord(tMaxRecord);</span>
+				else
+<span class="fc" id="L148">					page.setMaxRecord(totalRecords);</span>
+<span class="fc" id="L149">				page.setPageSize(pageSize);</span>
+<span class="fc" id="L150">				page.setTotalPages(totalPages);</span>
+<span class="fc" id="L151">				page.setTotalRecords(totalRecords);</span>
+				// added by neelesh pant
+<span class="fc" id="L153">				page.setCurrentPage(SearchCriteriaUtil.getCurrentPage(searchCriteria));</span>
+<span class="fc" id="L154">				registrationQueueDto.setPage(page);</span>
+			}
+<span class="fc" id="L156">			List&lt;String&gt; organization = null;</span>
+<span class="fc" id="L157">			organization = getOrganization(connection);</span>
+<span class="fc" id="L158">			registrationQueueDto.setOrganization(organization);</span>
+<span class="fc" id="L159">			registrationQueueDto.setSource(SourceEnum.getSourceValues());</span>
+<span class="fc" id="L160">			registrationQueueDto.setTransValue(TransactionValuesEnum.getTransactionValues());</span>
+			
+<span class="fc" id="L162">			registrationQueueDto.setOnfidoStatus(OnfidoStatusEnum.getOnfidoStatusValues());</span>
+			
+<span class="fc" id="L164">			List&lt;String&gt; currency = null;</span>
+<span class="fc" id="L165">			currency = getCurrency(connection);</span>
+<span class="fc" id="L166">			registrationQueueDto.setCurrency(currency);</span>
+<span class="fc" id="L167">			Watchlist watchlist = null;</span>
+<span class="fc" id="L168">			boolean category1 = searchCriteria.getFilter().getUserProfile().getPermissions()</span>
+<span class="fc" id="L169">					.getCanManageWatchListCategory1();</span>
+<span class="fc" id="L170">			boolean category2 = searchCriteria.getFilter().getUserProfile().getPermissions()</span>
+<span class="fc" id="L171">					.getCanManageWatchListCategory2();</span>
+<span class="fc" id="L172">			watchlist = getWatchListReasonId(connection, category1, category2);</span>
+<span class="fc" id="L173">			registrationQueueDto.setWatchList(watchlist);</span>
+<span class="fc" id="L174">			List&lt;String&gt; owner = null;</span>
+<span class="fc" id="L175">			owner = getLockedUserName(connection);</span>
+<span class="fc" id="L176">			registrationQueueDto.setOwner(owner);</span>
+<span class="fc" id="L177">			SavedSearch savedSearch = null;</span>
+<span class="fc" id="L178">			savedSearch = getSaveSearches(searchCriteria.getFilter().getUserProfile().getId(),regReport,connection);</span>
+<span class="fc" id="L179">			registrationQueueDto.setSavedSearch(savedSearch);</span>
+<span class="fc" id="L180">			List&lt;String&gt; legalEntity = null;</span>
+<span class="fc" id="L181">			legalEntity = getLegalEntity(connection);</span>
+<span class="fc" id="L182">			registrationQueueDto.setLegalEntity(legalEntity);</span>
+<span class="fc" id="L183">			searchCriteria.setPage(registrationQueueDto.getPage());</span>
+<span class="fc" id="L184">			registrationQueueDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteria));</span>
+
+<span class="fc" id="L186">		} catch (Exception e) {</span>
+<span class="fc" id="L187">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L189">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L191">		return registrationQueueDto;</span>
+	}
+
+	private String buildAccountAndContactAttributeFilterQuery(RegistrationReportSearchCriteria searchCriteria,
+			RegReportContactFilterQueryBuilder contactFilter, String contactFilterQuery, String watchListCategoryFilter,
+			String accountFilterQuery) {
+<span class="fc" id="L197">		String contactJoin = &quot;&quot;;</span>
+<span class="fc" id="L198">		contactJoin = contactFilterQuery(contactFilterQuery, watchListCategoryFilter, contactJoin);</span>
+
+<span class="fc" id="L200">		String accountJoin = &quot;&quot;;</span>
+<span class="fc" id="L201">		accountJoin = accountFilterQuery(accountFilterQuery, accountJoin);</span>
+
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">		if (contactFilter.isFilterAppliedForAccountAndContact()) {</span>
+<span class="nc" id="L204">			contactJoin = RegistrationReportQueryConstant.CONTACT_FILTER_LEFT_JOIN.getQuery();</span>
+<span class="nc" id="L205">			accountJoin = RegistrationReportQueryConstant.ACCOUNT_FILTER_LEFT_JOIN.getQuery();</span>
+		}
+
+<span class="fc" id="L208">		String orgJoin = &quot;&quot;;</span>
+<span class="fc" id="L209">		orgJoin = organizationJoin(searchCriteria, orgJoin);</span>
+		
+<span class="fc" id="L211">		String deviceJoin = &quot;&quot;;</span>
+<span class="fc" id="L212">		deviceJoin = deviceJoin(searchCriteria, deviceJoin);</span>
+		
+<span class="fc" id="L214">		String onfidoJoin = &quot;&quot;;</span>
+<span class="fc" id="L215">		onfidoJoin = onfidoJoin(searchCriteria, onfidoJoin);</span>
+
+<span class="fc" id="L217">		String legalEntityJoin = &quot;&quot;;</span>
+<span class="fc" id="L218">		legalEntityJoin = legalEntityJoin(searchCriteria, legalEntityJoin);</span>
+
+<span class="fc" id="L220">		FilterQueryBuilder regFilter = new RegReportFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L221">				RegistrationReportQueryConstant.REGISTRATION_REPORT_FILTER.getQuery(),</span>
+<span class="fc" id="L222">				searchCriteria.getIsFilterApply(), Boolean.TRUE);</span>
+<span class="fc" id="L223">		String regFilterQuery = regFilter.getQuery();</span>
+
+<span class="fc" id="L225">		String userJoin = &quot;&quot;;</span>
+<span class="fc" id="L226">		userJoin = userJoin(regFilterQuery, userJoin);</span>
+
+		/*
+		 * For certain filter search has to be performed on both account and
+		 * Contact tables like Name, compliance status, service statuses and IF
+		 * both table inner joins are added to REGISTRATION_REPORT_FILTER, PFX
+		 * only are CFX only results are obtained and IF LEFT joins are added it
+		 * returns all the rows. So adding LEFT joins with WHERE Clause and NULL
+		 * checks.
+		 * 
+		 * Also, if User filter is added, WHERE clause gets added automatically,
+		 * else WHERE has to be added
+		 * 
+		 * Moreover, if either contact or account only filter is added, should
+		 * NOT use LEFT JOINs.
+		 * 
+		 */
+<span class="pc bpc" id="L243" title="3 of 4 branches missed.">		if (contactJoin.length() &gt; 1 &amp;&amp; accountJoin.length() &gt; 1) {</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">			if (regFilterQuery.contains(WHERE)) {</span>
+<span class="nc" id="L245">				regFilterQuery = regFilterQuery + AND</span>
+<span class="nc" id="L246">						+ RegistrationReportQueryConstant.REPORT_FILTER_NULL_CHECK.getQuery();</span>
+			} else {
+<span class="nc" id="L248">				regFilterQuery = regFilterQuery + &quot; &quot; + WHERE + &quot; &quot;</span>
+<span class="nc" id="L249">						+ RegistrationReportQueryConstant.REPORT_FILTER_NULL_CHECK.getQuery();</span>
+			}
+
+		} else {
+<span class="fc" id="L253">			contactJoin = contactJoin.replace(&quot;LEFT&quot;, &quot;&quot;);</span>
+<span class="fc" id="L254">			accountJoin = accountJoin.replace(&quot;LEFT&quot;, &quot;&quot;);</span>
+		}
+<span class="fc" id="L256">		String filter = StringUtils.arrayToCommaDelimitedString(searchCriteria.getFilter().getWatchListReason());</span>
+<span class="fc" id="L257">		regFilterQuery = watchlistReasonFilter(regFilterQuery, filter);</span>
+<span class="fc" id="L258">		regFilterQuery = regFilterQuery.replace(&quot;{CONTACT_FILTER_JOIN}&quot;, contactJoin)</span>
+<span class="fc" id="L259">				.replace(&quot;{ACCOUNT_FILTER_JOIN}&quot;, accountJoin).replace(&quot;{ORG_TABLE_JOIN}&quot;, orgJoin)</span>
+<span class="fc" id="L260">				.replace(&quot;{USER_FILTER_JOIN}&quot;, userJoin)</span>
+<span class="fc" id="L261">				.replace(&quot;{LEGAL_ENTITY_JOIN}&quot;, legalEntityJoin)</span>
+<span class="fc" id="L262">				.replace(&quot;{DEVICE_ID_JOIN}&quot;, deviceJoin)</span>
+<span class="fc" id="L263">				.replace(&quot;{ONFIDO_JOIN}&quot;, onfidoJoin);</span>
+
+<span class="fc" id="L265">		return regFilterQuery;</span>
+	}
+
+
+	private String userJoin(String regFilterQuery, String userJoin) {
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">		if (regFilterQuery.contains(RegQueDBColumns.REGOWNER.getName())) {</span>
+<span class="nc" id="L271">			userJoin = RegistrationReportQueryConstant.USER_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L273">		return userJoin;</span>
+	}
+
+
+	private String legalEntityJoin(RegistrationReportSearchCriteria searchCriteria, String legalEntityJoin) {
+<span class="pc bpc" id="L278" title="1 of 2 branches missed.">		if (null != searchCriteria.getFilter().getLegalEntity()</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">				&amp;&amp; searchCriteria.getFilter().getLegalEntity().length &gt; 0) {</span>
+<span class="nc" id="L280">			legalEntityJoin = RegistrationReportQueryConstant.LEGEL_ENTITY_TABLE_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L282">		return legalEntityJoin;</span>
+	}
+
+
+	private String onfidoJoin(RegistrationReportSearchCriteria searchCriteria, String onfidoJoin) {
+<span class="pc bpc" id="L287" title="3 of 4 branches missed.">		if(null!=searchCriteria.getFilter().getOnfidoStatus() &amp;&amp; null == searchCriteria.getFilter().getOrganization()) {</span>
+<span class="nc" id="L288">			onfidoJoin =  RegistrationReportQueryConstant.ONFIDO_JOIN.getQuery();  </span>
+		}
+<span class="fc" id="L290">		return onfidoJoin;</span>
+	}
+
+
+	private String deviceJoin(RegistrationReportSearchCriteria searchCriteria, String deviceJoin) {
+<span class="pc bpc" id="L295" title="1 of 2 branches missed.">		if(null!=searchCriteria.getFilter().getDeviceId()) {</span>
+<span class="nc" id="L296">			deviceJoin =  RegistrationReportQueryConstant.DEVICE_ID_JOIN.getQuery();  </span>
+		}
+<span class="fc" id="L298">		return deviceJoin;</span>
+	}
+
+
+	private String organizationJoin(RegistrationReportSearchCriteria searchCriteria, String orgJoin) {
+<span class="pc bpc" id="L303" title="1 of 2 branches missed.">		if (null != searchCriteria.getFilter().getOrganization()</span>
+<span class="nc bnc" id="L304" title="All 2 branches missed.">				&amp;&amp; searchCriteria.getFilter().getOrganization().length &gt; 0) {</span>
+<span class="nc" id="L305">			orgJoin = RegistrationReportQueryConstant.ORG_TABLE_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L307">		return orgJoin;</span>
+	}
+
+
+	private String contactFilterQuery(String contactFilterQuery, String watchListCategoryFilter, String contactJoin) {
+<span class="pc bpc" id="L312" title="2 of 4 branches missed.">		if (contactFilterQuery.contains(WHERE) || null != watchListCategoryFilter) {</span>
+<span class="nc" id="L313">			contactJoin = RegistrationReportQueryConstant.CONTACT_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L315">		return contactJoin;</span>
+	}
+
+
+	private String accountFilterQuery(String accountFilterQuery, String accountJoin) {
+<span class="pc bpc" id="L320" title="1 of 2 branches missed.">		if (accountFilterQuery.contains(WHERE)) {</span>
+<span class="fc" id="L321">			accountJoin = RegistrationReportQueryConstant.ACCOUNT_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L323">		return accountJoin;</span>
+	}
+
+	private String buildAccountFilterQuery(RegistrationReportSearchCriteria searchCriteria) {
+<span class="fc" id="L327">		FilterQueryBuilder accountFilter = new RegReportAccountFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L328">				RegistrationReportQueryConstant.REGISTRATION_REPORT_ACCOUNT_FILTER.getQuery(), true);</span>
+<span class="fc" id="L329">		return accountFilter.getQuery();</span>
+	}
+
+	private String buildContactFilterQuery(RegistrationReportSearchCriteria searchCriteria, String contactFilterQuery) {
+<span class="fc" id="L333">		String countryJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L334" title="1 of 2 branches missed.">		if (searchCriteria.getFilter().getKeyword() != null</span>
+<span class="pc bpc" id="L335" title="1 of 2 branches missed.">				&amp;&amp; searchCriteria.getFilter().getKeyword().contains(&quot;cor:&quot;)) {</span>
+<span class="nc" id="L336">			countryJoin = RegistrationReportQueryConstant.REGISTRATION_REPORT_COUNTRY_OF_RESIDENCE_FILTER.getQuery();</span>
+		}
+
+<span class="fc" id="L339">		return contactFilterQuery.replace(&quot;{REGISTRATION_REPORT_COUNTRY_OF_RESIDENCE_FILTER}&quot;,</span>
+				countryJoin);
+	}
+
+	private String getWatchListCategoryFilter(RegistrationReportSearchCriteria regReportSearchCriteria) {
+<span class="fc" id="L344">		String watchlistStatus = null;</span>
+<span class="fc" id="L345">		boolean hasAllPermission = false;</span>
+<span class="pc bpc" id="L346" title="1 of 2 branches missed.">		if (regReportSearchCriteria.getFilter().getUserProfile().getPermissions().getCanManageWatchListCategory1()) {</span>
+<span class="fc" id="L347">			watchlistStatus = WatchListCategoryEnum.CATEGORY_1.getCategoryDbStatus().toString();</span>
+		}
+<span class="pc bpc" id="L349" title="1 of 2 branches missed.">		if (regReportSearchCriteria.getFilter().getUserProfile().getPermissions().getCanManageWatchListCategory2()) {</span>
+<span class="pc bpc" id="L350" title="1 of 2 branches missed.">			if (null != watchlistStatus)</span>
+<span class="fc" id="L351">				hasAllPermission = true;</span>
+			else
+<span class="nc" id="L353">				watchlistStatus = WatchListCategoryEnum.CATEGORY_2.getCategoryDbStatus().toString();</span>
+
+		}
+<span class="pc bpc" id="L356" title="1 of 2 branches missed.">		if (hasAllPermission)</span>
+<span class="fc" id="L357">			watchlistStatus = null;</span>
+		else {
+<span class="nc bnc" id="L359" title="All 2 branches missed.">			if (null != watchlistStatus)</span>
+<span class="nc" id="L360">				watchlistStatus = RegistrationReportQueryConstant.WATCHLIST_CATEGORY_FILTER.getQuery().replace(&quot;?&quot;, watchlistStatus);</span>
+		}
+
+<span class="fc" id="L363">		return watchlistStatus;</span>
+	}
+
+	/**
+	 * @param regFilterQuery
+	 * @param filter
+	 * @return
+	 */
+	private String watchlistReasonFilter(String regFilterQuery, String filter) {
+<span class="fc" id="L372">		String regWatchlistReasonFilterQuery = regFilterQuery;</span>
+<span class="pc bpc" id="L373" title="2 of 4 branches missed.">		if (null != filter &amp;&amp; filter.length() &gt; 0) {</span>
+<span class="nc bnc" id="L374" title="All 2 branches missed.">			if (regWatchlistReasonFilterQuery.contains(WHERE)) {</span>
+<span class="nc" id="L375">				regWatchlistReasonFilterQuery = regWatchlistReasonFilterQuery + AND</span>
+<span class="nc" id="L376">						+ RegistrationReportQueryConstant.WATCHLIST_FILTER.getQuery().replace(&quot;?&quot;, filter);</span>
+			} else {
+<span class="nc" id="L378">				regWatchlistReasonFilterQuery = regWatchlistReasonFilterQuery + &quot; &quot; + WHERE + &quot; &quot;</span>
+<span class="nc" id="L379">						+ RegistrationReportQueryConstant.WATCHLIST_FILTER.getQuery().replace(&quot;?&quot;, filter);</span>
+			}
+		}
+<span class="fc" id="L382">		return regWatchlistReasonFilterQuery;</span>
+	}
+
+	private String executeSort(Sort sort, String listQuery) {
+<span class="fc" id="L386">		String columnName = &quot;a.updatedon&quot;;</span>
+<span class="fc" id="L387">		boolean isAsc = false;</span>
+<span class="pc bpc" id="L388" title="3 of 4 branches missed.">		if (sort != null &amp;&amp; sort.getIsAscend() != null) {</span>
+<span class="nc" id="L389">			isAsc = sort.getIsAscend();</span>
+		}
+<span class="fc" id="L391">		return addSort(columnName, isAsc, listQuery);</span>
+	}
+
+	/**
+	 * Gets the regisration queue dta.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param minRowNum
+	 *            the min row num
+	 * @param maxRowNum
+	 *            the max row num
+	 * @return the regisration queue datagetRegisrationQueueDta
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	private List&lt;RegistrationQueueData&gt; getRegisrationQueueData(Connection connection, int minRowNum, int maxRowNum,
+			String query, String countQuery) throws CompliancePortalException {
+<span class="fc" id="L409">		List&lt;RegistrationQueueData&gt; registrationQueueDataList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L410">		PreparedStatement statement = null;</span>
+<span class="fc" id="L411">		PreparedStatement countStatement = null;</span>
+<span class="fc" id="L412">		ResultSet rs = null;</span>
+<span class="fc" id="L413">		ResultSet countRs = null;</span>
+		try {
+<span class="fc" id="L415">			statement = connection.prepareStatement(query);</span>
+<span class="fc" id="L416">			statement.setInt(1, minRowNum);</span>
+<span class="fc" id="L417">			statement.setInt(2, maxRowNum);</span>
+<span class="fc" id="L418">			rs = statement.executeQuery();</span>
+<span class="fc bfc" id="L419" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L420">				RegistrationQueueData registrationQueueData = new RegistrationQueueData();</span>
+<span class="fc" id="L421">				registrationQueueData.setContactId(rs.getInt(RegQueDBColumns.CONTACTID.getName()));</span>
+<span class="fc" id="L422">				registrationQueueData.setAccountId(rs.getInt(RegQueDBColumns.ACCOUNTID.getName()));</span>
+<span class="fc" id="L423">				registrationQueueData.setContactName(rs.getString(RegQueDBColumns.CONTACTNAME.getName()));</span>
+<span class="fc" id="L424">				registrationQueueData.setTradeAccountNum(rs.getString(RegQueDBColumns.TRADEACCOUNTNUM.getName()));</span>
+<span class="fc" id="L425">				Timestamp registeredOn = rs.getTimestamp(RegQueDBColumns.REGISTEREDON.getName());</span>
+<span class="pc bpc" id="L426" title="1 of 2 branches missed.">				if (registeredOn != null) {</span>
+<span class="fc" id="L427">					registrationQueueData.setRegisteredOn(DateTimeFormatter.dateTimeFormatter(registeredOn));</span>
+				}
+<span class="fc" id="L429">				registrationQueueData.setOrganisation(rs.getString(RegQueDBColumns.ORGANIZATION.getName()));</span>
+<span class="fc" id="L430">				registrationQueueData.setLegalEntity(rs.getString(RegQueDBColumns.LEGALENTITY.getName()));</span>
+<span class="fc" id="L431">				registrationQueueData.setEidCheck(</span>
+<span class="fc" id="L432">						ServiceStatusEnum.getStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.KYCSTATUS.getName())));</span>
+<span class="fc" id="L433">				registrationQueueData.setFraugster(ServiceStatusEnum</span>
+<span class="fc" id="L434">						.getStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.FRAUGSTERSTATUS.getName())));</span>
+<span class="fc" id="L435">				registrationQueueData.setSanction(ServiceStatusEnum</span>
+<span class="fc" id="L436">						.getStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.SANCTIONSTATUS.getName())));</span>
+<span class="fc" id="L437">				registrationQueueData.setBlacklist(ServiceStatusEnum</span>
+<span class="fc" id="L438">						.getStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.BLACKLISTSTATUS.getName())));</span>
+<span class="fc" id="L439">				registrationQueueData.setCustomCheck(ServiceStatusEnum</span>
+<span class="fc" id="L440">						.getStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.CUSOMCHECKSTATUS.getName())));</span>
+<span class="fc" id="L441">				registrationQueueData.setBuyCurrency(rs.getString(RegQueDBColumns.BUYCURRENCY.getName()));</span>
+<span class="fc" id="L442">				registrationQueueData.setSellCurrency(rs.getString(RegQueDBColumns.SELLCURRENCY.getName()));</span>
+<span class="fc" id="L443">				registrationQueueData.setTransactionValue(com.currenciesdirect.gtg.compliance.util.StringUtils</span>
+<span class="fc" id="L444">						.getNumberFormat(rs.getString(RegQueDBColumns.TRANSACTIONVALUE.getName())));</span>
+<span class="fc" id="L445">				registrationQueueData.setSource(rs.getString(RegQueDBColumns.SOURCE.getName()));</span>
+<span class="fc" id="L446">				registrationQueueData.setType(</span>
+<span class="fc" id="L447">						CustomerTypeEnum.getUiStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.TYPE.getName())));</span>
+<span class="fc" id="L448">				registrationQueueData</span>
+<span class="fc" id="L449">						.setCountryOfResidence(rs.getString(RegQueDBColumns.COUNTRY_OF_RESIDENCE.getName()));</span>
+<span class="fc" id="L450">				registrationQueueData.setAccountVersion(rs.getInt(RegQueDBColumns.ACCOUNT_VERSION.getName()));</span>
+<span class="fc" id="L451">				setNewOrUpdatedData(registrationQueueData);</span>
+<span class="fc" id="L452">				Timestamp registeredDate = rs.getTimestamp(RegQueDBColumns.REGISTERED_DATE.getName());</span>
+<span class="fc" id="L453">				setRegisteredDate(registeredDate, registrationQueueData);</span>
+<span class="fc" id="L454">				registrationQueueData.setComplianceStatus(rs.getString(RegQueDBColumns.STATUS.getName()));</span>
+<span class="fc" id="L455">				String lockedBy = rs.getString(RegQueDBColumns.LOCKED_BY.getName());</span>
+<span class="fc" id="L456">				setLockedData(lockedBy, rs, registrationQueueData);</span>
+<span class="fc" id="L457">				registrationQueueDataList.add(registrationQueueData);</span>
+<span class="fc" id="L458">			}</span>
+<span class="pc bpc" id="L459" title="1 of 2 branches missed.">			if (null != countQuery) {</span>
+<span class="fc" id="L460">				countStatement = connection.prepareStatement(countQuery);</span>
+<span class="fc" id="L461">				countRs = countStatement.executeQuery();</span>
+<span class="pc bpc" id="L462" title="2 of 4 branches missed.">				if (countRs.next() &amp;&amp; !registrationQueueDataList.isEmpty())</span>
+<span class="fc" id="L463">					registrationQueueDataList.get(0)</span>
+<span class="fc" id="L464">							.setTotalRecords(countRs.getInt(RegQueDBColumns.TOTALROWS.getName()));</span>
+			}
+<span class="fc" id="L466">		} catch (Exception e) {</span>
+<span class="fc" id="L467">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L469">			closeResultset(rs);</span>
+<span class="fc" id="L470">			closePrepareStatement(statement);</span>
+<span class="fc" id="L471">			closeResultset(countRs);</span>
+<span class="fc" id="L472">			closePrepareStatement(countStatement);</span>
+		}
+<span class="fc" id="L474">		return registrationQueueDataList;</span>
+	}
+
+	// newly created method
+	private List&lt;RegistrationQueueData&gt; getRegisrationWholeQueueData(Connection connection, String query)
+			throws CompliancePortalException {
+<span class="fc" id="L480">		List&lt;RegistrationQueueData&gt; registrationQueueDataList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L481">		PreparedStatement statement = null;</span>
+<span class="fc" id="L482">		ResultSet rs = null;</span>
+		try {
+<span class="fc" id="L484">			statement = connection.prepareStatement(query);</span>
+<span class="fc" id="L485">			rs = statement.executeQuery();</span>
+<span class="fc bfc" id="L486" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L487">				RegistrationQueueData registrationQueueData = new RegistrationQueueData();</span>
+<span class="fc" id="L488">				registrationQueueData.setContactId(rs.getInt(RegQueDBColumns.CONTACTID.getName()));</span>
+<span class="fc" id="L489">				registrationQueueData.setAccountId(rs.getInt(RegQueDBColumns.ACCOUNTID.getName()));</span>
+<span class="fc" id="L490">				registrationQueueData.setContactName(rs.getString(RegQueDBColumns.CONTACTNAME.getName()));</span>
+<span class="fc" id="L491">				registrationQueueData.setTradeAccountNum(rs.getString(RegQueDBColumns.TRADEACCOUNTNUM.getName()));</span>
+<span class="fc" id="L492">				Timestamp registeredOn = rs.getTimestamp(RegQueDBColumns.REGISTEREDON.getName());</span>
+<span class="pc bpc" id="L493" title="1 of 2 branches missed.">				if (registeredOn != null) {</span>
+<span class="fc" id="L494">					registrationQueueData.setRegisteredOn(DateTimeFormatter.dateTimeFormatter(registeredOn));</span>
+				}
+
+<span class="fc" id="L497">				registrationQueueData.setOrganisation(rs.getString(RegQueDBColumns.ORGANIZATION.getName()));</span>
+<span class="fc" id="L498">				registrationQueueData.setLegalEntity(rs.getString(RegQueDBColumns.LEGALENTITY.getName()));</span>
+<span class="fc" id="L499">				registrationQueueData.setEidCheck(</span>
+<span class="fc" id="L500">						ServiceStatusEnum.getStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.KYCSTATUS.getName())));</span>
+<span class="fc" id="L501">				registrationQueueData.setFraugster(ServiceStatusEnum</span>
+<span class="fc" id="L502">						.getStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.FRAUGSTERSTATUS.getName())));</span>
+<span class="fc" id="L503">				registrationQueueData.setSanction(ServiceStatusEnum</span>
+<span class="fc" id="L504">						.getStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.SANCTIONSTATUS.getName())));</span>
+<span class="fc" id="L505">				registrationQueueData.setBlacklist(ServiceStatusEnum</span>
+<span class="fc" id="L506">						.getStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.BLACKLISTSTATUS.getName())));</span>
+<span class="fc" id="L507">				registrationQueueData.setCustomCheck(ServiceStatusEnum</span>
+<span class="fc" id="L508">						.getStatusFromDatabaseStatus(rs.getInt(RegQueDBColumns.CUSOMCHECKSTATUS.getName())));</span>
+<span class="fc" id="L509">				registrationQueueData.setBuyCurrency(rs.getString(RegQueDBColumns.BUYCURRENCY.getName()));</span>
+<span class="fc" id="L510">				registrationQueueData.setSellCurrency(rs.getString(RegQueDBColumns.SELLCURRENCY.getName()));</span>
+<span class="fc" id="L511">				registrationQueueData.setTransactionValue(rs.getString(RegQueDBColumns.TRANSACTIONVALUE.getName()));</span>
+<span class="fc" id="L512">				registrationQueueData.setSource(rs.getString(RegQueDBColumns.SOURCE.getName()));</span>
+<span class="fc" id="L513">				registrationQueueData.setType(rs.getString(RegQueDBColumns.TYPE.getName()));</span>
+<span class="fc" id="L514">				registrationQueueData</span>
+<span class="fc" id="L515">						.setCountryOfResidence(rs.getString(RegQueDBColumns.COUNTRY_OF_RESIDENCE.getName()));</span>
+<span class="fc" id="L516">				registrationQueueData.setAccountVersion(rs.getInt(RegQueDBColumns.ACCOUNT_VERSION.getName()));</span>
+<span class="pc bpc" id="L517" title="1 of 2 branches missed.">				if (registrationQueueData.getAccountVersion() != null</span>
+<span class="pc bpc" id="L518" title="1 of 2 branches missed.">						&amp;&amp; registrationQueueData.getAccountVersion() &gt; 1) {</span>
+<span class="nc" id="L519">					registrationQueueData.setNewOrUpdated(Constants.U);</span>
+				} else {
+<span class="fc" id="L521">					registrationQueueData.setNewOrUpdated(Constants.N);</span>
+				}
+<span class="fc" id="L523">				Timestamp registeredDate = rs.getTimestamp(RegQueDBColumns.REGISTERED_DATE.getName());</span>
+<span class="pc bpc" id="L524" title="1 of 2 branches missed.">				if (registeredDate != null) {</span>
+<span class="nc" id="L525">					registrationQueueData.setRegisteredDate(DateTimeFormatter.dateTimeFormatter(registeredDate));</span>
+				} else {
+<span class="fc" id="L527">					registrationQueueData.setRegisteredDate(Constants.DASH_UI);</span>
+				}
+<span class="fc" id="L529">				registrationQueueData.setComplianceStatus(rs.getString(RegQueDBColumns.STATUS.getName()));</span>
+<span class="fc" id="L530">				String lockedBy = rs.getString(RegQueDBColumns.LOCKED_BY.getName());</span>
+<span class="pc bpc" id="L531" title="5 of 6 branches missed.">				if (lockedBy != null &amp;&amp; !lockedBy.isEmpty() &amp;&amp; !lockedBy.equalsIgnoreCase(Constants.DUMMY_USER)) {</span>
+<span class="nc" id="L532">					registrationQueueData</span>
+<span class="nc" id="L533">							.setUserResourceLockId(rs.getInt(RegQueDBColumns.USER_RESOURCE_LOCK_ID.getName()));</span>
+<span class="nc" id="L534">					registrationQueueData.setLocked(Boolean.TRUE);</span>
+<span class="nc" id="L535">					registrationQueueData.setLockedBy(lockedBy);</span>
+				}
+
+<span class="fc" id="L538">				registrationQueueDataList.add(registrationQueueData);</span>
+<span class="fc" id="L539">			}</span>
+
+<span class="fc" id="L541">		} catch (Exception e) {</span>
+<span class="fc" id="L542">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L544">			closeResultset(rs);</span>
+<span class="fc" id="L545">			closePrepareStatement(statement);</span>
+
+		}
+<span class="fc" id="L548">		return registrationQueueDataList;</span>
+	}
+
+	@Override
+	public ActivityLogs getActivityLogs(ActivityLogRequest request) throws CompliancePortalException {
+
+<span class="nc" id="L554">		return null;</span>
+	}
+
+	/**
+	 * Gets the regisration queue whole data.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param query
+	 *            the query
+	 * @return the regisration queue whole data
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	/*
+	 * Method for RegistrationQueueWholeData ExcelSheet
+	 */
+	public List&lt;RegistrationQueueData&gt; getRegisrationQueueWholeData(Connection connection, String query)
+			throws CompliancePortalException {
+<span class="nc" id="L573">		List&lt;RegistrationQueueData&gt; registrationQueueDataList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L574">		PreparedStatement statement = null;</span>
+<span class="nc" id="L575">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L577">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L578">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L579" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L580">				RegistrationQueueData registrationQueueData = new RegistrationQueueData();</span>
+<span class="nc" id="L581">				registrationQueueData.setContactId(rs.getInt(RegQueDBColumns.CONTACTID.getName()));</span>
+<span class="nc" id="L582">				registrationQueueData.setAccountId(rs.getInt(RegQueDBColumns.ACCOUNTID.getName()));</span>
+<span class="nc" id="L583">				registrationQueueData.setContactName(rs.getString(RegQueDBColumns.CONTACTNAME.getName()));</span>
+<span class="nc" id="L584">				registrationQueueData.setTradeAccountNum(rs.getString(RegQueDBColumns.TRADEACCOUNTNUM.getName()));</span>
+<span class="nc" id="L585">				Timestamp registeredOn = rs.getTimestamp(RegQueDBColumns.REGISTEREDON.getName());</span>
+<span class="nc bnc" id="L586" title="All 2 branches missed.">				if (registeredOn != null) {</span>
+<span class="nc" id="L587">					registrationQueueData.setRegisteredOn(DateTimeFormatter.dateTimeFormatter(registeredOn));</span>
+				}
+<span class="nc" id="L589">				registrationQueueData.setOrganisation(rs.getString(RegQueDBColumns.ORGANIZATION.getName()));</span>
+<span class="nc" id="L590">				registrationQueueData.setEidCheck(rs.getString(RegQueDBColumns.KYCSTATUS.getName()));</span>
+<span class="nc" id="L591">				registrationQueueData.setFraugster(rs.getString(RegQueDBColumns.FRAUGSTERSTATUS.getName()));</span>
+<span class="nc" id="L592">				registrationQueueData.setSanction(rs.getString(RegQueDBColumns.SANCTIONSTATUS.getName()));</span>
+<span class="nc" id="L593">				registrationQueueData.setBlacklist(rs.getString(RegQueDBColumns.BLACKLISTSTATUS.getName()));</span>
+<span class="nc" id="L594">				registrationQueueData.setBuyCurrency(rs.getString(RegQueDBColumns.BUYCURRENCY.getName()));</span>
+<span class="nc" id="L595">				registrationQueueData.setSellCurrency(rs.getString(RegQueDBColumns.SELLCURRENCY.getName()));</span>
+<span class="nc" id="L596">				registrationQueueData.setTransactionValue(rs.getString(RegQueDBColumns.TRANSACTIONVALUE.getName()));</span>
+<span class="nc" id="L597">				registrationQueueData.setSource(rs.getString(RegQueDBColumns.SOURCE.getName()));</span>
+<span class="nc" id="L598">				registrationQueueData.setType(rs.getString(RegQueDBColumns.TYPE.getName()));</span>
+<span class="nc" id="L599">				String lockedBy = rs.getString(RegQueDBColumns.LOCKED_BY.getName());</span>
+<span class="nc bnc" id="L600" title="All 4 branches missed.">				if (lockedBy != null &amp;&amp; !lockedBy.isEmpty()) {</span>
+<span class="nc" id="L601">					registrationQueueData</span>
+<span class="nc" id="L602">							.setUserResourceLockId(rs.getInt(RegQueDBColumns.USER_RESOURCE_LOCK_ID.getName()));</span>
+<span class="nc" id="L603">					registrationQueueData.setLocked(Boolean.TRUE);</span>
+<span class="nc" id="L604">					registrationQueueData.setLockedBy(lockedBy);</span>
+				}
+<span class="nc" id="L606">				registrationQueueDataList.add(registrationQueueData);</span>
+
+<span class="nc" id="L608">			}</span>
+<span class="nc" id="L609">		} catch (Exception e) {</span>
+<span class="nc" id="L610">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L612">			closeResultset(rs);</span>
+<span class="nc" id="L613">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L615">		return registrationQueueDataList;</span>
+	}
+
+	/**
+	 * Method for Download ExcelSheet
+	 */
+	@Override
+	public RegistrationQueueDto getRegistrationQueueWholeData(RegistrationReportSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+
+<span class="fc" id="L625">		RegReportContactFilterQueryBuilder contactFilter = new RegReportContactFilterQueryBuilder(</span>
+<span class="fc" id="L626">				searchCriteria.getFilter(),</span>
+<span class="fc" id="L627">				RegistrationReportQueryConstant.REGISTRATION_REPORT_CONTACT_FILTER.getQuery(), true);</span>
+
+<span class="fc" id="L629">		String contactFilterQuery = contactFilter.getQuery();</span>
+<span class="fc" id="L630">		String watchListCategoryFilter = getWatchListCategoryFilter(searchCriteria);</span>
+<span class="pc bpc" id="L631" title="1 of 2 branches missed.">		if (null != watchListCategoryFilter) {</span>
+<span class="nc" id="L632">			contactFilterQuery = contactFilterQuery.replace(WATCHLIST_CATEGORY_FILTER, watchListCategoryFilter);</span>
+		}else{
+<span class="fc" id="L634">			contactFilterQuery = contactFilterQuery.replace(WATCHLIST_CATEGORY_FILTER, &quot;&quot;);</span>
+		}
+<span class="fc" id="L636">		contactFilterQuery = buildContactFilterQuery(searchCriteria, contactFilterQuery);</span>
+
+<span class="fc" id="L638">		FilterQueryBuilder accountFilter = new RegReportAccountFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L639">				RegistrationReportQueryConstant.REGISTRATION_REPORT_ACCOUNT_FILTER.getQuery(), true);</span>
+<span class="fc" id="L640">		String accountFilterQuery = accountFilter.getQuery();</span>
+
+<span class="fc" id="L642">		String contactJoin = &quot;&quot;;</span>
+<span class="fc" id="L643">		contactJoin = contactFilterQuery(contactFilterQuery, watchListCategoryFilter, contactJoin);</span>
+
+<span class="fc" id="L645">		String accountJoin = &quot;&quot;;</span>
+<span class="fc" id="L646">		accountJoin = accountFilterQuery(accountFilterQuery, accountJoin);</span>
+<span class="pc bpc" id="L647" title="1 of 2 branches missed.">		if (contactFilter.isFilterAppliedForAccountAndContact()) {</span>
+<span class="nc" id="L648">			contactJoin = RegistrationReportQueryConstant.CONTACT_FILTER_LEFT_JOIN.getQuery();</span>
+<span class="nc" id="L649">			accountJoin = RegistrationReportQueryConstant.ACCOUNT_FILTER_LEFT_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L651">		String orgJoin = &quot;&quot;;</span>
+<span class="fc" id="L652">		orgJoin = organizationJoin(searchCriteria, orgJoin);</span>
+		
+<span class="fc" id="L654">		String deviceJoin = &quot;&quot;;</span>
+<span class="fc" id="L655">		deviceJoin = deviceJoin(searchCriteria, deviceJoin);</span>
+		
+<span class="fc" id="L657">		String onfidoJoin = &quot;&quot;;</span>
+<span class="fc" id="L658">		onfidoJoin = onfidoJoin(searchCriteria, onfidoJoin);</span>
+		
+<span class="fc" id="L660">		String legalEntityJoin = &quot;&quot;;</span>
+<span class="fc" id="L661">		legalEntityJoin = legalEntityJoin(searchCriteria, legalEntityJoin);</span>
+
+<span class="fc" id="L663">		FilterQueryBuilder regFilter = new RegReportFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L664">				RegistrationReportQueryConstant.REGISTRATION_REPORT_FILTER.getQuery(),</span>
+<span class="fc" id="L665">				searchCriteria.getIsFilterApply(), Boolean.TRUE);</span>
+<span class="fc" id="L666">		String regFilterQuery = regFilter.getQuery();</span>
+
+<span class="fc" id="L668">		String userJoin = &quot;&quot;;</span>
+<span class="fc" id="L669">		userJoin = userJoin(regFilterQuery, userJoin);</span>
+		/*
+		 * For certain filter search has to be performed on both account and
+		 * Contact tables like Name, compliance status, service statuses and IF
+		 * both table inner joins are added to REGISTRATION_REPORT_FILTER, PFX
+		 * only are CFX only results are obtained and IF LEFT joins are added it
+		 * returns all the rows. So adding LEFT joins with WHERE Clause and NULL
+		 * checks.
+		 * 
+		 * Also, if User filter is added, WHERE clause gets added automatically,
+		 * else WHERE has to be added
+		 * 
+		 * Moreover, if either contact or account only filter is added, should
+		 * NOT use LEFT JOINs.
+		 * 
+		 */
+<span class="pc bpc" id="L685" title="3 of 4 branches missed.">		if (contactJoin.length() &gt; 1 &amp;&amp; accountJoin.length() &gt; 1) {</span>
+<span class="nc bnc" id="L686" title="All 2 branches missed.">			if (regFilterQuery.contains(WHERE)) {</span>
+<span class="nc" id="L687">				regFilterQuery = regFilterQuery + AND</span>
+<span class="nc" id="L688">						+ RegistrationReportQueryConstant.REPORT_FILTER_NULL_CHECK.getQuery();</span>
+			} else {
+<span class="nc" id="L690">				regFilterQuery = regFilterQuery + &quot; WHERE &quot;</span>
+<span class="nc" id="L691">						+ RegistrationReportQueryConstant.REPORT_FILTER_NULL_CHECK.getQuery();</span>
+			}
+
+		} else {
+<span class="fc" id="L695">			contactJoin = contactJoin.replace(&quot;LEFT&quot;, &quot;&quot;);</span>
+<span class="fc" id="L696">			accountJoin = accountJoin.replace(&quot;LEFT&quot;, &quot;&quot;);</span>
+		}
+
+<span class="fc" id="L699">		regFilterQuery = regFilterQuery.replace(&quot;{CONTACT_FILTER_JOIN}&quot;, contactJoin)</span>
+<span class="fc" id="L700">				.replace(&quot;{ACCOUNT_FILTER_JOIN}&quot;, accountJoin).replace(&quot;{ORG_TABLE_JOIN}&quot;, orgJoin)</span>
+<span class="fc" id="L701">				.replace(&quot;{USER_FILTER_JOIN}&quot;, userJoin).replace(&quot;{LEGAL_ENTITY_JOIN}&quot;, legalEntityJoin)</span>
+<span class="fc" id="L702">				.replace(&quot;{DEVICE_ID_JOIN}&quot;, deviceJoin)</span>
+<span class="fc" id="L703">				.replace(&quot;{ONFIDO_JOIN}&quot;, onfidoJoin);</span>
+		
+<span class="fc" id="L705">		searchCriteria.getFilter().getWatchListReason();</span>
+<span class="fc" id="L706">		String filter = StringUtils.arrayToCommaDelimitedString(searchCriteria.getFilter().getWatchListReason());</span>
+<span class="fc" id="L707">		regFilterQuery = watchlistReasonFilter(regFilterQuery, filter);</span>
+		//ADD for AT-3269
+<span class="fc" id="L709">		String legalEntityJoin1 = &quot;&quot;;</span>
+<span class="pc bpc" id="L710" title="1 of 2 branches missed.">		if (null != searchCriteria.getFilter().getLegalEntity()</span>
+<span class="nc bnc" id="L711" title="All 2 branches missed.">				&amp;&amp; searchCriteria.getFilter().getLegalEntity().length &gt; 0) {</span>
+<span class="nc" id="L712">			String[] legalEntity = searchCriteria.getFilter().getLegalEntity();</span>
+<span class="nc" id="L713">			String value = appendAllValues(legalEntity);</span>
+<span class="nc" id="L714">			legalEntityJoin1 = &quot;JOIN LegalEntity le ON acc.LegalEntityID = le.ID AND le.code In (&quot;+ value + &quot;)&quot;;</span>
+		}
+<span class="fc" id="L716">		String listQuery = getRegistrationReportQuery(RegistrationReportQueryConstant.GET_REGISTRATION_EXCEL_REPORT.getQuery(), </span>
+				contactFilterQuery, accountFilterQuery, regFilterQuery, legalEntityJoin1);
+
+<span class="fc" id="L719">		RegistrationQueueDto registrationQueueDto = null;</span>
+<span class="fc" id="L720">		registrationQueueDto = registrationQueueWholeData(searchCriteria, listQuery);</span>
+<span class="fc" id="L721">		return registrationQueueDto;</span>
+	}
+
+
+	private RegistrationQueueDto registrationQueueWholeData(RegistrationReportSearchCriteria searchCriteria,
+			String listQuery) throws CompliancePortalException {
+<span class="fc" id="L727">		RegistrationQueueDto registrationQueueDto = new RegistrationQueueDto();</span>
+<span class="fc" id="L728">		Connection connection = null;</span>
+		try {
+<span class="fc" id="L730">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L731">			List&lt;RegistrationQueueData&gt; regQueueData = getRegisrationWholeQueueData(connection, listQuery);</span>
+<span class="fc" id="L732">			registrationQueueDto.setRegistrationQueue(regQueueData);</span>
+<span class="fc" id="L733">			Integer pageSize = SearchCriteriaUtil.getPageSize();</span>
+<span class="fc" id="L734">			Integer totalRecords = 0;</span>
+<span class="pc bpc" id="L735" title="2 of 4 branches missed.">			if (null != regQueueData &amp;&amp; !regQueueData.isEmpty()) {</span>
+<span class="fc" id="L736">				totalRecords = regQueueData.get(0).getTotalRecords();</span>
+			}
+<span class="pc bpc" id="L738" title="1 of 2 branches missed.">			if (totalRecords != null) {</span>
+<span class="nc" id="L739">				Integer totalPages = totalRecords / pageSize;</span>
+<span class="nc bnc" id="L740" title="All 2 branches missed.">				if (totalRecords % pageSize != 0) {</span>
+<span class="nc" id="L741">					totalPages += 1;</span>
+				}
+<span class="nc" id="L743">				Page page = new Page();</span>
+<span class="nc" id="L744">				page.setPageSize(pageSize);</span>
+<span class="nc" id="L745">				page.setTotalPages(totalPages);</span>
+<span class="nc" id="L746">				page.setTotalRecords(totalRecords);</span>
+<span class="nc" id="L747">				registrationQueueDto.setPage(page);</span>
+<span class="nc" id="L748">				List&lt;String&gt; organization = null;</span>
+<span class="nc" id="L749">				organization = getOrganization(connection);</span>
+<span class="nc" id="L750">				registrationQueueDto.setOrganization(organization);</span>
+<span class="nc" id="L751">				registrationQueueDto.setSource(SourceEnum.getSourceValues());</span>
+<span class="nc" id="L752">				registrationQueueDto.setTransValue(TransactionValuesEnum.getTransactionValues());</span>
+<span class="nc" id="L753">				List&lt;String&gt; currency = null;</span>
+<span class="nc" id="L754">				currency = getCurrency(connection);</span>
+<span class="nc" id="L755">				registrationQueueDto.setCurrency(currency);</span>
+<span class="nc" id="L756">				Watchlist watchlist = null;</span>
+<span class="nc" id="L757">				boolean category1 = searchCriteria.getFilter().getUserProfile().getPermissions()</span>
+<span class="nc" id="L758">						.getCanManageWatchListCategory1();</span>
+<span class="nc" id="L759">				boolean category2 = searchCriteria.getFilter().getUserProfile().getPermissions()</span>
+<span class="nc" id="L760">						.getCanManageWatchListCategory2();</span>
+<span class="nc" id="L761">				watchlist = getWatchListReasonId(connection, category1, category2);</span>
+<span class="nc" id="L762">				registrationQueueDto.setWatchList(watchlist);</span>
+<span class="nc" id="L763">				List&lt;String&gt; owner = null;</span>
+<span class="nc" id="L764">				owner = getLockedUserName(connection);</span>
+<span class="nc" id="L765">				registrationQueueDto.setOwner(owner);</span>
+<span class="nc" id="L766">				searchCriteria.setPage(registrationQueueDto.getPage());</span>
+<span class="nc" id="L767">				registrationQueueDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteria));</span>
+			}
+<span class="fc" id="L769">		} catch (Exception e) {</span>
+<span class="fc" id="L770">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L772">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L774">		return registrationQueueDto;</span>
+	}
+	
+	/**
+	 * Append all values.
+	 *
+	 * @param values the values
+	 * @return the string
+	 */
+	//Add For AT-3269
+	private String appendAllValues(String[] values) {
+<span class="nc" id="L785">		StringBuilder s = new StringBuilder();</span>
+<span class="nc bnc" id="L786" title="All 2 branches missed.">		for (String value : values) {</span>
+<span class="nc bnc" id="L787" title="All 4 branches missed.">			if (value != null &amp;&amp; !value.isEmpty()) {</span>
+<span class="nc" id="L788">				s.append(&quot;'&quot;).append(value).append(&quot;'&quot;).append(',');</span>
+			}
+
+		}
+<span class="nc bnc" id="L792" title="All 2 branches missed.">		if (s.length() &gt; 1) {</span>
+<span class="nc" id="L793">			s.setLength(s.length() - 1);</span>
+<span class="nc" id="L794">			return s.toString();</span>
+		}
+<span class="nc" id="L796">		return null;</span>
+
+	}
+	
+	private void setNewOrUpdatedData(RegistrationQueueData registrationQueueData)
+	{
+<span class="fc" id="L802">		registrationQueueData.setNewOrUpdated(Constants.N);</span>
+<span class="pc bpc" id="L803" title="2 of 4 branches missed.">		if (registrationQueueData.getAccountVersion() != null &amp;&amp; registrationQueueData.getAccountVersion() &gt; 1) {</span>
+<span class="nc" id="L804">			registrationQueueData.setNewOrUpdated(Constants.U);</span>
+		} 
+<span class="fc" id="L806">	}</span>
+	
+	
+	private void setRegisteredDate(Timestamp registeredDate,RegistrationQueueData registrationQueueData)
+	{
+<span class="fc" id="L811">		registrationQueueData.setRegisteredDate(Constants.DASH_UI);</span>
+<span class="pc bpc" id="L812" title="1 of 2 branches missed.">		if (registeredDate != null) {</span>
+<span class="nc" id="L813">			registrationQueueData.setRegisteredDate(DateTimeFormatter.dateTimeFormatter(registeredDate));</span>
+		} 
+<span class="fc" id="L815">	}</span>
+	
+	private void setLockedData(String lockedBy,ResultSet rs,RegistrationQueueData registrationQueueData) throws SQLException {
+<span class="pc bpc" id="L818" title="5 of 6 branches missed.">		if (lockedBy != null &amp;&amp; !lockedBy.isEmpty() &amp;&amp; !lockedBy.equalsIgnoreCase(Constants.DUMMY_USER)) {</span>
+<span class="nc" id="L819">			registrationQueueData</span>
+<span class="nc" id="L820">					.setUserResourceLockId(rs.getInt(RegQueDBColumns.USER_RESOURCE_LOCK_ID.getName()));</span>
+<span class="nc" id="L821">			registrationQueueData.setLocked(Boolean.TRUE);</span>
+<span class="nc" id="L822">			registrationQueueData.setLockedBy(lockedBy);</span>
+		}
+<span class="fc" id="L824">	}</span>
+	
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

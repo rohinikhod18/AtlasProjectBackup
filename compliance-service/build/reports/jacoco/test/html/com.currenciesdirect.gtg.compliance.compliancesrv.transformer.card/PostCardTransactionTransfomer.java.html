@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PostCardTransactionTransfomer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.card</a> &gt; <span class="el_source">PostCardTransactionTransfomer.java</span></div><h1>PostCardTransactionTransfomer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.card;
+
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailHeaderForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailPayloadForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.SendEmailRequestForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionResponse;
+import com.currenciesdirect.gtg.compliance.commons.externalservice.commhubport.ICommHubServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.enterprise.EnterpriseServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.enterprise.EnterpriseIPAddressDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.ordercardsrv.PostCardTransactionRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+
+<span class="nc" id="L30">public class PostCardTransactionTransfomer extends AbstractTransformer {</span>
+	
+	/** The Constant LOG. */
+<span class="nc" id="L33">	private static final Logger LOG = LoggerFactory.getLogger(PostCardTransactionTransfomer.class);</span>
+	
+	private static final String DATE_TIME_STRING = &quot;yyyy-MM-dd HH:mm:ss&quot;;
+	
+	/** The Constant TIME_STRING. */
+	private static final String TIME_STRING = &quot;00:00:00&quot;;
+	
+	/** The enterprise service impl. */
+	@Autowired	
+	protected EnterpriseServiceImpl enterpriseServiceImpl;
+	
+	/** The i comm hub service impl. */
+	@Autowired
+	private ICommHubServiceImpl iCommHubServiceImpl;
+
+	/**
+	 * Transform request.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L56">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L57">		PostCardTransactionRequest request =  (PostCardTransactionRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L58">		TransactionMonitoringPostCardTransactionRequest tmRequest = new TransactionMonitoringPostCardTransactionRequest();</span>
+<span class="nc" id="L59">		TransactionMonitoringPostCardTransactionResponse tmResponse = new TransactionMonitoringPostCardTransactionResponse();</span>
+		
+<span class="nc" id="L61">		MessageExchange ccExchange = new MessageExchange();</span>
+		
+		try {
+<span class="nc" id="L64">			transformTransactionMonitoringPostCardRequest(request, tmRequest);	</span>
+<span class="nc bnc" id="L65" title="All 6 branches missed.">			if(request.getIpAddress() != null &amp;&amp; !request.getIpAddress().isEmpty() &amp;&amp; !request.getIpAddress().equals(&quot;&quot;)) {</span>
+<span class="nc" id="L66">				getIPAddressDetails(request, tmRequest);</span>
+			}
+			
+<span class="nc" id="L69">			ccExchange.setRequest(tmRequest);</span>
+<span class="nc" id="L70">			ccExchange.setResponse(tmResponse);</span>
+<span class="nc" id="L71">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L72">			message.getPayload().appendMessageExchange(ccExchange);</span>
+			
+<span class="nc" id="L74">		} catch(Exception e) {</span>
+<span class="nc" id="L75">			LOG.error(&quot;Error in PostCardTransactionTransfomer transformRequest()&quot;, e);</span>
+<span class="nc" id="L76">		}</span>
+<span class="nc" id="L77">		return message;</span>
+	}
+
+	/**
+	 * Gets the IP address details.
+	 *
+	 * @param request the request
+	 * @param tmRequest the tm request
+	 * @return the IP address details
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void getIPAddressDetails(PostCardTransactionRequest request,
+			TransactionMonitoringPostCardTransactionRequest tmRequest) throws ComplianceException {
+		EnterpriseIPAddressDetails enterpriseIpAdd;
+<span class="nc" id="L91">		enterpriseIpAdd = enterpriseServiceImpl.getIPAddressDetails(request.getIpAddress());</span>
+<span class="nc bnc" id="L92" title="All 6 branches missed.">		if(enterpriseIpAdd != null &amp;&amp; enterpriseIpAdd.getIpAddress() != null &amp;&amp; enterpriseIpAdd.getLongitude() != null) {</span>
+<span class="nc" id="L93">			setIPDetails(enterpriseIpAdd, tmRequest);</span>
+		}
+<span class="nc" id="L95">	}</span>
+
+	/**
+	 * Transform transaction monitoring post card request.
+	 *
+	 * @param request the request
+	 * @param tmRequest the tm request
+	 * @throws ParseException 
+	 */
+	private void transformTransactionMonitoringPostCardRequest(PostCardTransactionRequest request,
+			TransactionMonitoringPostCardTransactionRequest tmRequest) throws ParseException {
+<span class="nc" id="L106">		tmRequest.setTrxID(request.getPaymentLifeId());</span>
+<span class="nc" id="L107">		tmRequest.setTitanAccountNumber(request.getAccountNumber());</span>
+<span class="nc" id="L108">		tmRequest.setCardToken(request.getCardToken());</span>
+<span class="nc" id="L109">		tmRequest.setTxnAmount(request.getTxnAmount());</span>
+<span class="nc" id="L110">		tmRequest.setgPSDatestamp(</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">				request.getGpsDatestamp() != null ? dateTimeFormatter(request.getGpsDatestamp().toString()) : null);</span>
+<span class="nc" id="L112">		tmRequest.setRequestType(request.getCardRequestType());</span>
+<span class="nc" id="L113">		tmRequest.setCardInputMode(request.getCardInputMode());</span>
+<span class="nc" id="L114">		tmRequest.setCardInputModeDesc(request.getCardInputModeDesc());</span>
+<span class="nc" id="L115">		tmRequest.setMerchID(request.getMerchantID());</span>
+<span class="nc" id="L116">		tmRequest.setMerchantName(request.getMerchantName());</span>
+<span class="nc" id="L117">		tmRequest.setMerchantNameOther(request.getMerchantNameOther());</span>
+<span class="nc" id="L118">		tmRequest.setmCCCode(request.getMccCode());</span>
+<span class="nc" id="L119">		tmRequest.setmCCCodeDescription(request.getMccCodeDescription());</span>
+<span class="nc" id="L120">		tmRequest.setMerchantCountryCode(request.getMerchantCountryCode());</span>
+<span class="nc" id="L121">		tmRequest.setMerchantPostcode(request.getMerchantPostCode());</span>
+<span class="nc" id="L122">		tmRequest.setMerchantAddress(request.getMerchantAddress());</span>
+<span class="nc" id="L123">		tmRequest.setpOSTerminal(request.getPosTerminal());</span>
+<span class="nc" id="L124">		tmRequest.setBin(request.getBin());</span>
+<span class="nc" id="L125">		tmRequest.setProductID(request.getProductId());</span>
+<span class="nc" id="L126">		tmRequest.setAcqDate(</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">				request.getAcqDatestamp() != null ? dateTimeFormatter(request.getAcqDatestamp().toString()) : null);</span>
+<span class="nc" id="L128">		tmRequest.setCardPresentIndicator(request.getCardPresentInd());</span>
+<span class="nc" id="L129">		tmRequest.setCardPresentDescription(request.getCardPresentDesc());</span>
+<span class="nc" id="L130">		tmRequest.setTxnCountry(request.getTxnCountry());</span>
+<span class="nc" id="L131">		tmRequest.setMultiPartInd(request.getPreAuthMultiPartInd());</span>
+<span class="nc" id="L132">		tmRequest.setMultiPartFinal(request.getPreAuthMultiPartFinal());</span>
+<span class="nc" id="L133">		tmRequest.setMultiPartMatchingReference(request.getPreAuthMatchingReference());</span>
+<span class="nc" id="L134">		tmRequest.setBillCcy(request.getBillCcy());</span>
+		
+		//AT-5249
+<span class="nc" id="L137">		Double billAmount = request.getBillAmount();</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">		if(billAmount != null) {</span>
+<span class="nc" id="L139">			billAmount = billAmount * -1;</span>
+<span class="nc" id="L140">			tmRequest.setBillAmount(billAmount);</span>
+		}
+		
+<span class="nc" id="L143">		tmRequest.setEffectiveAmount(request.getEffectiveAmount());</span>
+<span class="nc" id="L144">		tmRequest.setAdditionalAmountType(request.getAdditionalAmountType());</span>
+<span class="nc" id="L145">		tmRequest.setAdditionalAmountCcy(request.getAdditionalAmountCcy());</span>
+<span class="nc" id="L146">		tmRequest.setAdditionalAmount(request.getAdditionalAmount());</span>
+<span class="nc" id="L147">		tmRequest.setConsolidatedWalletBalances(request.getConsolidatedWalletBalances());</span>
+<span class="nc" id="L148">		tmRequest.setMerchantRegion(request.getMerchantRegion());</span>
+<span class="nc" id="L149">		tmRequest.setMerchantCity(request.getMerchantCity());</span>
+<span class="nc" id="L150">		tmRequest.setMerchantContact(request.getMerchantContact());</span>
+<span class="nc" id="L151">		tmRequest.setMerchantSecondContact(request.getMerchantSecondContact());</span>
+<span class="nc" id="L152">		tmRequest.setMerchantWebsite(request.getMerchantWebsite());</span>
+<span class="nc" id="L153">		tmRequest.setAcquirerID(request.getAcquirerId());</span>
+<span class="nc" id="L154">		tmRequest.setgPSDecisionCode(request.getGpsDecisionCode());</span>
+<span class="nc" id="L155">		tmRequest.setgPSDecisionCodeDescription(request.getGpsDecisionCodeDescription());</span>
+<span class="nc" id="L156">		tmRequest.setTitanDecisionCode(</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">				request.getTitanDecision().equalsIgnoreCase(&quot;000&quot;) ? &quot;00&quot; : request.getTitanDecision()); // AT-5357</span>
+<span class="nc" id="L158">		tmRequest.setTitanDecisionDescription(request.getTitanDecisionDescription());</span>
+<span class="nc" id="L159">		tmRequest.setCardStatusCode(request.getCardStatusCode());</span>
+<span class="nc" id="L160">		tmRequest.setgPSSTIPFlag(request.getGpsStipFlag());</span>
+<span class="nc" id="L161">		tmRequest.setaVSResult(request.getAvsResult());</span>
+		
+<span class="nc bnc" id="L163" title="All 4 branches missed.">		if (request.getGpsPosData() != null &amp;&amp; !request.getGpsPosData().isEmpty()</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">				&amp;&amp; request.getGpsPosData().length() &gt; 18) {</span>
+<span class="nc" id="L165">			tmRequest.setsCAAuthenticationExemptionCode(String.valueOf(request.getGpsPosData().charAt(18)));</span>
+		}
+		
+<span class="nc" id="L168">		tmRequest.setcVVResults(request.getCvvResults());</span>
+<span class="nc" id="L169">		tmRequest.setDeviceID(request.getDeviceId());</span>
+<span class="nc" id="L170">		tmRequest.setUpdateStatus(request.getUpdateStatus());</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">		tmRequest.setUpdateDate(request.getDateUpdate() != null ? dateFormatter(request.getDateUpdate().toString()) : null);</span>
+<span class="nc" id="L172">		tmRequest.setChargebackReason(request.getChargebackReason());</span>
+		
+<span class="nc" id="L174">		tmRequest.setpOSDatestamp(posdateTimeFormatter(request.getPosDate(),request.getPosTime()));</span>
+		
+<span class="nc" id="L176">		tmRequest.setgPSPOSCapability(request.getGpsPosCapability());</span>
+<span class="nc" id="L177">		tmRequest.setgPSPOSData(request.getGpsPosData());</span>
+<span class="nc" id="L178">		tmRequest.setIpAddress(request.getIpAddress());</span>
+<span class="nc" id="L179">		tmRequest.setTxnCCY(request.getTxnCurrency());</span>
+<span class="nc" id="L180">		tmRequest.setsCAAuthenticationExemptionDescription(null);</span>
+<span class="nc" id="L181">		tmRequest.setUpdateAmount(request.getRefundorDispAmount());</span>
+<span class="nc" id="L182">		tmRequest.setAuthenticationMethod(request.getAuthenticationMethod());</span>
+<span class="nc" id="L183">		tmRequest.setAuthenticationMethodDesc(request.getAuthenticationMethodDesc());</span>
+		//AT-5371
+<span class="nc" id="L185">		tmRequest.setPtWallet(request.getPtWallet());</span>
+<span class="nc" id="L186">		tmRequest.setPtDeviceType(request.getPtDeviceType());</span>
+<span class="nc" id="L187">		tmRequest.setPtDeviceIP(request.getPtDeviceIP());</span>
+<span class="nc" id="L188">		tmRequest.setPtDeviceID(request.getPtToken()); //Updated for AT-5474</span>
+<span class="nc" id="L189">	}</span>
+	
+	/**
+	 * Sets the IP details.
+	 *
+	 * @param request the request
+	 * @param tmRequest the tm request
+	 */
+	private void setIPDetails(EnterpriseIPAddressDetails request,
+			TransactionMonitoringPostCardTransactionRequest tmRequest) {
+<span class="nc" id="L199">		tmRequest.setContinent(request.getContinent());</span>
+<span class="nc" id="L200">		tmRequest.setLongitude(request.getLongitude().toString());</span>
+<span class="nc" id="L201">		tmRequest.setLatitiude(request.getLatitiude().toString());</span>
+<span class="nc" id="L202">		tmRequest.setRegion(request.getRegion());</span>
+<span class="nc" id="L203">		tmRequest.setCity(request.getCity());</span>
+<span class="nc" id="L204">		tmRequest.setTimezone(request.getTimezone());</span>
+<span class="nc" id="L205">		tmRequest.setOrganization(request.getOrganization());</span>
+<span class="nc" id="L206">		tmRequest.setCarrier(request.getCarrier());</span>
+<span class="nc" id="L207">		tmRequest.setConnectionType(request.getConnectionType());</span>
+<span class="nc" id="L208">		tmRequest.setLineSpeed(request.getLineSpeed());</span>
+<span class="nc" id="L209">		tmRequest.setIpRoutingType(request.getIpRoutingType());</span>
+<span class="nc" id="L210">		tmRequest.setCountryName(request.getCountryName());</span>
+<span class="nc" id="L211">		tmRequest.setCountryCode(request.getCountryCode());</span>
+<span class="nc" id="L212">		tmRequest.setStateName(request.getStateName());</span>
+<span class="nc" id="L213">		tmRequest.setStateCode(request.getStateCode());</span>
+<span class="nc" id="L214">		tmRequest.setPostalCode(request.getPostalCode());</span>
+<span class="nc" id="L215">		tmRequest.setAreaCode(request.getAreaCode());</span>
+<span class="nc" id="L216">		tmRequest.setAnonymizerStatus(request.getAnonymizerStatus());</span>
+<span class="nc" id="L217">		tmRequest.setIpAddress(request.getIpAddress());</span>
+<span class="nc" id="L218">	}</span>
+
+	/**
+	 * Date formatter.
+	 *
+	 * @param date the date
+	 * @return the string
+	 * @throws ParseException the parse exception
+	 */
+	private String dateTimeFormatter(String date) throws ParseException {
+<span class="nc" id="L228">		DateFormat df = new SimpleDateFormat(DATE_TIME_STRING);</span>
+<span class="nc" id="L229">		Date dateToFormat = df.parse(date);</span>
+<span class="nc" id="L230">		DateFormat outputformat = new SimpleDateFormat(DATE_TIME_STRING);</span>
+<span class="nc" id="L231">		return outputformat.format(dateToFormat);</span>
+	}
+	
+	/**
+	 * Transform response.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L242">		MessageExchange messageExchange = message.getPayload()</span>
+<span class="nc" id="L243">				.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L244">		TransactionMonitoringPostCardTransactionRequest tmCardRequest = (TransactionMonitoringPostCardTransactionRequest) messageExchange</span>
+<span class="nc" id="L245">				.getRequest();</span>
+<span class="nc" id="L246">		TransactionMonitoringPostCardTransactionResponse tmCardResponse = (TransactionMonitoringPostCardTransactionResponse) messageExchange</span>
+<span class="nc" id="L247">				.getResponse();</span>
+
+		try {
+<span class="nc bnc" id="L250" title="All 2 branches missed.">			if (tmCardResponse.getHttpStatus() == 400) {</span>
+<span class="nc" id="L251">				sendAlertEmailForInvalidRequest(tmCardRequest.getTrxID(), tmCardResponse.getErrorDescription());</span>
+			}
+<span class="nc" id="L253">		} catch (Exception e) {</span>
+<span class="nc" id="L254">			LOG.error(&quot;Error in PostCardTransactionTransformer transformResponse() method : &quot;, e);</span>
+<span class="nc" id="L255">		}</span>
+
+<span class="nc" id="L257">		return message;</span>
+	}
+
+	/**
+	 * Send alert email for invalid request.
+	 *
+	 * @param instructionNumber the instruction number
+	 */
+	private void sendAlertEmailForInvalidRequest(String instructionNumber, String errorDesc) {
+
+<span class="nc" id="L267">		SendEmailRequestForTM sendTMEmailRequest = new SendEmailRequestForTM();</span>
+<span class="nc" id="L268">		EmailHeaderForTM header = new EmailHeaderForTM();</span>
+<span class="nc" id="L269">		EmailPayloadForTM payload = new EmailPayloadForTM();</span>
+
+<span class="nc" id="L271">		header.setSourceSystem(&quot;Atlas&quot;);</span>
+<span class="nc" id="L272">		header.setOrgCode(&quot;Currencies Direct&quot;);</span>
+<span class="nc" id="L273">		header.setLegalEntity(&quot;CDLGB&quot;);</span>
+
+<span class="nc" id="L275">		String email = System.getProperty(&quot;intuition.sendTo&quot;);</span>
+<span class="nc" id="L276">		List&lt;String&gt; list = Arrays.asList(email.split(&quot;,&quot;));</span>
+
+<span class="nc" id="L278">		payload.setEmailId(list);</span>
+<span class="nc" id="L279">		payload.setSubject(&quot;Intuition Post Card Transaction request failed&quot;);</span>
+<span class="nc" id="L280">		payload.setEmailContent(&quot;Post Card Transaction request for Instruction Number &quot; + instructionNumber</span>
+				+ &quot; to Intuition failed, due to &quot;+errorDesc+&quot;, please alert dev team.&quot;);
+<span class="nc" id="L282">		payload.setFromEmilId(System.getProperty(&quot;intuition.sendFrom&quot;));</span>
+<span class="nc" id="L283">		payload.setReplyToEmailId(System.getProperty(&quot;intuition.sendFrom&quot;));</span>
+
+<span class="nc" id="L285">		sendTMEmailRequest.setTmHeader(header);</span>
+<span class="nc" id="L286">		sendTMEmailRequest.setTmPayload(payload);</span>
+
+<span class="nc" id="L288">		iCommHubServiceImpl.sendEmailForTMAlert(sendTMEmailRequest, true);</span>
+<span class="nc" id="L289">	}</span>
+	
+	/**
+	 * Date formatter.
+	 *
+	 * @param date the date
+	 * @return the string
+	 * @throws ParseException the parse exception
+	 */
+	private String dateFormatter(String date) throws ParseException {
+<span class="nc" id="L299">		DateFormat df = new SimpleDateFormat(DATE_TIME_STRING);</span>
+<span class="nc" id="L300">		Date dateToFormat = df.parse(date);</span>
+<span class="nc" id="L301">		DateFormat outputformat = new SimpleDateFormat(&quot;yyyy-MM-dd&quot;);</span>
+<span class="nc" id="L302">		return outputformat.format(dateToFormat);</span>
+	}
+	
+	/**
+	 * Posdate time formatter.
+	 *
+	 * @param posDate the pos date
+	 * @param posTime the pos time
+	 * @return the string
+	 */
+	private String posdateTimeFormatter(String posDate, String posTime) {
+<span class="nc" id="L313">		String posDateTime = null;</span>
+		
+<span class="nc bnc" id="L315" title="All 6 branches missed.">		if(posDate != null &amp;&amp; !posDate.isEmpty() &amp;&amp; !posDate.equalsIgnoreCase(&quot;&quot;)) {</span>
+<span class="nc bnc" id="L316" title="All 6 branches missed.">			posTime=(posTime != null &amp;&amp; !posTime.isEmpty() &amp;&amp; !posTime.equalsIgnoreCase(&quot;&quot;)) ? posTime : TIME_STRING;</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">			if(posDate.length() == 8){</span>
+<span class="nc" id="L318">    		    StringBuilder sbDate = new StringBuilder(posDate);</span>
+<span class="nc" id="L319">    			sbDate.insert(4, '-');</span>
+<span class="nc" id="L320">    			sbDate.insert(7, '-');</span>
+<span class="nc" id="L321">    			posDate = sbDate.toString();</span>
+    		}
+<span class="nc bnc" id="L323" title="All 4 branches missed.">			if(!posTime.equalsIgnoreCase(TIME_STRING) &amp;&amp; posTime.length() == 6) {</span>
+<span class="nc" id="L324">				StringBuilder sbTime = new StringBuilder(posTime);</span>
+<span class="nc" id="L325">				sbTime.insert(2, ':');</span>
+<span class="nc" id="L326">				sbTime.insert(5,':');</span>
+<span class="nc" id="L327">				posTime = sbTime.toString();</span>
+<span class="nc" id="L328">				posDateTime = posDate + &quot; &quot; + posTime;</span>
+<span class="nc" id="L329">			}</span>
+<span class="nc bnc" id="L330" title="All 4 branches missed.">			else if(!posTime.equalsIgnoreCase(TIME_STRING) &amp;&amp; posTime.length() == 12){</span>
+<span class="nc" id="L331">			    StringBuilder sbTime = new StringBuilder(posTime);</span>
+<span class="nc" id="L332">				sbTime.insert(0, &quot;20&quot;);</span>
+<span class="nc" id="L333">				sbTime.insert(4, '-');</span>
+<span class="nc" id="L334">				sbTime.insert(7, '-');</span>
+<span class="nc" id="L335">				sbTime.insert(10, ' ');</span>
+<span class="nc" id="L336">				sbTime.insert(13, ':');</span>
+<span class="nc" id="L337">				sbTime.insert(16, ':');</span>
+<span class="nc" id="L338">				posDateTime = sbTime.toString();</span>
+<span class="nc" id="L339">			}</span>
+			else{
+<span class="nc" id="L341">			    posTime = TIME_STRING;</span>
+<span class="nc" id="L342">			    posDateTime = posDate + &quot; &quot; + posTime;</span>
+			}
+		}
+				
+<span class="nc" id="L346">		return posDateTime;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

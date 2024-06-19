@@ -1,0 +1,55 @@
+pipeline {
+        agent any
+        stages {
+            stage ('Start') {
+              steps {
+                sendSlackNotifications 'STARTED'
+              }
+            }
+           
+	    stage("Deploy to Applicaton Server") {
+                steps {
+                echo "Deploy in prod from snapshot"
+                    script {
+                        ansibleTower(
+                            towerServer: 'Prod_Ansible_Tower_Integration', importTowerLogs:true,
+                            towerCredentialsId: '',
+                            templateType: 'workflow',
+                            jobTemplate: 'atlas-workflow',
+                            verbose: true,
+							extraVars:"""---
+                              repoPath: ${params.repoPath}
+                              portalartifact: compliance-portal-${params.buildVersion}.war
+                              complianceserviceartifact: compliance-service-${params.buildVersion}.war
+                              customcheckartifact: custom-checks-service-${params.buildVersion}.war
+                              fraugsterartifact: fraugster-service-${params.buildVersion}.war
+                              internalruleartifact: internalrule-service-${params.buildVersion}.war
+                              kycartifact: kyc-service-${params.buildVersion}.war
+                              sanctionartifact: sanction-service-${params.buildVersion}.war
+                              transactionmonitoringartifact: transaction-monitoring-service-${params.buildVersion}.war
+                              """,
+                            async: false
+                        )
+                    }
+				}
+            }
+            stage("Run Integration tests"){
+                steps{
+                    echo "Running functional test"
+                }
+            }
+            
+            stage("Run Functional tests"){
+                steps{
+                    echo "Running functional test"
+                }
+            }
+        }
+     post {
+            always {
+                cleanWs deleteDirs: true, notFailBuild: true
+                sendSlackNotifications currentBuild.result
+				sendEmail()
+            }
+        }
+    }

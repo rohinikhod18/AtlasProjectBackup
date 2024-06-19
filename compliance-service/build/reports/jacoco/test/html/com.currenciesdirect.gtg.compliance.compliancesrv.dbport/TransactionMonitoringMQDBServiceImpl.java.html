@@ -1,0 +1,882 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TransactionMonitoringMQDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">TransactionMonitoringMQDBServiceImpl.java</span></div><h1>TransactionMonitoringMQDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.messaging.Message;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountMQRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentBoardCastResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentInResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsInRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsSummary;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransactionMonitoringMQDBService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.BroadCastStatusEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionSignupMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.TransactionMonitoringMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+
+/**
+ * The Class TransactionMonitoringMQDBServiceImpl.
+ */
+@SuppressWarnings(&quot;squid:S2095&quot;)
+@Component
+<span class="nc" id="L48">public class TransactionMonitoringMQDBServiceImpl extends AbstractDao implements ITransactionMonitoringMQDBService {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L51">	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(TransactionMonitoringMQDBServiceImpl.class);</span>
+	
+	/** The Constant RETRYCOUNT. */
+	private static final String RETRYCOUNT = &quot;transactionmonitoring.retrycount&quot;;
+	
+	/** The Constant DORMANT_FLAG. */
+	private static final String DORMANT_FLAG = &quot;DormantFlag&quot;;
+	
+	/** The Constant PAYMENT_IN. */
+	private static final String PAYMENT_IN = &quot;payment_in&quot;;
+	
+	/** The Constant PAYMENT_IN_UPDATE. */
+	private static final String PAYMENT_IN_UPDATE = &quot;payment_in_update&quot;;
+	
+	/** The Constant PAYMENT_OUT. */
+	private static final String PAYMENT_OUT = &quot;payment_out&quot;;
+	
+	/** The Constant PAYMENT_OUT_UPDATE. */
+	private static final String PAYMENT_OUT_UPDATE = &quot;payment_out_update&quot;;
+	
+	/** The Constant OLD_PAYMENT_STATUS. */
+	private static final String OLD_PAYMENT_STATUS = &quot;oldPaymentStatus&quot;;
+	
+	/**
+	 * Checks if is message for broadcast.
+	 *
+	 * @return the boolean
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Boolean isMessageForBroadcast() throws ComplianceException {
+<span class="nc" id="L81">		PreparedStatement statement = null;</span>
+<span class="nc" id="L82">		ResultSet rs = null;</span>
+<span class="nc" id="L83">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L85">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L86">			statement = connection.prepareStatement(DBQueryConstant.GET_TM_MQ_MESSAGE_FROM_DB.getQuery());</span>
+<span class="nc" id="L87">			statement.setInt(1, Integer.parseInt(System.getProperty(RETRYCOUNT)));</span>
+
+<span class="nc" id="L89">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L91">				return Boolean.TRUE;</span>
+			}
+
+<span class="nc" id="L94">		} catch (Exception e) {</span>
+<span class="nc" id="L95">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L97">			closeResultset(rs);</span>
+<span class="nc" id="L98">			closePrepareStatement(statement);</span>
+<span class="nc" id="L99">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L101">		return Boolean.FALSE;</span>
+	}
+
+	/**
+	 * Load message from DB.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; loadMessageFromDB(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L113">		PreparedStatement statement = null;</span>
+<span class="nc" id="L114">		ResultSet rs = null;</span>
+<span class="nc" id="L115">		Connection connection = null;</span>
+<span class="nc" id="L116">		TransactionMonitoringMQRequest transactionMonitoringMQRequest = new TransactionMonitoringMQRequest();</span>
+		try {
+<span class="nc" id="L118">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L119">			statement = connection.prepareStatement(DBQueryConstant.GET_TM_MQ_MESSAGE_FROM_DB.getQuery());</span>
+<span class="nc" id="L120">			statement.setInt(1, Integer.parseInt(System.getProperty(RETRYCOUNT)));</span>
+
+<span class="nc" id="L122">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L124">				transactionMonitoringMQRequest.setId(rs.getInt(&quot;ID&quot;));</span>
+<span class="nc" id="L125">				transactionMonitoringMQRequest.setOrgCode(rs.getString(&quot;OrganizationCode&quot;));</span>
+<span class="nc" id="L126">				transactionMonitoringMQRequest.setRequestType(rs.getString(&quot;RequestType&quot;));</span>
+<span class="nc" id="L127">				transactionMonitoringMQRequest.setAccountID(rs.getInt(&quot;AccountID&quot;));</span>
+<span class="nc" id="L128">				transactionMonitoringMQRequest.setContactID(rs.getInt(&quot;ContactID&quot;));</span>
+<span class="nc" id="L129">				transactionMonitoringMQRequest.setPaymentInID(rs.getInt(&quot;PaymentInID&quot;));</span>
+<span class="nc" id="L130">				transactionMonitoringMQRequest.setPaymentOutID(rs.getInt(&quot;PaymentOutID&quot;));</span>
+<span class="nc" id="L131">				transactionMonitoringMQRequest</span>
+<span class="nc" id="L132">						.setRequestJson(JsonConverterUtil.convertToObject(Object.class, rs.getString(&quot;RequestJson&quot;)));</span>
+<span class="nc" id="L133">				transactionMonitoringMQRequest.setCreatedBy(rs.getInt(&quot;CreatedBy&quot;));</span>
+<span class="nc" id="L134">				transactionMonitoringMQRequest.setTimestamp(rs.getTimestamp(&quot;CreatedOn&quot;));</span>
+<span class="nc" id="L135">				transactionMonitoringMQRequest.setIsPresent(rs.getInt(&quot;isPresent&quot;));</span>
+<span class="nc" id="L136">				transactionMonitoringMQRequest.addAttribute(DORMANT_FLAG, rs.getInt(DORMANT_FLAG));</span>
+<span class="nc" id="L137">				message.getPayload().setRetryCount(rs.getInt(&quot;RetryCount&quot;));</span>
+<span class="nc" id="L138">				message.getPayload().getMessageExchange(ServiceTypeEnum.GATEWAY_SERVICE)</span>
+<span class="nc" id="L139">						.setRequest(transactionMonitoringMQRequest);</span>
+			} else {
+<span class="nc" id="L141">				message.getPayload().setNoMessageLeft(Boolean.TRUE);</span>
+			}
+<span class="nc" id="L143">		} catch (Exception e) {</span>
+<span class="nc" id="L144">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L146">			closeResultset(rs);</span>
+<span class="nc" id="L147">			closePrepareStatement(statement);</span>
+<span class="nc" id="L148">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L150">		return message;</span>
+	}
+
+	/**
+	 * Update MQ status to DB.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; updateMQStatusToDB(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L161">		PreparedStatement statement = null;</span>
+		
+<span class="nc" id="L163">		Boolean accStatus = Boolean.FALSE;</span>
+<span class="nc" id="L164">		Boolean payInStauts = Boolean.FALSE;</span>
+<span class="nc" id="L165">		Boolean payOutStatus = Boolean.FALSE;</span>
+
+<span class="nc" id="L167">		Connection connection = null;</span>
+<span class="nc" id="L168">		Integer retryCount = null;</span>
+		try {
+<span class="nc" id="L170">			retryCount = message.getPayload().getRetryCount();</span>
+<span class="nc" id="L171">			MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L172">					.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND);</span>
+<span class="nc" id="L173">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L174">			TransactionMonitoringMQRequest transactionMonitoringMQRequest = (TransactionMonitoringMQRequest) messageExchange</span>
+<span class="nc" id="L175">					.getRequest();</span>
+<span class="nc" id="L176">			TransactionMonitoringMQServiceResponse response = (TransactionMonitoringMQServiceResponse) exchange</span>
+<span class="nc" id="L177">					.getResponse();</span>
+			
+<span class="nc bnc" id="L179" title="All 2 branches missed.">			if(response.getTransactionMonitoringSignupResponse() != null) {</span>
+<span class="nc" id="L180">				 accStatus = Constants.PASS.equalsIgnoreCase(response.getTransactionMonitoringSignupResponse()</span>
+<span class="nc" id="L181">						.getTransactionMonitoringAccountSignupResponse().getStatus());</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">			} else if(response.getTransactionMonitoringPaymentInResponse() != null) {</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">				 payInStauts = Constants.PASS.equalsIgnoreCase(response.getTransactionMonitoringPaymentInResponse().getStatus()) || </span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">						 Constants.FAIL.equalsIgnoreCase(response.getTransactionMonitoringPaymentInResponse().getStatus());</span>
+<span class="nc bnc" id="L185" title="All 2 branches missed.">			} else if(response.getTransactionMonitoringPaymentOutResponse() != null) {</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">				 payOutStatus = Constants.PASS.equalsIgnoreCase(response.getTransactionMonitoringPaymentOutResponse().getStatus()) ||</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">						 Constants.FAIL.equalsIgnoreCase(response.getTransactionMonitoringPaymentOutResponse().getStatus());</span>
+			}
+			
+<span class="nc" id="L190">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L191">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_TM_MQ_STATUS_TO_DB.getQuery());</span>
+<span class="nc bnc" id="L192" title="All 6 branches missed.">			if (Boolean.TRUE.equals(accStatus) || Boolean.TRUE.equals(payInStauts) || Boolean.TRUE.equals(payOutStatus)) {</span>
+<span class="nc" id="L193">				statement.setInt(1,</span>
+<span class="nc" id="L194">						BroadCastStatusEnum.getBraodCastStatusAsInteger(BroadCastStatusEnum.DELIVERED.toString()));</span>
+			} else {
+<span class="nc" id="L196">				statement.setInt(1,</span>
+<span class="nc" id="L197">						BroadCastStatusEnum.getBraodCastStatusAsInteger(BroadCastStatusEnum.FAILED.toString()));</span>
+<span class="nc" id="L198">				retryCount++;</span>
+			}
+
+<span class="nc" id="L201">			statement.setInt(2, retryCount);</span>
+<span class="nc" id="L202">			statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L203">			statement.setInt(4, transactionMonitoringMQRequest.getId());</span>
+<span class="nc" id="L204">			statement.executeUpdate();</span>
+			
+<span class="nc" id="L206">			message.getPayload().setRetryCount(retryCount);</span>
+			
+<span class="nc bnc" id="L208" title="All 4 branches missed.">			if(Boolean.TRUE.equals(accStatus) &amp;&amp; transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.SIGN_UP)) {</span>
+<span class="nc" id="L209">				updateAccTMFlag(transactionMonitoringMQRequest.getAccountID(), (Integer)transactionMonitoringMQRequest.getAdditionalAttribute(DORMANT_FLAG));</span>
+			}
+<span class="nc" id="L211">		} catch (Exception e) {</span>
+<span class="nc" id="L212">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L214">			closePrepareStatement(statement);</span>
+<span class="nc" id="L215">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L217">		return message;</span>
+
+	}
+	
+	
+	/**
+	 * Update acc TM flag.
+	 *
+	 * @param accID the acc ID
+	 * @param dormantFlag 
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void updateAccTMFlag(Integer accID, Integer dormantFlag) throws ComplianceException {
+<span class="nc" id="L230">		PreparedStatement statement = null;</span>
+<span class="nc" id="L231">		Connection connection = null;</span>
+<span class="nc" id="L232">		String accountTMFlag = &quot;1&quot;;</span>
+		try {
+<span class="nc bnc" id="L234" title="All 2 branches missed.">			if(dormantFlag == 1)</span>
+<span class="nc" id="L235">				accountTMFlag = &quot;4&quot;;</span>
+			
+<span class="nc" id="L237">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L238">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_ACC_TM_FLAG_MQ.getQuery().replace(&quot;#&quot;, accountTMFlag));</span>
+<span class="nc" id="L239">			statement.setInt(1, accID);</span>
+<span class="nc" id="L240">			statement.executeUpdate();</span>
+<span class="nc" id="L241">		} catch (Exception e) {</span>
+<span class="nc" id="L242">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+
+<span class="nc" id="L245">			closePrepareStatement(statement);</span>
+<span class="nc" id="L246">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L249">	}</span>
+	
+	/**
+	 * Removes the delivered record from TMMQ table.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; removeDeliveredRecordFromTMMQTable(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L259">		PreparedStatement statement = null;</span>
+<span class="nc" id="L260">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L262">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L263">			TransactionMonitoringMQRequest transactionMonitoringMQRequest = (TransactionMonitoringMQRequest) messageExchange</span>
+<span class="nc" id="L264">					.getRequest();</span>
+			
+<span class="nc" id="L266">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L267">			statement = connection.prepareStatement(DBQueryConstant.DELETE_DELIVERED_RECORD_FROM_TMMQ.getQuery());</span>
+<span class="nc" id="L268">			statement.setInt(1, transactionMonitoringMQRequest.getAccountID());</span>
+<span class="nc" id="L269">			Integer count =  statement.executeUpdate();</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">			if(count &gt; 0) {</span>
+<span class="nc" id="L271">				LOG.warn(&quot;Deleted Delivered Record From TransactionMonitoringMQ Where AccountID : {}&quot;,transactionMonitoringMQRequest.getAccountID());</span>
+			}
+<span class="nc" id="L273">		} catch (Exception e) {</span>
+<span class="nc" id="L274">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+
+<span class="nc" id="L277">			closePrepareStatement(statement);</span>
+<span class="nc" id="L278">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L281">		return message;</span>
+	}
+	
+	/**
+	 * Update account intuition risk level.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; updateAccountIntuitionRiskLevel(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L292">		PreparedStatement statement = null;</span>
+<span class="nc" id="L293">		Connection connection = null;</span>
+<span class="nc" id="L294">		String clientRiskLevel = null;</span>
+		
+		try {
+<span class="nc" id="L297">			MessageExchange messageExchange = message.getPayload()</span>
+<span class="nc" id="L298">					.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND);</span>
+<span class="nc" id="L299">			TransactionMonitoringMQServiceResponse transactionMonitoringMQResponse = (TransactionMonitoringMQServiceResponse) messageExchange</span>
+<span class="nc" id="L300">					.getResponse();</span>
+<span class="nc" id="L301">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L302">			TransactionMonitoringMQRequest transactionMonitoringMQRequest = (TransactionMonitoringMQRequest) exchange</span>
+<span class="nc" id="L303">					.getRequest();</span>
+			
+<span class="nc" id="L305">			TransactionMonitoringMQServiceRequest mqRequest = (TransactionMonitoringMQServiceRequest) messageExchange</span>
+<span class="nc" id="L306">					.getRequest();</span>
+
+<span class="nc bnc" id="L308" title="All 2 branches missed.">			if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.SIGN_UP)</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">					|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.UPDATE)</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">					|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.ADD_CONTACT)) {</span>
+<span class="nc" id="L311">				clientRiskLevel = updateIntuitionRiskLevelForSignup(clientRiskLevel, messageExchange,</span>
+						transactionMonitoringMQResponse);
+
+<span class="nc bnc" id="L314" title="All 2 branches missed.">			} else if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_IN) </span>
+<span class="nc bnc" id="L315" title="All 2 branches missed.">						|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_IN_UPDATE)) {</span>
+
+<span class="nc" id="L317">				clientRiskLevel = updateIntuitionRiskLevelAndStatusForPaymentIn(messageExchange,</span>
+						transactionMonitoringMQResponse, transactionMonitoringMQRequest, mqRequest);
+				
+<span class="nc bnc" id="L320" title="All 2 branches missed.">			} else if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_OUT) </span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">						|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_OUT_UPDATE)) {</span>
+
+<span class="nc" id="L323">				clientRiskLevel = updateIntuitionRiskLevelAndStatusForPaymentOut(messageExchange,</span>
+						transactionMonitoringMQResponse, transactionMonitoringMQRequest, mqRequest);
+				
+			}
+
+<span class="nc bnc" id="L328" title="All 2 branches missed.">			if (clientRiskLevel != null) {</span>
+<span class="nc" id="L329">				connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L330">				statement = connection.prepareStatement(DBQueryConstant.UPDATE_ACCOUNT_INTUITION_RISK_LEVEL.getQuery());</span>
+
+<span class="nc" id="L332">				statement.setString(1, clientRiskLevel);</span>
+<span class="nc" id="L333">				statement.setInt(2, 1);</span>
+<span class="nc" id="L334">				statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L335">				statement.setInt(4, transactionMonitoringMQRequest.getAccountID());</span>
+
+<span class="nc" id="L337">				statement.executeUpdate();</span>
+			}
+
+<span class="nc" id="L340">		} catch (Exception e) {</span>
+<span class="nc" id="L341">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+
+<span class="nc" id="L344">			closePrepareStatement(statement);</span>
+<span class="nc" id="L345">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L348">		return message;</span>
+	}
+	
+	
+	/**
+	 * @param messageExchange
+	 * @param transactionMonitoringMQResponse
+	 * @param transactionMonitoringMQRequest
+	 * @param mqRequest
+	 * @return
+	 * @throws ComplianceException
+	 */
+	private String updateIntuitionRiskLevelAndStatusForPaymentOut(MessageExchange messageExchange,
+			TransactionMonitoringMQServiceResponse transactionMonitoringMQResponse,
+			TransactionMonitoringMQRequest transactionMonitoringMQRequest,
+			TransactionMonitoringMQServiceRequest mqRequest) throws ComplianceException {
+		String clientRiskLevel;
+<span class="nc" id="L365">		TransactionMonitoringPaymentsOutRequest request = mqRequest.getTransactionMonitoringPaymentsOutRequest();</span>
+<span class="nc" id="L366">		TransactionMonitoringPaymentOutResponse tmPayOutResponse = transactionMonitoringMQResponse</span>
+<span class="nc" id="L367">				.getTransactionMonitoringPaymentOutResponse();</span>
+
+<span class="nc" id="L369">		EventServiceLog eventServiceLog = messageExchange.getEventServiceLog(</span>
+<span class="nc" id="L370">				ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L371">				transactionMonitoringMQRequest.getPaymentOutID());</span>
+
+<span class="nc" id="L373">		TransactionMonitoringPaymentsSummary summary = JsonConverterUtil</span>
+<span class="nc" id="L374">				.convertToObject(TransactionMonitoringPaymentsSummary.class, eventServiceLog.getSummary());</span>
+
+<span class="nc" id="L376">		clientRiskLevel = summary.getClientRiskLevel();</span>
+		
+<span class="nc bnc" id="L378" title="All 4 branches missed.">		if (clientRiskLevel != null &amp;&amp; transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_OUT)) {</span>
+<span class="nc" id="L379">			updatePaymentOutIntuitionClientRiskLevel(clientRiskLevel,transactionMonitoringMQRequest.getPaymentOutID());</span>
+		}
+		
+<span class="nc bnc" id="L382" title="All 2 branches missed.">		if (FundsOutComplianceStatus.HOLD.name().equals(request.getAdditionalAttribute(OLD_PAYMENT_STATUS))) {</span>
+<span class="nc" id="L383">			updatePaymentOutStatus(tmPayOutResponse.getPaymentStatus(), transactionMonitoringMQRequest.getPaymentOutID());</span>
+		}
+		
+<span class="nc" id="L386">		updatePaymentIntuitionStatus(tmPayOutResponse.getStatus(), transactionMonitoringMQRequest.getPaymentOutID(), transactionMonitoringMQRequest.getRequestType());</span>
+
+<span class="nc" id="L388">		return clientRiskLevel;</span>
+	}
+
+	/**
+	 * @param messageExchange
+	 * @param transactionMonitoringMQResponse
+	 * @param transactionMonitoringMQRequest
+	 * @param mqRequest
+	 * @return
+	 * @throws ComplianceException
+	 */
+	private String updateIntuitionRiskLevelAndStatusForPaymentIn(MessageExchange messageExchange,
+			TransactionMonitoringMQServiceResponse transactionMonitoringMQResponse,
+			TransactionMonitoringMQRequest transactionMonitoringMQRequest,
+			TransactionMonitoringMQServiceRequest mqRequest) throws ComplianceException {
+		String clientRiskLevel;
+<span class="nc" id="L404">		TransactionMonitoringPaymentsInRequest request = mqRequest.getTransactionMonitoringPaymentsInRequest();</span>
+<span class="nc" id="L405">		TransactionMonitoringPaymentInResponse tmPayInResponse = transactionMonitoringMQResponse</span>
+<span class="nc" id="L406">				.getTransactionMonitoringPaymentInResponse();</span>
+
+<span class="nc" id="L408">		EventServiceLog eventServiceLog = messageExchange.getEventServiceLog(</span>
+<span class="nc" id="L409">				ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L410">				transactionMonitoringMQRequest.getPaymentInID());</span>
+
+<span class="nc" id="L412">		TransactionMonitoringPaymentsSummary summary = JsonConverterUtil</span>
+<span class="nc" id="L413">				.convertToObject(TransactionMonitoringPaymentsSummary.class, eventServiceLog.getSummary());</span>
+
+<span class="nc" id="L415">		clientRiskLevel = summary.getClientRiskLevel();</span>
+		
+<span class="nc bnc" id="L417" title="All 4 branches missed.">		if(clientRiskLevel != null &amp;&amp; transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_IN)) {</span>
+<span class="nc" id="L418">			updatePaymentInIntuitionClientRiskLevel(clientRiskLevel, transactionMonitoringMQRequest.getPaymentInID());</span>
+		}
+		
+<span class="nc bnc" id="L421" title="All 2 branches missed.">		if (FundsInComplianceStatus.HOLD.name().equals(request.getAdditionalAttribute(OLD_PAYMENT_STATUS))) {</span>
+<span class="nc" id="L422">			updatePaymentInStatus(tmPayInResponse.getPaymentStatus(), transactionMonitoringMQRequest.getPaymentInID());</span>
+		}
+<span class="nc" id="L424">		updatePaymentIntuitionStatus(tmPayInResponse.getStatus(), transactionMonitoringMQRequest.getPaymentInID(),transactionMonitoringMQRequest.getRequestType());</span>
+
+<span class="nc" id="L426">		return clientRiskLevel;</span>
+	}
+
+	/**
+	 * @param clientRiskLevel
+	 * @param messageExchange
+	 * @param transactionMonitoringMQResponse
+	 * @return
+	 */
+	private String updateIntuitionRiskLevelForSignup(String clientRiskLevel, MessageExchange messageExchange,
+			TransactionMonitoringMQServiceResponse transactionMonitoringMQResponse) {
+<span class="nc bnc" id="L437" title="All 2 branches missed.">		if (transactionMonitoringMQResponse != null &amp;&amp; !transactionMonitoringMQResponse</span>
+<span class="nc" id="L438">				.getTransactionMonitoringSignupResponse().getTransactionMonitoringAccountSignupResponse()</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">				.getStatus().equalsIgnoreCase(Constants.SERVICE_FAILURE)) {</span>
+
+<span class="nc" id="L441">			TransactionMonitoringAccountSignupResponse tmSingUpAccountResponse = transactionMonitoringMQResponse</span>
+<span class="nc" id="L442">					.getTransactionMonitoringSignupResponse().getTransactionMonitoringAccountSignupResponse();</span>
+
+<span class="nc" id="L444">			EventServiceLog eventServiceLog = messageExchange.getEventServiceLog(</span>
+<span class="nc" id="L445">					ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L446">					tmSingUpAccountResponse.getAccountId());</span>
+
+<span class="nc" id="L448">			TransactionMonitoringAccountSummary accSummary = JsonConverterUtil</span>
+<span class="nc" id="L449">					.convertToObject(TransactionMonitoringAccountSummary.class, eventServiceLog.getSummary());</span>
+<span class="nc" id="L450">			clientRiskLevel = accSummary.getRiskLevel();</span>
+
+		}
+<span class="nc" id="L453">		return clientRiskLevel;</span>
+	}
+
+	/**
+	 * Update payment in intuition client risk level.
+	 *
+	 * @param clientRiskLevel the client risk level
+	 * @param paymentInID the payment in ID
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void updatePaymentInIntuitionClientRiskLevel(String clientRiskLevel, Integer paymentInID)
+			throws ComplianceException {
+<span class="nc" id="L465">		PreparedStatement statement = null;</span>
+<span class="nc" id="L466">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L468">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L469">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_PAYMENT_IN_INTUITION_CLIENT_RISK_LEVEL.getQuery());</span>
+			
+<span class="nc" id="L471">			statement.setString(1, clientRiskLevel);</span>
+<span class="nc" id="L472">			statement.setInt(2, 1);</span>
+<span class="nc" id="L473">			statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L474">			statement.setInt(4, paymentInID);</span>
+
+<span class="nc" id="L476">			statement.executeUpdate();</span>
+<span class="nc" id="L477">		} catch (Exception e) {</span>
+<span class="nc" id="L478">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+
+<span class="nc" id="L481">			closePrepareStatement(statement);</span>
+<span class="nc" id="L482">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L485">	}</span>
+
+	
+	/**
+	 * Update payment out intuition client risk level.
+	 *
+	 * @param clientRiskLevel the client risk level
+	 * @param paymentOutID the payment out ID
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void updatePaymentOutIntuitionClientRiskLevel(String clientRiskLevel, Integer paymentOutID)
+			throws ComplianceException {
+<span class="nc" id="L497">		PreparedStatement statement = null;</span>
+<span class="nc" id="L498">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L500">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L501">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_PAYMENT_OUT_INTUITION_CLIENT_RISK_LEVEL.getQuery());</span>
+			
+<span class="nc" id="L503">			statement.setString(1, clientRiskLevel);</span>
+<span class="nc" id="L504">			statement.setInt(2, 1);</span>
+<span class="nc" id="L505">			statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L506">			statement.setInt(4, paymentOutID);</span>
+
+<span class="nc" id="L508">			statement.executeUpdate();</span>
+<span class="nc" id="L509">		} catch (Exception e) {</span>
+<span class="nc" id="L510">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+
+<span class="nc" id="L513">			closePrepareStatement(statement);</span>
+<span class="nc" id="L514">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L517">	}</span>
+	
+	/**
+	 * Update payment intuition status.
+	 *
+	 * @param status the status
+	 * @param paymentID the payment ID
+	 * @param paymentMethod the payment method
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void updatePaymentIntuitionStatus(String status, Integer paymentID, String paymentMethod)
+			throws ComplianceException {
+<span class="nc" id="L529">		PreparedStatement statement = null;</span>
+<span class="nc" id="L530">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L532">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc bnc" id="L533" title="All 4 branches missed.">			if (paymentMethod.equalsIgnoreCase(PAYMENT_IN) || paymentMethod.equalsIgnoreCase(PAYMENT_IN_UPDATE)) {</span>
+<span class="nc" id="L534">				statement = connection</span>
+<span class="nc" id="L535">						.prepareStatement(DBQueryConstant.UPDATE_PAYMENT_IN_INTUITION_CHECK_STATUS.getQuery());</span>
+			} else {
+<span class="nc" id="L537">				statement = connection</span>
+<span class="nc" id="L538">						.prepareStatement(DBQueryConstant.UPDATE_PAYMENT_OUT_INTUITION_CHECK_STATUS.getQuery());</span>
+			}
+
+<span class="nc" id="L541">			statement.setInt(1, ServiceStatus.getStatusAsInteger(status));</span>
+<span class="nc" id="L542">			statement.setInt(2, 1);</span>
+<span class="nc" id="L543">			statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L544">			statement.setInt(4, paymentID);</span>
+
+<span class="nc" id="L546">			statement.executeUpdate();</span>
+<span class="nc" id="L547">		} catch (Exception e) {</span>
+<span class="nc" id="L548">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+
+<span class="nc" id="L551">			closePrepareStatement(statement);</span>
+<span class="nc" id="L552">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L555">	}</span>
+	
+	private void updatePaymentInStatus(String paymentStatus, Integer paymentInID) throws ComplianceException {
+<span class="nc" id="L558">		PreparedStatement statement = null;</span>
+<span class="nc" id="L559">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L561">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L562">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_PAYMENT_IN_STATUS.getQuery());</span>
+			
+<span class="nc" id="L564">			statement.setInt(1, 1);</span>
+<span class="nc" id="L565">			statement.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L566">			statement.setInt(3, FundsInComplianceStatus.getFundsInComplianceStatusAsInteger(paymentStatus));</span>
+<span class="nc" id="L567">			statement.setInt(4, paymentInID);</span>
+
+<span class="nc" id="L569">			statement.executeUpdate();</span>
+<span class="nc" id="L570">		} catch (Exception e) {</span>
+<span class="nc" id="L571">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+
+<span class="nc" id="L574">			closePrepareStatement(statement);</span>
+<span class="nc" id="L575">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L578">	}</span>
+	
+	private void updatePaymentOutStatus(String paymentStatus, Integer paymentOutID) throws ComplianceException {
+<span class="nc" id="L581">		PreparedStatement statement = null;</span>
+<span class="nc" id="L582">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L584">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L585">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_PAYMENT_OUT_STATUS.getQuery());</span>
+			
+<span class="nc" id="L587">			statement.setInt(1, 1);</span>
+<span class="nc" id="L588">			statement.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L589">			statement.setInt(3, FundsOutComplianceStatus.getFundsInComplianceStatusAsInteger(paymentStatus));</span>
+<span class="nc" id="L590">			statement.setInt(4, paymentOutID);</span>
+
+<span class="nc" id="L592">			statement.executeUpdate();</span>
+<span class="nc" id="L593">		} catch (Exception e) {</span>
+<span class="nc" id="L594">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+
+<span class="nc" id="L597">			closePrepareStatement(statement);</span>
+<span class="nc" id="L598">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L601">	}</span>
+	
+	/**
+	 * Update status in board cast queue.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; updateStatusInBoardCastQueue(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+
+<span class="nc" id="L613">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L614">		MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L615">				.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND);</span>
+<span class="nc" id="L616">		TransactionMonitoringMQRequest transactionMonitoringMQRequest = (TransactionMonitoringMQRequest) messageExchange</span>
+<span class="nc" id="L617">				.getRequest();</span>
+<span class="nc" id="L618">		TransactionMonitoringMQServiceRequest mqRequest = (TransactionMonitoringMQServiceRequest) exchange.getRequest();</span>
+<span class="nc" id="L619">		TransactionMonitoringMQServiceResponse mqResponse = (TransactionMonitoringMQServiceResponse) exchange</span>
+<span class="nc" id="L620">				.getResponse();</span>
+
+<span class="nc bnc" id="L622" title="All 2 branches missed.">		if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_IN)</span>
+<span class="nc bnc" id="L623" title="All 2 branches missed.">				|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_IN_UPDATE)</span>
+<span class="nc bnc" id="L624" title="All 2 branches missed.">				|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_OUT)</span>
+<span class="nc bnc" id="L625" title="All 2 branches missed.">				|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_OUT_UPDATE)) {</span>
+<span class="nc" id="L626">			int entityType = 0;</span>
+<span class="nc" id="L627">			String statusJson = null;</span>
+<span class="nc bnc" id="L628" title="All 2 branches missed.">			if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_IN)</span>
+<span class="nc bnc" id="L629" title="All 2 branches missed.">					|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_IN_UPDATE)) {</span>
+
+<span class="nc" id="L631">				TransactionMonitoringPaymentsInRequest request = mqRequest.getTransactionMonitoringPaymentsInRequest();</span>
+<span class="nc" id="L632">				TransactionMonitoringPaymentInResponse responsePayIn = mqResponse</span>
+<span class="nc" id="L633">						.getTransactionMonitoringPaymentInResponse();</span>
+<span class="nc" id="L634">				entityType = 4;</span>
+<span class="nc" id="L635">				statusJson = getPaymentInResponse(responsePayIn, request, mqRequest.getOrgCode());</span>
+
+<span class="nc" id="L637">				if (!responsePayIn.getPaymentStatus()</span>
+<span class="nc bnc" id="L638" title="All 2 branches missed.">						.equalsIgnoreCase(request.getAdditionalAttribute(OLD_PAYMENT_STATUS).toString())) {</span>
+<span class="nc" id="L639">					saveIntoStatusBoardCastQueue(transactionMonitoringMQRequest, entityType, statusJson);</span>
+				}
+				
+<span class="nc bnc" id="L642" title="All 2 branches missed.">			} else if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_OUT)</span>
+<span class="nc bnc" id="L643" title="All 2 branches missed.">					|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(PAYMENT_OUT_UPDATE)) {</span>
+<span class="nc" id="L644">				TransactionMonitoringPaymentsOutRequest request = mqRequest</span>
+<span class="nc" id="L645">						.getTransactionMonitoringPaymentsOutRequest();</span>
+<span class="nc" id="L646">				TransactionMonitoringPaymentOutResponse responsePayOut = mqResponse</span>
+<span class="nc" id="L647">						.getTransactionMonitoringPaymentOutResponse();</span>
+<span class="nc" id="L648">				entityType = 5;</span>
+<span class="nc" id="L649">				statusJson = getPaymentOutResponse(responsePayOut, request, mqRequest.getOrgCode());</span>
+				
+<span class="nc" id="L651">				if (!responsePayOut.getPaymentStatus()</span>
+<span class="nc bnc" id="L652" title="All 2 branches missed.">						.equalsIgnoreCase(request.getAdditionalAttribute(OLD_PAYMENT_STATUS).toString())) {</span>
+<span class="nc" id="L653">					saveIntoStatusBoardCastQueue(transactionMonitoringMQRequest, entityType, statusJson);</span>
+				}
+			}
+
+
+		}
+
+<span class="nc" id="L660">		return message;</span>
+
+	}
+
+	/**
+	 * @param transactionMonitoringMQRequest
+	 * @param entityType
+	 * @param statusJson
+	 * @throws ComplianceException
+	 */
+	private void saveIntoStatusBoardCastQueue(TransactionMonitoringMQRequest transactionMonitoringMQRequest,
+			int entityType, String statusJson) throws ComplianceException {
+<span class="nc" id="L672">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L673">		Connection connection = null;</span>
+
+		try {
+<span class="nc" id="L676">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L677">			preparedStatement = connection.prepareStatement(DBQueryConstant.SAVE_INTO_BROADCAST_QUEUE.getQuery());</span>
+<span class="nc" id="L678">			preparedStatement.setString(1, transactionMonitoringMQRequest.getOrgCode());</span>
+<span class="nc" id="L679">			preparedStatement.setInt(2, entityType);</span>
+<span class="nc" id="L680">			preparedStatement.setInt(3, transactionMonitoringMQRequest.getAccountID());</span>
+<span class="nc bnc" id="L681" title="All 2 branches missed.">			if (transactionMonitoringMQRequest.getContactID() != null) {</span>
+<span class="nc" id="L682">				preparedStatement.setInt(4, transactionMonitoringMQRequest.getContactID());</span>
+			} else {
+<span class="nc" id="L684">				preparedStatement.setNull(4, Types.INTEGER);</span>
+			}
+<span class="nc bnc" id="L686" title="All 2 branches missed.">			if (transactionMonitoringMQRequest.getPaymentInID() != 0) {</span>
+<span class="nc" id="L687">				preparedStatement.setInt(5, transactionMonitoringMQRequest.getPaymentInID());</span>
+			} else {
+<span class="nc" id="L689">				preparedStatement.setNull(5, Types.INTEGER);</span>
+			}
+<span class="nc bnc" id="L691" title="All 2 branches missed.">			if (transactionMonitoringMQRequest.getPaymentOutID() != 0) {</span>
+<span class="nc" id="L692">				preparedStatement.setInt(6, transactionMonitoringMQRequest.getPaymentOutID());</span>
+			} else {
+<span class="nc" id="L694">				preparedStatement.setNull(6, Types.INTEGER);</span>
+			}
+<span class="nc" id="L696">			preparedStatement.setString(7, statusJson);</span>
+<span class="nc" id="L697">			preparedStatement.setInt(8, 1);</span>
+<span class="nc" id="L698">			preparedStatement.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L699">			preparedStatement.setInt(10, 1);</span>
+<span class="nc" id="L700">			preparedStatement.setTimestamp(11, (new Timestamp(System.currentTimeMillis())));</span>
+<span class="nc" id="L701">			preparedStatement.executeUpdate();</span>
+
+<span class="nc" id="L703">		} catch (Exception e) {</span>
+<span class="nc" id="L704">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L706">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L707">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L709">	}</span>
+
+	private String getPaymentInResponse(TransactionMonitoringPaymentInResponse responsePayIn,
+			TransactionMonitoringPaymentsInRequest request, String orgCode) {
+
+<span class="nc" id="L714">		TransactionMonitoringPaymentBoardCastResponse boardCastResponse = new TransactionMonitoringPaymentBoardCastResponse();</span>
+<span class="nc" id="L715">		boardCastResponse.setOsrID(UUID.randomUUID().toString());</span>
+<span class="nc" id="L716">		boardCastResponse.setOrgCode(orgCode);</span>
+<span class="nc" id="L717">		boardCastResponse.setTradeContractNumber(request.getContractNumber());</span>
+<span class="nc" id="L718">		boardCastResponse.setTradePaymentID(request.getTransactionId());</span>
+<span class="nc" id="L719">		boardCastResponse.setStatus(responsePayIn.getPaymentStatus());</span>
+<span class="nc" id="L720">		boardCastResponse.setResponseCode(responsePayIn.getResponseCode());</span>
+<span class="nc" id="L721">		boardCastResponse.setResponseDescription(responsePayIn.getResponseDescription());</span>
+<span class="nc" id="L722">		return JsonConverterUtil.convertToJsonWithNull(boardCastResponse);</span>
+
+	}
+
+	private String getPaymentOutResponse(TransactionMonitoringPaymentOutResponse responsePayIn,
+			TransactionMonitoringPaymentsOutRequest request, String orgCode) {
+
+<span class="nc" id="L729">		TransactionMonitoringPaymentBoardCastResponse boardCastResponse = new TransactionMonitoringPaymentBoardCastResponse();</span>
+<span class="nc" id="L730">		boardCastResponse.setOsrID(UUID.randomUUID().toString());</span>
+<span class="nc" id="L731">		boardCastResponse.setOrgCode(orgCode);</span>
+<span class="nc" id="L732">		boardCastResponse.setTradeContractNumber(request.getContractNumber());</span>
+<span class="nc" id="L733">		boardCastResponse.setTradePaymentID(request.getTransactionId());</span>
+<span class="nc" id="L734">		boardCastResponse.setStatus(responsePayIn.getPaymentStatus());</span>
+<span class="nc" id="L735">		boardCastResponse.setResponseCode(responsePayIn.getResponseCode());</span>
+<span class="nc" id="L736">		boardCastResponse.setResponseDescription(responsePayIn.getResponseDescription());</span>
+<span class="nc" id="L737">		return JsonConverterUtil.convertToJsonWithNull(boardCastResponse);</span>
+
+	}
+	
+	
+	public List&lt;TransactionMonitoringMQRequest&gt; loadAllMessageFromDB() throws ComplianceException {
+<span class="nc" id="L743">		PreparedStatement statement = null;</span>
+<span class="nc" id="L744">		ResultSet rs = null;</span>
+<span class="nc" id="L745">		Connection connection = null;</span>
+<span class="nc" id="L746">		List&lt;TransactionMonitoringMQRequest&gt; transactionMonitoringMQRequestList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L749">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L750">			statement = connection.prepareStatement(DBQueryConstant.GET_ALL_TM_MQ_MESSAGE_FROM_DB.getQuery());</span>
+<span class="nc" id="L751">			statement.setInt(1, Integer.parseInt(System.getProperty(RETRYCOUNT)));</span>
+
+<span class="nc" id="L753">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L754" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L755">				TransactionMonitoringMQRequest transactionMonitoringMQRequest = new TransactionMonitoringMQRequest();</span>
+<span class="nc" id="L756">				transactionMonitoringMQRequest.setId(rs.getInt(&quot;ID&quot;));</span>
+<span class="nc" id="L757">				transactionMonitoringMQRequest.setOrgCode(rs.getString(&quot;OrganizationCode&quot;));</span>
+<span class="nc" id="L758">				transactionMonitoringMQRequest.setRequestType(rs.getString(&quot;RequestType&quot;));</span>
+<span class="nc" id="L759">				transactionMonitoringMQRequest.setAccountID(rs.getInt(&quot;AccountID&quot;));</span>
+<span class="nc" id="L760">				transactionMonitoringMQRequest.setContactID(rs.getInt(&quot;ContactID&quot;));</span>
+<span class="nc" id="L761">				transactionMonitoringMQRequest.setPaymentInID(rs.getInt(&quot;PaymentInID&quot;));</span>
+<span class="nc" id="L762">				transactionMonitoringMQRequest.setPaymentOutID(rs.getInt(&quot;PaymentOutID&quot;));</span>
+<span class="nc" id="L763">				transactionMonitoringMQRequest</span>
+<span class="nc" id="L764">						.setRequestJson(JsonConverterUtil.convertToObject(Object.class, rs.getString(&quot;RequestJson&quot;)));</span>
+<span class="nc" id="L765">				transactionMonitoringMQRequest.setCreatedBy(rs.getInt(&quot;CreatedBy&quot;));</span>
+<span class="nc" id="L766">				transactionMonitoringMQRequest.setTimestamp(rs.getTimestamp(&quot;CreatedOn&quot;));</span>
+<span class="nc" id="L767">				transactionMonitoringMQRequest.setIsPresent(rs.getInt(&quot;isPresent&quot;));</span>
+				
+<span class="nc" id="L769">				transactionMonitoringMQRequestList.add(transactionMonitoringMQRequest);</span>
+				
+				
+<span class="nc" id="L772">			} </span>
+			
+<span class="nc" id="L774">		} catch (Exception e) {</span>
+<span class="nc" id="L775">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L777">			closeResultset(rs);</span>
+<span class="nc" id="L778">			closePrepareStatement(statement);</span>
+<span class="nc" id="L779">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L781">		return transactionMonitoringMQRequestList;</span>
+	}
+	
+	/**
+	 * Check account is present or not.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	//AT-4773
+	public Message&lt;MessageContext&gt; checkAccountIsPresentOrNot(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L794">		TransactionMonitoringAccountMQRequest tmRequest = (TransactionMonitoringAccountMQRequest) message.getPayload()</span>
+<span class="nc" id="L795">				.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L796">		PreparedStatement statement = null;</span>
+<span class="nc" id="L797">		Connection connection = null;</span>
+<span class="nc" id="L798">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L800">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L801">			statement = connection</span>
+<span class="nc" id="L802">					.prepareStatement(DBQueryConstant.GET_ACCOUNT_ID_USING_TRADE_ACCOUNT_NUMBER.getQuery());</span>
+<span class="nc" id="L803">			statement.setString(1, tmRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L804">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L805" title="All 2 branches missed.">			if (!rs.next()) {</span>
+<span class="nc" id="L806">				message.getPayload().setFailed(true);</span>
+			}
+
+<span class="nc" id="L809">		} catch (Exception e) {</span>
+<span class="nc" id="L810">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L812">			closeResultset(rs);</span>
+<span class="nc" id="L813">			closePrepareStatement(statement);</span>
+<span class="nc" id="L814">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L816">		return message;</span>
+	}
+	
+	
+	/**
+	 * Save reg sync to MQ.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	//AT-4473
+	public Message&lt;MessageContext&gt; saveIntuitionRegSyncToMQ(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L830">		MessageExchange messageExchange = message.getPayload().getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L831">		IntuitionSignupMQRequest request = (IntuitionSignupMQRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L832">		PreparedStatement broadcastEventStmt = null;</span>
+<span class="nc" id="L833">		Connection connection = null;</span>
+		
+		
+		try {
+			
+<span class="nc" id="L838">			String orgCode = (String) request.getAdditionalAttribute(&quot;orgCode&quot;);</span>
+<span class="nc" id="L839">			Integer id = (Integer) request.getAdditionalAttribute(&quot;PrimaryContactId&quot;);</span>
+			
+<span class="nc" id="L841">			String jsonAccountSignupRequest = JsonConverterUtil.convertToJsonWithoutNull(request);</span>
+			
+<span class="nc" id="L843">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L844">			broadcastEventStmt = connection.prepareStatement(DBQueryConstant.SAVE_INTO_TRANSACTION_MONITORING_MQ.getQuery());</span>
+			
+<span class="nc" id="L846">			broadcastEventStmt.setString(1, orgCode);</span>
+<span class="nc" id="L847">			broadcastEventStmt.setString(2, &quot;signup&quot;);</span>
+<span class="nc bnc" id="L848" title="All 4 branches missed.">			if (request.getAccount() != null &amp;&amp; request.getAccount().get(0).getAccountId()!= null) {</span>
+<span class="nc" id="L849">				broadcastEventStmt.setInt(3, Integer.parseInt(request.getAccount().get(0).getAccountId()));</span>
+			} else {
+<span class="nc" id="L851">				broadcastEventStmt.setNull(3, Types.INTEGER);</span>
+			}
+
+<span class="nc bnc" id="L854" title="All 4 branches missed.">			if (id != null &amp;&amp; id != 0) {</span>
+<span class="nc" id="L855">				broadcastEventStmt.setInt(4, id);</span>
+			} else {
+<span class="nc" id="L857">				broadcastEventStmt.setNull(4, Types.INTEGER);</span>
+			}
+			
+<span class="nc" id="L860">			broadcastEventStmt.setNull(5, Types.INTEGER);</span>
+<span class="nc" id="L861">			broadcastEventStmt.setNull(6, Types.INTEGER);</span>
+<span class="nc" id="L862">			broadcastEventStmt.setString(7, jsonAccountSignupRequest);</span>
+<span class="nc" id="L863">			broadcastEventStmt.setInt(8, 1);</span>
+<span class="nc" id="L864">			broadcastEventStmt.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L865">			broadcastEventStmt.setInt(10, 1);</span>
+<span class="nc" id="L866">			broadcastEventStmt.setTimestamp(11, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L867">			broadcastEventStmt.setInt(12, 1);</span>
+<span class="nc" id="L868">			broadcastEventStmt.executeUpdate();</span>
+			
+<span class="nc" id="L870">		} catch (Exception e) {</span>
+<span class="nc" id="L871">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L873">			closePrepareStatement(broadcastEventStmt);</span>
+<span class="nc" id="L874">			closeConnection(connection);</span>
+		}
+		
+<span class="nc" id="L877">		LOG.info(&quot;---------------- Registration Sync Intuition record {} successfully saved to TransactionMonitoringMQ table&quot;, request.getTradeAccNumber());</span>
+		
+<span class="nc" id="L879">		return message;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

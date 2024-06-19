@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataValidator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.reg</a> &gt; <span class="el_source">DataValidator.java</span></div><h1>DataValidator.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.reg;
+
+import java.util.List;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.Header;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.reg.RegistrationEnumValues;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.BaseMessageValidator;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.FieldValidator;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * @author bnt
+ *
+ */
+<span class="fc" id="L32">public class DataValidator extends BaseMessageValidator {</span>
+
+	private static final String REQUEST_IS_NOT_VALID = &quot;Request is not valid&quot;;
+	private static final String ACCOUNT = &quot;oldAccount&quot;;
+	private static final String BUY_CURRENCY_ID = &quot;BuyCurrencyId&quot;;
+	private static final String SELL_CURRENCY_ID = &quot;SellCurrencyId&quot;;
+	private static final String COUNTRY_ID = &quot;CountryID&quot;;
+	private static final String CONTACTS = &quot;oldContacts&quot;;
+
+<span class="fc" id="L41">	private static final Logger LOGGER = LoggerFactory.getLogger(DataValidator.class);</span>
+
+	/**
+	 * Process.
+	 *
+	 * @param message the message
+	 * @param correlationID the correlation ID
+	 * @return the message
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+<span class="fc" id="L52">		RegistrationResponse response = new RegistrationResponse();</span>
+<span class="fc" id="L53">		RegistrationServiceRequest registrationServiceRequest = null;</span>
+<span class="fc" id="L54">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+		try {
+<span class="fc" id="L56">			LOGGER.debug(&quot;Gateway message headers=[{}], payload=[{}] validated!!&quot;, message.getHeaders(),</span>
+<span class="fc" id="L57">					message.getPayload());</span>
+<span class="fc" id="L58">			registrationServiceRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="fc" id="L59">			registrationServiceRequest.setCorrelationID(correlationID);</span>
+<span class="fc" id="L60">			ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="fc" id="L61">			OperationEnum operation = messageExchange.getOperation();</span>
+<span class="fc" id="L62">			FieldValidator validator = new FieldValidator();</span>
+<span class="pc bpc" id="L63" title="2 of 4 branches missed.">			if (serviceInterfaceType == ServiceInterfaceType.PROFILE &amp;&amp; operation == OperationEnum.NEW_REGISTRATION) {</span>
+<span class="fc" id="L64">				validateNewRegistration(registrationServiceRequest, validator);</span>
+<span class="fc" id="L65">				createBaseResponse(response, validator, ComplianceReasonCode.MISSINGINFO.getReasonCode(),</span>
+						Constants.MSG_MISSING_INFO, Constants.SIGN_UP);
+<span class="nc bnc" id="L67" title="All 4 branches missed.">			} else if (serviceInterfaceType == ServiceInterfaceType.PROFILE</span>
+					&amp;&amp; operation == OperationEnum.UPDATE_ACCOUNT) {
+<span class="nc" id="L69">				validateUpdateAccount(registrationServiceRequest, validator);</span>
+<span class="nc" id="L70">				createBaseResponse(response, validator, ComplianceReasonCode.MISSINGINFO.getReasonCode(),</span>
+						Constants.MSG_MISSING_INFO, Constants.UPDATE);
+<span class="nc bnc" id="L72" title="All 4 branches missed.">			} else if (serviceInterfaceType == ServiceInterfaceType.PROFILE &amp;&amp; operation == OperationEnum.ADD_CONTACT) {</span>
+<span class="nc" id="L73">				validateAddContact(registrationServiceRequest, validator);</span>
+<span class="nc" id="L74">				createBaseResponse(response, validator, ComplianceReasonCode.MISSINGINFO.getReasonCode(),</span>
+						Constants.MSG_MISSING_INFO, Constants.ADD_CONTACT);
+			}
+<span class="nc" id="L77">		} catch (Exception e) {</span>
+<span class="nc" id="L78">			LOGGER.error(REQUEST_IS_NOT_VALID, e);</span>
+<span class="nc" id="L79">			response.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L80">			response.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L81">			response.setErrorDescription(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="fc" id="L82">		}</span>
+<span class="fc" id="L83">		response.setCorrelationID(correlationID);</span>
+<span class="fc" id="L84">		response.setOsrID(messageExchange.getRequest().getOsrId());</span>
+<span class="fc" id="L85">		messageExchange.setResponse(response);</span>
+<span class="fc" id="L86">		return message;</span>
+	}
+
+	private boolean validateContactsForUpdate(RegistrationServiceRequest registrationServiceRequest, FieldValidator fv) {
+<span class="nc" id="L90">		List&lt;Contact&gt; contacts = registrationServiceRequest.getAccount().getContacts();</span>
+<span class="nc" id="L91">		Boolean isValidate = Boolean.FALSE;</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">		for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L93" title="All 4 branches missed.">			if (null != contact &amp;&amp; null != contact.getId()) {</span>
+<span class="nc" id="L94">				validateUsaState(contact,fv);</span>
+<span class="nc" id="L95">				isValidate = Boolean.TRUE;</span>
+			} else {
+<span class="nc" id="L97">				fv.addError(Constants.ERR_INVALID_COTACT, Constants.FIELD_CONTACT_TRADE_CONTACT_ID);</span>
+<span class="nc" id="L98">				isValidate = Boolean.FALSE;</span>
+<span class="nc" id="L99">				break;</span>
+			}
+<span class="nc" id="L101">		}</span>
+
+<span class="nc" id="L103">		return isValidate;</span>
+	}
+
+	@SuppressWarnings(&quot;unchecked&quot;)
+	private Boolean validateNewContacts(RegistrationServiceRequest request, FieldValidator fv) {
+<span class="fc" id="L108">		Account account = request.getAccount();</span>
+<span class="fc" id="L109">		List&lt;Contact&gt; oldContacts = (List&lt;Contact&gt;) request.getAdditionalAttribute(CONTACTS);</span>
+<span class="fc" id="L110">		List&lt;Integer&gt; oldTradeContactidList = (List&lt;Integer&gt;) request.getAdditionalAttribute(Constants.TRADE_CONTACT_ID_LIST);</span>
+<span class="fc" id="L111">		Boolean isValidate = Boolean.TRUE;</span>
+		
+<span class="fc" id="L113">		Boolean isPrimaryContactPresent = isPrimaryContactPresent(oldContacts);</span>
+<span class="fc bfc" id="L114" title="All 2 branches covered.">		for (Contact contact : account.getContacts()) {</span>
+<span class="fc" id="L115">			contact.setVersion(1);</span>
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">			if (Constants.CFX.equalsIgnoreCase(account.getCustType())) {</span>
+<span class="nc" id="L117">				contact.setKYCEligible(false);</span>
+<span class="nc" id="L118">				contact.setSanctionEligible(false);</span>
+			}
+			/** validate tradeContactid : Abhijit G*/
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">			if (null != getContactBySFId(contact.getContactSFID(), oldContacts)) {</span>
+<span class="nc" id="L122">				fv.addError(Constants.ERR_INVALID_COTACT_ALREADY, Constants.FIELD_CONTACT_CONTACT_SF_ID);</span>
+<span class="nc" id="L123">				break;</span>
+			} 
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">			else if (Boolean.TRUE.equals(validateContactTradeFields(contact.getTradeContactID(),oldTradeContactidList))) {</span>
+<span class="nc" id="L126">				fv.addError(Constants.ERR_INVALID_COTACT_ALREADY, Constants.FIELD_CONTACT_TRADE_CONTACT_ID);</span>
+			}
+			
+<span class="pc bpc" id="L129" title="2 of 4 branches missed.">			if (contact.getPrimaryContact() != null &amp;&amp; contact.getPrimaryContact() </span>
+<span class="pc bpc" id="L130" title="1 of 2 branches missed.">					&amp;&amp; Boolean.TRUE.equals(isPrimaryContactPresent)) {</span>
+<span class="nc" id="L131">				fv.addError(Constants.ERR_PRIMARY_CONTACT_ALREADY, Constants.FIELD_ACC_ACC_SF_ID);</span>
+			}
+
+<span class="fc" id="L134">		}</span>
+<span class="pc bpc" id="L135" title="1 of 2 branches missed.">		if (null == request.getAdditionalAttribute(COUNTRY_ID))</span>
+<span class="nc" id="L136">			fv.addError(Constants.ERR_COUNTRY_INVALID, &quot;country_of_residence&quot;);</span>
+
+<span class="fc" id="L138">		return isValidate;</span>
+	}
+
+	private Boolean isPrimaryContactPresent(List&lt;Contact&gt; contacts) {
+
+<span class="pc bpc" id="L143" title="1 of 2 branches missed.">		for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">			if (Boolean.TRUE.equals(contact.getPrimaryContact())) {</span>
+<span class="nc" id="L145">				return Boolean.TRUE;</span>
+			}
+<span class="nc" id="L147">		}</span>
+
+<span class="fc" id="L149">		return Boolean.FALSE;</span>
+
+	}
+
+	private Contact getContactBySFId(String sfId, List&lt;Contact&gt; contacts) {
+<span class="pc bpc" id="L154" title="1 of 2 branches missed.">		for (Contact c : contacts) {</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">			if (c.getContactSFID().equalsIgnoreCase(sfId))</span>
+<span class="nc" id="L156">				return c;</span>
+<span class="nc" id="L157">		}</span>
+<span class="fc" id="L158">		return null;</span>
+	}
+
+	private void validateAccountForRegistration(RegistrationServiceRequest request, FieldValidator fv) {
+	   
+		/** validate tradeAccountid  and tradeAccountNumber: Abhijit G*/
+<span class="fc" id="L164">		validateAccountTradeFields(request, fv);</span>
+		
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">		if (null == request.getAdditionalAttribute(BUY_CURRENCY_ID))</span>
+<span class="nc" id="L167">			fv.addError(Constants.ERR_BUY_CURRENCY, Constants.FIELD_ACC_BUYING_CURRENCY);</span>
+<span class="pc bpc" id="L168" title="1 of 2 branches missed.">		if (null == request.getAdditionalAttribute(SELL_CURRENCY_ID))</span>
+<span class="nc" id="L169">			fv.addError(Constants.ERR_SELL_CURRENCY, Constants.FIELD_ACC_SELLING_CURRENCY);</span>
+		
+<span class="fc" id="L171">	}</span>
+
+	private void validateNewRegistration(RegistrationServiceRequest registrationServiceRequest,
+			FieldValidator validator) {
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">		if (null == registrationServiceRequest.getOrgId()) {</span>
+<span class="nc" id="L176">			validator.addError(Constants.ERR_INVALID_ORG, Constants.ORG_CODE);</span>
+		} else {
+<span class="fc" id="L178">			validateAccountForRegistration(registrationServiceRequest, validator);</span>
+<span class="fc" id="L179">			registrationServiceRequest.getAccount().setVersion(1);</span>
+<span class="fc" id="L180">			validateNewContacts(registrationServiceRequest, validator);</span>
+		}
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">		if (isMultipleContactsArePrimary(registrationServiceRequest.getAccount().getContacts())) {</span>
+<span class="nc" id="L183">			validator.addError(Constants.ERR_MULTIPLE_PRIMARY_CONTACT, Constants.FIELD_ACC_ACC_SF_ID);</span>
+		}
+<span class="fc" id="L185">	}</span>
+
+	private boolean isMultipleContactsArePrimary(List&lt;Contact&gt; contacts) {
+<span class="fc" id="L188">		Integer count = 0;</span>
+<span class="fc bfc" id="L189" title="All 2 branches covered.">		for (Contact contact : contacts) {</span>
+<span class="pc bpc" id="L190" title="2 of 4 branches missed.">			if (contact.getPrimaryContact() != null &amp;&amp; contact.getPrimaryContact()) {</span>
+<span class="fc" id="L191">				count++;</span>
+			}
+<span class="fc" id="L193">		}</span>
+<span class="pc bpc" id="L194" title="1 of 2 branches missed.">		return count &gt; 1;</span>
+	}
+
+	private void validateAddContact(RegistrationServiceRequest registrationServiceRequest, FieldValidator validator) {
+<span class="nc" id="L198">		Account oldAccount = (Account) registrationServiceRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc bnc" id="L199" title="All 6 branches missed.">		if (null == oldAccount || null == oldAccount.getId() || null == oldAccount.getVersion()) {</span>
+<span class="nc" id="L200">			validator.addError(Constants.ERR_INVALID_ACCOUNT, Constants.FIELD_ACC_TRADE_ACCOUNT_ID);</span>
+<span class="nc" id="L201">			return;</span>
+		} else {
+<span class="nc" id="L203">			validateNewContacts(registrationServiceRequest, validator);</span>
+		}
+
+<span class="nc bnc" id="L206" title="All 2 branches missed.">		if (!oldAccount.getCustType().equalsIgnoreCase(registrationServiceRequest.getAccount().getCustType())) {</span>
+<span class="nc" id="L207">			validator.addError(Constants.ERR_CUST_TYPE_MODIFIED, Constants.FIELD_ACC_CUST_TYPE);</span>
+		}
+
+<span class="nc bnc" id="L210" title="All 2 branches missed.">		if (!oldAccount.getAccSFID().equals(registrationServiceRequest.getAccount().getAccSFID())) {</span>
+<span class="nc" id="L211">			validator.addError(Constants.ERR_INVALID_ACCOUNT_NOT_PRESENT, Constants.FIELD_ACC_ACC_SF_ID);</span>
+		}
+
+<span class="nc" id="L214">	}</span>
+
+	private void validateUpdateAccount(RegistrationServiceRequest registrationServiceRequest, FieldValidator validator) {
+<span class="nc" id="L217">		Account oldAccount = (Account) registrationServiceRequest.getAdditionalAttribute(ACCOUNT);</span>
+		
+<span class="nc bnc" id="L219" title="All 6 branches missed.">		if (null == oldAccount || ( null == oldAccount.getId() || null == oldAccount.getVersion())) {</span>
+<span class="nc" id="L220">			validator.addError(Constants.ERR_INVALID_ACCOUNT_NOT_PRESENT, Constants.FIELD_ACC_TRADE_ACCOUNT_ID);</span>
+		} else {
+<span class="nc" id="L222">			registrationServiceRequest.getAccount().setVersion(oldAccount.getVersion() + 1);</span>
+<span class="nc" id="L223">			validateContactsForUpdate(registrationServiceRequest, validator);</span>
+		}
+<span class="nc" id="L225">		String orgName = (String) registrationServiceRequest.getAdditionalAttribute(Constants.ACC_ORG_NAME);</span>
+<span class="nc bnc" id="L226" title="All 4 branches missed.">		if(orgName != null &amp;&amp; !StringUtils.isNullOrTrimEmpty(registrationServiceRequest.getOrgCode()) &amp;&amp; </span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">				!registrationServiceRequest.getOrgCode().equalsIgnoreCase(orgName)){</span>
+<span class="nc" id="L228">			validator.addError(Constants.ERR_MODIFIY_ORG, Constants.ORG_CODE);</span>
+		}
+<span class="nc" id="L230">		Boolean isAccountModified = (Boolean) registrationServiceRequest.getAdditionalAttribute(Constants.FIELD_ACC_ISACCOUNTMODIFIED);</span>
+<span class="nc" id="L231">		Boolean isContactModified = (Boolean) registrationServiceRequest.getAdditionalAttribute(Constants.FIELD_ACC_ISCONTACTMODIFIED);</span>
+<span class="nc" id="L232">		Boolean isCompanyModified = (Boolean) registrationServiceRequest.getAdditionalAttribute(Constants.FIELD_ACC_ISCOMPANYMODIFIED);</span>
+<span class="nc" id="L233">		Boolean isConversionPredictionModified = (Boolean) registrationServiceRequest</span>
+<span class="nc" id="L234">				.getAdditionalAttribute(Constants.FIELD_ACC_ISCONVPREDICTIONMODIFIED);</span>
+<span class="nc" id="L235">		Boolean isCorporateComplianceModified = (Boolean) registrationServiceRequest</span>
+<span class="nc" id="L236">				.getAdditionalAttribute(Constants.FIELD_ACC_ISCORPORATECOMPLIANCEMODIFIED);</span>
+<span class="nc" id="L237">		checkIsContactsPresent(registrationServiceRequest, validator, isContactModified);</span>
+<span class="nc" id="L238">		checkIsAccountPresent(registrationServiceRequest, validator, oldAccount);</span>
+<span class="nc" id="L239">		checkIsAccountOrContactModified(validator, isAccountModified, isContactModified, isCompanyModified,</span>
+				isConversionPredictionModified, isCorporateComplianceModified);
+<span class="nc" id="L241">	}</span>
+
+	/**
+	 * @param registrationServiceRequest
+	 * @param validator
+	 * @param isContactModified
+	 */
+	private void checkIsContactsPresent(RegistrationServiceRequest registrationServiceRequest, FieldValidator validator,
+			Boolean isContactModified) {
+<span class="nc bnc" id="L250" title="All 4 branches missed.">		if (null != isContactModified &amp;&amp;(registrationServiceRequest.getAccount().getContacts() != null</span>
+<span class="nc bnc" id="L251" title="All 2 branches missed.">				&amp;&amp; !registrationServiceRequest.getAccount().getContacts().isEmpty()</span>
+<span class="nc bnc" id="L252" title="All 2 branches missed.">				&amp;&amp; !isContactModified)) {</span>
+<span class="nc" id="L253">			validator.addError(Constants.ERR_CONTACT_NOT_UPDATED, Constants.FIELD_CONTACT_CONTACT_SF_ID);</span>
+		}
+<span class="nc" id="L255">	}</span>
+
+	/**
+	 * @param registrationServiceRequest
+	 * @param validator
+	 * @param oldAccount
+	 */
+	private void checkIsAccountPresent(RegistrationServiceRequest registrationServiceRequest, FieldValidator validator,
+			Account oldAccount) {
+<span class="nc bnc" id="L264" title="All 4 branches missed.">		if (null != oldAccount &amp;&amp; !oldAccount.getAccSFID().equals(registrationServiceRequest.getAccount().getAccSFID())) {</span>
+<span class="nc" id="L265">			validator.addError(Constants.ERR_INVALID_ACCOUNT_NOT_PRESENT, Constants.FIELD_ACC_ACC_SF_ID);</span>
+		}
+<span class="nc" id="L267">	}</span>
+
+	/**
+	 * @param validator
+	 * @param isAccountModified
+	 * @param isContactModified
+	 */
+	private void checkIsAccountOrContactModified(FieldValidator validator, Boolean isAccountModified,
+			Boolean isContactModified, Boolean isCompanyModified, Boolean isConversionPredictionModified,
+			Boolean isCorporateComplianceModified) {
+<span class="nc bnc" id="L277" title="All 4 branches missed.">		if (null != isContactModified &amp;&amp; Boolean.FALSE.equals(isAccountModified) </span>
+<span class="nc bnc" id="L278" title="All 4 branches missed.">				&amp;&amp; Boolean.FALSE.equals(isContactModified) &amp;&amp; Boolean.FALSE.equals(isCompanyModified)</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">				&amp;&amp; Boolean.FALSE.equals(isConversionPredictionModified) </span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">				&amp;&amp; Boolean.FALSE.equals(isCorporateComplianceModified)) {</span>
+<span class="nc" id="L281">			validator.addError(Constants.ERR_ACCOUNT_NOT_UPDATED, Constants.FIELD_ACC_TRADE_ACCOUNT_ID);</span>
+		}
+<span class="nc" id="L283">	}</span>
+	
+	@SuppressWarnings(&quot;unchecked&quot;)
+	private void validateAccountTradeFields(RegistrationServiceRequest request, FieldValidator fv){
+		
+<span class="fc" id="L288">		List&lt;Integer&gt; oldTreadeAccountList=(List&lt;Integer&gt;) request.getAdditionalAttribute(Constants.TRADE_ACCOUNT_ID_LIST);</span>
+<span class="fc" id="L289">		List&lt;String&gt; oldTradeAccountNumberList= (List&lt;String&gt;) request.getAdditionalAttribute(Constants.TRADE_ACCOUNT_NUMBER_LIST);</span>
+		
+			
+<span class="pc bpc" id="L292" title="3 of 4 branches missed.">			if(!oldTreadeAccountList.isEmpty() &amp;&amp; oldTreadeAccountList.contains(request.getAccount().getTradeAccountID())){</span>
+<span class="nc" id="L293">				fv.addError(Constants.ERR_INVALID_ACCOUNT_ALREADY, Constants.FIELD_ACC_TRADE_ACCOUNT_ID);</span>
+			}
+			
+<span class="pc bpc" id="L296" title="3 of 4 branches missed.">			if(!oldTradeAccountNumberList.isEmpty() &amp;&amp; oldTradeAccountNumberList.contains(request.getAccount().getTradeAccountNumber())){</span>
+<span class="nc" id="L297">				fv.addError(Constants.ERR_INVALID_ACCOUNT_ALREADY, Constants.FIELD_ACC_TRADE_ACCOUNT_NUMBER);</span>
+		}
+<span class="fc" id="L299">	}</span>
+	
+	private Boolean validateContactTradeFields(Integer tradeContactId, List&lt;Integer&gt; oldTradeConactIdList) {
+
+<span class="pc bpc" id="L303" title="3 of 4 branches missed.">	return (!oldTradeConactIdList.isEmpty() &amp;&amp; oldTradeConactIdList.contains(tradeContactId));</span>
+	}
+
+	/**
+	 * Validate usa state.
+	 *
+	 * @param validator
+	 *            the validator
+	 */
+	private void validateUsaState(Contact contact,FieldValidator validator) {
+<span class="nc" id="L313">		RegistrationEnumValues enumValues = RegistrationEnumValues.getInstance();</span>
+<span class="nc bnc" id="L314" title="All 4 branches missed.">		if (!StringUtils.isNullOrTrimEmpty(contact.getCountry()) &amp;&amp; (&quot;USA&quot;).equalsIgnoreCase(contact.getCountry())</span>
+<span class="nc bnc" id="L315" title="All 2 branches missed.">				&amp;&amp; (StringUtils.isNullOrTrimEmpty(contact.getState())</span>
+<span class="nc bnc" id="L316" title="All 2 branches missed.">						|| enumValues.checkUsaStates(contact.getState()) == null)) {</span>
+<span class="nc" id="L317">			validator.addError(&quot;Incorrect USA State&quot;, &quot;state_province_county&quot;);</span>
+		}
+<span class="nc" id="L319">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

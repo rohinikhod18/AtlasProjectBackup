@@ -1,0 +1,118 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="FUNDSOUT.CUSTOMCHECK_RESEND.in.channel" />
+	<int:channel id="FUNDSOUT.CUSTOM_CHECK_RESEND.out.channel" />
+	<int:channel id="FUNDSOUT.CUSTOM_CHECK_RESEND.RESPONSE" />
+	<int:channel id="FUNDSOUT.CUSTOM_CHECK_RESEND.ACTIVITY.LOG" />
+	
+	<int:chain
+		id="resendfundsout.customchecksService"
+		input-channel="FUNDSOUT.CUSTOMCHECK_RESEND.in.channel">
+		<int:header-enricher>
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+		</int:header-enricher>
+		<int:service-activator ref="fundsout.MsgValidator" />
+		<int:router
+			id="fundsout.CustomCheckResendValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDSOUT.CUSTOM_CHECK_RESEND.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDSOUT.CUSTOM_CHECK_RESEND.DATA.ENRICH.CHANNEL" />
+		</int:router>
+	</int:chain>
+	<int:chain
+		id="fundsout.customchecksDataEnrich"
+		input-channel="FUNDSOUT.CUSTOM_CHECK_RESEND.DATA.ENRICH.CHANNEL"
+		output-channel="FUNDSOUT.CUSTOM_CHECK_RESEND.out.channel">
+		<int:service-activator
+			id="FUNDSOUT.CUSTOM_CHECK_RESEND.ENRICH"
+			ref="fundsout.dataEnricher"
+			method="enrichData" />
+		<int:service-activator
+			id="CUSTOM_CHECK_RESEND.CREATE.EVENT"
+			method="createEvent" ref="eventDBServiceImpl" >
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.customChecksTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsout.CUSTOM_CHECK.RESEND"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('VELOCITY_REPEAT_CHECK')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).CUSTOM_CHECKS_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.CustomChecksRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.customChecksTransformer"
+			method="transformResponse" />
+	</int:chain>
+	<int:chain
+		input-channel="FUNDSOUT.CUSTOM_CHECK_RESEND.out.channel"
+		output-channel="FUNDSOUT.CUSTOM_CHECK_RESEND.ACTIVITY.LOG">
+		<int:service-activator
+			id="fundsout.CUSTOM_CHECK_RESEND.SAVE.EVENT.SERVICE"
+			method="createEventSerivceLog"			
+				ref="eventDBServiceImpl">
+		</int:service-activator>
+	</int:chain>
+	<!-- <int:chain
+		id="fundsout.customCheckRepeatcreateActivity"
+		input-channel="FUNDSOUT.CUSTOM_CHECK_RESEND.ACTIVITY.LOG"
+		output-channel="FUNDSOUT.CUSTOM_CHECK_RESEND.RESPONSE">
+		
+		<int:service-activator
+			id="fundsout.CUSTOM_CHECK_RESENDActivityBuilder"
+			ref="CUSTOM_CHECK_RESENDActivityBuilder"
+			method="buildActivityLogs" />
+		<int:service-activator
+			id="fundsout.CUSTOM_CHECK_RESENDActivity"
+			method="createPaymentOutActivity">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl" />
+		</int:service-activator>
+		 
+	</int:chain>-->
+	
+	<int:chain id="fundsout.customCheckRepeatcreateActivity" input-channel="FUNDSOUT.CUSTOM_CHECK_RESEND.ACTIVITY.LOG" output-channel="FUNDSOUT.CUSTOM_CHECK_RESEND.RESPONSE">
+		<int:service-activator id="fundsout.customCheckResendActivityBuilder" ref="customCheckResendActivityBuilder"  method="buildActivityLogs" />
+	 	<int:service-activator id="fundsout.sanctionResendSetServiceStatus" ref="fundsOutDBService"  method="updateServiceStatusIntoPaymetOut" />
+	    <int:service-activator id="fundsout.customCheckResendActivity"  method="createPaymentOutActivity" >
+	    <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl" />
+	    </int:service-activator>
+		<int:service-activator id="fundsout.kafkaTxExecutor" ref="kafkaTxExecutorServiceImpl" method="executeKafkaTx" />
+	</int:chain>
+	<int:chain input-channel="FUNDSOUT.CUSTOM_CHECK_RESEND.RESPONSE" output-channel="nullChannel">
+	<int:service-activator id="fundsout.CUSTOMCHECKRESEND.RES" ref="customCheckResendResponse" method="process" />
+	</int:chain>
+	<bean id="customCheckResendResponse" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.customcheck.PrepareCustomCheckResendResponse"/>
+	<bean id="customCheckResendActivityBuilder" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.customcheck.CustomCheckRepeatCheckAtivityLogBuilder"/>
+</beans>

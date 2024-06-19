@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IntuitionPaymentStatusUpdateRuleService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.rules</a> &gt; <span class="el_source">IntuitionPaymentStatusUpdateRuleService.java</span></div><h1>IntuitionPaymentStatusUpdateRuleService.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.rules;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionPaymentStatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionPaymentStatusUpdateResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+
+<span class="nc" id="L25">public class IntuitionPaymentStatusUpdateRuleService {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L28">	private static final Logger LOG = LoggerFactory.getLogger(IntuitionPaymentStatusUpdateRuleService.class);</span>
+
+	/** The funds out DB service impl. */
+	@Autowired
+	protected FundsOutDBServiceImpl fundsOutDBServiceImpl;
+
+	/**
+	 * Process.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message) throws ComplianceException {
+
+<span class="nc" id="L44">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L45">		IntuitionPaymentStatusUpdateRequest request = (IntuitionPaymentStatusUpdateRequest) messageExchange</span>
+<span class="nc" id="L46">				.getRequest();</span>
+<span class="nc" id="L47">		IntuitionPaymentStatusUpdateResponse response = (IntuitionPaymentStatusUpdateResponse) messageExchange</span>
+<span class="nc" id="L48">				.getResponse();</span>
+
+<span class="nc bnc" id="L50" title="All 2 branches missed.">		if (request.getTrxType().equalsIgnoreCase(&quot;FUNDSIN&quot;)) {</span>
+<span class="nc" id="L51">			processFundsInRuleService(request, response);</span>
+		} else {
+<span class="nc" id="L53">			processFundsOutRuleService(request, response);</span>
+		}
+
+<span class="nc" id="L56">		return message;</span>
+	}
+
+	/**
+	 * Process funds in rule service.
+	 *
+	 * @param request  the request
+	 * @param response the response
+	 */
+	private void processFundsInRuleService(IntuitionPaymentStatusUpdateRequest request,
+			IntuitionPaymentStatusUpdateResponse response) {
+<span class="nc" id="L67">		FundsInCreateRequest fundsInRequest = (FundsInCreateRequest) request.getAdditionalAttribute(&quot;fundsInRequest&quot;);</span>
+<span class="nc" id="L68">		List&lt;FundsInReasonCode&gt; responseReasons = new ArrayList&lt;&gt;(10);</span>
+
+<span class="nc bnc" id="L70" title="All 2 branches missed.">		if (request.getAction().equalsIgnoreCase(FundsInComplianceStatus.CLEAR.name())</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">				|| request.getAction().equalsIgnoreCase(FundsInComplianceStatus.CLEAN.name())) {</span>
+
+<span class="nc" id="L73">			String paymentStatus = (String) fundsInRequest.getAdditionalAttribute(&quot;status&quot;);</span>
+<span class="nc" id="L74">			response.setPaymentStatus(paymentStatus);</span>
+
+<span class="nc" id="L76">			String sanctionStatus = (String) fundsInRequest.getAdditionalAttribute(&quot;SANCTION_STATUS&quot;);</span>
+
+<span class="nc bnc" id="L78" title="All 2 branches missed.">			if (!ServiceStatus.PASS.name().equals(sanctionStatus)</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(sanctionStatus)</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(sanctionStatus)) {</span>
+<span class="nc" id="L81">				responseReasons.add(FundsInReasonCode.SANCTIONED);</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">			} else if (ServiceStatus.SERVICE_FAILURE.name().equals(sanctionStatus)) {</span>
+<span class="nc" id="L83">				responseReasons.add(FundsInReasonCode.SANCTION_SERVICE_FAIL);</span>
+			}
+
+<span class="nc bnc" id="L86" title="All 2 branches missed.">			if (responseReasons.isEmpty()) {</span>
+<span class="nc" id="L87">				response.setPaymentStatus(FundsInComplianceStatus.CLEAR.name());</span>
+			}
+<span class="nc bnc" id="L89" title="All 2 branches missed.">		} else if (request.getAction().equalsIgnoreCase(FundsInComplianceStatus.SEIZE.name())) {</span>
+<span class="nc" id="L90">			response.setPaymentStatus(FundsInComplianceStatus.SEIZE.name());</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">		} else if (request.getAction().equalsIgnoreCase(FundsInComplianceStatus.REJECT.name())) {</span>
+<span class="nc" id="L92">			response.setPaymentStatus(FundsInComplianceStatus.REJECT.name());</span>
+		}
+
+<span class="nc" id="L95">	}</span>
+
+	/**
+	 * Process funds out rule service.
+	 *
+	 * @param request  the request
+	 * @param response the response
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void processFundsOutRuleService(IntuitionPaymentStatusUpdateRequest request,
+			IntuitionPaymentStatusUpdateResponse response) throws ComplianceException {
+<span class="nc" id="L106">		FundsOutRequest fundsOutRequest = (FundsOutRequest) request.getAdditionalAttribute(&quot;fundsOutRequest&quot;);</span>
+<span class="nc" id="L107">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;(10);</span>
+		try {
+<span class="nc bnc" id="L109" title="All 2 branches missed.">			if (request.getAction().equalsIgnoreCase(FundsOutComplianceStatus.CLEAR.name())</span>
+<span class="nc bnc" id="L110" title="All 2 branches missed.">					|| request.getAction().equalsIgnoreCase(FundsOutComplianceStatus.CLEAN.name())) {</span>
+<span class="nc" id="L111">				String paymentStatus = (String) fundsOutRequest.getAdditionalAttribute(&quot;status&quot;);</span>
+<span class="nc" id="L112">				response.setPaymentStatus(paymentStatus);</span>
+
+<span class="nc" id="L114">				setSanctionStatusResponse(fundsOutRequest, responseReasons);</span>
+
+<span class="nc bnc" id="L116" title="All 2 branches missed.">				if (responseReasons.isEmpty()) {</span>
+<span class="nc" id="L117">					response.setPaymentStatus(FundsOutComplianceStatus.CLEAR.name());</span>
+				}
+<span class="nc bnc" id="L119" title="All 2 branches missed.">			} else if (request.getAction().equalsIgnoreCase(FundsOutComplianceStatus.SEIZE.name())) {</span>
+<span class="nc" id="L120">				response.setPaymentStatus(FundsOutComplianceStatus.SEIZE.name());</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">			} else if (request.getAction().equalsIgnoreCase(FundsOutComplianceStatus.REJECT.name())) {</span>
+<span class="nc" id="L122">				response.setPaymentStatus(FundsOutComplianceStatus.REJECT.name());</span>
+			}
+
+<span class="nc" id="L125">		} catch (Exception e) {</span>
+<span class="nc" id="L126">			LOG.error(&quot;Error in processFundsOutRuleService() {1}&quot;, e);</span>
+<span class="nc" id="L127">		}</span>
+
+<span class="nc" id="L129">	}</span>
+
+	/**
+	 * Sets the sanction status response.
+	 *
+	 * @param fundsOutRequest the funds out request
+	 * @param responseReasons the response reasons
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void setSanctionStatusResponse(FundsOutRequest fundsOutRequest, List&lt;FundsOutReasonCode&gt; responseReasons)
+			throws ComplianceException {
+
+<span class="nc" id="L141">		String contactSanction = fundsOutDBServiceImpl.getContactSanctionStatus(fundsOutRequest.getContactId(),</span>
+<span class="nc" id="L142">				fundsOutRequest.getFundsOutId());</span>
+<span class="nc" id="L143">		String beneficierySanction = fundsOutDBServiceImpl.getBeneficierySanctionStatus(</span>
+<span class="nc" id="L144">				fundsOutRequest.getBeneficiary().getBeneficiaryId(), fundsOutRequest.getFundsOutId());</span>
+<span class="nc" id="L145">		String bankSanction = fundsOutDBServiceImpl.getBankSanctionStatus(</span>
+<span class="nc" id="L146">				fundsOutRequest.getBeneficiary().getBeneficiaryBankid(), fundsOutRequest.getFundsOutId());</span>
+
+<span class="nc bnc" id="L148" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(contactSanction)</span>
+<span class="nc bnc" id="L149" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(contactSanction)</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(contactSanction)) {</span>
+<span class="nc" id="L151">			responseReasons.add(FundsOutReasonCode.CONTACT_SANCTIONED);</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">		} else if (ServiceStatus.NOT_REQUIRED.name().equals(contactSanction)) {</span>
+<span class="nc" id="L153">			responseReasons.add(FundsOutReasonCode.INACTIVE_CUSTOMER);</span>
+		}
+
+<span class="nc bnc" id="L156" title="All 2 branches missed.">		if (!ServiceStatus.NOT_REQUIRED.name().equals(bankSanction)) {</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">			if (!ServiceStatus.PASS.name().equals(bankSanction)</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(bankSanction)) {</span>
+<span class="nc" id="L159">				responseReasons.add(FundsOutReasonCode.BANK_SANCTIONED);</span>
+			}
+
+<span class="nc bnc" id="L162" title="All 2 branches missed.">			if (!ServiceStatus.PASS.name().equals(beneficierySanction)</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(beneficierySanction)) {</span>
+<span class="nc" id="L164">				responseReasons.add(FundsOutReasonCode.BENEFICIARY_SANCTIONED);</span>
+			}
+		}
+		
+<span class="nc bnc" id="L168" title="All 2 branches missed.">		if(ServiceStatus.SERVICE_FAILURE.name().equals(contactSanction)</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">				|| ServiceStatus.SERVICE_FAILURE.name().equals(beneficierySanction)</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">				|| ServiceStatus.SERVICE_FAILURE.name().equals(bankSanction)) {</span>
+<span class="nc" id="L171">			responseReasons.add(FundsOutReasonCode.SANCTION_SERVICE_FAIL);</span>
+		}
+<span class="nc" id="L173">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

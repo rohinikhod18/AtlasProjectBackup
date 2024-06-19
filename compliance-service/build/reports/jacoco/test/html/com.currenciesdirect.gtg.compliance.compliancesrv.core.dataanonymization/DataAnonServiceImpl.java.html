@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataAnonServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization</a> &gt; <span class="el_source">DataAnonServiceImpl.java</span></div><h1>DataAnonServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.messaging.Message;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.dataanonymization.DataAnonAccount;
+import com.currenciesdirect.gtg.compliance.commons.domain.dataanonymization.DataAnonContact;
+import com.currenciesdirect.gtg.compliance.commons.domain.dataanonymization.DataAnonRequestFromES;
+import com.currenciesdirect.gtg.compliance.commons.domain.dataanonymization.DataAnonResponseForES;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistSTPData;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+@Component(&quot;dataAnonServiceImpl&quot;)
+<span class="nc" id="L31">public class DataAnonServiceImpl implements IDataAnonService{</span>
+	
+<span class="nc" id="L33">	private static final Logger LOG = LoggerFactory.getLogger(DataAnonServiceImpl.class);</span>
+	
+	/** The data anon DB service impl. */
+	@Autowired
+	@Qualifier(&quot;dataAnonDBServiceImpl&quot;)
+	private IDataAnonDBService iDataAnonDBServiceImpl;
+	
+	/**
+	 * Process data anonymization.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; processDataAnonymization(Message&lt;MessageContext&gt; message){
+<span class="nc" id="L48">		DataAnonRequestFromES request = message.getPayload().getGatewayMessageExchange().getRequest(DataAnonRequestFromES.class);</span>
+<span class="nc" id="L49">		DataAnonResponseForES response = new DataAnonResponseForES();</span>
+<span class="nc" id="L50">		DataAnonResponseForES actualResponse = new DataAnonResponseForES();</span>
+<span class="nc" id="L51">		boolean isAnonymizationComplete = false;</span>
+		try {
+<span class="nc" id="L53">			Account oldAccount = (Account) request.getAdditionalAttribute(Constants.FIELD_OLD_ACCOUNT);</span>
+<span class="nc" id="L54">			createContactAttributeAnonymizeData(request);</span>
+<span class="nc" id="L55">			createBlacklistProviderResponse(request);</span>
+<span class="nc" id="L56">			isAnonymizationComplete = iDataAnonDBServiceImpl.processDataAnonymization(request,oldAccount);</span>
+<span class="nc bnc" id="L57" title="All 2 branches missed.">			if(isAnonymizationComplete) {</span>
+<span class="nc" id="L58">				response.setCode(DataAnonConstants.RESPONSECODE2);</span>
+<span class="nc" id="L59">				response.setStatus(DataAnonConstants.RECEIVED_AND_PROCESSED);</span>
+<span class="nc" id="L60">				actualResponse.setDecision(BaseResponse.DECISION.SUCCESS);</span>
+<span class="nc" id="L61">				actualResponse.setResponseCode(ComplianceReasonCode.PASS.getReasonCode());</span>
+<span class="nc" id="L62">				actualResponse.setResponseDescription(&quot;Data Anonymization successfully completed&quot;);</span>
+			}
+			else {
+<span class="nc" id="L65">				response.setCode(DataAnonConstants.RESPONSECODE1);</span>
+<span class="nc" id="L66">				response.setStatus(DataAnonConstants.RECEIVED);</span>
+<span class="nc" id="L67">				actualResponse.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L68">				actualResponse.setResponseCode(ComplianceReasonCode.MISSINGINFO.getReasonCode());</span>
+<span class="nc" id="L69">				actualResponse.setResponseDescription(&quot;Data Anonymization not completed&quot;);</span>
+			}
+<span class="nc" id="L71">			response.setSystem(DataAnonConstants.SYSTEM);	</span>
+<span class="nc" id="L72">		}catch(Exception e) {</span>
+<span class="nc" id="L73">			LOG.error(&quot;Error in DataAnonServiceImpl for processDataAnonymization : {1}&quot;,e);</span>
+<span class="nc" id="L74">			response.setCode(DataAnonConstants.RESPONSECODE1);</span>
+<span class="nc" id="L75">			response.setStatus(DataAnonConstants.RECEIVED);</span>
+<span class="nc" id="L76">			response.setSystem(DataAnonConstants.SYSTEM);</span>
+<span class="nc" id="L77">			actualResponse.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L78">			actualResponse.setResponseCode(ComplianceReasonCode.MISSINGINFO.getReasonCode());</span>
+<span class="nc" id="L79">			actualResponse.setResponseDescription(&quot;Error in processDataAnonymization()&quot;);</span>
+<span class="nc" id="L80">		}</span>
+<span class="nc" id="L81">		response.addAttribute(Constants.BASE_RESPONSE, actualResponse);</span>
+<span class="nc" id="L82">		message.getPayload().getGatewayMessageExchange().setResponse(response);</span>
+<span class="nc" id="L83">		return message;</span>
+	}
+	
+	/**
+	 * Creates the contact attribute anonymize data.
+	 *
+	 * @param oldAccount the old account
+	 * @param request the request
+	 */
+	private void createContactAttributeAnonymizeData(DataAnonRequestFromES request) {
+<span class="nc" id="L93">		String contactAttribute = (String) request.getAdditionalAttribute(Constants.FIELD_OLD_CONTACTS_ATTRIBUTE);</span>
+<span class="nc" id="L94">		DataAnonAccount account = request.getAccount();</span>
+<span class="nc" id="L95">		DataAnonContact contact = request.getAccount().getContact().get(0);</span>
+		
+		try {
+<span class="nc" id="L98">			Contact anonContactAttribute = JsonConverterUtil.convertToObject(Contact.class, contactAttribute);</span>
+<span class="nc" id="L99">			anonContactAttribute.setTitle(contact.getAnonymizationDetails().getTitle());</span>
+<span class="nc" id="L100">			anonContactAttribute.setFirstName(contact.getAnonymizationDetails().getName());</span>
+<span class="nc" id="L101">			anonContactAttribute.setMiddleName(contact.getAnonymizationDetails().getName());</span>
+<span class="nc" id="L102">			anonContactAttribute.setLastName(contact.getAnonymizationDetails().getName());</span>
+<span class="nc" id="L103">			anonContactAttribute.setDob(contact.getAnonymizationDetails().getName());</span>
+<span class="nc" id="L104">			anonContactAttribute.setState(account.getAnonymizationDetails().getAddress().getState());//stateProvinceCounty</span>
+<span class="nc" id="L105">			anonContactAttribute.setPrefecture(account.getAnonymizationDetails().getAddress().getState());//prefecture</span>
+<span class="nc" id="L106">			anonContactAttribute.setCity(account.getAnonymizationDetails().getAddress().getCity());//townCityMuni</span>
+<span class="nc" id="L107">			anonContactAttribute.setAza(account.getAnonymizationDetails().getAddress().getCity());</span>
+<span class="nc" id="L108">			anonContactAttribute.setSubCity(account.getAnonymizationDetails().getAddress().getCity());</span>
+<span class="nc" id="L109">			anonContactAttribute.setAddress1(account.getAnonymizationDetails().getAddress().getAddressLine());</span>
+<span class="nc" id="L110">			anonContactAttribute.setStreet(account.getAnonymizationDetails().getAddress().getStreet());</span>
+<span class="nc" id="L111">			anonContactAttribute.setBuildingName(account.getAnonymizationDetails().getAddress().getStreet());</span>
+<span class="nc" id="L112">			anonContactAttribute.setPostCode(account.getAnonymizationDetails().getAddress().getPostalCode());</span>
+<span class="nc" id="L113">			anonContactAttribute.setCountry(account.getAnonymizationDetails().getAddress().getCountry());</span>
+<span class="nc" id="L114">			anonContactAttribute.setPhoneHome(contact.getAnonymizationDetails().getPhone());</span>
+<span class="nc" id="L115">			anonContactAttribute.setPhoneMobile(contact.getAnonymizationDetails().getPhone());</span>
+<span class="nc" id="L116">			anonContactAttribute.setPhoneWork(contact.getAnonymizationDetails().getPhone());</span>
+<span class="nc" id="L117">			anonContactAttribute.setPhoneWorkExtn(contact.getAnonymizationDetails().getPhone());</span>
+<span class="nc" id="L118">			anonContactAttribute.setIpAddress(account.getAnonymizationDetails().getIp());</span>
+<span class="nc" id="L119">			anonContactAttribute.setEmail(contact.getAnonymizationDetails().getEmail());</span>
+			
+<span class="nc" id="L121">			request.addAttribute(DataAnonConstants.CONTACT_ATTRIBUTE_ANONDATA, JsonConverterUtil.convertToJsonWithNull(anonContactAttribute));</span>
+<span class="nc" id="L122">		}catch(Exception e) {</span>
+<span class="nc" id="L123">			LOG.error(&quot;Error in DataAnonServiceImpl for createContactAttributeAnonymizeData : {1}&quot;,e);</span>
+<span class="nc" id="L124">		}</span>
+<span class="nc" id="L125">	}</span>
+
+	/**
+	 * Save data anon request.
+	 *
+	 * @param request the request
+	 * @throws ComplianceException 
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; saveDataAnonRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L135">		UserProfile userProfile = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L136">		DataAnonRequestFromES request = message.getPayload().getGatewayMessageExchange().getRequest(DataAnonRequestFromES.class);</span>
+<span class="nc" id="L137">		DataAnonResponseForES response = message.getPayload().getGatewayMessageExchange().getResponse(DataAnonResponseForES.class);</span>
+		try {
+<span class="nc" id="L139">			iDataAnonDBServiceImpl.saveDataAnonRequest(request,userProfile);</span>
+<span class="nc" id="L140">		}catch(Exception e) {</span>
+<span class="nc" id="L141">			LOG.error(&quot;Error in DataAnonServiceImpl for saveDataAnonRequest : {1}&quot;,e);</span>
+<span class="nc" id="L142">			response.setCode(DataAnonConstants.RESPONSECODE1);</span>
+<span class="nc" id="L143">			response.setStatus(DataAnonConstants.RECEIVED);</span>
+<span class="nc" id="L144">			response.setSystem(DataAnonConstants.SYSTEM);</span>
+<span class="nc" id="L145">		}</span>
+<span class="nc" id="L146">		return message;</span>
+	}
+	
+	/**
+	 * Creates the blacklist provider response.
+	 *
+	 * @param request the request
+	 */
+	private void createBlacklistProviderResponse(DataAnonRequestFromES request) {
+<span class="nc" id="L155">		creatingRegProviderResponse(request);</span>
+<span class="nc" id="L156">		creatingPayInProviderResponse(request);</span>
+<span class="nc" id="L157">		creatingPayOutProviderResponse(request);</span>
+<span class="nc" id="L158">	}</span>
+
+	/**
+	 * Creating reg provider response.
+	 *
+	 * @param request the request
+	 * @param regProviderResponse the reg provider response
+	 * @param data the data
+	 */
+	private void creatingRegProviderResponse(DataAnonRequestFromES request) {
+<span class="nc" id="L168">		BlacklistContactResponse providerResponse = new BlacklistContactResponse();</span>
+<span class="nc" id="L169">		List&lt;BlacklistSTPData&gt; listData = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L170">		setResponse(listData,&quot;NAME&quot;,&quot;CONTACT NAME&quot;,request.getAccount().getAnonymizationDetails().getName());</span>
+<span class="nc" id="L171">		setResponse(listData,&quot;EMAIL&quot;,&quot;EMAIL&quot;,request.getAccount().getContact().get(0).getAnonymizationDetails().getEmail());</span>
+<span class="nc" id="L172">		setResponse(listData,&quot;DOMAIN&quot;,&quot;DOMAIN&quot;,&quot;&quot;);</span>
+<span class="nc" id="L173">		setResponse(listData,&quot;PHONE_NUMBER&quot;,&quot;PHONE_NUMBER&quot;,request.getAccount().getContact().get(0).getAnonymizationDetails().getPhone());</span>
+<span class="nc" id="L174">		setResponse(listData,&quot;IPADDRESS&quot;,&quot;IPADDRESS&quot;,request.getAccount().getAnonymizationDetails().getIp());</span>
+<span class="nc" id="L175">		providerResponse.setStatus(&quot;&quot;);</span>
+<span class="nc" id="L176">		providerResponse.setData(listData);</span>
+<span class="nc" id="L177">		String jsonProviderResponse = JsonConverterUtil.convertToJsonWithNull(providerResponse);</span>
+<span class="nc" id="L178">		request.addAttribute(&quot;blacklistProviderResponse&quot;, jsonProviderResponse);</span>
+<span class="nc" id="L179">	}</span>
+	
+	/**
+	 * Creating pay out provider response.
+	 *
+	 * @param request the request
+	 * @param providerResponse the provider response
+	 * @param data the data
+	 */
+	private void creatingPayOutProviderResponse(DataAnonRequestFromES request) {
+<span class="nc" id="L189">		BlacklistContactResponse providerResponse = new BlacklistContactResponse();</span>
+<span class="nc" id="L190">		List&lt;BlacklistSTPData&gt; listData = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L191">		setResponse(listData,&quot;ACC_NUMBER&quot;,&quot;ACC_NUMBER&quot;,request.getAccount().getAnonymizationDetails().getBankAccount());</span>
+<span class="nc" id="L192">		setResponse(listData,&quot;NAME&quot;,&quot;CONTACT NAME&quot;,request.getAccount().getAnonymizationDetails().getName());</span>
+<span class="nc" id="L193">		setResponse(listData,&quot;NAME&quot;,&quot;BANK NAME&quot;,request.getAccount().getAnonymizationDetails().getName());</span>
+<span class="nc" id="L194">		providerResponse.setStatus(&quot;&quot;);</span>
+<span class="nc" id="L195">		providerResponse.setData(listData);</span>
+<span class="nc" id="L196">		String jsonProviderResponse = JsonConverterUtil.convertToJsonWithNull(providerResponse);</span>
+<span class="nc" id="L197">		request.addAttribute(&quot;blacklistPayOutProviderResponse&quot;, jsonProviderResponse);</span>
+<span class="nc" id="L198">	}</span>
+
+	/**
+	 * Creating pay in provider response.
+	 *
+	 * @param request the request
+	 * @param providerResponse the provider response
+	 * @param data the data
+	 */
+	private void creatingPayInProviderResponse(DataAnonRequestFromES request) {
+<span class="nc" id="L208">		BlacklistContactResponse providerResponse = new BlacklistContactResponse();</span>
+<span class="nc" id="L209">		List&lt;BlacklistSTPData&gt; listData = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L210">		setResponse(listData,&quot;NAME&quot;,&quot;CC NAME&quot;,request.getAccount().getAnonymizationDetails().getName());</span>
+<span class="nc" id="L211">		providerResponse.setStatus(&quot;&quot;);</span>
+<span class="nc" id="L212">		providerResponse.setData(listData);</span>
+<span class="nc" id="L213">		String jsonProviderResponse = JsonConverterUtil.convertToJsonWithNull(providerResponse);</span>
+<span class="nc" id="L214">		request.addAttribute(&quot;blacklistPayInProviderResponse&quot;, jsonProviderResponse);</span>
+<span class="nc" id="L215">	}</span>
+	
+	/**
+	 * Sets the response.
+	 *
+	 * @param listData the list data
+	 * @param type the type
+	 * @param requestType the request type
+	 * @param value the value
+	 */
+	private void setResponse(List&lt;BlacklistSTPData&gt; listData,String type,String requestType,String value) {
+<span class="nc" id="L226">		BlacklistSTPData data = new BlacklistSTPData();</span>
+<span class="nc" id="L227">		data.setType(type);</span>
+<span class="nc" id="L228">		data.setRequestType(requestType);</span>
+<span class="nc" id="L229">		data.setValue(value);</span>
+<span class="nc" id="L230">		data.setFound(Boolean.FALSE);</span>
+<span class="nc" id="L231">		data.setMatch(0);</span>
+<span class="nc" id="L232">		data.setMatchedData(&quot;&quot;);</span>
+<span class="nc" id="L233">		listData.add(data);</span>
+<span class="nc" id="L234">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PaymentOutController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.httpport</a> &gt; <span class="el_source">PaymentOutController.java</span></div><h1>PaymentOutController.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.httpport;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.ModelAndView;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.Contact;
+import com.currenciesdirect.gtg.compliance.core.IPaymentOutService;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentOutViewMoreRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ViewMoreResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutFilter;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutUpdateRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.RecentPaymentOutDetails;
+import com.currenciesdirect.gtg.compliance.dbport.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.FunctionsAllowed;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.UserPermissionFilterBuilder;
+
+/**
+ * The Class PaymentOutController.
+ */
+@Controller
+<span class="fc" id="L44">public class PaymentOutController extends BaseController {</span>
+
+	/** The log. */
+<span class="fc" id="L47">	private Logger log = LoggerFactory.getLogger(PaymentOutController.class);</span>
+
+	/** The i payment out service. */
+	@Autowired
+	@Qualifier(&quot;paymentOutServiceImpl&quot;)
+	private IPaymentOutService iPaymentOutService;
+
+	/**
+	 * Gets the payment out details.
+	 *
+	 * @param paymentOutId            the payment out id
+	 * @param custType            the cust type
+	 * @param searchCriteria            the search criteria
+	 * @param source the source
+	 * @param user            the user
+	 * @return the payment out details
+	 * @throws CompliancePortalException             the compliance portal exception
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION, 
+			ViewControllerConstant.CAN_MANAGE_CUSTOM,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2 }, allRequired = false)
+	@PostMapping(value = &quot;/paymentOutDetail&quot;)
+	public ModelAndView getPaymentOutDetails(
+			@RequestParam(value = &quot;paymentOutId&quot;, required = false) Integer paymentOutId,
+			@RequestParam(value = &quot;custType&quot;, required = false) String custType,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria,
+			@RequestParam(value = &quot;source&quot;, required = false) String source,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) throws CompliancePortalException {
+<span class="nc" id="L77">		ModelAndView modelAndView = new ModelAndView();</span>
+		PaymentOutDetailsDto paymentOutDetailDto;
+		String jsonPaymentOutDetailDto;
+  try {
+<span class="nc" id="L81">		  	  PaymentOutSearchCriteria searchCriteriaobj = JsonConverterUtil.convertToObject(PaymentOutSearchCriteria.class, searchCriteria);</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">		      if(searchCriteriaobj == null){</span>
+<span class="nc" id="L83">			   searchCriteriaobj = new PaymentOutSearchCriteria();</span>
+<span class="nc" id="L84">			   searchCriteriaobj.setFilter(new PaymentOutFilter());</span>
+		      }
+<span class="nc" id="L86">		     UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L87">				user.getPermissions());</span>
+<span class="nc" id="L88">		     searchCriteriaobj.getFilter().setUserProfile(user);</span>
+		
+<span class="nc bnc" id="L90" title="All 4 branches missed.">		     if ((CustomerTypeEnum.PFX.getUiStatus()).equals(custType)||(&quot;2&quot;).equals(custType)) {</span>
+<span class="nc" id="L91">	  		       modelAndView.setViewName(ViewNameEnum.PAYMENT_OUT_DETAILS.getViewName());</span>
+	          } else {
+<span class="nc" id="L93">		           modelAndView.setViewName(ViewNameEnum.CFX_PAYMENT_OUT_DETAILS.getViewName());</span>
+	          }
+<span class="nc bnc" id="L95" title="All 2 branches missed.">		     if (isValidRequest(paymentOutId, custType)) {</span>
+<span class="nc" id="L96">			      paymentOutDetailDto = iPaymentOutService.getPaymentOutDetails(paymentOutId, custType, searchCriteriaobj);  //custType added for AT-2986</span>
+<span class="nc" id="L97">			      paymentOutDetailDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteriaobj));</span>
+			     
+		      } else {
+<span class="nc" id="L100">			    throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+		      }
+		   }
+<span class="nc" id="L103">	catch (CompliancePortalException e) {</span>
+<span class="nc" id="L104">			log.debug(&quot;&quot; , e);</span>
+<span class="nc" id="L105">			paymentOutDetailDto = new PaymentOutDetailsDto();</span>
+<span class="nc" id="L106">			paymentOutDetailDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L107">			paymentOutDetailDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L108">		}</span>
+<span class="nc" id="L109">		paymentOutDetailDto.setIsPagenationRequired(Boolean.TRUE);</span>
+<span class="nc" id="L110">		paymentOutDetailDto.setUser(user);</span>
+<span class="nc" id="L111">		paymentOutDetailDto.setSource(source);</span>
+<span class="nc" id="L112">		jsonPaymentOutDetailDto = JsonConverterUtil.convertToJsonWithNull(paymentOutDetailDto);</span>
+<span class="nc" id="L113">		log.debug(jsonPaymentOutDetailDto);</span>
+<span class="nc" id="L114">		modelAndView.addObject(&quot;paymentOutDetails&quot;, paymentOutDetailDto);</span>
+<span class="nc" id="L115">		return modelAndView;</span>
+	}
+	
+ /**
+  * This method returns most recent payment made for beneficiary.
+  * 1.Takes trade account number and beneficiary account number as input.
+  * 2.searches most recent payment made for beneficiary.
+  * 3.Returns payment out details made for beneficiary
+  * 
+  * API added for AT-1277
+  *
+  * @param tradeAccountNumber the trade account number
+  * @param beneAccountNumber the bene account number
+  * @param searchCriteria the search criteria
+  * @param source the source
+  * @param user the user
+  * @return the most recent payment out details
+  * @throws CompliancePortalException the compliance portal exception
+  */
+@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+		ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION,
+		ViewControllerConstant.CAN_MANAGE_CUSTOM, 
+		ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1,
+		ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2 }, allRequired = false)
+             @PostMapping(value = &quot;/mostRecentPaymentOutDetails&quot;)			
+             public ModelAndView getMostRecentPaymentOutDetails(
+					@RequestParam(value = &quot;tradeId&quot;, required = false) String tradeAccountNumber,
+					@RequestParam(value = &quot;accountNumber&quot;, required = false) String beneAccountNumber,
+					@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria,
+					@RequestParam(value = &quot;source&quot;, required = false) String source,
+					@RequestAttribute(&quot;user&quot;) UserProfile user) throws CompliancePortalException {
+	   
+	            ModelAndView modelAndView;
+		        RecentPaymentOutDetails paymentOutDetail;
+<span class="nc" id="L149">		        paymentOutDetail = iPaymentOutService.getMostRecentPaymentOutId(tradeAccountNumber,beneAccountNumber);</span>
+<span class="nc" id="L150">		        modelAndView = getPaymentOutDetails(paymentOutDetail.getPaymentId(),paymentOutDetail.getCustType(),searchCriteria,source,user); </span>
+<span class="nc" id="L151">		        return modelAndView;</span>
+	}	
+   
+   /**
+    * Checks if is valid request.
+    *
+    * @param contactId the contact id
+    * @param custType the cust type
+    * @return true, if is valid request
+    */
+   private boolean isValidRequest(Integer contactId, String custType) {
+<span class="nc bnc" id="L162" title="All 4 branches missed.">	   return (null != contactId &amp;&amp; isNullOrEmpty(custType));</span>
+   }
+   
+   /**
+    * Checks if is null or empty.
+    *
+    * @param str the str
+    * @return true, if is null or empty
+    */
+   private boolean isNullOrEmpty(String str) {
+<span class="nc bnc" id="L172" title="All 4 branches missed.">		return (str != null &amp;&amp; !str.isEmpty());</span>
+	}
+	
+  	    
+	/**
+	 * Gets the payment out queue.
+	 *
+	 * @param user
+	 *            the user
+	 * @return the registration queue
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTOUT_QUQUE })
+	@GetMapping(value = &quot;/payOutQueue&quot;)
+	public ModelAndView getPaymentOutQueue(@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L186">		ModelAndView modelAndView = new ModelAndView();</span>
+		PaymentOutQueueDto paymentOutQueueDto;
+<span class="fc" id="L188">		modelAndView.setViewName(ViewNameEnum.PAYMENT_OUT_QUEUE.getViewName());</span>
+		try {
+<span class="fc" id="L190">			PaymentOutSearchCriteria searchCriteria = new PaymentOutSearchCriteria();</span>
+<span class="fc" id="L191">			PaymentOutFilter filter = UserPermissionFilterBuilder</span>
+<span class="fc" id="L192">			.getFilterFromUserPermission(user.getPermissions(), PaymentOutFilter.class);</span>
+<span class="fc" id="L193">			filter.setUserProfile(user);</span>
+<span class="fc" id="L194">			searchCriteria.setFilter(filter);</span>
+<span class="fc" id="L195">			paymentOutQueueDto = iPaymentOutService.getPaymentOutQueueWithCriteria(searchCriteria);</span>
+<span class="fc" id="L196">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L197">			log.debug(&quot;&quot;, e);</span>
+<span class="fc" id="L198">			paymentOutQueueDto = new PaymentOutQueueDto();</span>
+<span class="fc" id="L199">			paymentOutQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L200">			paymentOutQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L201">		}</span>
+<span class="fc" id="L202">		paymentOutQueueDto.setUser(user);</span>
+<span class="fc" id="L203">		modelAndView.addObject(&quot;paymentOutQueueDto&quot;, paymentOutQueueDto);</span>
+<span class="fc" id="L204">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the payment out queue with criteria .
+	 *
+	 * @param searchCriteria
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return the payment out queue with criteria
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTOUT_QUQUE })
+	@PostMapping(value = &quot;/paymentOutQueue&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public PaymentOutQueueDto getPaymentOutQueueWithCriteria(@RequestBody PaymentOutSearchCriteria searchCriteria,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L223">		PaymentOutQueueDto paymentOutQueueDto = null;</span>
+		try {
+<span class="fc" id="L225">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteria.getFilter(),</span>
+<span class="fc" id="L226">					user.getPermissions());</span>
+<span class="fc" id="L227">			searchCriteria.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L228">			paymentOutQueueDto = iPaymentOutService.getPaymentOutQueueWithCriteria(searchCriteria);</span>
+<span class="fc" id="L229">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L230">			log.debug(&quot;&quot; , e);</span>
+<span class="fc" id="L231">			paymentOutQueueDto = new PaymentOutQueueDto();</span>
+<span class="fc" id="L232">			paymentOutQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L233">			paymentOutQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L234">			paymentOutQueueDto.setUser(user);</span>
+<span class="fc" id="L235">		}</span>
+<span class="fc" id="L236">		paymentOutQueueDto.setUser(user);</span>
+<span class="fc" id="L237">		return paymentOutQueueDto;</span>
+	}
+	
+	/**
+	 * Gets the payment out queue with criteria.
+	 *
+	 * @param user the user
+	 * @param searchCriteria the search criteria
+	 * @return the payment out queue with criteria
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTOUT_QUQUE })
+	@PostMapping(value = &quot;/payOutQueue&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ModelAndView getPaymentOutQueueWithCriteria(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria) {
+<span class="nc" id="L254">		ModelAndView modelAndView = new ModelAndView();</span>
+		PaymentOutQueueDto paymentOutQueueDto;
+<span class="nc" id="L256">		modelAndView.setViewName(ViewNameEnum.PAYMENT_OUT_QUEUE.getViewName());</span>
+		try {
+<span class="nc" id="L258">			PaymentOutSearchCriteria searchCriteriaobj = JsonConverterUtil.convertToObject(PaymentOutSearchCriteria.class, searchCriteria);</span>
+<span class="nc" id="L259">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L260">					user.getPermissions());</span>
+<span class="nc" id="L261">			searchCriteriaobj.getFilter().setUserProfile(user);</span>
+			
+<span class="nc" id="L263">			paymentOutQueueDto = iPaymentOutService.getPaymentOutQueueWithCriteria(searchCriteriaobj);</span>
+<span class="nc" id="L264">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L265">			log.debug(&quot;&quot;, e);</span>
+<span class="nc" id="L266">			paymentOutQueueDto = new PaymentOutQueueDto();</span>
+<span class="nc" id="L267">			paymentOutQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L268">			paymentOutQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L269">		}</span>
+<span class="nc" id="L270">		paymentOutQueueDto.setUser(user);</span>
+<span class="nc" id="L271">		modelAndView.addObject(&quot;paymentOutQueueDto&quot;, paymentOutQueueDto);</span>
+<span class="nc" id="L272">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the activites.
+	 *
+	 * @param request
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return the activites
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION,
+			ViewControllerConstant.CAN_MANAGE_CUSTOM,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2 }, allRequired = false)
+	@PostMapping(value = &quot;/paymentOutActivites&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ActivityLogs getActivites(@RequestBody ActivityLogRequest request,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+
+<span class="fc" id="L296">		ActivityLogs activityLogs = new ActivityLogs();</span>
+		try {
+<span class="fc" id="L298">			request.setUser(user);</span>
+<span class="fc" id="L299">			activityLogs = iPaymentOutService.getActivityLogs(request);</span>
+<span class="fc" id="L300">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L301">			log.debug(&quot;&quot;, e);</span>
+<span class="fc" id="L302">			activityLogs.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L303">			activityLogs.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L304">		}</span>
+<span class="fc" id="L305">		return activityLogs;</span>
+	}
+
+	/**
+	 * Update PaymentOut.
+	 *
+	 * @param paymentOutUpdateRequest
+	 *            the payment out update request
+	 * @param user
+	 *            the user
+	 * @return the activity logs
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION,
+			ViewControllerConstant.CAN_MANAGE_CUSTOM,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2 }, allRequired = false)
+	@PostMapping(value = &quot;/paymentOutUpdate&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ActivityLogs updatePaymentOut(@RequestBody PaymentOutUpdateRequest paymentOutUpdateRequest,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L328">		paymentOutUpdateRequest.setUser(user);</span>
+<span class="fc" id="L329">		ActivityLogs activityLogs = new ActivityLogs();</span>
+		try {
+<span class="fc" id="L331">			paymentOutUpdateRequest.setUser(user);</span>
+<span class="fc" id="L332">			activityLogs = iPaymentOutService.updatePaymentOut(paymentOutUpdateRequest);</span>
+<span class="fc" id="L333">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L334">			log.debug(&quot;&quot; , e);</span>
+<span class="fc" id="L335">			activityLogs.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L336">			activityLogs.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L337">		}</span>
+<span class="fc" id="L338">		activityLogs.setUser(user);</span>
+<span class="fc" id="L339">		return activityLogs;</span>
+	}
+
+	/**
+	 * View More Details.
+	 *
+	 * @param viewMoreRequest            the view more request
+	 * @return viewMoreResponse
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION,
+			ViewControllerConstant.CAN_MANAGE_CUSTOM,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2 }, allRequired = false)
+	@PostMapping(value = &quot;/getPaymentOutViewMoreDetails&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ViewMoreResponse getPaymentOutViewMoreDetails(@RequestBody PaymentOutViewMoreRequest viewMoreRequest) {
+
+<span class="fc" id="L359">		ViewMoreResponse viewMoreResponse = null;</span>
+		try {
+<span class="fc" id="L361">			viewMoreResponse = iPaymentOutService.viewMoreDetails(viewMoreRequest);</span>
+<span class="fc" id="L362">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L363">			log.debug(&quot; {1}&quot;, e);</span>
+<span class="fc" id="L364">			viewMoreResponse = new ViewMoreResponse();</span>
+<span class="fc" id="L365">			viewMoreResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L366">			viewMoreResponse.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L367">		}</span>
+<span class="fc" id="L368">		return viewMoreResponse;</span>
+	}
+
+	/**
+	 * Gets the Further PaymentOut Details.
+	 *
+	 * @param viewMoreRequest            the view more request
+	 * @return viewMoreResponse
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION, 
+			ViewControllerConstant.CAN_MANAGE_CUSTOM,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2 }, allRequired = false)
+	@PostMapping(value = &quot;/getFurtherPaymentOutDetails&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ViewMoreResponse getFurtherPaymentOutViewMoreDetails(
+			@RequestBody PaymentOutViewMoreRequest viewMoreRequest) {
+
+<span class="fc" id="L389">		ViewMoreResponse viewMoreResponse = null;</span>
+		try {
+<span class="fc" id="L391">			viewMoreResponse = iPaymentOutService.getFurtherPaymentOutDetails(viewMoreRequest);</span>
+<span class="fc" id="L392">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L393">			log.debug(&quot; {1}&quot;, e);</span>
+<span class="fc" id="L394">			viewMoreResponse = new ViewMoreResponse();</span>
+<span class="fc" id="L395">			viewMoreResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L396">			viewMoreResponse.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L397">		}</span>
+<span class="fc" id="L398">		return viewMoreResponse;</span>
+	}
+
+	/**
+	 * Gets the payment out dashboard details.
+	 *
+	 * @param paymentOutId
+	 *            the payment out id
+	 * @param custType
+	 *            the cust type
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @param user
+	 *            the user
+	 * @return the payment out dashboard details
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION,
+			ViewControllerConstant.CAN_MANAGE_CUSTOM,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1 ,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2}, allRequired = false)
+	@PostMapping(value = &quot;/paymentOutDashboardDetails&quot;)
+	public ModelAndView getPaymentOutDashboardDetails(
+			@RequestParam(value = &quot;paymentOutId&quot;, required = false) Integer paymentOutId,
+			@RequestParam(value = &quot;custType&quot;, required = false) String custType,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) throws CompliancePortalException {
+
+<span class="nc" id="L428">		ModelAndView modelAndView = new ModelAndView();</span>
+
+<span class="nc" id="L430">		PaymentOutSearchCriteria searchCriteriaobj = JsonConverterUtil.convertToObject(PaymentOutSearchCriteria.class, searchCriteria);</span>
+<span class="nc bnc" id="L431" title="All 2 branches missed.">	      if(searchCriteriaobj == null){</span>
+<span class="nc" id="L432">		   searchCriteriaobj = new PaymentOutSearchCriteria();</span>
+<span class="nc" id="L433">		   searchCriteriaobj.setFilter(new PaymentOutFilter());</span>
+	      }
+<span class="nc" id="L435">	   UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L436">			user.getPermissions());</span>
+<span class="nc" id="L437">	        searchCriteriaobj.getFilter().setUserProfile(user);</span>
+
+<span class="nc bnc" id="L439" title="All 2 branches missed.">		if ((&quot;PFX&quot;).equals(custType)) {</span>
+<span class="nc" id="L440">			modelAndView.setViewName(ViewNameEnum.PAYMENT_OUT_DETAILS.getViewName());</span>
+		} else {
+<span class="nc" id="L442">			modelAndView.setViewName(ViewNameEnum.CFX_PAYMENT_OUT_DETAILS.getViewName());</span>
+		}
+		
+		PaymentOutDetailsDto paymentOutDetailDto;
+<span class="nc" id="L446">		paymentOutDetailDto = iPaymentOutService.getPaymentOutDetails(paymentOutId, custType, searchCriteriaobj);  //custType added for AT-2986</span>
+<span class="nc" id="L447">		paymentOutDetailDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteriaobj));</span>
+<span class="nc" id="L448">		paymentOutDetailDto.setIsPagenationRequired(Boolean.FALSE);</span>
+<span class="nc" id="L449">		paymentOutDetailDto.setUser(user);</span>
+<span class="nc" id="L450">		modelAndView.addObject(&quot;paymentOutDetails&quot;, paymentOutDetailDto);</span>
+<span class="nc" id="L451">		return modelAndView;</span>
+	}
+	
+	@PostMapping(value=&quot;/setPoiExistsFlagForPaymentOut&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public boolean setPoiExistsFlagForPaymentOut(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestBody Contact contact) {
+<span class="nc" id="L460">		boolean poiExists = false;</span>
+		try {
+<span class="nc" id="L462">			poiExists = iPaymentOutService.setPoiExistsFlagForPaymentOut(user, contact);</span>
+		}
+<span class="nc" id="L464">		catch(Exception e) {</span>
+<span class="nc" id="L465">			log.debug(&quot;Exception in PaymentInController in setPoiExistsFlagForPaymentIn() {1}&quot;, e);</span>
+<span class="nc" id="L466">		}</span>
+<span class="nc" id="L467">		return poiExists;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

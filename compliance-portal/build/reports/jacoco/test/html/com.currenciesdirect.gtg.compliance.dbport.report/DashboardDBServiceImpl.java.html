@@ -1,0 +1,532 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DashboardDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport.report</a> &gt; <span class="el_source">DashboardDBServiceImpl.java</span></div><h1>DashboardDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport.report;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.BusinessUnit;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.Dashboard;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.Fulfilment;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.FulfilmentGraph;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.Geography;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.PaymentDashboard;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.QueueRecordsPerCountry;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.QueueRecordsPerLegalEntity;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.RegistrationDashboard;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.TimelineSnapshot;
+import com.currenciesdirect.gtg.compliance.core.report.IDashboardDBService;
+import com.currenciesdirect.gtg.compliance.dbport.AbstractDao;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+
+/**
+ * The Class DashboardDBServiceImpl.
+ *
+ */
+@Component(&quot;dashboardDBServiceImpl&quot;)
+<span class="nc" id="L37">public class DashboardDBServiceImpl extends  AbstractDao implements IDashboardDBService {</span>
+
+<span class="nc" id="L39">	private static final Logger LOG = LoggerFactory.getLogger(DashboardDBServiceImpl.class);</span>
+	/**
+	 * Business -- 
+	 * To display compliance geographical , business unit,  fulfillment and time line snapshot information 
+	 * for PFX and CFX registration, Payment in and Payment out on compliance dashboard page.
+	 * to show geographical graph we shows as per PFX , CFX compliance registration records.
+	 * business unit are calculate against organizations.
+	 * fulfillment are calculated on the activity perform on each record (i.e changing status to or from Active to Reject for Registration and 
+	 * for Paymentin/Paymentout CLEAR, SEIZE and REJECT)
+	 * time line snapshot is calculated on all queue pending records.
+	 * 
+	 * Implementation---
+	 * 1) get tresholdTime from &quot;dashboard.fulfillment.threshold.time&quot; to get all dashboard information.
+	 *  if &quot;dashboard.fulfillment.threshold.time&quot; property is not present in comliance.properties file 
+	 *  then it takes DEFAULT_FULFILLMENT_TRESHOLD_TIME.
+	 *  2)call getRegistrationDashboard() to set geographical,  business unit and time line snapshot information for PFX and CFX registration.
+	 *  3) call getPaymentInDashboard() to set   business unit and time line snapshot information for payment in flow
+	 *  4) call getPaymentOutDashboard() to set   business unit and time line snapshot information for payment out flow
+	 *  5) call dashboardFulfilment() to set fulfillment information for registration , payment in and payment out flow.
+	 *  6) set current time as Refresh time.
+	 *  
+ 	 */
+	@Override
+	public Dashboard getDashboard() throws CompliancePortalException {
+<span class="nc" id="L63">		Connection connection = null;</span>
+<span class="nc" id="L64">		Dashboard dashboard = new Dashboard();</span>
+		
+		try {
+<span class="nc" id="L67">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L68">			dashboard.setTresholdFulfimentTime(SearchCriteriaUtil.getDashBoardThresholdFulfillmentTime());</span>
+<span class="nc" id="L69">			dashboard.setRegDashboard(getRegistrationDashboard(connection));</span>
+<span class="nc" id="L70">			dashboard.setPaymentInDashboard(getPaymentInDashboard(connection));</span>
+<span class="nc" id="L71">			dashboard.setPaymentOutDashboard(getPaymentOutDashboard(connection));</span>
+<span class="nc" id="L72">			dashboardFulfilment(dashboard,connection);</span>
+<span class="nc" id="L73">			dashboard.setRefreshOn(DateTimeFormatter.getTime(new Timestamp(System.currentTimeMillis()).toString()));</span>
+			
+<span class="nc" id="L75">		} catch (Exception e) {</span>
+<span class="nc" id="L76">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L78">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L80">		return dashboard;</span>
+	}
+
+	private PaymentDashboard getPaymentOutDashboard(Connection connection) throws CompliancePortalException {
+<span class="nc" id="L84">		Dashboard dashboard=new Dashboard();</span>
+<span class="nc" id="L85">		PaymentDashboard paymentOutDashboard = new PaymentDashboard();</span>
+		try {	
+<span class="nc" id="L87">			getPaymentOutByLegalEntity(paymentOutDashboard,connection);</span>
+<span class="nc" id="L88">			getPaymentOutTimelineSnapshot(paymentOutDashboard,connection);</span>
+			
+<span class="nc" id="L90">			dashboard.setPaymentOutDashboard(paymentOutDashboard);</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">			if(null != dashboard.getPaymentOutBusinessUnitJsonString()){</span>
+<span class="nc" id="L92">				paymentOutDashboard.setBusinessUnitJsonString(dashboard.getPaymentOutBusinessUnitJsonString());	</span>
+			}
+			
+<span class="nc" id="L95">		} catch (Exception e) {</span>
+<span class="nc" id="L96">			LOG.debug(&quot;Error while fetching data in getPaymentOutDashboard() method&quot;,e);</span>
+<span class="nc" id="L97">		} </span>
+<span class="nc" id="L98">		return paymentOutDashboard;</span>
+	}
+
+	//AT-2355  Dash board should show legal entity view
+	private void getPaymentOutByLegalEntity(PaymentDashboard paymentOutDashboard, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L103">		ArrayList&lt;QueueRecordsPerLegalEntity&gt; queueRecordsLegalEntityPaymentOutList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L104">		BusinessUnit businessUnit = new BusinessUnit();</span>
+<span class="nc" id="L105">		int totalRecords =0;	</span>
+<span class="nc" id="L106">		PreparedStatement statement = null;</span>
+<span class="nc" id="L107">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L109">			statement =connection.prepareStatement(RegistrationReportQueryConstant.GET_PAYMENTOUT_DASHBOARD_BY_LEGALENTITY.getQuery());</span>
+<span class="nc" id="L110">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">			while(rs.next()){</span>
+<span class="nc" id="L112">				QueueRecordsPerLegalEntity queueRecordsLegalEntityPaymentOut = new QueueRecordsPerLegalEntity();</span>
+<span class="nc" id="L113">				queueRecordsLegalEntityPaymentOut.setLegalEntity(rs.getString(DashboardDBColumns.LEGALENTITY.getName()));</span>
+<span class="nc" id="L114">				queueRecordsLegalEntityPaymentOut.setVisits(rs.getInt(DashboardDBColumns.RECORDS.getName()));</span>
+<span class="nc" id="L115">				queueRecordsLegalEntityPaymentOutList.add(queueRecordsLegalEntityPaymentOut);</span>
+<span class="nc" id="L116">				totalRecords = totalRecords + queueRecordsLegalEntityPaymentOut.getVisits();</span>
+<span class="nc" id="L117">			}</span>
+<span class="nc" id="L118">			businessUnit.setQueueRecordsPerLegalEntity(queueRecordsLegalEntityPaymentOutList);</span>
+<span class="nc" id="L119">			paymentOutDashboard.setBusinessUnit(businessUnit);</span>
+<span class="nc" id="L120">			paymentOutDashboard.setTotalRecords(totalRecords);</span>
+<span class="nc" id="L121">		}catch (Exception e) {</span>
+<span class="nc" id="L122">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}finally {
+<span class="nc" id="L124">			closeResultset(rs);</span>
+<span class="nc" id="L125">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L127">	}</span>
+
+	private PaymentDashboard getPaymentInDashboard(Connection connection) throws CompliancePortalException {
+<span class="nc" id="L130">		Dashboard dashboard=new Dashboard();</span>
+<span class="nc" id="L131">		PaymentDashboard paymentInDashboard = new PaymentDashboard();			</span>
+		try {			
+<span class="nc" id="L133">			getPaymentInByLegalEntity(paymentInDashboard,connection);</span>
+<span class="nc" id="L134">			getPaymentInTimelineSnapshot(paymentInDashboard,connection);</span>
+<span class="nc" id="L135">			dashboard.setPaymentInDashboard(paymentInDashboard);</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">			if(null != dashboard.getPaymentInBusinessUnitJsonString()){</span>
+<span class="nc" id="L137">				paymentInDashboard.setBusinessUnitJsonString(dashboard.getPaymentInBusinessUnitJsonString());</span>
+			}
+			
+<span class="nc" id="L140">		} catch (Exception e) {</span>
+<span class="nc" id="L141">			LOG.debug(&quot;Error while fetching data getPaymentInDashboard() method&quot;,e);</span>
+<span class="nc" id="L142">		} </span>
+<span class="nc" id="L143">		return paymentInDashboard;</span>
+	}
+
+	//AT-2355  Dash board should show legal entity view
+	private void getPaymentInByLegalEntity(PaymentDashboard paymentInDashboard, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L148">		ArrayList&lt;QueueRecordsPerLegalEntity&gt; queueRecordsLegalEntityPaymentInList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L149">		BusinessUnit businessUnit = new BusinessUnit();</span>
+<span class="nc" id="L150">		int totalRecords =0;	</span>
+<span class="nc" id="L151">		PreparedStatement statement = null;</span>
+<span class="nc" id="L152">		ResultSet rs = null;		</span>
+		
+		try {
+<span class="nc" id="L155">			statement =connection.prepareStatement(RegistrationReportQueryConstant.GET_PAYMENTIN_DASHBOARD_BY_LEGALENTITY.getQuery());</span>
+<span class="nc" id="L156">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">			while(rs.next()){</span>
+<span class="nc" id="L158">				QueueRecordsPerLegalEntity queueRecordsLegalEntityPaymentIn = new QueueRecordsPerLegalEntity();</span>
+<span class="nc" id="L159">				queueRecordsLegalEntityPaymentIn.setLegalEntity(rs.getString(DashboardDBColumns.LEGALENTITY.getName()));</span>
+<span class="nc" id="L160">				queueRecordsLegalEntityPaymentIn.setVisits(rs.getInt(DashboardDBColumns.RECORDS.getName()));</span>
+<span class="nc" id="L161">				queueRecordsLegalEntityPaymentInList.add(queueRecordsLegalEntityPaymentIn);</span>
+<span class="nc" id="L162">				totalRecords =totalRecords + queueRecordsLegalEntityPaymentIn.getVisits();</span>
+<span class="nc" id="L163">			}</span>
+<span class="nc" id="L164">			businessUnit.setQueueRecordsPerLegalEntity(queueRecordsLegalEntityPaymentInList);</span>
+<span class="nc" id="L165">			paymentInDashboard.setBusinessUnit(businessUnit);</span>
+<span class="nc" id="L166">			paymentInDashboard.setTotalRecords(totalRecords);</span>
+<span class="nc" id="L167">		} catch (Exception e) {</span>
+<span class="nc" id="L168">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}finally {
+<span class="nc" id="L170">			closeResultset(rs);</span>
+<span class="nc" id="L171">			closePrepareStatement(statement);</span>
+		}
+		
+<span class="nc" id="L174">	}</span>
+
+	private RegistrationDashboard getRegistrationDashboard( Connection connection) throws CompliancePortalException {
+<span class="nc" id="L177">		Dashboard dashboard=new Dashboard();</span>
+<span class="nc" id="L178">		RegistrationDashboard registrationDashboard = new RegistrationDashboard();</span>
+		
+		try {
+<span class="nc" id="L181">			getRegByCountry(registrationDashboard,connection);</span>
+<span class="nc" id="L182">			getRegByLegalEntity(registrationDashboard,connection);</span>
+<span class="nc" id="L183">			getRegTimelineSnapshot(registrationDashboard,connection);</span>
+<span class="nc" id="L184">			dashboard.setRegDashboard(registrationDashboard);</span>
+		
+<span class="nc bnc" id="L186" title="All 2 branches missed.">			if(null != dashboard.getRegPfxByBusinessUnitJsonString()){</span>
+<span class="nc" id="L187">				registrationDashboard.setRegPfxByBusinessUnitJsonString(dashboard.getRegPfxByBusinessUnitJsonString());</span>
+			}
+<span class="nc bnc" id="L189" title="All 2 branches missed.">			if(null != dashboard.getRegCfxByBusinessUnitJsonString()){</span>
+<span class="nc" id="L190">				registrationDashboard.setRegCfxByBusinessUnitJsonString(dashboard.getRegCfxByBusinessUnitJsonString());	</span>
+			}
+<span class="nc bnc" id="L192" title="All 2 branches missed.">			if(null != dashboard.getRegPfxByGeographyAsJson()){</span>
+<span class="nc" id="L193">				registrationDashboard.setRegPfxByGeographyJsonString(dashboard.getRegPfxByGeographyAsJson());</span>
+			}
+<span class="nc bnc" id="L195" title="All 2 branches missed.">			if(null != dashboard.getRegCfxByGeographyAsJson()){</span>
+<span class="nc" id="L196">				registrationDashboard.setRegCfxByGeographyJsonString(dashboard.getRegCfxByGeographyAsJson());</span>
+			}
+			
+<span class="nc" id="L199">		}catch(Exception e){</span>
+<span class="nc" id="L200">			LOG.debug(&quot;Error while fetching data getRegistrationDashboard() method&quot;,e);</span>
+<span class="nc" id="L201">		}</span>
+<span class="nc" id="L202">		return registrationDashboard;</span>
+	}
+
+
+	private void getRegTimelineSnapshot(RegistrationDashboard registrationDashboard, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L207">		TimelineSnapshot pfxTimelineSnapshot = new TimelineSnapshot();</span>
+<span class="nc" id="L208">		TimelineSnapshot cfxTimelineSnapshot = new TimelineSnapshot();</span>
+<span class="nc" id="L209">		PreparedStatement statement = null;</span>
+<span class="nc" id="L210">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L212">			statement =connection.prepareStatement(RegistrationReportQueryConstant.GET_REGISTRATION_DASHBOARD_TIMELINE_SNAP_SHOT.getQuery());</span>
+<span class="nc" id="L213">			rs= statement.executeQuery();</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">				if(rs.getString(DashboardDBColumns.CUSTOMER_TYPE.getName()).equalsIgnoreCase(Constants.CUST_TYPE_PFX)){</span>
+<span class="nc" id="L216">					pfxTimelineSnapshot.setAvgRecordAge(rs.getString(DashboardDBColumns.AGE.getName()));</span>
+<span class="nc" id="L217">					pfxTimelineSnapshot.setNewPfxContactId(rs.getString(DashboardDBColumns.LAST_CONTACT_ID.getName()));</span>
+<span class="nc" id="L218">					pfxTimelineSnapshot.setOldPfxContactId(rs.getString(DashboardDBColumns.FIRST_CONTACT_ID.getName()));</span>
+<span class="nc" id="L219">					pfxTimelineSnapshot.setOldestRecord(rs.getString(DashboardDBColumns.OLD_CONTACT_AGE.getName()));</span>
+<span class="nc" id="L220">					pfxTimelineSnapshot.setNewestRecord(rs.getString(DashboardDBColumns.NEW_CONTACT_AGE.getName()));</span>
+<span class="nc" id="L221">					pfxTimelineSnapshot.setOldCustomerType(Constants.CUST_TYPE_PFX);</span>
+<span class="nc" id="L222">					pfxTimelineSnapshot.setNewCustomerType(Constants.CUST_TYPE_PFX);</span>
+				}else{
+<span class="nc" id="L224">					cfxTimelineSnapshot.setAvgRecordAge(rs.getString(DashboardDBColumns.AGE.getName()));</span>
+<span class="nc" id="L225">					cfxTimelineSnapshot.setNewCfxContactId(rs.getString(DashboardDBColumns.LAST_CONTACT_ID.getName()));</span>
+<span class="nc" id="L226">					cfxTimelineSnapshot.setOldCfxContactId(rs.getString(DashboardDBColumns.FIRST_CONTACT_ID.getName()));</span>
+<span class="nc" id="L227">					cfxTimelineSnapshot.setOldestRecord(rs.getString(DashboardDBColumns.OLD_CONTACT_AGE.getName()));</span>
+<span class="nc" id="L228">					cfxTimelineSnapshot.setNewestRecord(rs.getString(DashboardDBColumns.NEW_CONTACT_AGE.getName()));</span>
+<span class="nc" id="L229">					cfxTimelineSnapshot.setOldCustomerType(Constants.CUST_TYPE_CFX);</span>
+<span class="nc" id="L230">					cfxTimelineSnapshot.setNewCustomerType(Constants.CUST_TYPE_CFX);</span>
+				}
+			}
+			
+<span class="nc" id="L234">			registrationDashboard.setRegPfxTimelineSnapshot(pfxTimelineSnapshot);</span>
+<span class="nc" id="L235">			registrationDashboard.setRegCfxTimelineSnapshot(cfxTimelineSnapshot);</span>
+			
+<span class="nc" id="L237">		}catch (Exception e) {</span>
+<span class="nc" id="L238">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);	</span>
+		}finally {
+<span class="nc" id="L240">			closePrepareStatement(statement);</span>
+<span class="nc" id="L241">			closeResultset(rs);</span>
+		}
+	
+<span class="nc" id="L244">	}</span>
+	
+	private void getPaymentInTimelineSnapshot(PaymentDashboard paymentInDashboard, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L247">		TimelineSnapshot timelineSnapshot = new TimelineSnapshot();</span>
+<span class="nc" id="L248">		PreparedStatement statement = null;</span>
+<span class="nc" id="L249">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L251">			statement =connection.prepareStatement(RegistrationReportQueryConstant.GET_PAYMENTIN_DASHBOARD_TIMELINE_SNAP_SHOT.getQuery());</span>
+<span class="nc" id="L252">			rs= statement.executeQuery();</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L254">				timelineSnapshot.setAvgRecordAge(rs.getString(DashboardDBColumns.AGE.getName()));</span>
+<span class="nc" id="L255">				timelineSnapshot.setNewPfxContactId(rs.getString(DashboardDBColumns.LAST_PAYMENTIN_ID.getName()));</span>
+<span class="nc" id="L256">				timelineSnapshot.setOldPfxContactId(rs.getString(DashboardDBColumns.FIRST_PAYMENTIN_ID.getName()));</span>
+<span class="nc" id="L257">				timelineSnapshot.setOldestRecord(rs.getString(DashboardDBColumns.OLD_PAYMENTIN_AGE.getName()));</span>
+<span class="nc" id="L258">				timelineSnapshot.setNewestRecord(rs.getString(DashboardDBColumns.NEW_PAYMENTIN_AGE.getName()));</span>
+<span class="nc" id="L259">				timelineSnapshot.setOldCustomerType(Constants.CUST_TYPE_PFX);</span>
+<span class="nc" id="L260">				timelineSnapshot.setNewCustomerType(Constants.CUST_TYPE_PFX);</span>
+			}
+<span class="nc" id="L262">			paymentInDashboard.setTimelineSnapshot(timelineSnapshot);</span>
+			
+<span class="nc" id="L264">		}catch (Exception e) {</span>
+<span class="nc" id="L265">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);	</span>
+		}finally {
+<span class="nc" id="L267">			closePrepareStatement(statement);</span>
+<span class="nc" id="L268">			closeResultset(rs);</span>
+		}
+	
+<span class="nc" id="L271">	}</span>
+	
+	
+	private void getPaymentOutTimelineSnapshot(PaymentDashboard paymentoutDashboard, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L275">		TimelineSnapshot timelineSnapshot = new TimelineSnapshot();</span>
+<span class="nc" id="L276">		PreparedStatement statement = null;</span>
+<span class="nc" id="L277">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L279">			statement =connection.prepareStatement(RegistrationReportQueryConstant.GET_PAYMENTOUT_DASHBOARD_TIMELINE_SNAP_SHOT.getQuery());</span>
+<span class="nc" id="L280">			rs= statement.executeQuery();</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L282">				timelineSnapshot.setAvgRecordAge(rs.getString(DashboardDBColumns.AGE.getName()));</span>
+<span class="nc" id="L283">				timelineSnapshot.setNewPfxContactId(rs.getString(DashboardDBColumns.LAST_PAYMENTOUT_ID.getName()));</span>
+<span class="nc" id="L284">				timelineSnapshot.setOldPfxContactId(rs.getString(DashboardDBColumns.FIRST_PAYMENTOUT_ID.getName()));</span>
+<span class="nc" id="L285">				timelineSnapshot.setOldestRecord(rs.getString(DashboardDBColumns.OLD_PAYMENTOUT_AGE.getName()));</span>
+<span class="nc" id="L286">				timelineSnapshot.setNewestRecord(rs.getString(DashboardDBColumns.NEW_PAYMENTOUT_AGE.getName()));</span>
+<span class="nc" id="L287">				timelineSnapshot.setOldCustomerType(Constants.CUST_TYPE_PFX);</span>
+<span class="nc" id="L288">				timelineSnapshot.setNewCustomerType(Constants.CUST_TYPE_PFX);</span>
+			}
+			
+<span class="nc" id="L291">			paymentoutDashboard.setTimelineSnapshot(timelineSnapshot);</span>
+			
+<span class="nc" id="L293">		}catch (Exception e) {</span>
+<span class="nc" id="L294">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);	</span>
+		}finally {
+<span class="nc" id="L296">			closePrepareStatement(statement);</span>
+<span class="nc" id="L297">			closeResultset(rs);</span>
+		}
+	
+<span class="nc" id="L300">	}</span>
+	
+	private void getRegByCountry(RegistrationDashboard registrationDashboard, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L303">		ArrayList&lt;QueueRecordsPerCountry&gt; queueRecordsPfxCountries = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L304">		ArrayList&lt;QueueRecordsPerCountry&gt; queueRecordsCfxCountries = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L305">		Geography geographyPfx = new Geography();</span>
+<span class="nc" id="L306">		Geography geographyCfx = new Geography();</span>
+<span class="nc" id="L307">		PreparedStatement statement = null;</span>
+<span class="nc" id="L308">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L310">			statement =connection.prepareStatement(RegistrationReportQueryConstant.GET_REGISTRATION_DASHBOARD_BY_COUNTRY.getQuery());</span>
+<span class="nc" id="L311">			rs= statement.executeQuery();</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">				if(Constants.CUST_TYPE_PFX.equalsIgnoreCase(rs.getString(DashboardDBColumns.CUSTOMER_TYPE.getName()))){</span>
+<span class="nc" id="L314">					QueueRecordsPerCountry queueRecordsPfxCountryCode = new QueueRecordsPerCountry();</span>
+<span class="nc" id="L315">					queueRecordsPfxCountryCode.setCountryName(rs.getString(DashboardDBColumns.COUNTRY_DISPLAY_NAME.getName()));</span>
+<span class="nc" id="L316">					queueRecordsPfxCountryCode.setId(rs.getString(DashboardDBColumns.COUNTRY_SHORT_CODE.getName()));</span>
+<span class="nc" id="L317">					queueRecordsPfxCountryCode.setValue(rs.getInt(DashboardDBColumns.COUNTRY_WISE_TOTAL_RECORDS.getName()));</span>
+<span class="nc" id="L318">					queueRecordsPfxCountries.add(queueRecordsPfxCountryCode);</span>
+<span class="nc" id="L319">				}else {</span>
+<span class="nc" id="L320">					QueueRecordsPerCountry queueRecordsCfxCountryCode = new QueueRecordsPerCountry();</span>
+<span class="nc" id="L321">					queueRecordsCfxCountryCode.setCountryName(rs.getString(DashboardDBColumns.COUNTRY_DISPLAY_NAME.getName()));</span>
+<span class="nc" id="L322">					queueRecordsCfxCountryCode.setId(rs.getString(DashboardDBColumns.COUNTRY_SHORT_CODE.getName()));</span>
+<span class="nc" id="L323">					queueRecordsCfxCountryCode.setValue(rs.getInt(DashboardDBColumns.COUNTRY_WISE_TOTAL_RECORDS.getName()));</span>
+<span class="nc" id="L324">					queueRecordsCfxCountries.add(queueRecordsCfxCountryCode);</span>
+<span class="nc" id="L325">				}</span>
+			}
+<span class="nc" id="L327">			geographyPfx.setQueueRecordsPerCountry(queueRecordsPfxCountries);</span>
+<span class="nc" id="L328">			geographyCfx.setQueueRecordsPerCountry(queueRecordsCfxCountries);</span>
+<span class="nc" id="L329">			registrationDashboard.setRegPfxByGeography(geographyPfx);</span>
+<span class="nc" id="L330">			registrationDashboard.setRegCfxByGeography(geographyCfx);</span>
+<span class="nc" id="L331">		}catch (Exception e) {</span>
+<span class="nc" id="L332">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);	</span>
+		}finally {
+<span class="nc" id="L334">			closePrepareStatement(statement);</span>
+<span class="nc" id="L335">			closeResultset(rs);</span>
+		}
+<span class="nc" id="L337">	}</span>
+
+	//AT-2355  Dash board should show legal entity view
+	private void getRegByLegalEntity(RegistrationDashboard registrationDashboard, Connection connection) throws CompliancePortalException {		
+<span class="nc" id="L341">		ArrayList&lt;QueueRecordsPerLegalEntity&gt; queueRecordsLegalEntityListPfx = new ArrayList&lt;&gt;();		</span>
+<span class="nc" id="L342">		ArrayList&lt;QueueRecordsPerLegalEntity&gt; queueRecordsLegalEntityListCfx = new ArrayList&lt;&gt;();		</span>
+<span class="nc" id="L343">		BusinessUnit businessUnitPfx=new BusinessUnit();</span>
+<span class="nc" id="L344">		BusinessUnit businessUnitCfx=new BusinessUnit();</span>
+<span class="nc" id="L345">		int totalRecords =0;</span>
+<span class="nc" id="L346">		int totalPfxRecords =0;</span>
+<span class="nc" id="L347">		int totalCfxRecords =0;</span>
+<span class="nc" id="L348">		PreparedStatement statement = null;</span>
+<span class="nc" id="L349">		ResultSet rs = null;</span>
+		
+		try {
+<span class="nc" id="L352">			statement =connection.prepareStatement(RegistrationReportQueryConstant.GET_REGISTRATION_DASHBOARD_BY_LEGALENTITY.getQuery());</span>
+<span class="nc" id="L353">			rs = statement.executeQuery();			</span>
+<span class="nc bnc" id="L354" title="All 2 branches missed.">			while (rs.next()) {</span>
+				
+<span class="nc bnc" id="L356" title="All 2 branches missed.">				if(Constants.CUST_TYPE_PFX.equalsIgnoreCase(rs.getString(DashboardDBColumns.CUSTOMER_TYPE.getName()))){</span>
+<span class="nc" id="L357">					QueueRecordsPerLegalEntity queueRecordsPerLegalEntityPfx = new QueueRecordsPerLegalEntity();</span>
+<span class="nc" id="L358">					queueRecordsPerLegalEntityPfx.setLegalEntity(rs.getString(DashboardDBColumns.LEGALENTITY.getName()));</span>
+<span class="nc" id="L359">					queueRecordsPerLegalEntityPfx.setVisits(rs.getInt(DashboardDBColumns.BUSINESS_WISE_TOTAL_RECORDS.getName()));	</span>
+<span class="nc" id="L360">					queueRecordsLegalEntityListPfx.add(queueRecordsPerLegalEntityPfx);</span>
+<span class="nc" id="L361">					totalRecords = totalRecords + queueRecordsPerLegalEntityPfx.getVisits();</span>
+<span class="nc" id="L362">					totalPfxRecords = totalPfxRecords + queueRecordsPerLegalEntityPfx.getVisits();</span>
+<span class="nc" id="L363">				}else {</span>
+<span class="nc" id="L364">					QueueRecordsPerLegalEntity queueRecordsPerLegalEntityCfx = new QueueRecordsPerLegalEntity();</span>
+<span class="nc" id="L365">					queueRecordsPerLegalEntityCfx.setLegalEntity(rs.getString(DashboardDBColumns.LEGALENTITY.getName()));</span>
+<span class="nc" id="L366">					queueRecordsPerLegalEntityCfx.setVisits(rs.getInt(DashboardDBColumns.BUSINESS_WISE_TOTAL_RECORDS.getName()));	</span>
+<span class="nc" id="L367">					queueRecordsLegalEntityListCfx.add(queueRecordsPerLegalEntityCfx);</span>
+<span class="nc" id="L368">					totalRecords = totalRecords + queueRecordsPerLegalEntityCfx.getVisits();</span>
+<span class="nc" id="L369">					totalCfxRecords = totalCfxRecords + queueRecordsPerLegalEntityCfx.getVisits();</span>
+<span class="nc" id="L370">				}</span>
+				
+			}
+<span class="nc" id="L373">			businessUnitPfx.setQueueRecordsPerLegalEntity(queueRecordsLegalEntityListPfx);</span>
+<span class="nc" id="L374">			businessUnitCfx.setQueueRecordsPerLegalEntity(queueRecordsLegalEntityListCfx);</span>
+<span class="nc" id="L375">			registrationDashboard.setRegPfxByBusinessUnit(businessUnitPfx);</span>
+<span class="nc" id="L376">			registrationDashboard.setRegCfxByBusinessUnit(businessUnitCfx);</span>
+<span class="nc" id="L377">			registrationDashboard.setTotalRegRecords(totalRecords);</span>
+<span class="nc" id="L378">			registrationDashboard.setTotalPfxRecords(totalPfxRecords);</span>
+<span class="nc" id="L379">			registrationDashboard.setTotalCfxRecords(totalCfxRecords);</span>
+			
+<span class="nc" id="L381">		} catch (Exception e) {</span>
+<span class="nc" id="L382">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);	</span>
+		}finally {
+<span class="nc" id="L384">			closePrepareStatement(statement);</span>
+<span class="nc" id="L385">			closeResultset(rs);</span>
+		}
+<span class="nc" id="L387">	}	</span>
+
+	private void dashboardFulfilment(Dashboard dashboard, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L390">		PreparedStatement statement = null;</span>
+<span class="nc" id="L391">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L393">			statement = connection</span>
+<span class="nc" id="L394">					.prepareStatement(RegistrationReportQueryConstant.GET_CLEARED_RECORD_DETAILS.getQuery());</span>
+<span class="nc" id="L395">			statement.setTimestamp(1, Timestamp.valueOf(dashboard.getTresholdFulfimentTime()));</span>
+<span class="nc" id="L396">			statement.setTimestamp(2, Timestamp.valueOf(dashboard.getTresholdFulfimentTime()));</span>
+<span class="nc" id="L397">			rs = statement.executeQuery();</span>
+
+<span class="nc" id="L399">			getDashboardFulFillment(dashboard, rs);</span>
+
+<span class="nc" id="L401">		} catch (Exception e) {</span>
+<span class="nc" id="L402">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L404">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L406">	}</span>
+	
+	private void getDashboardFulFillment(Dashboard dashboard, ResultSet rs) {
+<span class="nc" id="L409">		Fulfilment regPfxFulfillment = new Fulfilment();</span>
+<span class="nc" id="L410">		Fulfilment regCfxFulfillment = new Fulfilment();</span>
+<span class="nc" id="L411">		Fulfilment paymentInFulfillment = new Fulfilment();</span>
+<span class="nc" id="L412">		Fulfilment paymentOutFulfillment = new Fulfilment();</span>
+<span class="nc" id="L413">		Integer totalHours=0;</span>
+<span class="nc" id="L414">		Integer totalPFXFulfilledRecords=0;</span>
+<span class="nc" id="L415">		Integer totalCFXFulfilledRecords=0;</span>
+<span class="nc" id="L416">		Integer totalPaymentInFulfilledRecords=0;</span>
+<span class="nc" id="L417">		Integer totalPaymentOutFulfilledRecords=0;</span>
+<span class="nc" id="L418">		Integer pfxRecordsClearedPerHour=0;</span>
+<span class="nc" id="L419">		Integer cfxRecordsClearedPerHour=0;</span>
+<span class="nc" id="L420">		Integer paymentInRecordsClearedPerHour=0;</span>
+<span class="nc" id="L421">		Integer paymentOutRecordsClearedPerHour=0;</span>
+<span class="nc" id="L422">		Integer pfxAvgCleringTime=0;</span>
+<span class="nc" id="L423">		Integer cfxAvgCleringTime=0;</span>
+<span class="nc" id="L424">		Integer paymentInAvgCleringTime=0;</span>
+<span class="nc" id="L425">		Integer paymentOutAvgCleringTime=0;</span>
+		try {
+			
+<span class="nc bnc" id="L428" title="All 2 branches missed.">			while (rs.next()) {</span>
+
+<span class="nc bnc" id="L430" title="All 2 branches missed.">				if (rs.getString(DashboardDBColumns.RESOURCE_TYPE.getName()).equalsIgnoreCase(Constants.CONTACT)) {</span>
+
+<span class="nc" id="L432">					totalPFXFulfilledRecords = rs.getInt(DashboardDBColumns.TOTAL_RECORDS.getName());</span>
+<span class="nc" id="L433">					totalHours = rs.getInt(DashboardDBColumns.TOTAL_HOURS.getName());</span>
+<span class="nc" id="L434">					pfxRecordsClearedPerHour = totalPFXFulfilledRecords / totalHours;</span>
+<span class="nc" id="L435">					pfxAvgCleringTime = rs.getInt(DashboardDBColumns.AVG_CLEARING_TIME.getName());</span>
+					
+<span class="nc bnc" id="L437" title="All 2 branches missed.">				} else if (rs.getString(DashboardDBColumns.RESOURCE_TYPE.getName()).equalsIgnoreCase(Constants.ACCOUNT)) {</span>
+					
+<span class="nc" id="L439">					totalCFXFulfilledRecords = rs.getInt(DashboardDBColumns.TOTAL_RECORDS.getName());</span>
+<span class="nc" id="L440">					totalHours = rs.getInt(DashboardDBColumns.TOTAL_HOURS.getName());</span>
+<span class="nc" id="L441">					cfxRecordsClearedPerHour = totalCFXFulfilledRecords / totalHours;</span>
+<span class="nc" id="L442">					cfxAvgCleringTime = rs.getInt(DashboardDBColumns.AVG_CLEARING_TIME.getName());</span>
+					
+<span class="nc bnc" id="L444" title="All 2 branches missed.">				} else if (rs.getString(DashboardDBColumns.RESOURCE_TYPE.getName()).equalsIgnoreCase(Constants.PAYMENT_OUT)) {</span>
+					
+<span class="nc" id="L446">					totalPaymentOutFulfilledRecords = rs.getInt(DashboardDBColumns.TOTAL_RECORDS.getName());</span>
+<span class="nc" id="L447">					totalHours = rs.getInt(DashboardDBColumns.TOTAL_HOURS.getName());</span>
+<span class="nc" id="L448">					paymentOutRecordsClearedPerHour = totalPaymentOutFulfilledRecords / totalHours;</span>
+<span class="nc" id="L449">					paymentOutAvgCleringTime = rs.getInt(DashboardDBColumns.AVG_CLEARING_TIME.getName());</span>
+					
+<span class="nc bnc" id="L451" title="All 2 branches missed.">				} else if (rs.getString(DashboardDBColumns.RESOURCE_TYPE.getName()).equalsIgnoreCase(Constants.PAYMENT_IN)) {</span>
+					
+<span class="nc" id="L453">					totalPaymentInFulfilledRecords = rs.getInt(DashboardDBColumns.TOTAL_RECORDS.getName());</span>
+<span class="nc" id="L454">					totalHours = rs.getInt(DashboardDBColumns.TOTAL_HOURS.getName());</span>
+<span class="nc" id="L455">					paymentInRecordsClearedPerHour = totalPaymentInFulfilledRecords / totalHours;</span>
+<span class="nc" id="L456">					paymentInAvgCleringTime = rs.getInt(DashboardDBColumns.AVG_CLEARING_TIME.getName());</span>
+					
+				}
+			}
+			
+<span class="nc" id="L461">			regPfxFulfillment.setFromTime(DateTimeFormatter.getHours(dashboard.getTresholdFulfimentTime()));</span>
+<span class="nc" id="L462">			regPfxFulfillment.setClearedToday(totalPFXFulfilledRecords);</span>
+<span class="nc" id="L463">			regPfxFulfillment.setAvgPerHour(pfxRecordsClearedPerHour);</span>
+<span class="nc" id="L464">			regPfxFulfillment.setAvgClearingTime(pfxAvgCleringTime);</span>
+<span class="nc" id="L465">			regPfxFulfillment.setFulfilmentGraph(setFulfilmentGraph(totalPFXFulfilledRecords, dashboard.getRegDashboard().getTotalPfxRecords()));</span>
+			
+<span class="nc" id="L467">			regCfxFulfillment.setFromTime(DateTimeFormatter.getHours(dashboard.getTresholdFulfimentTime()));</span>
+<span class="nc" id="L468">			regCfxFulfillment.setClearedToday(totalCFXFulfilledRecords);</span>
+<span class="nc" id="L469">			regCfxFulfillment.setAvgPerHour(cfxRecordsClearedPerHour);</span>
+<span class="nc" id="L470">			regCfxFulfillment.setAvgClearingTime(cfxAvgCleringTime);</span>
+<span class="nc" id="L471">			regCfxFulfillment.setFulfilmentGraph(setFulfilmentGraph(totalCFXFulfilledRecords, dashboard.getRegDashboard().getTotalCfxRecords()));</span>
+		
+<span class="nc" id="L473">			paymentInFulfillment.setFromTime(DateTimeFormatter.getHours(dashboard.getTresholdFulfimentTime()));</span>
+<span class="nc" id="L474">			paymentInFulfillment.setClearedToday(totalPaymentInFulfilledRecords);</span>
+<span class="nc" id="L475">			paymentInFulfillment.setAvgPerHour(paymentInRecordsClearedPerHour);</span>
+<span class="nc" id="L476">			paymentInFulfillment.setAvgClearingTime(paymentInAvgCleringTime);</span>
+<span class="nc" id="L477">			paymentInFulfillment.setFulfilmentGraph(setFulfilmentGraph(totalPaymentInFulfilledRecords, dashboard.getPaymentInDashboard().getTotalRecords()));</span>
+			
+<span class="nc" id="L479">			paymentOutFulfillment.setFromTime(DateTimeFormatter.getHours(dashboard.getTresholdFulfimentTime()));</span>
+<span class="nc" id="L480">			paymentOutFulfillment.setClearedToday(totalPaymentOutFulfilledRecords);</span>
+<span class="nc" id="L481">			paymentOutFulfillment.setAvgPerHour(paymentOutRecordsClearedPerHour);</span>
+<span class="nc" id="L482">			paymentOutFulfillment.setAvgClearingTime(paymentOutAvgCleringTime);</span>
+<span class="nc" id="L483">			paymentOutFulfillment.setFulfilmentGraph(setFulfilmentGraph(totalPaymentOutFulfilledRecords,  dashboard.getPaymentOutDashboard().getTotalRecords()));</span>
+			
+<span class="nc" id="L485">			dashboard.getRegDashboard().setRegPfxFulfilment(regPfxFulfillment);</span>
+<span class="nc" id="L486">			dashboard.getRegDashboard().setRegCfxFulfilment(regCfxFulfillment);</span>
+<span class="nc" id="L487">			dashboard.getPaymentInDashboard().setFulfilment(paymentInFulfillment);</span>
+<span class="nc" id="L488">			dashboard.getPaymentOutDashboard().setFulfilment(paymentOutFulfillment);</span>
+<span class="nc bnc" id="L489" title="All 2 branches missed.">			if(null != dashboard.getRegPfxFulfilmentJsonString()){</span>
+<span class="nc" id="L490">				dashboard.getRegDashboard().setRegPfxFulfilmentJsonString(dashboard.getRegPfxFulfilmentJsonString());</span>
+			}
+<span class="nc bnc" id="L492" title="All 2 branches missed.">			if(null != dashboard.getRegCfxFulfilmentJsonString()){</span>
+<span class="nc" id="L493">				dashboard.getRegDashboard().setRegCfxFulfilmentJsonString(dashboard.getRegCfxFulfilmentJsonString());	</span>
+			}
+<span class="nc bnc" id="L495" title="All 2 branches missed.">			if(null != dashboard.getPaymentInFulfilmentJsonString()){</span>
+<span class="nc" id="L496">				dashboard.getPaymentInDashboard().setFulfilmentJsonString(dashboard.getPaymentInFulfilmentJsonString());</span>
+			}
+<span class="nc bnc" id="L498" title="All 2 branches missed.">			if(null != dashboard.getPaymentOutFulfilmentJsonString()){</span>
+<span class="nc" id="L499">				dashboard.getPaymentOutDashboard().setFulfilmentJsonString(dashboard.getPaymentOutFulfilmentJsonString());	</span>
+			}
+			
+			
+<span class="nc" id="L503">		} catch (Exception e) {</span>
+<span class="nc" id="L504">			LOG.debug(&quot;Error while fetching data in getDashboardFulFillment() method&quot;,e);</span>
+		}
+		finally {
+<span class="nc" id="L507">			closeResultset(rs);</span>
+		}
+<span class="nc" id="L509">	}</span>
+	
+
+	private List&lt;FulfilmentGraph&gt; setFulfilmentGraph(Integer fulfilledValue, Integer remaingValue) {
+		
+<span class="nc" id="L514">		FulfilmentGraph fulfilmentGraphFullfilled = new FulfilmentGraph();</span>
+<span class="nc" id="L515">		FulfilmentGraph fulfilmentGraphRemaing = new FulfilmentGraph();</span>
+<span class="nc" id="L516">		List&lt;FulfilmentGraph&gt; fulfilmentGraphList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L518">		fulfilmentGraphFullfilled.setTitle(Constants.DASHBOARD_FULFILLMENT_GRAPH_FULFILLED_VALUE);</span>
+<span class="nc" id="L519">		fulfilmentGraphFullfilled.setValue(fulfilledValue);</span>
+
+<span class="nc" id="L521">		fulfilmentGraphRemaing.setTitle(Constants.DASHBOARD_FULFILLMENT_GRAPH_REMAINING_VALUE);</span>
+<span class="nc" id="L522">		fulfilmentGraphRemaing.setValue(remaingValue);</span>
+
+<span class="nc" id="L524">		fulfilmentGraphList.add(fulfilmentGraphFullfilled);</span>
+<span class="nc" id="L525">		fulfilmentGraphList.add(fulfilmentGraphRemaing);</span>
+
+<span class="nc" id="L527">		return fulfilmentGraphList;</span>
+
+	}
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

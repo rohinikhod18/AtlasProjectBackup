@@ -1,0 +1,578 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PaymentInQueryConstant.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">PaymentInQueryConstant.java</span></div><h1>PaymentInQueryConstant.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+
+/**
+ * The Enum PaymentInQueryConstant.
+ *
+ * @author Rajesh
+ */
+<span class="fc" id="L10">@SuppressWarnings(&quot;squid:S1192&quot;)</span>
+public enum PaymentInQueryConstant {	
+	
+<span class="fc" id="L13">	PAYMENTIN_QUEUE_CONTACT_ATTRIBUTE_FILTER( &quot;SELECT   b.accountid , a.id contactid, Row_number() OVER (partition BY b.accountid ORDER BY b.updatedon) rnum &quot;</span>
+			+ &quot;   FROM contactattribute A JOIN contact B ON a.id = b.id {PAYMENTIN_QUEUE_COUNTRY_OF_RESIDENCE_FILTER} {WATCHLIST_CATEGORY_FILTER}&quot;),
+	
+<span class="fc" id="L16">	PAYMENTIN_QUEUE_ACCOUNT_ATTRIBUTE_FILTER( &quot;  SELECT a.id accountid, b.organizationId as organization  &quot;</span>
+			+ &quot; FROM   accountattribute A  JOIN account B  ON  a.id = b.id&quot;),
+	
+<span class="fc" id="L19">	PAYMENTIN_QUEUE_ATTRIBUTE_FILTER(&quot; SELECT p.id AS paymentid  FROM   comp.paymentinattribute P &quot; </span>
+			+ &quot;{COUNTRY_JOIN} &quot;),
+	
+<span class="fc" id="L22">	PAYMENTIN_QUEUE_FILTER(&quot; SELECT  payin.id AS resourceid,  resourcetype, ur.createdby &quot;</span>
+			/*
+			 * +
+			 * &quot; (SELECT	se.status FROM ServiceStatusEnum se WHERE se.ID = esl.Status) AS ESLRiskStatus &quot;
+			 */
+			+ &quot; FROM   paymentin payin &quot; //,  U.SsoUserId
+			+ &quot; LEFT JOIN userresourcelock ur  ON  ur.resourceid = payin.id  AND resourcetype = 2  AND ur.LockReleasedOn IS NULL &quot;
+			/*
+			 * +
+			 * &quot; LEFT JOIN eventservicelog esl ON esl.EntityID = payin.ID AND esl.ServiceType = 11 &quot;
+			 */
+			+ &quot; {CONTACT_FILTER_JOIN} {ACCOUNT_FILTER_JOIN} {ATTRIBUTE_FILTER_JOIN} {USER_JOIN} {ORG_TABLE_JOIN} {LEGAL_ENTITY_TABLE_JOIN} JOIN Account acc ON payin.accountid = acc.id  &quot;
+			+ &quot; WHERE payin.compliancestatus=4 AND payin.Deleted &lt;&gt; 1 AND payin.isOnQueue=1 &quot;), 
+	
+<span class="fc" id="L36">	PAYMENTIN_QUEUE_CONTACT_FILTER_JOIN(&quot; LEFT JOIN  contactattributefilter CF ON payin.contactid = cf.contactid&quot;),</span>
+	
+<span class="fc" id="L38">	PAYMENTIN_QUEUE_ACCOUNT_FILTER_JOIN(&quot; LEFT JOIN  accountattributefilter AF ON payin.accountid = af.accountid&quot;),</span>
+	
+<span class="fc" id="L40">	PAYMENTIN_QUEUE_ATTRIBUTE_FILTER_JOIN(&quot; JOIN paymentattributefilter PF ON payin.id = PF.paymentid&quot;),</span>
+	
+<span class="fc" id="L42">	WATCHLIST_CATEGORY_FILTER(&quot; LEFT JOIN ContactWatchList CL ON CL.contact=B.id JOIN watchlist W ON CL.reason=w.id AND w.category IN(?)  &quot;),</span>
+	
+<span class="fc" id="L44">	ORG_TABLE_JOIN(&quot;JOIN Organization org ON org.Id = payin.organizationID  &quot;),</span>
+	
+<span class="fc" id="L46">	LEGAL_ENTITY_TABLE_JOIN(&quot;JOIN LegalEntity le ON le.ID = payin.LegalEntityID&quot;),</span>
+	
+<span class="fc" id="L48">	USER_FILTER_JOIN(&quot;LEFT JOIN [USER] U ON U.id=ur.UserId &quot;),</span>
+	
+<span class="fc" id="L50">	COUNTRY_FILTER_JOIN(&quot;LEFT JOIN  country c ON c.code=P.vCountryOfPayment&quot;),</span>
+	
+<span class="fc" id="L52">	RG_FILTER_JOIN(&quot;LEFT JOIN eventservicelog esl ON esl.EntityID = payin.ID AND esl.ServiceType = 11&quot;),</span>
+	
+<span class="fc" id="L54">	QUEUE_FILTER_NULL_CHECK(&quot; (CF.ContactId IS NOT NULL OR AF.AccountId IS NOT NULL) &quot;),</span>
+	
+<span class="fc" id="L56">	PAYMENTIN_QUEUE_COUNTRY_OF_RESIDENCE_FILTER(&quot;JOIN country cor ON cor.id = b.country&quot;),</span>
+	
+<span class="fc" id="L58">	GET_PAYMENTIN_QUEUE(&quot; DECLARE @Offset INT = ?,   @Rows   INT = ?;&quot;</span>
+			+ &quot; WITH &quot;
+			+ &quot; contactattributefilter AS ( {PAYMENTIN_REPORT_CONTACT_FILTER} ), &quot;
+			+ &quot; accountattributefilter AS ( {PAYMENTIN_REPORT_ACCOUNT_FILTER} ), &quot;
+			+ &quot; paymentattributefilter AS ( {PAYMENTIN_ATTRIBUTE_FILTER} ), &quot;
+			+ &quot; selectedid AS (  {PAYMENTIN_REPORT_FILTER} order by {SORT_FIELD_NAME} {ORDER_TYPE}  offset @Offset rows  FETCH next @rows rows only ) &quot;
+			+ &quot; SELECT    pina.attributes, &quot;
+			+ &quot;          payin.id               AS paymentinid, &quot;
+			+ &quot;          payin.accountid        AS accountid, &quot;
+			+ &quot;          payin.contactid        AS contactid, &quot;
+			+ &quot;          payin.compliancestatus AS compliancestatus, &quot;
+			+ &quot;          payin.tradeContractNumber   AS transactions, &quot;
+			+ &quot;          acc.tradeaccountnumber  AS client, &quot;
+			+ &quot;          con.Country             AS countryOfResidence,&quot;
+			+ &quot;          acc.crmaccountid        AS acsfid, &quot;
+			+ &quot;          payin.transactiondate  AS [Date], &quot;
+			+ &quot;          acc.[type] AS type, &quot;
+			+ &quot;          CASE &quot;
+			+ &quot;                    WHEN acc.[type] = 2 THEN con.NAME &quot;
+			+ &quot;                    ELSE acc.NAME  END AS clientname, &quot;
+			+ &quot;          pina.vTransactionCurrency                         AS transactioncurrency, &quot;
+			+ &quot;          pina.vTransactionAmount                           AS amount, &quot;
+			+ &quot;          pina.vBaseCurrencyAmount                          AS basecurrencyamount, &quot;
+			+ &quot; pina.vPaymentMethod AS paymentmethod, &quot;
+			+ &quot;          pina.vThirdPartyPayment                           AS isthirdpartypayment, &quot;
+			+ &quot;          resourceid, &quot;
+			+ &quot; us.ssouserid AS lockedby, &quot;
+			+ &quot; org.NAME AS organization,&quot;
+			+ &quot; acc.LegalEntity, &quot;
+			+ &quot; pina.vCountryOfPayment AS country, &quot;
+			+ &quot;          coun.DisplayName AS countrydisplayname,&quot;
+			+ &quot; pcse.status AS overallstatus, &quot;
+			+ &quot;          CASE &quot;
+			+ &quot;          WHEN acc.[type] = 2 THEN con.PayInwatchliststatus &quot;
+			+ &quot; ELSE acc.PayInwatchliststatus END AS WatchListStatus, &quot;//changes for AT-2986
+			+ &quot;          payin.blackliststatus, &quot;
+			+ &quot;          payin.fraugsterstatus, &quot;
+			+ &quot;          payin.sanctionstatus, &quot;
+			+ &quot;          payin.customcheckstatus, &quot;
+			+ &quot; payin.intuitionCheckStatus, &quot; // AT-4607
+			+ &quot;          payin.debitCardFraudCheckStatus AS riskStatus &quot;
+			+ &quot; FROM      paymentin payin &quot;
+			+ &quot; JOIN      selectedid pq &quot;
+			+ &quot; ON        pq.resourceid = payin.id &quot;
+			+ &quot; JOIN      paymentinattribute pina &quot;
+			+ &quot; ON        payin.id = pina.id &quot;
+			+ &quot; JOIN      paymentcompliancestatusenum pcse &quot;
+			+ &quot; ON        payin.compliancestatus = pcse.id &quot;
+			+ &quot; JOIN      account acc &quot;
+			+ &quot; ON        payin.accountid = acc.id &quot;
+			+ &quot; JOIN      contact con &quot;
+			+ &quot; ON        payin.contactid = con.id &quot;
+			+ &quot; JOIN      organization org &quot;
+			+ &quot; ON        org.id = acc.organizationid &quot;
+			+ &quot; LEFT JOIN country cor &quot;
+			+ &quot; ON        cor.id = con.country &quot;
+			+ &quot; LEFT JOIN country coun &quot;
+			+ &quot; ON        coun.code = pina.vcountryofpayment &quot;
+			+ &quot; LEFT JOIN [user] us &quot;
+			+ &quot; ON        us.id = pq.createdby order by {SORT_FIELD_NAME} {ORDER_TYPE}&quot;),
+	
+<span class="fc" id="L119">	PAYMENTIN_QUEUE_COUNT(&quot; WITH &quot;</span>
+			+ &quot; contactattributefilter AS ( {PAYMENTIN_REPORT_CONTACT_FILTER} ), &quot;
+			+ &quot; accountattributefilter AS ( {PAYMENTIN_REPORT_ACCOUNT_FILTER} ), &quot;
+			+ &quot; paymentattributefilter AS ( {PAYMENTIN_ATTRIBUTE_FILTER} ), &quot;
+			+ &quot; selectedid AS (  {PAYMENTIN_REPORT_FILTER}  ) &quot; //ORDER BY  payin.updatedon DESC offset @Offset rows  FETCH next @rows rows only
+			+ &quot; SELECT   Count(payin.Id)              AS TotalRows &quot;
+			+ &quot; FROM      paymentin payin &quot;
+			+ &quot; JOIN      selectedid pq &quot;
+			+ &quot; ON        pq.resourceid = payin.id &quot;
+			+ &quot; JOIN      paymentinattribute pina &quot;
+			+ &quot; ON        payin.id = pina.id &quot;
+			+ &quot; JOIN      paymentcompliancestatusenum pcse &quot;
+			+ &quot; ON        payin.compliancestatus = pcse.id &quot;
+			+ &quot; JOIN      account acc &quot;
+			+ &quot; ON        payin.accountid = acc.id &quot;
+			+ &quot; JOIN      contact con &quot;
+			+ &quot; ON        payin.contactid = con.id &quot;
+			+ &quot; JOIN      organization org &quot;
+			+ &quot; ON        org.id = acc.organizationid &quot;
+			+ &quot; LEFT JOIN eventservicelog esl ON&quot;
+			+ &quot; esl.EntityID=payin.ID&quot;
+			+ &quot; AND esl.ServiceType = 11&quot;
+			+ &quot; LEFT JOIN [user] us &quot;
+			+ &quot; ON        us.id = pq.createdby&quot;),
+	
+<span class="fc" id="L144">	GET_PAYMENTIN_QUEUE_PAGINATION(&quot;WITH pique AS( &quot;</span>
+			+ &quot; SELECT &quot;
+			+ &quot; Row_number() OVER(ORDER BY payin.id DESC) AS rownum, &quot;
+			+ &quot; payin.id AS paymentinid, &quot;
+			+ &quot; payin.accountid AS accountid, &quot;
+			+ &quot; payin.contactid AS contactid, &quot;
+			+ &quot; payin.compliancestatus AS compliancestatus, &quot;
+			+ &quot; payin.deleted AS deleted, &quot;
+			+ &quot; payin.tradecontractnumber AS Transactions, &quot;
+			+ &quot; acc.tradeaccountnumber AS client, &quot;
+			+ &quot; payinattri.transactiondate AS [Date], &quot;
+			+ &quot; acc.[type] AS [type], &quot;
+			+ &quot;                case when  acc.[type]='PFX' then con.NAME &quot;
+			+ &quot;                when acc.[type]='CFX' then acc.NAME &quot;
+			+ &quot;                END as clientname, &quot;
+			+ &quot; payinattri.transactioncurrency AS sell, &quot;
+			+ &quot; payinattri.transactionamount AS amount, &quot;
+			+ &quot; payinattri.paymentmethod AS [method], &quot;
+			+ &quot; ur.id AS resourceid, &quot;
+			+ &quot; us.ssouserid AS lockedby, &quot;
+			+ &quot; org.NAME AS organization, &quot;
+			+ &quot; ctr.code AS country, &quot;
+			+ &quot; pcse.status AS overallstatus, &quot;
+			+ &quot; acc.WatchlistStatus AS watchliststatus, &quot;
+			+ &quot; payin.BlacklistStatus AS blackliststatus, &quot;
+			+ &quot; payin.FraugsterStatus AS fraugsterstatus, &quot;
+			+ &quot; payin.SanctionStatus AS sanctionstatus, &quot;
+			+ &quot; payin.CustomCheckStatus AS CustomCheckStatus &quot;
+			+ &quot; FROM &quot;
+			+ &quot; paymentin payIn &quot;
+			+ &quot; JOIN paymentinattribute payInAttri ON payin.id = payinattri.id &quot;
+			+ &quot; JOIN account acc ON payin.accountid = acc.id &quot;
+			+ &quot; JOIN contact con ON payin.contactid = con.id &quot;
+			+ &quot; JOIN paymentcompliancestatusenum pcse ON payin.compliancestatus = pcse.id &quot;
+			+ &quot; LEFT JOIN Country ctr ON payInAttri.countryofpayment = ctr.id &quot;
+			+ &quot; JOIN organization org ON org.id = acc.organizationid &quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON payin.id = ur.resourceid &quot;
+			+ &quot; AND ur.resourcetype = 'PAYMENT_IN' &quot;
+			+ &quot; LEFT JOIN [user] us ON us.id = ur.createdby &quot;
+			+ &quot; WHERE &quot;
+<span class="fc" id="L184">			+ &quot; payinattri.transactiondate &gt; DATEADD(day,-&quot;+SearchCriteriaUtil.getDefaultQueueRecordSize()+&quot;,GETDATE()) &quot;</span>
+			+ &quot; and pcse.status='HOLD' &quot;
+			+ &quot; AND payIn.deleted = 0 &quot;
+			+ &quot; AND ur.lockreleasedon IS NULL &quot;
+			+ &quot; &quot;
+			+ &quot; &quot;
+			+ &quot; ) &quot;
+			+ &quot; SELECT *, (SELECT max(rownum) FROM pique) AS 'TotalRows' &quot;
+			+ &quot; FROM &quot;
+			+ &quot; pique &quot;
+			+ &quot; WHERE &quot;
+			+ &quot; rownum &gt;= ? &quot;
+			+ &quot; AND rownum &lt;= ?&quot;),
+	
+<span class="fc" id="L198">	GET_PAYMENTIN_QUEUE_COUNT(&quot;SELECT COUNT(*) as count FROM PaymentIn WHERE complianceStatus&lt;&gt;1&quot;),</span>
+	
+<span class="fc" id="L200">	GET_PAYMENTIN_QUEUE_WITHOUT_PAGINATION(&quot;SELECT Count(*) AS count from( SELECT * FROM &quot;</span>
+			+ &quot; ( SELECT payin.id AS paymentinid,payin.accountid  AS accountid,payin.contactid AS contactid, &quot;
+			+ &quot; payin.compliancestatus AS compliancestatus,payin.deleted AS deleted,payin.TradeContractNumber AS Transactions, &quot;
+			+ &quot; acc.tradeaccountnumber AS client,payinattri.transactiondate  AS [Date], &quot;
+			+ &quot; con.NAME  AS clientname,acc.type AS type,payinattri.TransactionCurrency AS sell, &quot;
+			+ &quot; payinattri.TransactionAmount AS amount,payinattri.paymentMethod AS method, &quot;
+			+ &quot; ur.id AS resourceid,(SELECT SSOUserId FROM [User] where id=ur.createdby) AS lockedby, &quot;
+			+ &quot; (SELECT NAME FROM organization WHERE  id = acc.organizationid) AS organization, &quot;
+			+ &quot; ( SELECT code AS country FROM   country WHERE  id = &quot;
+			+ &quot; ( SELECT CountryOfPayment FROM   paymentinattribute pa WHERE  pa.id = payin.id)) AS country, &quot;
+			+ &quot; ( SELECT status FROM   paymentcompliancestatusenum WHERE  id = &quot;
+			+ &quot; ( SELECT compliancestatus FROM   paymentin pyi WHERE  payin.id = pyi.id)) AS overallstatus , &quot;
+			+ &quot; ( SELECT Count(*) FROM   contactwatchlist cw WHERE  cw.contact IN (select id from Contact where AccountId=payin.Accountid)) AS watchliststatus, &quot;
+			+ &quot; ( SELECT TOP 1 status FROM eventservicelog esl  WHERE esl.servicetype = &quot;
+			+ &quot; ( SELECT id FROM compliance_servicetypeenum  WHERE  code = 'BLACKLIST') AND payin.id = &quot;
+			+ &quot;                (select top 1 paymentinid from event where id in (esl.eventid) order by id desc))AS blackliststatus, &quot;
+			+ &quot; ( SELECT TOP 1 status  FROM     eventservicelog esl WHERE esl.servicetype = &quot;
+			+ &quot; ( SELECT id FROM   compliance_servicetypeenum WHERE  code = 'FRAUGSTER') AND payin.id = (select top 1 paymentinid from event where id in (esl.eventid) order by id desc)) &quot;
+			+ &quot;                 AS fraugsterstatus, &quot;
+			+ &quot; ( SELECT TOP 1 status  FROM     eventservicelog esl  WHERE    esl.servicetype = &quot;
+			+ &quot; ( SELECT id FROM   compliance_servicetypeenum WHERE  code = 'SANCTION') AND payin.id = (select top 1 paymentinid from event where id in (esl.eventid) order by id desc)) &quot;
+			+ &quot;                 AS sanctionstatus, &quot;
+			+ &quot; ( SELECT TOP 1 status  FROM     eventservicelog esl  WHERE    esl.servicetype = &quot;
+			+ &quot; ( SELECT id FROM   compliance_servicetypeenum WHERE  code = 'VELOCITYCHECK') AND payin.id = &quot;
+			+ &quot;                         (select top 1 paymentinid from event where id in (esl.eventid) order by id desc)) AS CustomCheckStatus &quot;
+			+ &quot; FROM paymentIn payIn &quot;
+			+ &quot; JOIN paymentinattribute payInAttri ON payin.id = payinattri.id &quot;
+			+ &quot; JOIN account acc ON payin.accountid = acc.id &quot;
+			+ &quot; JOIN contact con ON payin.contactid = con.id &quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON payin.id = ur.resourceid AND ur.ResourceType = 'PAYMENT_IN' &quot;
+			+ &quot; AND ur.lockreleasedon IS NULL) AS pqueue &quot;
+			+ &quot; where compliancestatus &lt;&gt; 1 AND deleted &lt;&gt; 1) AS pqueue2&quot;),
+	
+	
+<span class="fc" id="L234">	GET_PAYMENTIN_QUEUE_INNER_QUERY(&quot;SELECT &quot;</span>
+			+ &quot; Row_number() OVER( &quot;
+			+ &quot; ORDER BY &quot;
+			+ &quot; paymentinid desc &quot;
+			+ &quot; ) AS rownum, &quot;
+			+ &quot; pqueue2.* &quot;
+			+ &quot;from &quot;
+			+ &quot; ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; pqueue.* &quot;
+			+ &quot; FROM &quot;
+			+ &quot; ( &quot;
+			+ &quot; select &quot;
+			+ &quot; payin.id AS paymentinid, &quot;
+			+ &quot; payin.accountid AS accountid, &quot;
+			+ &quot; payin.contactid AS contactid, &quot;
+			+ &quot; payin.compliancestatus AS compliancestatus, &quot;
+			+ &quot; payin.deleted AS deleted, &quot;
+			+ &quot; payin.tradecontractnumber AS Transactions, &quot;
+			+ &quot; acc.tradeaccountnumber AS client, &quot;
+			+ &quot; payin.transactiondate AS [Date], &quot;
+			+ &quot; case &quot;
+			+ &quot; when acc.[type] = 2 then 'CFX' &quot;
+			+ &quot; when acc.[type] = 1 then 'PFX' &quot;
+			+ &quot; END as [type], &quot;
+			+ &quot; case &quot;
+			+ &quot; when acc.[type] = 2 then con.NAME &quot;
+			+ &quot; when acc.[type] = 1 then acc.NAME &quot;
+			+ &quot; END as clientname, &quot;
+			+ &quot; payinattri.vtransactioncurrency AS sell, &quot;
+			+ &quot; payinattri.vtransactionamount AS amount, &quot;
+			+ &quot; payinattri.vpaymentmethod AS [method], &quot;
+			+ &quot; ur.id AS resourceid, &quot;
+			+ &quot; us.ssouserid AS lockedby, &quot;
+			+ &quot; org.NAME AS organization, &quot;
+			+ &quot; payInAttri.vcountryofpayment AS country, &quot;
+			+ &quot; ctr.DisplayName AS CountryDisplayName, &quot;
+			+ &quot; pcse.status AS overallstatus, &quot;
+			+ &quot; acc.WatchlistStatus AS watchliststatus, &quot;
+			+ &quot; payin.BlacklistStatus AS blackliststatus, &quot;
+			+ &quot; payin.FraugsterStatus AS fraugsterstatus, &quot;
+			+ &quot; payin.SanctionStatus AS sanctionstatus, &quot;
+			+ &quot; payin.CustomCheckStatus AS CustomCheckStatus &quot;
+			+ &quot; FROM &quot;
+			+ &quot; paymentin payIn &quot;
+			+ &quot; JOIN paymentinattribute payInAttri ON &quot;
+			+ &quot; payin.id = payinattri.id &quot;
+			+ &quot; JOIN account acc ON &quot;
+			+ &quot; payin.accountid = acc.id &quot;
+			+ &quot; JOIN contact con ON &quot;
+			+ &quot; payin.contactid = con.id &quot;
+			+ &quot; JOIN paymentcompliancestatusenum pcse ON &quot;
+			+ &quot; payin.compliancestatus = pcse.id &quot;
+			+ &quot; LEFT JOIN Country ctr ON &quot;
+			+ &quot; payInAttri.vcountryofpayment = ctr.code &quot;
+			+ &quot; JOIN organization org ON &quot;
+			+ &quot; org.id = acc.organizationid &quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON &quot;
+			+ &quot; payin.id = ur.resourceid &quot;
+			+ &quot; AND ur.resourcetype = 2  AND ur.lockreleasedon IS NULL &quot;
+			+ &quot; LEFT JOIN [user] us ON &quot;
+			+ &quot; us.id = ur.createdby &quot;
+			+ &quot; WHERE &quot;
+			+ &quot; pcse.status='HOLD' &quot;
+			+ &quot; AND payIn.deleted = 0 &quot;
+			+ &quot; &quot;
+			+ &quot; ) As pqueue) As pqueue2&quot;),
+	
+<span class="fc" id="L302">	GET_PAYMENTIN_QUEUE_PAGINATION_WITH_CRITERIA(&quot; WITH pique  &quot;</span>
+			+ &quot;AS &quot;
+			+ &quot;( {INNER_QUERY} ) &quot;
+			+ &quot;   SELECT *, (SELECT max(rownum) FROM pique) AS 'TotalRows' &quot;
+			+ &quot; FROM pique WHERE rownum &gt;= ? AND rownum &lt;= ? &quot;),
+	
+<span class="fc" id="L308">	GET_PAYMENT_IN_DETAILS(&quot;SELECT pyi.id, &quot;</span>
+			+ &quot; pyi.accountid, &quot;
+			+ &quot; pyi.contactid, &quot;
+			+ &quot; org.NAME AS Organisation, pyi.isOnQueue,&quot;
+			+ &quot; pyi.TradeContractNumber, &quot;
+			+ &quot; pyi.deleted, &quot;
+			+ &quot; pyi.Updatedon, &quot;
+			+&quot;                  pyi.initialStatus, &quot;
+			+ &quot; (SELECT status &quot;
+			+ &quot; FROM   paymentcompliancestatusenum &quot;
+			+ &quot; WHERE  id = pyi.compliancestatus)   AS PaymentInStaus, &quot;
+			+ &quot; pia.vPaymentMethod, &quot;
+			+ &quot; pia.vThirdPartyPayment, &quot;
+			+ &quot; pia.vDebitorName, &quot;
+			+ &quot; pia.attributes AS PaymentInAttributes, &quot;
+			+ &quot; pia.vCountryOfPayment AS Country, &quot;
+			+ &quot; coun.displayName AS CountryOfFundFullName, &quot;
+			+ &quot; pia.vTransactionAmount AS Amount, &quot;
+			+ &quot; pia.vTransactionCurrency AS SellCurrency, &quot;
+			+ &quot; pyi.TransactionDate AS DateOfPayment, &quot;
+			+ &quot; co.NAME AS ContactName, &quot;
+			+ &quot; acc.compliancedoneon AS RegComplete, &quot;
+			+&quot; pyi.IntuitionClientRiskLevel AS IntuitionRiskLevel, &quot; //AT-4187
+			+&quot; acc.AccountTMFlag, &quot;
+			+&quot; acc.Version as AccountVersion, &quot; 
+			+ &quot; co.createdon AS RegIn, &quot;
+			+ &quot; (SELECT status &quot;
+			+ &quot; FROM contactcompliancestatusenum &quot;
+			+ &quot; WHERE  id = co.compliancestatus) AS ContactComplianceStatus, &quot;
+			+ &quot; co.tradecontactid AS TradeContactId, &quot;
+			+ &quot; pyi.tradepaymentid, &quot;
+			+ &quot; coa.attributes AS contactAttrib, &quot;
+			+ &quot; (SELECT status &quot;
+			+ &quot; FROM accountcompliancestatusenum &quot;
+			+ &quot; WHERE id = acc.compliancestatus)   AS AccComplianceStatus, &quot;
+			+ &quot; acc.crmaccountid, &quot;
+			+ &quot; acc.tradeaccountnumber, &quot;
+			+ &quot; accAttrib.attributes AS AccountAttrib, &quot;
+			+ &quot; co.crmcontactid, &quot;
+			+ &quot; ur.id AS userResourceLockId, &quot;
+			+ &quot; (SELECT SSOUserId FROM [User] where id=ur.createdby) AS LockedBy, &quot;
+			+ &quot; esl.id AS EventServiceLogId, &quot;
+			+ &quot; esl.entityid, &quot;
+			+ &quot; (SELECT TOP 1 code &quot;
+			+ &quot; FROM compliance_servicetypeenum &quot;
+			+ &quot; WHERE  id = esl.servicetype) AS ServiceType, &quot;
+			+ &quot; esl.entitytype, &quot;
+			+ &quot; esl.eventid, &quot;
+			+ &quot; esl.summary, &quot;
+			+ &quot; JSON_VALUE(esl.ProviderResponse, '$.Action') AS intuitionCurrentAction, &quot; //AT-4962
+			+ &quot; esl.status AS EventServiceStatus, &quot;
+			+ &quot; (SELECT SSOUserId FROM [User] where id=esl.updatedby) AS EventServiceUpdatedBy, &quot;
+			+ &quot; esl.updatedon AS EventServiceUpdatedOn, &quot;
+			+ &quot;     JSON_VALUE(pia.ATTRIBUTES, '$.trade.third_party_payment') AS IsThirdParty,  &quot;
+			+ &quot;     JSON_VALUE(pia.ATTRIBUTES, '$.trade.customer_legal_entity') AS LegalEntity, &quot;
+			+ &quot;              co.POIExists AS poiExists &quot; //AT-3450
+			+ &quot; FROM (SELECT pyi.* &quot;
+			+ &quot; FROM paymentin pyi &quot;
+			+ &quot; WHERE  id = ?) AS pyi &quot;
+			+ &quot; LEFT JOIN organization org &quot;
+			+ &quot; ON pyi.organizationid = org.id &quot;
+			+ &quot; LEFT JOIN paymentinattribute pia &quot;
+			+ &quot; ON pia.id = pyi.id &quot;
+			+ &quot; LEFT JOIN contact co &quot;
+			+ &quot; ON co.id = pyi.contactid &quot;
+			+ &quot; LEFT JOIN contactattribute coa &quot;
+			+ &quot; ON coa.id = pyi.contactid &quot;
+			+ &quot; LEFT JOIN account acc &quot;
+			+ &quot; ON acc.id = pyi.accountid &quot;
+			+ &quot; LEFT JOIN accountattribute accAttrib &quot;
+			+ &quot; ON accAttrib.id = pyi.accountid &quot;
+			+ &quot;                 LEFT JOIN country coun&quot;
+			+ &quot;                        ON coun.code = pia.vCountryOfPayment&quot;
+			+ &quot; LEFT JOIN eventservicelog esl &quot;
+			+ &quot; ON esl.id IN (SELECT ESL.id AS logid &quot;
+			+ &quot; FROM [eventservicelog] ESL &quot;
+			+ &quot; LEFT JOIN event EV &quot;
+			+ &quot; ON ESL.eventid = EV.id &quot;
+			+ &quot; AND EV.paymentoutid IS NULL &quot;
+			+ &quot; WHERE EV.paymentinid = pyi.id) &quot;
+			+ &quot; LEFT JOIN userresourcelock ur &quot;
+			+ &quot; ON pyi.id = ur.resourceid &quot;
+			+ &quot; AND ur.lockreleasedon IS NULL &quot;
+			+ &quot; AND ur.resourcetype = 2 &quot;
+			+ &quot; ORDER BY esl.servicetype, &quot;
+			+ &quot; ESL.updatedon DESC&quot;),
+	
+<span class="fc" id="L395">	GET_PAYMENTIN_STATUS_WITH_OHTER_STATUS(&quot;SELECT PCSE.Status, PYI.Id FROM PaymentIn PYI RIGHT JOIN PaymentComplianceStatusEnum PCSE ON PYI.ComplianceStatus = PCSE.Id and PYI.Id = ?&quot;), </span>
+	
+<span class="fc" id="L397">	GET_PAYMENTIN_STATUS_REASON(&quot;SELECT    sur.Reason , &quot;</span>
+			+ &quot;          Isnull(psr.paymentinid,-1) AS PaymentinId &quot;
+			+ &quot;FROM      statusupdatereason sur &quot;
+			+ &quot;LEFT JOIN paymentinstatusreason psr &quot;
+			+ &quot;ON        psr.statusupdatereasonid=sur.id &quot;
+			+ &quot;AND       psr.paymentinid=? &quot;
+			+ &quot;WHERE     sur.module IN ('PAYMENT_IN','ALL') order by sur.Reason&quot;), 
+	
+
+<span class="fc" id="L406">	GET_ACTIVITY_LOGS_OF_PAYMENT_IN(&quot;WITH SELECTedID AS ( &quot;</span>
+			+ &quot;SELECT &quot;
+			+ &quot;( &quot;
+			+ &quot; select &quot;
+			+ &quot; SSOUserId &quot;
+			+ &quot; from &quot;
+			+ &quot; [user] &quot;
+			+ &quot; where &quot;
+			+ &quot; ID = pal.ActivityBy &quot;
+			+ &quot; ) As [User], &quot;
+			+ &quot; pal.CreatedOn, &quot;
+			+ &quot; pald.Log As [Activity], &quot;
+			+ &quot; ate.module + ' ' + ate.type As [ActivityType], &quot;
+			+ &quot; pal.Comments AS [Comment] &quot;
+			+ &quot; &quot;
+			+ &quot;FROM &quot;
+			+ &quot; PaymentInActivityLog pal &quot;
+			+ &quot;JOIN PaymentInActivityLogDetail pald ON &quot;
+			+ &quot; pal.id = pald.ActivityId &quot;
+			+ &quot; AND pal.paymentInId = ? &quot;
+			+ &quot;JOIN ActivityTypeEnum ate ON &quot;
+			+ &quot; pald.ActivityType = ate.id ) &quot;
+			+ &quot;SELECT * FROM SELECTedID &quot;
+			+ &quot;ORDER BY &quot;
+			+ &quot; SELECTedID.CreatedOn desc &quot;),
+	
+<span class="fc" id="L432">	GET_PAYMENTIN_QUEUE_FOR_PAGINATION_FILTER(&quot;SELECT rc.* &quot;</span>
+			+ &quot;FROM   ( {INNER_QUERY} &quot;
+			+ &quot;   ) as pqueue2     ) AS rc &quot;
+			+ &quot;WHERE  rownum in (?,?,?,?) &quot;),
+	
+<span class="fc" id="L437">	GET_PAGINATION_DETAILS(&quot;SELECT * from( SELECT   Row_number() OVER ( ORDER BY paymentinid DESC) AS rownum, pqueue.* FROM &quot;</span>
+			+ &quot; ( SELECT payin.id AS paymentinid,payin.accountid  AS accountid,payin.contactid AS contactid, &quot;
+			+ &quot; payin.compliancestatus AS compliancestatus,payin.deleted AS deleted,payin.TradeContractNumber AS Transactions, &quot;
+			+ &quot; acc.tradeaccountnumber AS client,payinattri.transactiondate  AS [Date], &quot;
+			+ &quot; con.NAME  AS clientname,acc.type AS type,payinattri.TransactionCurrency AS sell, &quot;
+			+ &quot; payinattri.TransactionAmount AS amount,payinattri.paymentMethod AS method, &quot;
+			+ &quot; (SELECT NAME FROM   organization WHERE  id = acc.organizationid) AS organization, &quot;
+			+ &quot; ( SELECT code AS country FROM   country WHERE  id = &quot;
+			+ &quot; ( SELECT CountryOfPayment FROM   paymentinattribute pa WHERE  pa.id = payin.id)) AS country, &quot;
+			+ &quot; ( SELECT status FROM   paymentcompliancestatusenum WHERE  id = &quot;
+			+ &quot; ( SELECT compliancestatus FROM   paymentin pyi WHERE  payin.id = pyi.id)) AS overallstatus , &quot;
+			+ &quot; ( SELECT Count(*) FROM   contactwatchlist cw WHERE  cw.contact IN (select id from Contact where AccountId=payin.Accountid)) AS watchliststatus, &quot;
+			+ &quot; ( SELECT TOP 1 status FROM eventservicelog esl  WHERE esl.servicetype = &quot;
+			+ &quot; ( SELECT id FROM compliance_servicetypeenum  WHERE  code = 'BLACKLIST') AND payin.id = &quot;
+			+ &quot;                         (select top 1 paymentinid from event where id in (esl.eventid) order by id desc))AS blackliststatus, &quot;
+			+ &quot; ( SELECT TOP 1 status  FROM     eventservicelog esl WHERE esl.servicetype = &quot;
+			+ &quot; ( SELECT id FROM   compliance_servicetypeenum WHERE  code = 'FRAUGSTER') AND payin.id = &quot;
+			+ &quot;                         (select top 1 paymentinid from event where id in (esl.eventid) order by id desc)) AS fraugsterstatus, &quot;
+			+ &quot; ( SELECT TOP 1 status  FROM     eventservicelog esl  WHERE    esl.servicetype = &quot;
+			+ &quot; ( SELECT id FROM   compliance_servicetypeenum WHERE  code = 'SANCTION') AND payin.id = &quot;
+			+ &quot;                         (select top 1 paymentinid from event where id in (esl.eventid) order by id desc)) AS sanctionstatus &quot;
+			+ &quot; &quot;
+			+ &quot; FROM paymentIn payIn &quot;
+			+ &quot; JOIN paymentinattribute payInAttri ON payin.id = payinattri.id &quot;
+			+ &quot; JOIN account acc ON payin.accountid = acc.id &quot;
+			+ &quot; JOIN contact con ON payin.contactid = con.id &quot;
+			+ &quot; ) AS pqueue &quot;
+			+ &quot; where compliancestatus &lt;&gt; 1 AND deleted &lt;&gt; 1) AS pqueue2 &quot;
+			+ &quot; WHERE  rownum in (?,?,?,?)&quot;), 
+	
+<span class="fc" id="L467">	INSERT_PAYMENT_IN_REASON(&quot;INSERT INTO [PaymentInStatusReason]([PaymentInID], [StatusUpdateReasonID], [CreatedBy], [CreatedOn], [UpdatedBy], [UpdatedOn]) VALUES(?, (SELECT Id FROM StatusUpdateReason WHERE Module IN ('PAYMENT_IN','ALL') AND Reason=?), (select Id from [user] where SSOUserID=?), ?, (select Id from [user] where SSOUserID=?), ?)&quot;), </span>
+	
+<span class="fc" id="L469">	INSERT_PAYMENT_IN_ACTIVITY_LOG(&quot;INSERT INTO [PaymentInActivityLog] (PaymentInID, ActivityBy, [Timestamp], Comments, CreatedBy, CreatedOn, UserLockID) &quot;</span>
+			+ &quot;VALUES(?, (select Id from [user] where SSOUserID=?), &quot;
+			+ &quot; ?, ?, (select Id from [user] where SSOUserID=?), ?, &quot;
+			+ &quot;(SELECT ID FROM UserResourceLock WHERE ResourceType = 2 AND ResourceID = ? AND LockReleasedOn IS NULL) )&quot;),
+	
+<span class="fc" id="L474">	INSERT_PAYMENT_IN_ACTIVITY_LOG_DETAIL(&quot;INSERT INTO [PaymentInActivityLogDetail]([ActivityID], [ActivityType], [Log], [CreatedBy], [CreatedOn]) VALUES(?, (SELECT Id FROM ActivityTypeEnum WHERE Module=? and Type=?), ?, (select Id from [user] where SSOUserID=?), ?)&quot;), </span>
+	
+<span class="fc" id="L476">	UPDATE_PAYMENT_IN_STATUS(&quot;UPDATE [PaymentIn] SET ComplianceStatus=(SELECT Id FROM PaymentComplianceStatusEnum WHERE Status=?),UpdatedBy=(select id  from [user] where SSOUserID=?),UpdatedOn=?, isOnQueue=? WHERE Id=?&quot;), </span>
+	
+<span class="fc" id="L478">	GET_PAYMENTIN_ACTIVITY_LOGS_BY_ROWS(&quot;WIth SelectID AS( &quot;</span>
+			+ &quot; SELECT &quot;
+			+ &quot; ( &quot;
+			+ &quot; select &quot;
+			+ &quot; SSOUserId &quot;
+			+ &quot; from &quot;
+			+ &quot; [user] &quot;
+			+ &quot; where &quot;
+			+ &quot; ID = pal.ActivityBy &quot;
+			+ &quot; ) AS [User], &quot;
+			+ &quot; pal.createdon, &quot;
+			+ &quot; pald.log AS [Activity], &quot;
+			+ &quot; ate.module + ' ' + ate.type AS [ActivityType], &quot;
+			+ &quot; pal.Comments AS [Comment] &quot;
+			+ &quot; FROM &quot;
+			+ &quot; paymentinactivitylog pal &quot;
+			+ &quot; JOIN paymentinactivitylogdetail pald ON &quot;
+			+ &quot; pal.id = pald.activityid &quot;
+			+ &quot; AND pal.paymentinid = ? &quot;
+			+ &quot; JOIN activitytypeenum ate ON &quot;
+			+ &quot; pald.activitytype = ate.id ) SELECT &quot;
+			+ &quot; * &quot;
+			+ &quot;FROM &quot;
+			+ &quot; SelectID &quot;
+			+ &quot;ORDER BY &quot;
+			+ &quot; CreatedOn desc OFFSET ? ROWS FETCH NEXT ? ROWS ONLY&quot;),
+	
+<span class="fc" id="L505">	GET_VIEWMORE_PAYMENTIN_DETAILS(&quot;Select * from &quot;</span>
+			+ &quot;(SELECT Row_number() OVER (ORDER BY id DESC) AS rownum, PQueue.* from &quot;
+			+ &quot;(select esl.id, &quot;
+			+ &quot; esl.eventId, &quot;
+			+ &quot; eve.PaymentInID, &quot;
+			+ &quot; esl.entitytype, &quot;
+			+ &quot; esl.entityid, &quot;
+			+ &quot; esl.createdon, &quot;
+			+ &quot; esl.updatedon, &quot;
+			+ &quot; esl.Summary, &quot;
+			+ &quot; (select SSOUserId from [user] where ID=esl.UpdatedBy) As UpdatedBy,esl.status &quot;
+			+ &quot; from Event eve Join EventServiceLog esl ON eve.id = esl.eventId &quot;
+			+ &quot; where servicetype = (SELECT id &quot;
+			+ &quot; FROM compliance_servicetypeenum &quot;
+			+ &quot; WHERE code = ? ) &quot;
+			+ &quot; and EntityType = ? &quot;
+			+ &quot; and eve.PaymentInID = ? &quot;
+			+ &quot; and eve.PaymentOutID is null )AS PQueue ) AS PQueue2   WHERE  rownum &gt;= ? &quot;
+			+ &quot; AND rownum &lt;= ? ORDER  BY updatedon DESC&quot;),
+	
+<span class="fc" id="L525">	GET_PRIMARY_CONTACT_NAME(&quot;select name from contact  where accountid=? and [primary]=1&quot;),</span>
+	
+	//added for AT-898 for Sprint 1
+<span class="fc" id="L528">	GET_NO_OF_CONTACTS_FOR_ACCOUNT(&quot;select count(*) from Contact where AccountID = ?&quot;),</span>
+	
+<span class="fc" id="L530">	UPDATE_PAYMENT_IN_IS_ON_QUEUE_STATUS(&quot;UPDATE [PaymentIn] SET UpdatedBy=(select id  from [user] where SSOUserID=?),&quot;</span>
+			+ &quot; UpdatedOn=?, isOnQueue=? WHERE Id=?&quot;),
+	
+<span class="fc" id="L533">	GET_SERVICE_FAILURE_PAYMENT_IN_COUNT(&quot;SELECT &quot;</span>
+			+ &quot; Count(CASE WHEN pin.FraugsterStatus IN (8) THEN 1 ELSE NULL END) AS Fraugster_Fail,&quot; 
+			+ &quot; Count(CASE WHEN pin.SanctionStatus IN (8) THEN 1 ELSE NULL END) AS Sanction_Fail, &quot;
+			+ &quot; Count(CASE WHEN pin.BlacklistStatus IN (8) THEN 1 ELSE NULL END) AS Blacklist_Fail, &quot;
+			+ &quot; Count(CASE WHEN pin.CustomCheckStatus IN (8) THEN 1 ELSE NULL END) AS CustomCheck_Fail &quot;
+			+ &quot;FROM Paymentin pin &quot;
+			+ &quot;WHERE&quot;
+			+ &quot; pin.ComplianceStatus = 4 &quot;
+			+ &quot; AND pin.createdon BETWEEN ? AND ? &quot;
+			),
+	
+<span class="fc" id="L544">	GET_SERVICE_FAILURE_PAYMENT_IN_DETAILS(&quot;SELECT &quot;</span>
+			+ &quot; pin.id AS paymentID, &quot;
+			+ &quot; pin.[TradeContractNumber], &quot;
+			+ &quot; pin.TradePaymentID, &quot;
+			+ &quot; o.Code AS orgCode, &quot;
+			+ &quot; o.id AS orgID, &quot;
+			+ &quot; pin.AccountID, &quot;
+			+ &quot; pin.ContactID, &quot;
+			+ &quot; pin.compliancestatus &quot;
+			+ &quot;FROM PaymentIn pin &quot;
+			+ &quot;JOIN Organization o ON pin.OrganizationID = o.id &quot;
+			+ &quot;JOIN Account ac ON pin.accountid = ac.id &quot;
+			+ &quot;WHERE &quot;
+			+ &quot; pin.ComplianceStatus = 4 &quot;
+			+ &quot; AND (pin.fraugsterstatus IN(8) &quot;
+			+ &quot; OR pin.SanctionStatus IN(8) &quot;
+			+ &quot; OR pin.BlacklistStatus IN(8) &quot;
+			+ &quot; OR pin.CustomCheckStatus IN(8)) &quot;
+			+ &quot; AND pin.createdon BETWEEN ? AND ? &quot;),
+	
+<span class="fc" id="L564">	UPDATE_CONTACT_POI_EXISTS_FLAG(&quot;update Contact set POIExists = 1 where CRMContactID = ?&quot;);//AT-3450</span>
+	
+	private String query;
+
+<span class="fc" id="L568">	PaymentInQueryConstant(String query) {</span>
+<span class="fc" id="L569">		this.query = query;</span>
+
+<span class="fc" id="L571">	}</span>
+
+	public String getQuery() {
+<span class="fc" id="L574">		return this.query;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

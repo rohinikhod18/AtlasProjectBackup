@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TMMQBulkProcessingService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoringmq</a> &gt; <span class="el_source">TMMQBulkProcessingService.java</span></div><h1>TMMQBulkProcessingService.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoringmq;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.TransactionMonitoringMQDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.TransactionMonitoringMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+
+<span class="nc" id="L17">public class TMMQBulkProcessingService {</span>
+	
+<span class="nc" id="L19">	private static final Logger LOG = LoggerFactory.getLogger(TMMQBulkProcessingService.class);</span>
+
+	@Autowired
+	protected TransactionMonitoringMQDBServiceImpl transactionMonitoringMQDBServiceImpl;
+	
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; bulkProcessing(Message&lt;MessageContext&gt; message) {
+
+<span class="nc" id="L27">		MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L28">				.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND);</span>
+		
+<span class="nc" id="L30">		TransactionMonitoringMQServiceResponse mqResponse = (TransactionMonitoringMQServiceResponse) exchange</span>
+<span class="nc" id="L31">				.getResponse();</span>
+		
+		List&lt;TransactionMonitoringMQRequest&gt; bulkProcessList;
+		Boolean status;
+<span class="nc" id="L35">		Boolean	statusReg = Boolean.FALSE;</span>
+<span class="nc" id="L36">		Boolean	statusPayIn = Boolean.FALSE;</span>
+<span class="nc" id="L37">		Boolean	statusPayOut = Boolean.FALSE;</span>
+<span class="nc bnc" id="L38" title="All 2 branches missed.">		if(null != mqResponse.getTransactionMonitoringSignupResponse() ) {</span>
+<span class="nc" id="L39">				statusReg = mqResponse.getTransactionMonitoringSignupResponse()</span>
+<span class="nc" id="L40">					.getTransactionMonitoringAccountSignupResponse().getHttpStatus().equals(200);</span>
+		}
+						
+<span class="nc bnc" id="L43" title="All 2 branches missed.">		if (null != mqResponse.getTransactionMonitoringPaymentInResponse()</span>
+<span class="nc bnc" id="L44" title="All 2 branches missed.">				&amp;&amp; mqResponse.getTransactionMonitoringPaymentInResponse().getHttpStatus() != null) {</span>
+<span class="nc" id="L45">			statusPayIn = mqResponse.getTransactionMonitoringPaymentInResponse().getHttpStatus().equals(200);</span>
+		}
+
+<span class="nc bnc" id="L48" title="All 2 branches missed.">		if (null != mqResponse.getTransactionMonitoringPaymentOutResponse()</span>
+<span class="nc bnc" id="L49" title="All 2 branches missed.">				&amp;&amp; mqResponse.getTransactionMonitoringPaymentOutResponse().getHttpStatus() != null) {</span>
+<span class="nc" id="L50">			statusPayOut = mqResponse.getTransactionMonitoringPaymentOutResponse().getHttpStatus().equals(200);</span>
+		}
+		
+<span class="nc bnc" id="L53" title="All 6 branches missed.">		status = statusReg || statusPayIn || statusPayOut;</span>
+		
+		
+		try {
+<span class="nc bnc" id="L57" title="All 2 branches missed.">			if (Boolean.TRUE.equals(status)) {</span>
+<span class="nc" id="L58">				bulkProcessList = transactionMonitoringMQDBServiceImpl.loadAllMessageFromDB();</span>
+<span class="nc" id="L59">				TMBulkReprocessMonitorThread recheckMonitorThread = new TMBulkReprocessMonitorThread(bulkProcessList);</span>
+<span class="nc" id="L60">				recheckMonitorThread.start();</span>
+			}
+			
+			
+<span class="nc" id="L64">		} catch (Exception e) {</span>
+<span class="nc" id="L65">			LOG.error(&quot;Error while processing TMMQBulkProcessingService :: bulkProcessing() ::  &quot;, e);</span>
+<span class="nc" id="L66">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L67">		}</span>
+		
+				
+<span class="nc" id="L70">		return message;</span>
+		
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TransactionMonitoringMQService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoringmq</a> &gt; <span class="el_source">TransactionMonitoringMQService.java</span></div><h1>TransactionMonitoringMQService.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoringmq;
+
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.slf4j.Logger;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.async.DeferredResult;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessage;
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessageResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.PostCardTransactionMQDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.TransactionMonitoringMQDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.postcardtransactionmq.PostCardTransactionMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.TransactionMonitoringMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+
+/**
+ * The Class TransactionMonitoringMQService.
+ */
+@Component
+<span class="nc" id="L41">public class TransactionMonitoringMQService {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L44">	private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(TransactionMonitoringMQService.class);</span>
+
+	/** The application context. */
+	@Autowired
+	private ApplicationContext applicationContext;
+
+	/** The transaction monitoring MQDB service impl. */
+	@Autowired
+	private TransactionMonitoringMQDBServiceImpl transactionMonitoringMQDBServiceImpl;
+	
+	/** The post card transaction MQDB service impl. */
+	@Autowired
+	private PostCardTransactionMQDBServiceImpl postCardTransactionMQDBServiceImpl;
+
+	/** The Constant ORG_IN_CHANNEL. */
+	private static final String ORG_IN_CHANNEL = &quot;%s.%s.in.channel&quot;;
+
+	/** The Constant DEFAULT_IN_CHANNEL. */
+	private static final String DEFAULT_IN_CHANNEL = &quot;%s.%s.in.channel&quot;;
+
+	/**
+	 * Do transaction monitoring MQ.
+	 */
+	public void doTransactionMonitoringMQ() {
+<span class="nc" id="L68">		TransactionMonitoringMQRequest broadCastQueueRequest = new TransactionMonitoringMQRequest();</span>
+
+		try {
+<span class="nc bnc" id="L71" title="All 2 branches missed.">			if (Boolean.TRUE.equals(transactionMonitoringMQDBServiceImpl.isMessageForBroadcast())) {</span>
+
+<span class="nc" id="L73">				MessageContext messageContextTM = buildMessageContext(ServiceTypeEnum.GATEWAY_SERVICE,</span>
+						ServiceInterfaceType.PROFILE, OperationEnum.TRANSACTION_MONITORING_MQ_RESEND, null,
+						broadCastQueueRequest);
+
+<span class="nc" id="L77">				executeWorkflowTM(messageContextTM);</span>
+			}
+<span class="nc" id="L79">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L80">			LOG.error(&quot;Error in executing broadcast service&quot;, e);</span>
+<span class="nc" id="L81">		}</span>
+<span class="nc" id="L82">	}</span>
+
+	/**
+	 * Builds the message context.
+	 *
+	 * @param serviceType the service type
+	 * @param serviceInterface the service interface
+	 * @param operation the operation
+	 * @param orgCode the org code
+	 * @param payload the payload
+	 * @return the message context
+	 */
+	public MessageContext buildMessageContext(final ServiceTypeEnum serviceType,
+			final ServiceInterfaceType serviceInterface, final OperationEnum operation, final String orgCode,
+			final ServiceMessage payload) {
+
+<span class="nc" id="L98">		MessageExchange gateWayMessageExchange = new MessageExchange();</span>
+<span class="nc" id="L99">		gateWayMessageExchange.setServiceTypeEnum(serviceType);</span>
+<span class="nc" id="L100">		gateWayMessageExchange.setServiceInterface(serviceInterface);</span>
+<span class="nc" id="L101">		gateWayMessageExchange.setOperation(operation);</span>
+<span class="nc" id="L102">		gateWayMessageExchange.setRequest(payload);</span>
+
+		// addHTTPHeaders(httpRequest, payload);
+
+<span class="nc" id="L106">		MessageContext messageContext = new MessageContext();</span>
+
+<span class="nc" id="L108">		messageContext.appendMessageExchange(gateWayMessageExchange);</span>
+
+<span class="nc" id="L110">		return messageContext;</span>
+	}
+
+	/**
+	 * Execute workflow TM.
+	 *
+	 * @param messageContext the message context
+	 * @return the deferred result
+	 */
+	public DeferredResult&lt;ResponseEntity&gt; executeWorkflowTM(final MessageContext messageContext) {
+<span class="nc" id="L120">		DeferredResult&lt;ResponseEntity&gt; deferredResult = new DeferredResult&lt;&gt;(-1L);// 8000L,</span>
+																					// &quot;timeout
+																					// occured&quot;
+
+<span class="nc" id="L124">		MessageExchange gateWayMessageExchange = messageContext.getMessageCollection().get(0).getMessageExchange();</span>
+
+<span class="nc bnc" id="L126" title="All 2 branches missed.">		if (null == gateWayMessageExchange.getRequest().getOsrId()</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">				|| gateWayMessageExchange.getRequest().getOsrId().isEmpty()) {</span>
+<span class="nc" id="L128">			gateWayMessageExchange.getRequest().setOsrId(UUID.randomUUID().toString());</span>
+		}
+
+<span class="nc" id="L131">		Map&lt;String, Object&gt; messageHeaders = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L132">		messageHeaders.put(MessageContextHeaders.GATEWAY_REQUEST_RECEIVE_TIME,</span>
+<span class="nc" id="L133">				messageContext.getAuditInfo().getCreatedOn());</span>
+<span class="nc" id="L134">		messageHeaders.put(MessageContextHeaders.GATEWAY_SERVICE_ID, gateWayMessageExchange.getServiceInterface());</span>
+<span class="nc" id="L135">		messageHeaders.put(MessageContextHeaders.GATEWAY_OPERATION, gateWayMessageExchange.getOperation().name());</span>
+<span class="nc" id="L136">		messageHeaders.put(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT, deferredResult);</span>
+<span class="nc" id="L137">		messageHeaders.put(&quot;correlationID&quot;, UUID.randomUUID().toString());</span>
+<span class="nc" id="L138">		Message&lt;MessageContext&gt; message = MessageBuilder.withPayload(messageContext).copyHeaders(messageHeaders)</span>
+<span class="nc" id="L139">				.build();</span>
+
+<span class="nc" id="L141">		MessageChannel messageChannel = getInMessageChannel(gateWayMessageExchange.getOperation().name(),</span>
+<span class="nc" id="L142">				gateWayMessageExchange.getServiceInterface().name());</span>
+
+<span class="nc" id="L144">		messageChannel.send(message);</span>
+
+<span class="nc" id="L146">		return deferredResult;</span>
+	}
+
+	/**
+	 * Gets the in message channel.
+	 *
+	 * @param operation the operation
+	 * @param gatewayService the gateway service
+	 * @return the in message channel
+	 */
+	private MessageChannel getInMessageChannel(final String operation, final String gatewayService) {
+		MessageChannel messageChannel;
+<span class="nc" id="L158">		String inChannel = String.format(ORG_IN_CHANNEL, gatewayService, operation);</span>
+		try {
+<span class="nc" id="L160">			messageChannel = applicationContext.getBean(inChannel, MessageChannel.class);</span>
+<span class="nc" id="L161">		} catch (NoSuchBeanDefinitionException nbde) {</span>
+<span class="nc" id="L162">			inChannel = String.format(DEFAULT_IN_CHANNEL, gatewayService, operation);</span>
+<span class="nc" id="L163">			String logData = &quot;message forwarding to default channel [&quot;;</span>
+<span class="nc" id="L164">			logData = logData.concat(inChannel).concat(&quot;], exception was= &quot;).concat(nbde.toString());</span>
+<span class="nc" id="L165">			LOG.debug(logData);</span>
+<span class="nc" id="L166">			messageChannel = applicationContext.getBean(inChannel, MessageChannel.class);</span>
+<span class="nc" id="L167">		}</span>
+<span class="nc" id="L168">		return messageChannel;</span>
+	}
+
+	/**
+	 * Adds the HTTP headers.
+	 *
+	 * @param httpRequest the http request
+	 * @param payload the payload
+	 */
+	private void addHTTPHeaders(final HttpServletRequest httpRequest, final ServiceMessage payload) {
+<span class="nc" id="L178">		Enumeration&lt;String&gt; headerNames = httpRequest.getHeaderNames();</span>
+		StringBuilder values;
+		String headerName;
+		Enumeration&lt;String&gt; headers;
+<span class="nc bnc" id="L182" title="All 2 branches missed.">		while (headerNames.hasMoreElements()) {</span>
+<span class="nc" id="L183">			headerName = headerNames.nextElement();</span>
+<span class="nc" id="L184">			headers = httpRequest.getHeaders(headerName);</span>
+<span class="nc" id="L185">			values = new StringBuilder();</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">			while (headers.hasMoreElements()) {</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">				if (values.length() &gt; 0) {</span>
+<span class="nc" id="L188">					values.append(',');</span>
+				}
+<span class="nc" id="L190">				values.append(headers.nextElement());</span>
+			}
+<span class="nc" id="L192">			payload.addAttribute(&quot;http.header.&quot;.concat(headerName), values.toString());</span>
+		}
+<span class="nc" id="L194">		payload.addAttribute(&quot;http.header.requestURI&quot;, httpRequest.getRequestURI());</span>
+<span class="nc" id="L195">		payload.addAttribute(&quot;http.header.remoteAddr&quot;, httpRequest.getRemoteAddr());</span>
+<span class="nc" id="L196">	}</span>
+
+	/**
+	 * Handle response.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; handleResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc bnc" id="L205" title="All 2 branches missed.">		if (Boolean.TRUE.equals(message.getPayload().getNoMessageLeft())) {</span>
+<span class="nc" id="L206">			LOG.debug(&quot;NO MESSAGE LEFT FOR BROADCAST&quot;);</span>
+		} else {
+<span class="nc" id="L208">			LOG.debug(&quot;PUSH MQ EXECUTED SUCCESSFULLY&quot;);</span>
+		}
+
+<span class="nc" id="L211">		DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message.getHeaders()</span>
+<span class="nc" id="L212">				.get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+
+<span class="nc" id="L214">		BaseResponse regResponse = new BaseResponse();</span>
+<span class="nc" id="L215">		ResponseEntity&lt;ServiceMessageResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(regResponse, HttpStatus.OK);</span>
+
+<span class="nc" id="L217">		deferredResult.setResult(responseEntity);</span>
+
+<span class="nc" id="L219">		return message;</span>
+	}
+
+	/**
+	 * Do post card transaction MQ.
+	 */
+	//AT-5023
+	public void doPostCardTransactionMQ() {
+<span class="nc" id="L227">		PostCardTransactionMQRequest postCardMQRequest = new PostCardTransactionMQRequest();</span>
+
+		try {
+<span class="nc bnc" id="L230" title="All 2 branches missed.">			if (Boolean.TRUE.equals(postCardTransactionMQDBServiceImpl.isMessageForBroadcast())) {</span>
+
+<span class="nc" id="L232">				MessageContext messageContextTM = buildMessageContext(ServiceTypeEnum.GATEWAY_SERVICE,</span>
+						ServiceInterfaceType.CARD, OperationEnum.TRANSACTION_MONITORING_MQ_RESEND, null,
+						postCardMQRequest);
+
+<span class="nc" id="L236">				executeWorkflowTM(messageContextTM);</span>
+			}
+<span class="nc" id="L238">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L239">			LOG.error(&quot;Error in executing post card transaction broadcast service&quot;, e);</span>
+<span class="nc" id="L240">		}</span>
+		
+<span class="nc" id="L242">	}</span>
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

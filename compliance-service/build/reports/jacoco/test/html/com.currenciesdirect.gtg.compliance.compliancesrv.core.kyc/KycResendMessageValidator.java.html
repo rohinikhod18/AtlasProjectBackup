@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>KycResendMessageValidator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.kyc</a> &gt; <span class="el_source">KycResendMessageValidator.java</span></div><h1>KycResendMessageValidator.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.kyc;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse.DECISION;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KycResendRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+
+/**
+ * The Class KycResendMessageValidator.
+ */
+<span class="nc" id="L24">public class KycResendMessageValidator {</span>
+
+	private static final String REQUEST_IS_NOT_VALID = &quot;Request is not valid&quot;;
+
+<span class="nc" id="L28">	private static final Logger LOGGER = LoggerFactory.getLogger(KycResendMessageValidator.class);</span>
+
+	@Autowired
+	private NewRegistrationDBServiceImpl newRegistrationDBServiceImpl;
+
+	/**
+	 * Process.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L42">		Boolean isAccountValidate = Boolean.FALSE;</span>
+<span class="nc" id="L43">		Boolean isContactValidate = Boolean.FALSE;</span>
+<span class="nc" id="L44">		KycResendRequest kycResendRequest = null;</span>
+<span class="nc" id="L45">		MessageExchange messageExchange = null;</span>
+<span class="nc" id="L46">		KYCSummary response = new KYCSummary();</span>
+		try {
+<span class="nc" id="L48">			messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+
+<span class="nc" id="L50">			kycResendRequest = (KycResendRequest) messageExchange.getRequest();</span>
+
+<span class="nc" id="L52">			ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc" id="L53">			OperationEnum operation = messageExchange.getOperation();</span>
+
+<span class="nc bnc" id="L55" title="All 4 branches missed.">			if (serviceInterfaceType == ServiceInterfaceType.PROFILE &amp;&amp; operation == OperationEnum.KYC_RESEND) {</span>
+
+<span class="nc" id="L57">				isAccountValidate = validateAccountForKycResend(kycResendRequest.getAccountId());</span>
+<span class="nc" id="L58">				isContactValidate = validateContactForKycResend(kycResendRequest.getContactId());</span>
+<span class="nc" id="L59">				Integer orgId = newRegistrationDBServiceImpl.getOrganisationID(kycResendRequest.getOrgCode());</span>
+<span class="nc" id="L60">				kycResendRequest.setOrgId(orgId);</span>
+<span class="nc bnc" id="L61" title="All 4 branches missed.">				if (isAccountValidate &amp;&amp; isContactValidate) {</span>
+<span class="nc" id="L62">					response.setDecision(DECISION.SUCCESS);</span>
+				} else {
+<span class="nc" id="L64">					response.setDecision(DECISION.FAIL);</span>
+<span class="nc" id="L65">					response.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L66">					LOGGER.error(REQUEST_IS_NOT_VALID);</span>
+				}
+<span class="nc" id="L68">			} else {</span>
+<span class="nc" id="L69">				response.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L70">				response.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L71">				LOGGER.error(REQUEST_IS_NOT_VALID);</span>
+			}
+
+<span class="nc" id="L74">		} catch (Exception e) {</span>
+<span class="nc" id="L75">			LOGGER.error(REQUEST_IS_NOT_VALID, e);</span>
+<span class="nc" id="L76">			response.setDecision(DECISION.FAIL);</span>
+<span class="nc" id="L77">			response.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L78">		}</span>
+<span class="nc bnc" id="L79" title="All 4 branches missed.">		if (Boolean.FALSE.equals(isAccountValidate) || Boolean.FALSE.equals(isContactValidate)) {</span>
+<span class="nc" id="L80">			MessageExchange msgExchange = new MessageExchange();</span>
+<span class="nc" id="L81">			msgExchange.setServiceTypeEnum(ServiceTypeEnum.KYC_SERVICE);</span>
+<span class="nc" id="L82">			msgExchange.setResponse(response);</span>
+<span class="nc" id="L83">			message.getPayload().appendMessageExchange(msgExchange);</span>
+		}
+<span class="nc bnc" id="L85" title="All 2 branches missed.">		if (messageExchange != null)</span>
+<span class="nc" id="L86">			messageExchange.setResponse(response);</span>
+
+<span class="nc" id="L88">		return message;</span>
+	}
+
+	private Boolean validateAccountForKycResend(Integer accountId) throws ComplianceException {
+<span class="nc bnc" id="L92" title="All 4 branches missed.">		return (accountId != null &amp;&amp; newRegistrationDBServiceImpl.isAccountExistByDBId(accountId));</span>
+	}
+
+	private Boolean validateContactForKycResend(Integer contactId) throws ComplianceException {
+<span class="nc bnc" id="L96" title="All 4 branches missed.">		return (contactId != null &amp;&amp; newRegistrationDBServiceImpl.isContactExistByDBId(contactId));</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

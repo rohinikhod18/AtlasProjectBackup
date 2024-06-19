@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>EmailClientImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.externalservice.enterpriseport</a> &gt; <span class="el_source">EmailClientImpl.java</span></div><h1>EmailClientImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.externalservice.enterpriseport;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentEmailRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentInEmailRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentOutEmailRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentUpdateRequest;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.SoapClient;
+
+import communicationapi.EmailMessage;
+import communicationapi.MessageAttributes;
+import communicationapi.RequestHeader;
+
+<span class="nc" id="L26">public class EmailClientImpl implements IEmailClient{</span>
+	
+	private static final String UPDATED_PAYMENT_STATUS = &quot;#UpdatedPaymentStatus&quot;;
+<span class="nc" id="L29">  private static Logger log = LoggerFactory.getLogger(EmailClientImpl.class);</span>
+	
+	/**
+	 * Instantiates a new email client impl.
+	 */
+
+	@Override
+	public Boolean sendEmail(PaymentUpdateRequest paymentUpdateRequest, PaymentEmailRequest paymentEmailRequest) {
+<span class="nc" id="L37">		SoapClient client = SoapClient.getInstance();</span>
+<span class="nc" id="L38">		PaymentInEmailRequest paymentInEmailrequest = new PaymentInEmailRequest();</span>
+<span class="nc" id="L39">		PaymentOutEmailRequest paymentOutEmailRequest = new PaymentOutEmailRequest();</span>
+<span class="nc bnc" id="L40" title="All 2 branches missed.">		if(paymentEmailRequest instanceof PaymentInEmailRequest) {</span>
+<span class="nc" id="L41">			paymentInEmailrequest = (PaymentInEmailRequest) paymentEmailRequest;</span>
+		}
+<span class="nc bnc" id="L43" title="All 2 branches missed.">		else if(paymentEmailRequest instanceof PaymentOutEmailRequest){</span>
+<span class="nc" id="L44">			paymentOutEmailRequest = (PaymentOutEmailRequest) paymentEmailRequest;</span>
+		}
+		
+<span class="nc" id="L47">		EmailMessage message = null;</span>
+		
+<span class="nc bnc" id="L49" title="All 4 branches missed.">		if(null != paymentOutEmailRequest.getPaymentOutId() &amp;&amp; null == paymentInEmailrequest.getPaymentInId()) {</span>
+<span class="nc" id="L50">			message = prepareMessageForPaymentOutRejection(paymentOutEmailRequest);</span>
+		} 
+<span class="nc bnc" id="L52" title="All 4 branches missed.">		else if(null != paymentInEmailrequest.getPaymentInId() &amp;&amp; null == paymentOutEmailRequest.getPaymentOutId()){</span>
+<span class="nc" id="L53">			message = prepareMessageForPaymentInRejection(paymentInEmailrequest);</span>
+		}
+		
+<span class="nc" id="L56">		RequestHeader requestHeader = new RequestHeader();</span>
+<span class="nc" id="L57">		requestHeader.setOrganizationCode(paymentUpdateRequest.getOrgCode());</span>
+<span class="nc" id="L58">		requestHeader.setSource(Constants.SOURCE_ATLAS);</span>
+<span class="nc" id="L59">		Boolean result = Boolean.FALSE;</span>
+		try {
+<span class="nc" id="L61">			result = client.execute(message, requestHeader,Constants.SERVICE_FLOWNAME_EMAIL);</span>
+<span class="nc" id="L62">		} catch (Exception e) {</span>
+<span class="nc" id="L63">			log.error(&quot;Error in SendEmail()&quot;,e);</span>
+<span class="nc" id="L64">		}</span>
+<span class="nc" id="L65">		return result;</span>
+	}
+	
+	private EmailMessage prepareMessageForPaymentOutRejection(PaymentOutEmailRequest paymentOutEmailRequest) {
+<span class="nc" id="L69">		EmailMessage emailMessage = new EmailMessage();</span>
+<span class="nc" id="L70">		List&lt;MessageAttributes&gt; messageAttributesList = new ArrayList&lt;&gt;();</span>
+		
+<span class="nc" id="L72">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+		
+<span class="nc" id="L74">		Map&lt;String,String&gt; attributes = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">		if(Constants.REJECT.equalsIgnoreCase(paymentOutEmailRequest.getStatus())) {</span>
+<span class="nc" id="L76">			attributes.put(UPDATED_PAYMENT_STATUS, &quot;Rejected&quot;);</span>
+		} else {
+<span class="nc" id="L78">			attributes.put(UPDATED_PAYMENT_STATUS, &quot;Seized&quot;);</span>
+		}
+<span class="nc" id="L80">		attributes.put(&quot;#CustomerNumber&quot;, paymentOutEmailRequest.getClientNumber());</span>
+<span class="nc" id="L81">		attributes.put(&quot;#TradeContractId&quot;, paymentOutEmailRequest.getTradeContractId());</span>
+<span class="nc" id="L82">		attributes.put(&quot;#BeneficiaryAmount&quot;, paymentOutEmailRequest.getBeneficiaryAmount());</span>
+<span class="nc" id="L83">		attributes.put(&quot;#Currency&quot;, paymentOutEmailRequest.getCurrency());</span>
+<span class="nc" id="L84">		attributes.put(&quot;#PaymentStatus&quot;, paymentOutEmailRequest.getStatus());</span>
+<span class="nc" id="L85">		attributes.put(&quot;#TodayDate&quot;, DateTimeFormatter.dateTimeFormatter(timestamp));</span>
+<span class="nc" id="L86">		attributes.put(&quot;#UserName&quot;, paymentOutEmailRequest.getUserName());</span>
+<span class="nc" id="L87">		attributes.put(&quot;#StatusReason&quot;, paymentOutEmailRequest.getStatusReason());</span>
+<span class="nc" id="L88">		attributes.put(&quot;#Comment&quot;, paymentOutEmailRequest.getComment());</span>
+<span class="nc" id="L89">		attributes.put(&quot;#BeneficiaryName&quot;, paymentOutEmailRequest.getBeneficiaryName());</span>
+		
+<span class="nc" id="L91">		Set&lt;Map.Entry&lt;String, String&gt;&gt; entrySet = attributes.entrySet();</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">		for (Entry&lt;String, String&gt; entry : entrySet){</span>
+<span class="nc" id="L93">			MessageAttributes messageAttribute = new MessageAttributes();</span>
+<span class="nc" id="L94">			messageAttribute.setID(entry.getKey());</span>
+<span class="nc" id="L95">			messageAttribute.setValue(entry.getValue());</span>
+<span class="nc" id="L96">			messageAttributesList.add(messageAttribute);</span>
+<span class="nc" id="L97">		}</span>
+<span class="nc" id="L98">		emailMessage.setAttributes(messageAttributesList);</span>
+<span class="nc" id="L99">		emailMessage.setLocale(Constants.LOCALE_EN);</span>
+<span class="nc" id="L100">		emailMessage.setEvent(Constants.PAYMENT_OUT_REJECT_EVENT);</span>
+<span class="nc" id="L101">		emailMessage.setCustomerEmail(System.getProperty(paymentOutEmailRequest.getOrgCode().replaceAll(&quot;\\s+&quot;, &quot;&quot;).toLowerCase()+Constants.EAMIL_SENDTO) );</span>
+<span class="nc" id="L102">		emailMessage.setCustomerType(paymentOutEmailRequest.getCustType());	</span>
+		
+<span class="nc" id="L104">		return emailMessage;</span>
+	}
+	
+	private EmailMessage prepareMessageForPaymentInRejection(PaymentInEmailRequest paymentInEmailrequest) {
+<span class="nc" id="L108">		EmailMessage emailMessage = new EmailMessage();</span>
+<span class="nc" id="L109">		List&lt;MessageAttributes&gt; messageAttributesList = new ArrayList&lt;&gt;();</span>
+		
+<span class="nc" id="L111">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+		
+<span class="nc" id="L113">		Map&lt;String,String&gt; attributes = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">		if(Constants.REJECT.equalsIgnoreCase(paymentInEmailrequest.getStatus())) {</span>
+<span class="nc" id="L115">			attributes.put(UPDATED_PAYMENT_STATUS, &quot;Rejected&quot;);</span>
+		} else {
+<span class="nc" id="L117">			attributes.put(UPDATED_PAYMENT_STATUS, &quot;Seized&quot;);</span>
+		}
+<span class="nc" id="L119">		attributes.put(&quot;#CustomerNumber&quot;, paymentInEmailrequest.getClientNumber());</span>
+<span class="nc" id="L120">		attributes.put(&quot;#TradeContractId&quot;, paymentInEmailrequest.getTradeContractId());</span>
+<span class="nc" id="L121">		attributes.put(&quot;#DebtorAmount&quot;, paymentInEmailrequest.getDebtorAmount());</span>
+<span class="nc" id="L122">		attributes.put(&quot;#Currency&quot;, paymentInEmailrequest.getCurrency());</span>
+<span class="nc" id="L123">		attributes.put(&quot;#PaymentStatus&quot;, paymentInEmailrequest.getStatus());</span>
+<span class="nc" id="L124">		attributes.put(&quot;#TodayDate&quot;, DateTimeFormatter.dateTimeFormatter(timestamp));</span>
+<span class="nc" id="L125">		attributes.put(&quot;#UserName&quot;, paymentInEmailrequest.getUserName());</span>
+<span class="nc" id="L126">		attributes.put(&quot;#StatusReason&quot;, paymentInEmailrequest.getStatusReason());</span>
+<span class="nc" id="L127">		attributes.put(&quot;#Comment&quot;, paymentInEmailrequest.getComment());</span>
+<span class="nc" id="L128">		attributes.put(&quot;#PaymentMethod&quot;, paymentInEmailrequest.getPaymentMethod());</span>
+		
+<span class="nc" id="L130">		Set&lt;Map.Entry&lt;String, String&gt;&gt; entrySet = attributes.entrySet();</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">		for (Entry&lt;String, String&gt; entry : entrySet){</span>
+<span class="nc" id="L132">			MessageAttributes messageAttribute = new MessageAttributes();</span>
+<span class="nc" id="L133">			messageAttribute.setID(entry.getKey());</span>
+<span class="nc" id="L134">			messageAttribute.setValue(entry.getValue());</span>
+<span class="nc" id="L135">			messageAttributesList.add(messageAttribute);</span>
+<span class="nc" id="L136">		}</span>
+<span class="nc" id="L137">		emailMessage.setAttributes(messageAttributesList);</span>
+<span class="nc" id="L138">		emailMessage.setLocale(Constants.LOCALE_EN);</span>
+<span class="nc" id="L139">		emailMessage.setEvent(Constants.PAYMENT_IN_REJECT_EVENT);</span>
+<span class="nc" id="L140">		emailMessage.setCustomerEmail(System.getProperty(paymentInEmailrequest.getOrgCode().replaceAll(&quot;\\s+&quot;, &quot;&quot;).toLowerCase()+Constants.EAMIL_SENDTO) );</span>
+<span class="nc" id="L141">		emailMessage.setCustomerType(paymentInEmailrequest.getCustType());</span>
+		
+<span class="nc" id="L143">		return emailMessage;</span>
+	}
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

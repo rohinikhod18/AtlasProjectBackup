@@ -1,0 +1,910 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">sanction-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.sanction.core</a> &gt; <span class="el_source">ServiceImpl.java</span></div><h1>ServiceImpl.java</h1><pre class="source lang-java linenums">/*******************************************************************************
+ * 
+ * Copyright 2017 Currencies Direct Ltd, United Kingdom
+ * 
+ * Compliance: ServiceImpl.java
+ ******************************************************************************/
+package com.currenciesdirect.gtg.compliance.sanction.core;
+
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.IDomain;
+import com.currenciesdirect.gtg.compliance.commons.domain.config.ProviderProperty;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse;
+import com.currenciesdirect.gtg.compliance.commons.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.commons.util.ObjectCloner;
+import com.currenciesdirect.gtg.compliance.commons.validator.FieldValidator;
+import com.currenciesdirect.gtg.compliance.sanction.core.domain.SanctionGetStatusRequest;
+import com.currenciesdirect.gtg.compliance.sanction.core.domain.SanctionGetStatusResponse;
+import com.currenciesdirect.gtg.compliance.sanction.core.validator.SanctionValidator;
+import com.currenciesdirect.gtg.compliance.sanction.exception.SanctionErrors;
+import com.currenciesdirect.gtg.compliance.sanction.exception.SanctionException;
+import com.currenciesdirect.gtg.compliance.sanction.finscanport.FinscanPort;
+import com.currenciesdirect.gtg.compliance.sanction.finscanport.SLLookUpMultiTask;
+import com.currenciesdirect.gtg.compliance.sanction.finscanport.SlGetStatusTask;
+import com.currenciesdirect.gtg.compliance.sanction.util.Constants;
+
+/**
+ * The Class ServiceImpl.
+ * 
+ * This is Sanction service class. This service takes request coming from
+ * compliance-service and gets sanction details from sanction provider(Finscan)
+ * against that request.
+ * 
+ * @author abhijitg
+ */
+public class ServiceImpl implements IService {
+
+	/** The Constant LOG. */
+<span class="fc" id="L55">	private static final Logger LOG = LoggerFactory.getLogger(ServiceImpl.class);</span>
+
+	/** The service impl. */
+<span class="fc" id="L58">	private static ServiceImpl serviceImpl = null;</span>
+	
+	/** The iservice port. */
+<span class="fc" id="L61">	private ISanctionService iservicePort = FinscanPort.getInstance();</span>
+	
+	/** The concrete data builder. */
+<span class="fc" id="L64">	private SanctionConcreteDataBuilder concreteDataBuilder = SanctionConcreteDataBuilder.getInstance();</span>
+	
+	/** The i sanctionvalidator. */
+<span class="fc" id="L67">	private ISanctionvalidator iSanctionvalidator = SanctionValidator.getInstance();</span>
+
+	/**
+	 * Instantiates a new service impl.
+	 */
+<span class="fc" id="L72">	private ServiceImpl() {</span>
+
+<span class="fc" id="L74">	}</span>
+
+	/**
+	 * Gets the single instance of ServiceImpl.
+	 *
+	 * @return single instance of ServiceImpl
+	 */
+	public static ServiceImpl getInstance() {
+<span class="nc bnc" id="L82" title="All 2 branches missed.">		if (serviceImpl == null) {</span>
+<span class="nc" id="L83">			serviceImpl = new ServiceImpl();</span>
+		}
+<span class="nc" id="L85">		return serviceImpl;</span>
+	}
+
+	/**
+	 * Sanction service performs sanction check on five types of entities 1)
+	 * Contact 2) Bank 3) Beneficiary 4) Account(Company) 5)Debtor Implementation steps :
+	 * 1) validate the request 2) if request is invalid return response with
+	 * invalid request error else go to step 3 3) get provider properties from
+	 * provider config cache(This cache is initialized at the deployment time.
+	 * Cache contains sanction provider url,passwords and other information
+	 * which are saved in database) 4) create getstatus and sllookupMulti
+	 * tasks(get status and sllookupmulti are finscan provider methods, if
+	 * sanction is being performed for first time on respected entity then
+	 * sllookupmulti task is added for that entity otherwise slgetstatus. This
+	 * decision is taken from &quot;isexisting&quot; field present in request. Here task
+	 * executor pattern is used for multi-threading) 5) submit tasks to
+	 * executors service.(There are executors 1)SlgetStatusTask
+	 * 2)SlLookupMultiTask both are responsible for transforming request to
+	 * provider acceptable format,call provider and transform response) 6) after
+	 * execution of step 5, merge responses of both executors to sanction
+	 * response object 7) return response to compliance-service.
+	 *
+	 * @param sanctionRequest the sanction request
+	 * @return the sanction details
+	 * @throws SanctionException the sanction exception
+	 */
+	@Override
+	public SanctionResponse getSanctionDetails(SanctionRequest sanctionRequest) throws SanctionException {
+		/*SanctionResponse sanctionsResponse = new SanctionResponse();
+
+		List&lt;Callable&lt;IDomain&gt;&gt; lst = new ArrayList&lt;&gt;();
+		ProviderProperty providerProperty = null;
+		FieldValidator fv = new FieldValidator();
+		try {
+
+			fv = iSanctionvalidator.validateRequest(sanctionRequest);
+			if (fv != null &amp;&amp; !fv.isFailed()) {
+				SanctionContactResponse conResponse = new SanctionContactResponse();
+				conResponse.setContactId(sanctionRequest.getContactrequests().get(0).getContactId());
+				conResponse.setErrorCode(SanctionErrors.VALIDATION_EXCEPTION.getErrorCode());
+				conResponse.setErrorDescription(
+						SanctionErrors.VALIDATION_EXCEPTION.getErrorDescription() + fv.getErrors());
+				List&lt;SanctionContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();
+				contactResponses.add(conResponse);
+				LOG.error(SanctionErrors.VALIDATION_EXCEPTION.getErrorDescription());
+				sanctionsResponse.setErrorCode(SanctionErrors.VALIDATION_EXCEPTION.getErrorCode());
+				sanctionsResponse.setErrorDescription(
+						SanctionErrors.VALIDATION_EXCEPTION.getErrorDescription() + fv.getErrors());
+				sanctionsResponse.setContactResponses(contactResponses);
+				return sanctionsResponse;
+			}
+			providerProperty = concreteDataBuilder.getProviderInitConfigProperty(Constants.FINSCAN_PROVIDER);
+
+			
+			SanctionRequest cloneSanctionRequest = (SanctionRequest) ObjectCloner.deepCopy(sanctionRequest);
+			createTasks(sanctionRequest, lst, providerProperty);
+
+			if (!lst.isEmpty()) {
+
+				sanctionsResponse = invokeExecutors(lst, cloneSanctionRequest);
+			} else {
+				sanctionsResponse = iservicePort.checkSanctionDetails(sanctionRequest, providerProperty);
+			}
+			callSLMultiForClientNotExsist(cloneSanctionRequest, sanctionsResponse, providerProperty);
+
+		} catch (SanctionException e) {
+			throw e;
+		} catch (Exception e) {
+			LOG.error(&quot;Error in ServiceImpl : getSanctionDetails()&quot;, e);
+			throw new SanctionException(SanctionErrors.ERROR_WHILE_SENDING_REQUEST_TO_SANCTION_PROVIDER);
+		}*/
+<span class="nc" id="L156">		SanctionResponse sanctionResponse = new SanctionResponse();</span>
+<span class="nc" id="L157">		List&lt;SanctionContactResponse&gt; sanctionContactResponseList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L158">		SanctionContactResponse sanctionContactResponse=new SanctionContactResponse();</span>
+<span class="nc" id="L159">		sanctionContactResponse.setOfacList(&quot;Safe&quot;);</span>
+<span class="nc" id="L160">		sanctionContactResponse.setWorldCheck(&quot;Safe&quot;);</span>
+<span class="nc" id="L161">		sanctionContactResponse.setStatus(&quot;Pass&quot;);</span>
+<span class="nc" id="L162">		sanctionContactResponseList.add(sanctionContactResponse);</span>
+<span class="nc" id="L163">		sanctionResponse.setContactResponses(sanctionContactResponseList);</span>
+		
+<span class="nc" id="L165">		List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponseList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L166">		SanctionBeneficiaryResponse beneficiaryResponse =new SanctionBeneficiaryResponse();</span>
+<span class="nc" id="L167">		beneficiaryResponse.setOfacList(&quot;Safe&quot;);</span>
+<span class="nc" id="L168">		beneficiaryResponse.setWorldCheck(&quot;Safe&quot;);</span>
+<span class="nc" id="L169">		beneficiaryResponse.setStatus(&quot;Pass&quot;);</span>
+<span class="nc" id="L170">		beneficiaryResponseList.add(beneficiaryResponse);</span>
+<span class="nc" id="L171">		sanctionResponse.setBeneficiaryResponses(beneficiaryResponseList);</span>
+		
+<span class="nc" id="L173">		List&lt;SanctionBankResponse&gt; SanctionBankResponseList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L174">		SanctionBankResponse bankResponse=new SanctionBankResponse();</span>
+<span class="nc" id="L175">		bankResponse.setOfacList(&quot;Safe&quot;);</span>
+<span class="nc" id="L176">		bankResponse.setWorldCheck(&quot;Safe&quot;);</span>
+<span class="nc" id="L177">		bankResponse.setStatus(&quot;Pass&quot;);</span>
+<span class="nc" id="L178">		SanctionBankResponseList.add(bankResponse);</span>
+<span class="nc" id="L179">		sanctionResponse.setBankResponses(SanctionBankResponseList);</span>
+<span class="nc" id="L180">		String jsonAccountSignupResponse = JsonConverterUtil.convertToJsonWithNull(sanctionResponse);</span>
+<span class="nc" id="L181">		 LOG.warn(&quot;\n ------- KYC Response Start -------- \n  {}&quot;, jsonAccountSignupResponse);</span>
+<span class="nc" id="L182">		return sanctionResponse;</span>
+	}
+
+	/**
+	 * Invoke executors.
+	 *
+	 * @param lst the lst
+	 * @param request the request
+	 * @return the sanction response
+	 * @throws InterruptedException the interrupted exception
+	 * @throws ExecutionException the execution exception
+	 * @throws SanctionException the sanction exception
+	 */
+	private SanctionResponse invokeExecutors(List&lt;Callable&lt;IDomain&gt;&gt; lst, SanctionRequest request)
+			throws InterruptedException, ExecutionException, SanctionException {
+<span class="nc" id="L197">		ExecutorService sanctionExecutors = SanctionExecutors.getExecutorService();</span>
+<span class="nc" id="L198">		SanctionResponse sanctionMultiResponse = new SanctionResponse();</span>
+		SanctionResponse finalMultiResponse;
+<span class="nc" id="L200">		SanctionResponse sanctionGetStatusResponse = new SanctionResponse();</span>
+<span class="nc" id="L201">		List&lt;SanctionContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L202">		List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L203">		List&lt;SanctionBankResponse&gt; bankResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L204">		sanctionGetStatusResponse.setContactResponses(contactResponses);</span>
+<span class="nc" id="L205">		sanctionGetStatusResponse.setBeneficiaryResponses(beneficiaryResponses);</span>
+<span class="nc" id="L206">		sanctionGetStatusResponse.setBankResponses(bankResponses);</span>
+
+<span class="nc" id="L208">		List&lt;Future&lt;IDomain&gt;&gt; tasks = sanctionExecutors.invokeAll(lst);</span>
+
+<span class="nc bnc" id="L210" title="All 2 branches missed.">		for (Future&lt;IDomain&gt; task : tasks) {</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">			if (task.get() instanceof SanctionResponse) {</span>
+<span class="nc" id="L212">				sanctionMultiResponse = (SanctionResponse) task.get();</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">			} else if (task.get() instanceof SanctionGetStatusResponse) {</span>
+				SanctionGetStatusResponse getStatusResponse;
+<span class="nc" id="L215">				getStatusResponse = (SanctionGetStatusResponse) task.get();</span>
+<span class="nc bnc" id="L216" title="All 4 branches missed.">				switch (getStatusResponse.getApplicationId()) {</span>
+				case Constants.CLNTS:
+<span class="nc" id="L218">					SanctionContactResponse contactResponse = populategetStatusContactResponse(getStatusResponse,</span>
+							request);
+<span class="nc" id="L220">					sanctionGetStatusResponse.getContactResponses().add(contactResponse);</span>
+<span class="nc" id="L221">					break;</span>
+
+				case Constants.BNFC:
+<span class="nc" id="L224">					SanctionBeneficiaryResponse beneficiaryResponse = populateGetStatusBeneficiaryResponse(</span>
+							getStatusResponse,request);
+<span class="nc" id="L226">					sanctionGetStatusResponse.getBeneficiaryResponses().add(beneficiaryResponse);</span>
+<span class="nc" id="L227">					break;</span>
+
+				case Constants.BANK:
+<span class="nc" id="L230">					SanctionBankResponse bankResponse = populateGetStatusBankResponse(getStatusResponse,request);</span>
+<span class="nc" id="L231">					sanctionGetStatusResponse.getBankResponses().add(bankResponse);</span>
+<span class="nc" id="L232">					break;</span>
+				default:
+<span class="nc" id="L234">					LOG.error(&quot;Wrong applicationID in sanctionresponse&quot;);</span>
+<span class="nc" id="L235">					throw new SanctionException(SanctionErrors.SANCTION_GENERIC_EXCEPTION);</span>
+				}
+			}
+<span class="nc" id="L238">		}</span>
+<span class="nc" id="L239">		finalMultiResponse = mergeSanctionResponses(sanctionMultiResponse, sanctionGetStatusResponse);</span>
+
+<span class="nc" id="L241">		return finalMultiResponse;</span>
+	}
+
+	/**
+	 * Populate get status bank response.
+	 *
+	 * @param getStatusResponse the get status response
+	 * @param request the request
+	 * @return the sanction bank response
+	 */
+	private SanctionBankResponse populateGetStatusBankResponse(SanctionGetStatusResponse getStatusResponse,SanctionRequest request) {
+<span class="nc" id="L252">		SanctionBankRequest bankRequest = getSanctionBankRequestById(request, getStatusResponse.getId());</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">		if(null != bankRequest)</span>
+<span class="nc" id="L254">			setOfacAndWcFromPreValues(getStatusResponse, bankRequest.getPreviousStatus(), bankRequest.getPreviousOfac(),bankRequest.getPreviousWorldCheck());</span>
+<span class="nc" id="L255">		SanctionBankResponse bankResponse = new SanctionBankResponse();</span>
+<span class="nc" id="L256">		bankResponse.setBankID(getStatusResponse.getId());</span>
+<span class="nc" id="L257">		bankResponse.setPendingCount(getStatusResponse.getPendingCount());</span>
+<span class="nc" id="L258">		bankResponse.setResultsCount(getStatusResponse.getResultsCount());</span>
+<span class="nc" id="L259">		bankResponse.setSanctionId(getStatusResponse.getSanctionId());</span>
+<span class="nc" id="L260">		bankResponse.setStatus(getStatusResponse.getStatus());</span>
+<span class="nc" id="L261">		bankResponse.setStatusDescription(getStatusResponse.getStatusDescription());</span>
+<span class="nc" id="L262">		bankResponse.setProviderResponse(getStatusResponse.getProviderResponse());</span>
+<span class="nc" id="L263">		bankResponse.setProviderName(Constants.FINSCAN_PROVIDER);</span>
+<span class="nc" id="L264">		bankResponse.setProviderMethod(Constants.PROVIDER_METHOD_SL_GET_STATUS);</span>
+<span class="nc" id="L265">		bankResponse.setErrorCode(getStatusResponse.getErrorCode());</span>
+<span class="nc" id="L266">		bankResponse.setErrorDescription(getStatusResponse.getErrorDescription());</span>
+<span class="nc" id="L267">		bankResponse.setOfacList(getStatusResponse.getOfacList());</span>
+<span class="nc" id="L268">		bankResponse.setWorldCheck(getStatusResponse.getWorldCheck());</span>
+<span class="nc" id="L269">		return bankResponse;</span>
+	}
+
+	/**
+	 * Populate get status beneficiary response.
+	 *
+	 * @param getStatusResponse the get status response
+	 * @param request the request
+	 * @return the sanction beneficiary response
+	 */
+	private SanctionBeneficiaryResponse populateGetStatusBeneficiaryResponse(
+			SanctionGetStatusResponse getStatusResponse,SanctionRequest request) {
+<span class="nc" id="L281">		SanctionBeneficiaryRequest beneRequest = getSanctionBeneficiaryRequestById(request, getStatusResponse.getId());</span>
+<span class="nc bnc" id="L282" title="All 2 branches missed.">		if(null != beneRequest)</span>
+<span class="nc" id="L283">			setOfacAndWcFromPreValues(getStatusResponse, beneRequest.getPreviousStatus(), beneRequest.getPreviousOfac(),beneRequest.getPreviousWorldCheck());</span>
+<span class="nc" id="L284">		SanctionBeneficiaryResponse beneficiaryResponse = new SanctionBeneficiaryResponse();</span>
+<span class="nc" id="L285">		beneficiaryResponse.setBeneficiaryId(getStatusResponse.getId());</span>
+<span class="nc" id="L286">		beneficiaryResponse.setPendingCount(getStatusResponse.getPendingCount());</span>
+<span class="nc" id="L287">		beneficiaryResponse.setResultsCount(getStatusResponse.getResultsCount());</span>
+<span class="nc" id="L288">		beneficiaryResponse.setSanctionId(getStatusResponse.getSanctionId());</span>
+<span class="nc" id="L289">		beneficiaryResponse.setStatus(getStatusResponse.getStatus());</span>
+<span class="nc" id="L290">		beneficiaryResponse.setStatusDescription(getStatusResponse.getStatusDescription());</span>
+<span class="nc" id="L291">		beneficiaryResponse.setProviderResponse(getStatusResponse.getProviderResponse());</span>
+<span class="nc" id="L292">		beneficiaryResponse.setProviderName(Constants.FINSCAN_PROVIDER);</span>
+<span class="nc" id="L293">		beneficiaryResponse.setProviderMethod(Constants.PROVIDER_METHOD_SL_GET_STATUS);</span>
+<span class="nc" id="L294">		beneficiaryResponse.setErrorCode(getStatusResponse.getErrorCode());</span>
+<span class="nc" id="L295">		beneficiaryResponse.setErrorDescription(getStatusResponse.getErrorDescription());</span>
+<span class="nc" id="L296">		beneficiaryResponse.setOfacList(getStatusResponse.getOfacList());</span>
+<span class="nc" id="L297">		beneficiaryResponse.setWorldCheck(getStatusResponse.getWorldCheck());</span>
+<span class="nc" id="L298">		return beneficiaryResponse;</span>
+	}
+
+	/**
+	 *  Set ofacList and worldCheck in ContactResponse -Saylee.
+	 *
+	 * @param getStatusResponse the get status response
+	 * @param request the request
+	 * @return the sanction contact response
+	 */
+	private SanctionContactResponse populategetStatusContactResponse(SanctionGetStatusResponse getStatusResponse,
+			SanctionRequest request) {
+
+<span class="nc" id="L311">		SanctionContactRequest contactRequest = getSanctionContactRequestById(request, getStatusResponse.getId());</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">		if(null != contactRequest)</span>
+<span class="nc" id="L313">			setSanctionOfacAndWc(getStatusResponse, contactRequest);</span>
+
+<span class="nc" id="L315">		SanctionContactResponse contactResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L316">		contactResponse.setContactId(getStatusResponse.getId());</span>
+<span class="nc" id="L317">		contactResponse.setPendingCount(getStatusResponse.getPendingCount());</span>
+<span class="nc" id="L318">		contactResponse.setResultsCount(getStatusResponse.getResultsCount());</span>
+<span class="nc" id="L319">		contactResponse.setSanctionId(getStatusResponse.getSanctionId());</span>
+<span class="nc" id="L320">		contactResponse.setStatus(getStatusResponse.getStatus());</span>
+<span class="nc" id="L321">		contactResponse.setStatusDescription(getStatusResponse.getStatusDescription());</span>
+<span class="nc" id="L322">		contactResponse.setProviderResponse(getStatusResponse.getProviderResponse());</span>
+<span class="nc" id="L323">		contactResponse.setProviderName(Constants.FINSCAN_PROVIDER);</span>
+<span class="nc" id="L324">		contactResponse.setProviderMethod(Constants.PROVIDER_METHOD_SL_GET_STATUS);</span>
+<span class="nc" id="L325">		contactResponse.setErrorCode(getStatusResponse.getErrorCode());</span>
+<span class="nc" id="L326">		contactResponse.setErrorDescription(getStatusResponse.getErrorDescription());</span>
+<span class="nc" id="L327">		contactResponse.setOfacList(getStatusResponse.getOfacList());</span>
+<span class="nc" id="L328">		contactResponse.setWorldCheck(getStatusResponse.getWorldCheck());</span>
+<span class="nc" id="L329">		return contactResponse;</span>
+	}
+
+	/**
+	 * Merge sanction responses.
+	 *
+	 * @param multiResponse the multi response
+	 * @param getStatusResponse the get status response
+	 * @return the sanction response
+	 */
+	private SanctionResponse mergeSanctionResponses(SanctionResponse multiResponse,
+			SanctionResponse getStatusResponse) {
+<span class="nc" id="L341">		SanctionResponse sanctionResponse = new SanctionResponse();</span>
+<span class="nc" id="L342">		List&lt;SanctionContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L343">		List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L344">		List&lt;SanctionBankResponse&gt; bankResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L345">		sanctionResponse.setContactResponses(contactResponses);</span>
+<span class="nc" id="L346">		sanctionResponse.setBeneficiaryResponses(beneficiaryResponses);</span>
+<span class="nc" id="L347">		sanctionResponse.setBankResponses(bankResponses);</span>
+
+<span class="nc" id="L349">		mergeGetStatusSanctionResponses(getStatusResponse, sanctionResponse);</span>
+
+<span class="nc" id="L351">		mergerLookUpMultiResponses(multiResponse, sanctionResponse);</span>
+
+<span class="nc" id="L353">		return sanctionResponse;</span>
+	}
+
+	/**
+	 * Merger look up multi responses.
+	 *
+	 * @param multiResponse the multi response
+	 * @param sanctionResponse the sanction response
+	 */
+	private void mergerLookUpMultiResponses(SanctionResponse multiResponse, SanctionResponse sanctionResponse) {
+<span class="nc bnc" id="L363" title="All 4 branches missed.">		if (multiResponse.getContactResponses() != null &amp;&amp; !multiResponse.getContactResponses().isEmpty()) {</span>
+<span class="nc bnc" id="L364" title="All 2 branches missed.">			for (SanctionContactResponse contactResponse : multiResponse.getContactResponses()) {</span>
+<span class="nc" id="L365">				sanctionResponse.getContactResponses().add(contactResponse);</span>
+<span class="nc" id="L366">			}</span>
+		}
+
+<span class="nc bnc" id="L369" title="All 4 branches missed.">		if (multiResponse.getBeneficiaryResponses() != null &amp;&amp; !multiResponse.getBeneficiaryResponses().isEmpty()) {</span>
+<span class="nc bnc" id="L370" title="All 2 branches missed.">			for (SanctionBeneficiaryResponse beneficiaryResponse : multiResponse.getBeneficiaryResponses()) {</span>
+<span class="nc" id="L371">				sanctionResponse.getBeneficiaryResponses().add(beneficiaryResponse);</span>
+<span class="nc" id="L372">			}</span>
+		}
+<span class="nc bnc" id="L374" title="All 4 branches missed.">		if (multiResponse.getBankResponses() != null &amp;&amp; !multiResponse.getBankResponses().isEmpty()) {</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">			for (SanctionBankResponse bankResponse : multiResponse.getBankResponses()) {</span>
+<span class="nc" id="L376">				sanctionResponse.getBankResponses().add(bankResponse);</span>
+<span class="nc" id="L377">			}</span>
+		}
+<span class="nc" id="L379">		sanctionResponse.setProviderResponse(multiResponse.getProviderResponse());</span>
+<span class="nc" id="L380">		sanctionResponse.setErrorCode(multiResponse.getErrorCode());</span>
+<span class="nc" id="L381">		sanctionResponse.setErrorDescription(multiResponse.getErrorDescription());</span>
+<span class="nc" id="L382">	}</span>
+
+	/**
+	 * Merge get status sanction responses.
+	 *
+	 * @param getStatusResponse the get status response
+	 * @param sanctionResponse the sanction response
+	 */
+	private void mergeGetStatusSanctionResponses(SanctionResponse getStatusResponse,
+			SanctionResponse sanctionResponse) {
+<span class="nc bnc" id="L392" title="All 4 branches missed.">		if (getStatusResponse.getContactResponses() != null &amp;&amp; !getStatusResponse.getContactResponses().isEmpty()) {</span>
+<span class="nc bnc" id="L393" title="All 2 branches missed.">			for (SanctionContactResponse contactResponse : getStatusResponse.getContactResponses()) {</span>
+<span class="nc" id="L394">				sanctionResponse.getContactResponses().add(contactResponse);</span>
+<span class="nc" id="L395">			}</span>
+		}
+
+<span class="nc bnc" id="L398" title="All 2 branches missed.">		if (getStatusResponse.getBeneficiaryResponses() != null</span>
+<span class="nc bnc" id="L399" title="All 2 branches missed.">				&amp;&amp; !getStatusResponse.getBeneficiaryResponses().isEmpty()) {</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">			for (SanctionBeneficiaryResponse beneficiaryResponse : getStatusResponse.getBeneficiaryResponses()) {</span>
+<span class="nc" id="L401">				sanctionResponse.getBeneficiaryResponses().add(beneficiaryResponse);</span>
+<span class="nc" id="L402">			}</span>
+		}
+<span class="nc bnc" id="L404" title="All 4 branches missed.">		if (getStatusResponse.getBankResponses() != null &amp;&amp; !getStatusResponse.getBankResponses().isEmpty()) {</span>
+<span class="nc bnc" id="L405" title="All 2 branches missed.">			for (SanctionBankResponse bankResponse : getStatusResponse.getBankResponses()) {</span>
+<span class="nc" id="L406">				sanctionResponse.getBankResponses().add(bankResponse);</span>
+<span class="nc" id="L407">			}</span>
+		}
+<span class="nc" id="L409">	}</span>
+
+	/**
+	 * Creates the tasks.
+	 *
+	 * @param sanctionRequest the sanction request
+	 * @param lst the lst
+	 * @param providerProperty the provider property
+	 */
+	private void createTasks(SanctionRequest sanctionRequest, List&lt;Callable&lt;IDomain&gt;&gt; lst,
+			ProviderProperty providerProperty) {
+<span class="nc" id="L420">		List&lt;SanctionContactRequest&gt; contactRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L421">		List&lt;SanctionBeneficiaryRequest&gt; beneficiaryRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L422">		List&lt;SanctionBankRequest&gt; bankRequests = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L424" title="All 2 branches missed.">		if (sanctionRequest.getContactrequests() != null) {</span>
+
+<span class="nc" id="L426">			createGetStatusTasksForContact(sanctionRequest, lst, providerProperty, contactRequests);</span>
+		}
+
+<span class="nc bnc" id="L429" title="All 2 branches missed.">		if (sanctionRequest.getBeneficiaryRequests() != null) {</span>
+<span class="nc" id="L430">			createGetStatusTaskForBeneficiary(sanctionRequest, lst, providerProperty, beneficiaryRequests);</span>
+		}
+
+<span class="nc bnc" id="L433" title="All 2 branches missed.">		if (sanctionRequest.getBankRequests() != null) {</span>
+<span class="nc" id="L434">			createGetStatusTaskForBank(sanctionRequest, lst, providerProperty, bankRequests);</span>
+		}
+
+<span class="nc bnc" id="L437" title="All 6 branches missed.">		if (!(bankRequests.isEmpty() &amp;&amp; beneficiaryRequests.isEmpty() &amp;&amp; contactRequests.isEmpty())) {</span>
+<span class="nc" id="L438">			lst.add(new SLLookUpMultiTask(sanctionRequest, providerProperty));</span>
+		}
+<span class="nc" id="L440">		sanctionRequest.setBankRequests(bankRequests);</span>
+<span class="nc" id="L441">		sanctionRequest.setBeneficiaryRequests(beneficiaryRequests);</span>
+<span class="nc" id="L442">		sanctionRequest.setContactrequests(contactRequests);</span>
+<span class="nc" id="L443">	}</span>
+
+	/**
+	 * Creates the get status task for bank.
+	 *
+	 * @param sanctionRequest the sanction request
+	 * @param lst the lst
+	 * @param providerProperty the provider property
+	 * @param bankRequests the bank requests
+	 */
+	private void createGetStatusTaskForBank(SanctionRequest sanctionRequest, List&lt;Callable&lt;IDomain&gt;&gt; lst,
+			ProviderProperty providerProperty, List&lt;SanctionBankRequest&gt; bankRequests) {
+<span class="nc" id="L455">		bankRequests.addAll(sanctionRequest.getBankRequests());</span>
+<span class="nc bnc" id="L456" title="All 2 branches missed.">		for (SanctionBankRequest bankRequest : sanctionRequest.getBankRequests()) {</span>
+<span class="nc bnc" id="L457" title="All 2 branches missed.">			if (Boolean.TRUE.equals(bankRequest.getIsExisting())) {</span>
+<span class="nc" id="L458">				SanctionGetStatusRequest fundsOutRequest = populateGetStatusRequestforBank(bankRequest);</span>
+<span class="nc" id="L459">				lst.add(new SlGetStatusTask(fundsOutRequest, providerProperty));</span>
+<span class="nc" id="L460">				bankRequests.remove(bankRequest);</span>
+			}
+<span class="nc" id="L462">		}</span>
+<span class="nc" id="L463">	}</span>
+
+	/**
+	 * Creates the get status task for beneficiary.
+	 *
+	 * @param sanctionRequest the sanction request
+	 * @param lst the lst
+	 * @param providerProperty the provider property
+	 * @param beneficiaryRequests the beneficiary requests
+	 */
+	private void createGetStatusTaskForBeneficiary(SanctionRequest sanctionRequest, List&lt;Callable&lt;IDomain&gt;&gt; lst,
+			ProviderProperty providerProperty, List&lt;SanctionBeneficiaryRequest&gt; beneficiaryRequests) {
+<span class="nc" id="L475">		beneficiaryRequests.addAll(sanctionRequest.getBeneficiaryRequests());</span>
+<span class="nc bnc" id="L476" title="All 2 branches missed.">		for (SanctionBeneficiaryRequest beneficiaryRequest : sanctionRequest.getBeneficiaryRequests()) {</span>
+<span class="nc bnc" id="L477" title="All 2 branches missed.">			if (Boolean.TRUE.equals(beneficiaryRequest.getIsExisting())) {</span>
+<span class="nc" id="L478">				SanctionGetStatusRequest fundsOutRequest = populateGetStatusRequestforBeneficiary(beneficiaryRequest);</span>
+<span class="nc" id="L479">				lst.add(new SlGetStatusTask(fundsOutRequest, providerProperty));</span>
+<span class="nc" id="L480">				beneficiaryRequests.remove(beneficiaryRequest);</span>
+			}
+<span class="nc" id="L482">		}</span>
+<span class="nc" id="L483">	}</span>
+
+	/**
+	 * Creates the get status tasks for contact.
+	 *
+	 * @param sanctionRequest the sanction request
+	 * @param lst the lst
+	 * @param providerProperty the provider property
+	 * @param contactRequests the contact requests
+	 */
+	private void createGetStatusTasksForContact(SanctionRequest sanctionRequest, List&lt;Callable&lt;IDomain&gt;&gt; lst,
+			ProviderProperty providerProperty, List&lt;SanctionContactRequest&gt; contactRequests) {
+<span class="nc" id="L495">		contactRequests.addAll(sanctionRequest.getContactrequests());</span>
+<span class="nc bnc" id="L496" title="All 2 branches missed.">		for (SanctionContactRequest contactRequest : sanctionRequest.getContactrequests()) {</span>
+<span class="nc bnc" id="L497" title="All 2 branches missed.">			if (Boolean.TRUE.equals(contactRequest.getIsExisting())) {</span>
+<span class="nc" id="L498">				SanctionGetStatusRequest fundsOutRequest = populateGetStatusRequestforContact(contactRequest);</span>
+<span class="nc" id="L499">				lst.add(new SlGetStatusTask(fundsOutRequest, providerProperty));</span>
+<span class="nc" id="L500">				contactRequests.remove(contactRequest);</span>
+			}
+<span class="nc" id="L502">		}</span>
+<span class="nc" id="L503">	}</span>
+
+	/**
+	 * Populate get status requestfor contact.
+	 *
+	 * @param contactRequest the contact request
+	 * @return the sanction get status request
+	 */
+	private SanctionGetStatusRequest populateGetStatusRequestforContact(SanctionContactRequest contactRequest) {
+<span class="nc" id="L512">		SanctionGetStatusRequest fundsOutRequest = new SanctionGetStatusRequest();</span>
+<span class="nc" id="L513">		fundsOutRequest.setApplicationId(Constants.CLNTS);</span>
+<span class="nc" id="L514">		fundsOutRequest.setCountry(contactRequest.getCountry());</span>
+<span class="nc" id="L515">		fundsOutRequest.setDob(contactRequest.getDob());</span>
+<span class="nc" id="L516">		fundsOutRequest.setFullName(contactRequest.getFullName());</span>
+<span class="nc" id="L517">		fundsOutRequest.setGender(contactRequest.getGender());</span>
+<span class="nc" id="L518">		fundsOutRequest.setId(contactRequest.getContactId());</span>
+<span class="nc" id="L519">		fundsOutRequest.setSanctionId(contactRequest.getSanctionId());</span>
+<span class="nc" id="L520">		return fundsOutRequest;</span>
+	}
+
+	/**
+	 * Populate get status requestfor beneficiary.
+	 *
+	 * @param beneficiaryRequest the beneficiary request
+	 * @return the sanction get status request
+	 */
+	private SanctionGetStatusRequest populateGetStatusRequestforBeneficiary(
+			SanctionBeneficiaryRequest beneficiaryRequest) {
+<span class="nc" id="L531">		SanctionGetStatusRequest fundsOutRequest = new SanctionGetStatusRequest();</span>
+<span class="nc" id="L532">		fundsOutRequest.setApplicationId(Constants.BNFC);</span>
+<span class="nc" id="L533">		fundsOutRequest.setCountry(beneficiaryRequest.getCountry());</span>
+<span class="nc" id="L534">		fundsOutRequest.setDob(beneficiaryRequest.getDob());</span>
+<span class="nc" id="L535">		fundsOutRequest.setFullName(beneficiaryRequest.getFullName());</span>
+<span class="nc" id="L536">		fundsOutRequest.setGender(beneficiaryRequest.getGender());</span>
+<span class="nc" id="L537">		fundsOutRequest.setId(beneficiaryRequest.getBeneficiaryId());</span>
+<span class="nc" id="L538">		fundsOutRequest.setSanctionId(beneficiaryRequest.getSanctionId());</span>
+<span class="nc" id="L539">		return fundsOutRequest;</span>
+	}
+
+	/**
+	 * Populate get status requestfor bank.
+	 *
+	 * @param bankRequest the bank request
+	 * @return the sanction get status request
+	 */
+	private SanctionGetStatusRequest populateGetStatusRequestforBank(SanctionBankRequest bankRequest) {
+<span class="nc" id="L549">		SanctionGetStatusRequest fundsOutRequest = new SanctionGetStatusRequest();</span>
+<span class="nc" id="L550">		fundsOutRequest.setApplicationId(Constants.BANK);</span>
+<span class="nc" id="L551">		fundsOutRequest.setCountry(bankRequest.getCountry());</span>
+<span class="nc" id="L552">		fundsOutRequest.setFullName(bankRequest.getBankName());</span>
+<span class="nc" id="L553">		fundsOutRequest.setId(bankRequest.getBankId());</span>
+<span class="nc" id="L554">		fundsOutRequest.setSanctionId(bankRequest.getSanctionId());</span>
+<span class="nc" id="L555">		return fundsOutRequest;</span>
+	}
+
+	/**
+	 *  Get contactRequest for particular ContactID.
+	 *
+	 * @param request the request
+	 * @param id the id
+	 * @return the sanction contact request by id
+	 */
+	private SanctionContactRequest getSanctionContactRequestById(SanctionRequest request, int id) {
+<span class="nc bnc" id="L566" title="All 2 branches missed.">		for (SanctionContactRequest contactRequest : request.getContactrequests()) {</span>
+<span class="nc bnc" id="L567" title="All 2 branches missed.">			if (contactRequest.getContactId() == id) {</span>
+<span class="nc" id="L568">				return contactRequest;</span>
+			}
+<span class="nc" id="L570">		}</span>
+<span class="nc" id="L571">		return null;</span>
+
+	}
+	
+	/**
+	 *  Get beneficiary request for particular beneficiaryID.
+	 *
+	 * @param request the request
+	 * @param id the id
+	 * @return the sanction beneficiary request by id
+	 */
+	private SanctionBeneficiaryRequest getSanctionBeneficiaryRequestById(SanctionRequest request, int id) {
+<span class="nc bnc" id="L583" title="All 2 branches missed.">		for (SanctionBeneficiaryRequest beneReq : request.getBeneficiaryRequests()) {</span>
+<span class="nc bnc" id="L584" title="All 2 branches missed.">			if (beneReq.getBeneficiaryId() == id) {</span>
+<span class="nc" id="L585">				return beneReq;</span>
+			}
+<span class="nc" id="L587">		}</span>
+<span class="nc" id="L588">		return null;</span>
+
+	}
+	
+	
+	/**
+	 *  Get beneficiary request for particular beneficiaryID.
+	 *
+	 * @param request the request
+	 * @param id the id
+	 * @return the sanction bank request by id
+	 */
+	private SanctionBankRequest getSanctionBankRequestById(SanctionRequest request, int id) {
+<span class="nc bnc" id="L601" title="All 2 branches missed.">		for (SanctionBankRequest bankReq : request.getBankRequests()) {</span>
+<span class="nc bnc" id="L602" title="All 2 branches missed.">			if (bankReq.getBankId() == id) {</span>
+<span class="nc" id="L603">				return bankReq;</span>
+			}
+<span class="nc" id="L605">		}</span>
+<span class="nc" id="L606">		return null;</span>
+
+	}
+
+
+	/**
+	 *  Get contactResponse for particular ContactID.
+	 *
+	 * @param request the request
+	 * @param id the id
+	 * @return the sanction contact response by id
+	 */
+	public SanctionContactResponse getSanctionContactResponseById(SanctionResponse request, int id) {
+<span class="pc bpc" id="L619" title="1 of 2 branches missed.">		for (SanctionContactResponse contactResponse : request.getContactResponses()) {</span>
+<span class="pc bpc" id="L620" title="1 of 2 branches missed.">			if (contactResponse.getContactId() == id) {</span>
+<span class="fc" id="L621">				return contactResponse;</span>
+			}
+<span class="nc" id="L623">		}</span>
+<span class="nc" id="L624">		return null;</span>
+
+	}
+	
+	/**
+	 * Gets the sanction bank response by id.
+	 *
+	 * @param response the response
+	 * @param bankID the bank ID
+	 * @return the sanction bank response by id
+	 */
+	private SanctionBankResponse getSanctionBankResponseById(SanctionResponse response, int bankID) {
+<span class="nc bnc" id="L636" title="All 2 branches missed.">		for (SanctionBankResponse bankResponse : response.getBankResponses()) {</span>
+<span class="nc bnc" id="L637" title="All 2 branches missed.">			if (bankResponse.getBankID() == bankID) {</span>
+<span class="nc" id="L638">				return bankResponse;</span>
+			}
+<span class="nc" id="L640">		}</span>
+<span class="nc" id="L641">		return null;</span>
+	}
+	
+	/**
+	 * Gets the sanction beneficiary response by id.
+	 *
+	 * @param response the response
+	 * @param beneficiaryId the beneficiary id
+	 * @return the sanction beneficiary response by id
+	 */
+	private SanctionBeneficiaryResponse getSanctionBeneficiaryResponseById(SanctionResponse response,
+			int beneficiaryId) {
+<span class="nc bnc" id="L653" title="All 2 branches missed.">		for (SanctionBeneficiaryResponse beneResponse : response.getBeneficiaryResponses()) {</span>
+<span class="nc bnc" id="L654" title="All 2 branches missed.">			if (beneResponse.getBeneficiaryId() == beneficiaryId) {</span>
+<span class="nc" id="L655">				return beneResponse;</span>
+			}
+<span class="nc" id="L657">		}</span>
+<span class="nc" id="L658">		return null;</span>
+	}
+
+	/**
+	 *  Get contactResponse for particular ContactID.
+	 *
+	 * @param request the request
+	 * @param id the id
+	 * @return the sanction contact response index by id
+	 */
+	public Integer getSanctionContactResponseIndexById(SanctionResponse request, int id) {
+<span class="pc bpc" id="L669" title="1 of 2 branches missed.">		for (int i = 0; i &lt; request.getContactResponses().size(); i++) {</span>
+<span class="pc bpc" id="L670" title="1 of 2 branches missed.">			if (request.getContactResponses().get(i).getContactId() == id) {</span>
+<span class="fc" id="L671">				return i;</span>
+			}
+		}
+<span class="nc" id="L674">		return -1;</span>
+
+	}
+
+	/**
+	 * Set Status for OfacList and WorldCheck for particular contactId check
+	 * condition for SanctionStatus is Fail or Pending and PreviousStatus of
+	 * contact is not Pass then set Previous Status of OfacList and WorldCheck
+	 * for that Contact - Saylee.
+	 *
+	 * @param getStatusResponse the get status response
+	 * @param request the request
+	 */
+	private void setSanctionOfacAndWc(SanctionGetStatusResponse getStatusResponse, SanctionContactRequest request) {
+<span class="nc" id="L688">		setOfacAndWcFromPreValues(getStatusResponse,request.getPreviousStatus(),request.getPreviousOfac(),request.getPreviousWorldCheck());</span>
+<span class="nc" id="L689">	}</span>
+
+	/**
+	 * Sets the ofac and wc from pre values.
+	 *
+	 * @param getStatusResponse the get status response
+	 * @param preStatus the pre status
+	 * @param preOfac the pre ofac
+	 * @param preWc the pre wc
+	 */
+	private void setOfacAndWcFromPreValues(SanctionGetStatusResponse getStatusResponse,
+			String preStatus,String preOfac,String preWc) {
+<span class="nc bnc" id="L701" title="All 2 branches missed.">		if ((Constants.FAIL.equals(getStatusResponse.getStatus())</span>
+<span class="nc bnc" id="L702" title="All 4 branches missed.">				|| Constants.PENDING.equals(getStatusResponse.getStatus()))</span>
+<span class="nc bnc" id="L703" title="All 2 branches missed.">				&amp;&amp; (null != preStatus &amp;&amp; !Constants.PASS.equals(preStatus))) {</span>
+<span class="nc bnc" id="L704" title="All 2 branches missed.">			if (null != preOfac) {</span>
+<span class="nc" id="L705">				getStatusResponse.setOfacList(preOfac);</span>
+			}
+<span class="nc bnc" id="L707" title="All 2 branches missed.">			if (null != preWc) {</span>
+<span class="nc" id="L708">				getStatusResponse.setWorldCheck(preWc);</span>
+			}
+		}
+<span class="nc" id="L711">	}</span>
+
+	/**
+	 * Call SL multi for client not exsist.
+	 *
+	 * @param request the request
+	 * @param response the response
+	 * @param providerProperty the provider property
+	 * @throws SanctionException the sanction exception
+	 */
+	private void callSLMultiForClientNotExsist(SanctionRequest request, SanctionResponse response,
+			ProviderProperty providerProperty) throws SanctionException {
+<span class="nc bnc" id="L723" title="All 2 branches missed.">		if(response == null) {</span>
+<span class="nc" id="L724">			return;</span>
+		}
+<span class="nc" id="L726">		List&lt;SanctionContactRequest&gt; contactRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L727">		List&lt;SanctionBankRequest&gt; bankRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L728">		List&lt;SanctionBeneficiaryRequest&gt; beneficiaryRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L729">		List&lt;SanctionContactResponse&gt; newContactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L730">		List&lt;SanctionBankResponse&gt; newBankResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L731">		List&lt;SanctionBeneficiaryResponse&gt; newBeneResponses = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L733">			addFailedContactRequests(request, response.getContactResponses(), contactRequests);</span>
+<span class="nc" id="L734">			addFailedBankRequests(request, response.getBankResponses(), bankRequests);</span>
+<span class="nc" id="L735">			addFailedBeneficiaryRequests(request, response.getBeneficiaryResponses(), beneficiaryRequests);</span>
+
+<span class="nc" id="L737">			SanctionRequest newRequest = new SanctionRequest();</span>
+<span class="nc" id="L738">			newRequest.setContactrequests(contactRequests);</span>
+<span class="nc" id="L739">			newRequest.setBeneficiaryRequests(beneficiaryRequests);</span>
+<span class="nc" id="L740">			newRequest.setBankRequests(bankRequests);</span>
+			
+<span class="nc bnc" id="L742" title="All 6 branches missed.">			if (!(bankRequests.isEmpty() &amp;&amp; beneficiaryRequests.isEmpty() &amp;&amp; contactRequests.isEmpty())) {</span>
+<span class="nc" id="L743">				SanctionResponse slMultiResponse = iservicePort.checkSanctionDetails(newRequest, providerProperty);</span>
+<span class="nc" id="L744">				mergetNewContactResponses(response, newContactResponses, slMultiResponse);</span>
+<span class="nc" id="L745">				mergetNewBankResponses(response, newBankResponses, slMultiResponse);</span>
+<span class="nc" id="L746">				mergetNewBeneficiaryResponses(response, newBeneResponses, slMultiResponse);</span>
+			}
+
+<span class="nc" id="L749">		} catch (SanctionException e) {</span>
+<span class="nc" id="L750">			throw e;</span>
+<span class="nc" id="L751">		} catch (Exception e) {</span>
+<span class="nc" id="L752">			LOG.error(&quot;Error in ServiceImpl : getSanctionDetails()&quot;, e);</span>
+<span class="nc" id="L753">			throw new SanctionException(SanctionErrors.ERROR_WHILE_SENDING_REQUEST_TO_SANCTION_PROVIDER);</span>
+<span class="nc" id="L754">		}</span>
+<span class="nc" id="L755">	}</span>
+
+	/**
+	 * Merget new contact responses.
+	 *
+	 * @param response the response
+	 * @param newResponses the new responses
+	 * @param slMultiResponse the sl multi response
+	 */
+	private void mergetNewContactResponses(SanctionResponse response, List&lt;SanctionContactResponse&gt; newResponses,
+			SanctionResponse slMultiResponse) {
+<span class="nc bnc" id="L766" title="All 4 branches missed.">		if (slMultiResponse == null || slMultiResponse.getContactResponses() == null) {</span>
+<span class="nc" id="L767">			return;</span>
+		}
+<span class="nc bnc" id="L769" title="All 2 branches missed.">		for (int i = 0; i &lt; response.getContactResponses().size(); i++) {</span>
+			SanctionContactResponse contactResponse;
+<span class="nc" id="L771">			SanctionContactResponse preContactResponse = response.getContactResponses().get(i);</span>
+<span class="nc" id="L772">			SanctionContactResponse newContactResponse = getSanctionContactResponseById(slMultiResponse,</span>
+<span class="nc" id="L773">					preContactResponse.getContactId());</span>
+<span class="nc bnc" id="L774" title="All 2 branches missed.">			if (newContactResponse != null) {</span>
+<span class="nc" id="L775">				contactResponse = newContactResponse;</span>
+			} else {
+<span class="nc" id="L777">				contactResponse = preContactResponse;</span>
+			}
+<span class="nc" id="L779">			newResponses.add(contactResponse);</span>
+		}
+<span class="nc" id="L781">		response.setContactResponses(newResponses);</span>
+<span class="nc" id="L782">	}</span>
+	
+	/**
+	 * Merget new bank responses.
+	 *
+	 * @param response the response
+	 * @param newResponses the new responses
+	 * @param slMultiResponse the sl multi response
+	 */
+	private void mergetNewBankResponses(SanctionResponse response, List&lt;SanctionBankResponse&gt; newResponses,
+			SanctionResponse slMultiResponse) {
+<span class="nc bnc" id="L793" title="All 4 branches missed.">		if (slMultiResponse == null || slMultiResponse.getBankResponses() == null) {</span>
+<span class="nc" id="L794">			return;</span>
+		}
+<span class="nc bnc" id="L796" title="All 2 branches missed.">		for (int i = 0; i &lt; response.getBankResponses().size(); i++) {</span>
+			SanctionBankResponse bankResponse;
+<span class="nc" id="L798">			SanctionBankResponse preBankResponse = response.getBankResponses().get(i);</span>
+<span class="nc" id="L799">			SanctionBankResponse newBankResponse = getSanctionBankResponseById(slMultiResponse,</span>
+<span class="nc" id="L800">					preBankResponse.getBankID());</span>
+<span class="nc bnc" id="L801" title="All 2 branches missed.">			if (newBankResponse != null) {</span>
+<span class="nc" id="L802">				bankResponse = newBankResponse;</span>
+			} else {
+<span class="nc" id="L804">				bankResponse = preBankResponse;</span>
+			}
+<span class="nc" id="L806">			newResponses.add(bankResponse);</span>
+		}
+<span class="nc" id="L808">		response.setBankResponses(newResponses);</span>
+<span class="nc" id="L809">	}</span>
+	
+	
+	
+
+	/**
+	 * Merget new beneficiary responses.
+	 *
+	 * @param response the response
+	 * @param newResponses the new responses
+	 * @param slMultiResponse the sl multi response
+	 */
+	private void mergetNewBeneficiaryResponses(SanctionResponse response, List&lt;SanctionBeneficiaryResponse&gt; newResponses,
+			SanctionResponse slMultiResponse) {
+<span class="nc bnc" id="L823" title="All 4 branches missed.">		if (slMultiResponse == null || slMultiResponse.getBeneficiaryResponses() == null) {</span>
+<span class="nc" id="L824">			return;</span>
+		}
+<span class="nc bnc" id="L826" title="All 2 branches missed.">		for (int i = 0; i &lt; response.getBeneficiaryResponses().size(); i++) {</span>
+			SanctionBeneficiaryResponse beneficiaryResponse;
+<span class="nc" id="L828">			SanctionBeneficiaryResponse preBeneResponse = response.getBeneficiaryResponses().get(i);</span>
+<span class="nc" id="L829">			SanctionBeneficiaryResponse newBeneResponse = getSanctionBeneficiaryResponseById(slMultiResponse,</span>
+<span class="nc" id="L830">					preBeneResponse.getBeneficiaryId());</span>
+<span class="nc bnc" id="L831" title="All 2 branches missed.">			if (newBeneResponse != null) {</span>
+<span class="nc" id="L832">				beneficiaryResponse = newBeneResponse;</span>
+			} else {
+<span class="nc" id="L834">				beneficiaryResponse = preBeneResponse;</span>
+			}
+<span class="nc" id="L836">			newResponses.add(beneficiaryResponse);</span>
+		}
+<span class="nc" id="L838">		response.setBeneficiaryResponses(newResponses);</span>
+<span class="nc" id="L839">	}</span>
+
+	/**
+	 * Adds the failed contact requests.
+	 *
+	 * @param request the request
+	 * @param contactResponses the contact responses
+	 * @param contactRequests the contact requests
+	 */
+	private void addFailedContactRequests(SanctionRequest request, List&lt;SanctionContactResponse&gt; contactResponses,
+			List&lt;SanctionContactRequest&gt; contactRequests) {
+<span class="nc bnc" id="L850" title="All 4 branches missed.">		if(contactResponses == null || request == null) {</span>
+<span class="nc" id="L851">			return;</span>
+		}
+<span class="nc bnc" id="L853" title="All 2 branches missed.">		for (int i = 0; i &lt; contactResponses.size(); i++) {</span>
+<span class="nc" id="L854">			SanctionContactResponse contactResponse = contactResponses.get(i);</span>
+<span class="nc bnc" id="L855" title="All 4 branches missed.">			if (contactResponse.getStatusDescription() != null &amp;&amp; contactResponse.getStatusDescription().contains(Constants.CLIENT_NOT_EXSIST)) {</span>
+<span class="nc" id="L856">				SanctionContactRequest contactRequest = getSanctionContactRequestById(request,</span>
+<span class="nc" id="L857">						contactResponse.getContactId());</span>
+<span class="nc" id="L858">				contactRequests.add(contactRequest);</span>
+			}
+		}
+<span class="nc" id="L861">	}</span>
+	
+	/**
+	 * Adds the failed bank requests.
+	 *
+	 * @param request the request
+	 * @param bankResponses the bank responses
+	 * @param bankRequests the bank requests
+	 */
+	private void addFailedBankRequests(SanctionRequest request, List&lt;SanctionBankResponse&gt; bankResponses,
+			List&lt;SanctionBankRequest&gt; bankRequests) {
+<span class="nc bnc" id="L872" title="All 4 branches missed.">		if(bankResponses == null || request == null) {</span>
+<span class="nc" id="L873">			return;</span>
+		}
+<span class="nc bnc" id="L875" title="All 2 branches missed.">		for (int i = 0; i &lt; bankResponses.size(); i++) {</span>
+<span class="nc" id="L876">			SanctionBankResponse bankResponse = bankResponses.get(i);</span>
+<span class="nc bnc" id="L877" title="All 4 branches missed.">			if (bankResponse.getStatusDescription() != null &amp;&amp; bankResponse.getStatusDescription().contains(Constants.CLIENT_NOT_EXSIST)) {</span>
+<span class="nc" id="L878">				SanctionBankRequest bankRequest = getSanctionBankRequestById(request,</span>
+<span class="nc" id="L879">						bankResponse.getBankID());</span>
+<span class="nc" id="L880">				bankRequests.add(bankRequest);</span>
+			}
+		}
+<span class="nc" id="L883">	}</span>
+	
+	/**
+	 * Adds the failed beneficiary requests.
+	 *
+	 * @param request the request
+	 * @param beneResponses the bene responses
+	 * @param bankRequests the bank requests
+	 */
+	private void addFailedBeneficiaryRequests(SanctionRequest request, List&lt;SanctionBeneficiaryResponse&gt; beneResponses,
+			List&lt;SanctionBeneficiaryRequest&gt; bankRequests) {
+<span class="nc bnc" id="L894" title="All 4 branches missed.">		if(beneResponses == null || request == null) {</span>
+<span class="nc" id="L895">			return;</span>
+		}
+<span class="nc bnc" id="L897" title="All 2 branches missed.">		for (int i = 0; i &lt; beneResponses.size(); i++) {</span>
+<span class="nc" id="L898">			SanctionBeneficiaryResponse beneResponse = beneResponses.get(i);</span>
+<span class="nc bnc" id="L899" title="All 4 branches missed.">			if (beneResponse.getStatusDescription() != null &amp;&amp; beneResponse.getStatusDescription().contains(Constants.CLIENT_NOT_EXSIST)) {</span>
+<span class="nc" id="L900">				SanctionBeneficiaryRequest beneRequest = getSanctionBeneficiaryRequestById(request,</span>
+<span class="nc" id="L901">						beneResponse.getBeneficiaryId());</span>
+<span class="nc" id="L902">				bankRequests.add(beneRequest);</span>
+			}
+		}
+<span class="nc" id="L905">	}</span>
+	
+	
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

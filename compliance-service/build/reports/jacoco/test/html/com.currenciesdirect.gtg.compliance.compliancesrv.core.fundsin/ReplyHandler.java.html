@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ReplyHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin</a> &gt; <span class="el_source">ReplyHandler.java</span></div><h1>ReplyHandler.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.Message;
+import org.springframework.web.context.request.async.DeferredResult;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.response.FundsInDeleteResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessageResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.BulkRecheckResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+@SuppressWarnings({ &quot;unchecked&quot; })
+<span class="nc" id="L24">public class ReplyHandler {</span>
+<span class="nc" id="L25">	private static final Logger LOGGER = LoggerFactory.getLogger(ReplyHandler.class);</span>
+
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message) {
+
+<span class="nc" id="L30">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+		String jsonResponseEntity;
+<span class="nc" id="L32">		DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message.getHeaders()</span>
+<span class="nc" id="L33">				.get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+<span class="nc" id="L34">		ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc" id="L35">		OperationEnum operation = messageExchange.getOperation();</span>
+		ResponseEntity&lt;ServiceMessageResponse&gt; responseEntity ;
+<span class="nc bnc" id="L37" title="All 4 branches missed.">		if (serviceInterfaceType == ServiceInterfaceType.FUNDSIN &amp;&amp; operation == OperationEnum.WHITELIST_UPDATE) {</span>
+<span class="nc" id="L38">			MessageExchange customCheckExchange = message.getPayload()</span>
+<span class="nc" id="L39">					.getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+<span class="nc" id="L40">			CustomCheckResponse serviceResponse = (CustomCheckResponse) customCheckExchange.getResponse();</span>
+<span class="nc" id="L41">			responseEntity = new ResponseEntity&lt;&gt;(serviceResponse, HttpStatus.OK);</span>
+
+<span class="nc bnc" id="L43" title="All 4 branches missed.">		}else if(serviceInterfaceType == ServiceInterfaceType.FUNDSIN &amp;&amp; operation == OperationEnum.DELETE_OPI){</span>
+			
+<span class="nc" id="L45">			FundsInDeleteResponse serviceResponse = (FundsInDeleteResponse)messageExchange.getResponse();</span>
+<span class="nc" id="L46">			responseEntity = new ResponseEntity&lt;&gt;(serviceResponse, HttpStatus.OK);</span>
+<span class="nc bnc" id="L47" title="All 4 branches missed.">		} else if (serviceInterfaceType == ServiceInterfaceType.FUNDSIN </span>
+				&amp;&amp; operation == OperationEnum.RECHECK_FAILURES) {
+<span class="nc" id="L49">			MessageExchange fundsInBulkExchange = message.getPayload().getMessageExchange(ServiceTypeEnum.FUNDSIN_BULK_RECHECK_SERVICE);</span>
+<span class="nc" id="L50">			BulkRecheckResponse serviceResponse = (BulkRecheckResponse)fundsInBulkExchange.getResponse();</span>
+<span class="nc" id="L51">			responseEntity = new ResponseEntity&lt;&gt;(serviceResponse, HttpStatus.OK);</span>
+<span class="nc" id="L52">		}</span>
+			
+		else {
+<span class="nc" id="L55">			BaseResponse serviceResponse = (BaseResponse) messageExchange.getResponse();</span>
+<span class="nc bnc" id="L56" title="All 2 branches missed.">			if (serviceResponse == null) {</span>
+<span class="nc" id="L57">				serviceResponse = new BaseResponse();</span>
+			}
+<span class="nc" id="L59">			responseEntity = new ResponseEntity&lt;&gt;(serviceResponse, HttpStatus.OK);</span>
+		}
+
+<span class="nc" id="L62">		deferredResult.setResult(responseEntity);</span>
+
+<span class="nc" id="L64">		message.getPayload().clearAll();</span>
+<span class="nc" id="L65">		jsonResponseEntity = JsonConverterUtil.convertToJsonWithoutNull(responseEntity.getBody());</span>
+<span class="nc" id="L66">		LOGGER.warn(&quot;Response :{}&quot;,jsonResponseEntity);</span>
+<span class="nc" id="L67">		return message;</span>
+	}
+
+	public void processSkippedMessages(Message&lt;MessageContext&gt; message) {
+		try{
+<span class="nc" id="L72">		LOGGER.warn(&quot; ??????????????????????? FUNDS_IN processSkippedMessages {}&quot;, message.getPayload().getGatewayMessageExchange().getResponse());</span>
+		
+<span class="nc" id="L74">		DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message.getHeaders()</span>
+<span class="nc" id="L75">				.get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+
+<span class="nc" id="L77">		BaseResponse registrationResponse = new BaseResponse();</span>
+		
+<span class="nc" id="L79">		registrationResponse.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L80">		message.getPayload().getGatewayMessageExchange().setResponse(registrationResponse);</span>
+<span class="nc" id="L81">		ResponseEntity&lt;ServiceMessageResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(registrationResponse, HttpStatus.OK);</span>
+		
+<span class="nc" id="L83">		deferredResult.setResult(responseEntity);</span>
+<span class="nc" id="L84">		}catch(Exception e){</span>
+<span class="nc" id="L85">			LOGGER.error(&quot;Exception in processSkippedMessages()&quot;,e);</span>
+<span class="nc" id="L86">		}</span>
+		
+<span class="nc" id="L88">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

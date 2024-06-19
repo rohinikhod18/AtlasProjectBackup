@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>KYCServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">kyc-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.kyc.core</a> &gt; <span class="el_source">KYCServiceImpl.java</span></div><h1>KYCServiceImpl.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.kyc.core;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.validator.FieldValidator;
+import com.currenciesdirect.gtg.compliance.kyc.core.domain.KYCProviderProperty;
+import com.currenciesdirect.gtg.compliance.kyc.core.validators.Ivalidator;
+import com.currenciesdirect.gtg.compliance.kyc.core.validators.ValidatorFactory;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCErrors;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCException;
+import com.currenciesdirect.gtg.compliance.kyc.gbgroupport.GBGroupPort;
+import com.currenciesdirect.gtg.compliance.kyc.lexisnexisport.CarbonServicePort;
+import com.currenciesdirect.gtg.compliance.kyc.lexisnexisport.LexisNexisPort;
+import com.currenciesdirect.gtg.compliance.kyc.util.Constants;
+import com.currenciesdirect.gtg.compliance.commons.enums.LegalEntityEnum;
+import com.currenciesdirect.gtg.compliance.commons.util.JsonConverterUtil;
+
+/**
+ * * The Class KYCServiceImpl.
+ * 
+ * This is KYC service class. This service takes request coming from
+ * compliance-service and gets kyc check details from kyc providers(GBGroup and
+ * LexisNexis) against that request.
+ * 
+ * @author manish
+ *
+ */
+public class KYCServiceImpl implements IKYCService {
+
+	/** The Constant LOG. */
+<span class="nc" id="L45">	private static final Logger LOG = LoggerFactory.getLogger(KYCServiceImpl.class);</span>
+
+	/** The Constant ERROR_IN_KYC_SERVICE_CHECK_KYC_METHOD. */
+	private static final String ERROR_IN_KYC_SERVICE_CHECK_KYC_METHOD = &quot;error in KYCService : checkKYC method &quot;;
+
+	/** The kyc service. */
+<span class="nc" id="L51">	private static IKYCService kycService = null;</span>
+
+	/** The validator factory. */
+<span class="nc" id="L54">	private ValidatorFactory validatorFactory = ValidatorFactory.getInstance();</span>
+
+	/** The concrete data builder. */
+<span class="nc" id="L57">	private KYCConcreteDataBuilder concreteDataBuilder = KYCConcreteDataBuilder.getInstance();</span>
+
+	/**
+	 * Instantiates a new KYC service impl.
+	 */
+<span class="nc" id="L62">	private KYCServiceImpl() {</span>
+
+<span class="nc" id="L64">	}</span>
+
+	/**
+	 * Gets the single instance of KYCServiceImpl.
+	 *
+	 * @return single instance of KYCServiceImpl
+	 */
+	public static IKYCService getInstance() {
+<span class="nc bnc" id="L72" title="All 2 branches missed.">		if (kycService == null) {</span>
+<span class="nc" id="L73">			kycService = new KYCServiceImpl();</span>
+		}
+<span class="nc" id="L75">		return kycService;</span>
+	}
+
+	/**
+	 * The Class ServiceImpl. Kyc service performs kyc check on only 17
+	 * countries out of which for 7 countries we call gbgroup provider and for
+	 * remaining lexisnexis provider. This mapping is saved in database and
+	 * maintained in kyc cache Implementation steps : 1) validate the request 2)
+	 * if request is valid create response with invalid request error for
+	 * corresponding contact else go to step 3 3) get provider name depending on
+	 * country name present in request from cache and get provider properties
+	 * from provider cache(This cache is initialized at the deployment time.
+	 * Cache contains kyc provider url,passwords and other information which are
+	 * saved in database) 4) create lexis-nexis and gbgroup tasks(kyc service
+	 * accepts multiple contacts in requests.Depending on country of contact
+	 * these task are created) Here task executor pattern is used for
+	 * multi-threading) 5) submit tasks to executors service.(There are
+	 * executors 1)LexisNexisPort 2)GBGroupPort both are responsible for
+	 * transforming request to provider acceptable format,call provider and
+	 * transform response) 6) after execution of step 5, merge responses of both
+	 * executors to kyc response object 7) return response to
+	 * compliance-service.
+	 *
+	 * @param request
+	 *            the request
+	 * @return the KYC provider response
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+
+	@Override
+	public KYCProviderResponse checkKYC(KYCProviderRequest request) throws KYCException {
+<span class="nc" id="L107">		KYCProviderResponse response = new KYCProviderResponse();</span>
+<span class="nc" id="L108">		List&lt;KYCContactRequest&gt; contats = null;</span>
+<span class="nc" id="L109">		List&lt;Callable&lt;KYCContactResponse&gt;&gt; lst = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L110">		List&lt;KYCContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L112">			contats = request.getContact();</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">			for (KYCContactRequest contact : contats) { </span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">				if (Constants.ORG_CD_SA.equalsIgnoreCase(request.getOrgCode())</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">						|| Constants.ORG_E4F.equalsIgnoreCase(request.getOrgCode())</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">						|| LegalEntityEnum.TORSG.getLECode().equals(request.getLegalEntity())) { // AT-4157 - TORSG</span>
+<span class="nc" id="L117">					KYCContactResponse contactResponse = createNotRequiredResponse(contact);</span>
+<span class="nc" id="L118">					contactResponses.add(contactResponse);</span>
+<span class="nc" id="L119">				} //AT-3327 Stop e-IDV for EU Legal entity clients</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">				else if(LegalEntityEnum.CDLEU.getLECode().equals(request.getLegalEntity())</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">						|| LegalEntityEnum.FCGEU.getLECode().equals(request.getLegalEntity())</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">						|| LegalEntityEnum.TOREU.getLECode().equals(request.getLegalEntity())){</span>
+<span class="nc" id="L123">					KYCContactResponse contactResponse = createNotRequiredResponse(contact);</span>
+<span class="nc" id="L124">					contactResponse.setBandText(Constants.EU_LE_POI_NEEDED);</span>
+<span class="nc" id="L125">					contactResponses.add(contactResponse);</span>
+				}
+			/*	else {
+					createRequiredResponse(request, lst, contactResponses, contact);
+				}
+			}
+
+			if (!lst.isEmpty()) {
+				ExecutorService kycExecutors = KYCExecutors.getExecutorService();
+
+				List&lt;Future&lt;KYCContactResponse&gt;&gt; tasks = kycExecutors.invokeAll(lst);
+
+				for (Future&lt;KYCContactResponse&gt; task : tasks) {
+					contactResponses.add(task.get());
+				}
+			}*/
+<span class="nc" id="L141">			}</span>
+<span class="nc" id="L142">			KYCProviderResponse kycProviderResponse= new KYCProviderResponse();</span>
+<span class="nc" id="L143">			kycProviderResponse.setAccountId(&quot;0716E04000zKzriLBX&quot;);</span>
+<span class="nc" id="L144">			kycProviderResponse.setOrgCode(&quot;Currencies Direct&quot;);</span>
+<span class="nc" id="L145">			kycProviderResponse.setSourceApplication(&quot;Dione&quot;);</span>
+<span class="nc" id="L146">			List&lt;KYCContactResponse&gt; contactResponseList= new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L147">			KYCContactResponse kyccontactResponse= new KYCContactResponse();</span>
+<span class="nc" id="L148">			kyccontactResponse.setBandText(&quot;NOT POI NEEDED&quot;);</span>
+<span class="nc" id="L149">			kyccontactResponse.setErrorCode(&quot;KYC000&quot;);</span>
+<span class="nc" id="L150">			kyccontactResponse.setErrorDescription(&quot;GBGroup Error: Organisation is active&quot;);</span>
+<span class="nc" id="L151">			kyccontactResponse.setContactSFId(&quot;002-C-0000052774&quot;);</span>
+<span class="nc" id="L152">			kyccontactResponse.setId(52774);</span>
+<span class="nc" id="L153">			kyccontactResponse.setOverallScore(&quot;0&quot;);</span>
+<span class="nc" id="L154">			kyccontactResponse.setProviderName(&quot;GBGroup&quot;);</span>
+<span class="nc" id="L155">			kyccontactResponse.setProviderMethod(&quot;authenticateSP&quot;);</span>
+<span class="nc" id="L156">			kyccontactResponse.setStatus(&quot;PASS&quot;);</span>
+<span class="nc" id="L157">			kycProviderResponse.setContactResponse(contactResponseList);</span>
+<span class="nc" id="L158">			contactResponseList.add(kyccontactResponse);</span>
+			
+			
+			//kycProviderResponse.setContactResponse(contactResponses);
+<span class="nc" id="L162">			kycProviderResponse.setAccountId(request.getAccountSFId());</span>
+<span class="nc" id="L163">			kycProviderResponse.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L164">			kycProviderResponse.setSourceApplication(request.getSourceApplication());</span>
+			
+<span class="nc" id="L166">			 String jsonAccountSignupResponse = JsonConverterUtil.convertToJsonWithNull(kycProviderResponse);</span>
+<span class="nc" id="L167">			 LOG.warn(&quot;\n ------- KYC Response Start -------- \n  {}&quot;, jsonAccountSignupResponse);</span>
+<span class="nc" id="L168">		        LOG.warn(&quot; \n -----------KYC Account Response End ---------&quot;);</span>
+			
+<span class="nc" id="L170">		} catch (Exception e) {</span>
+<span class="nc" id="L171">			String logData = &quot; Error in KYCService : checkKYC AuroraAccountID :&quot;;</span>
+<span class="nc" id="L172">			logData = logData.concat(request.getAccountSFId())</span>
+<span class="nc" id="L173">					.concat(&quot; CorrelationID : &quot;)</span>
+<span class="nc" id="L174">					.concat(request.getCorrelationID().toString())</span>
+<span class="nc" id="L175">					.concat(&quot;; &quot;).concat(e.toString());</span>
+<span class="nc" id="L176">			LOG.error(logData);</span>
+<span class="nc" id="L177">			throw new KYCException(KYCErrors.KYC_GENERIC_EXCEPTION, e);</span>
+<span class="nc" id="L178">		}</span>
+<span class="nc" id="L179">		return response;</span>
+	}
+
+	/**
+	 * Creates the required response.
+	 *
+	 * @param request
+	 *            the request
+	 * @param lst
+	 *            the lst
+	 * @param contactResponses
+	 *            the contact responses
+	 * @param contact
+	 *            the contact
+	 */
+	private void createRequiredResponse(KYCProviderRequest request, List&lt;Callable&lt;KYCContactResponse&gt;&gt; lst,
+			List&lt;KYCContactResponse&gt; contactResponses, KYCContactRequest contact) {
+		Ivalidator ivalidator;
+		String providerName;
+		String country;
+		KYCProviderProperty providerProperty;
+<span class="nc" id="L200">		country = contact.getAddress().getCountry().toUpperCase();</span>
+		try {
+<span class="nc" id="L202">			ivalidator = validatorFactory.getValidator(country);</span>
+<span class="nc" id="L203">			FieldValidator fv = ivalidator.validateKYCRequest(contact);</span>
+<span class="nc bnc" id="L204" title="All 4 branches missed.">			if (fv != null &amp;&amp; !fv.isFailed()) {</span>
+<span class="nc" id="L205">				String logData = &quot; Error in KYCService : checkKYC AuroraAccountID :&quot;;</span>
+<span class="nc" id="L206">				logData = logData.concat(request.getAccountSFId()).concat(&quot; CorrelationID :&quot; )</span>
+						//.concat(request.getCorrelationID().toString())
+<span class="nc" id="L208">						.concat(&quot; Mandatory parameters are missing in request&quot;);</span>
+<span class="nc" id="L209">				LOG.error(logData);</span>
+<span class="nc" id="L210">				KYCContactResponse contactResponse = new KYCContactResponse();</span>
+<span class="nc" id="L211">				contactResponse.setId(contact.getId());</span>
+<span class="nc" id="L212">				contactResponse.setContactSFId(contact.getContactSFId());</span>
+
+<span class="nc" id="L214">				contactResponse.setStatus(Constants.NOT_PERFORMED);</span>
+<span class="nc" id="L215">				contactResponse.setErrorCode(&quot;KYC0008&quot;);</span>
+<span class="nc" id="L216">				contactResponse</span>
+<span class="nc" id="L217">						.setErrorDescription(&quot;Mandatory fields are missing in request :&quot; + fv.getErrors().toString());</span>
+<span class="nc" id="L218">				contactResponses.add(contactResponse);</span>
+<span class="nc" id="L219">			} else {</span>
+
+<span class="nc" id="L221">				providerName = concreteDataBuilder.getProviderForCountry(country);</span>
+
+<span class="nc" id="L223">				providerProperty = concreteDataBuilder.getProviderInitConfigProperty(providerName);</span>
+				
+<span class="nc bnc" id="L225" title="All 2 branches missed.">				if (Constants.LEXISNEXIS_PROVIDER.equalsIgnoreCase(providerName)) {</span>
+<span class="nc" id="L226">					lst.add(new LexisNexisPort(contact, providerProperty));</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">				} else if (Constants.GBGROUP_PROVIDER.equalsIgnoreCase(providerName)) {</span>
+<span class="nc" id="L228">					lst.add(new GBGroupPort(contact, providerProperty));</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">				} else if(Constants.CARBONSERVICE_PROVIDER.equalsIgnoreCase(providerName)){</span>
+<span class="nc" id="L230">					lst.add(new CarbonServicePort(contact, providerProperty));</span>
+				} else {
+<span class="nc" id="L232">					throw new KYCException(KYCErrors.INVALID_PROVIDER);</span>
+				}
+
+			}
+<span class="nc" id="L236">		} catch (KYCException e) {</span>
+<span class="nc" id="L237">			KYCContactResponse contactResponse = new KYCContactResponse();</span>
+<span class="nc" id="L238">			contactResponse.setId(contact.getId());</span>
+<span class="nc" id="L239">			contactResponse.setErrorCode(e.getkycErrors().getErrorCode());</span>
+<span class="nc" id="L240">			contactResponse.setErrorDescription(e.getkycErrors().getErrorDescription());</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">			if (e.getkycErrors()==KYCErrors.COUNTRY_NOT_SUPPORTED) {</span>
+<span class="nc" id="L242">				contactResponse.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L243">				LOG.debug(ERROR_IN_KYC_SERVICE_CHECK_KYC_METHOD, e);</span>
+			} else {
+<span class="nc" id="L245">				contactResponse.setStatus(Constants.NOT_PERFORMED);</span>
+<span class="nc" id="L246">				LOG.error(ERROR_IN_KYC_SERVICE_CHECK_KYC_METHOD, e);</span>
+			}
+<span class="nc" id="L248">			contactResponse.setOverallScore(Constants.NOT_AVAILABLE);</span>
+			/**
+			 * Set ContactSFId if status is NOT_REQUIRED or NOT_PERFORMED
+			 * -Saylee
+			 */
+<span class="nc" id="L253">			contactResponse.setContactSFId(contact.getContactSFId());</span>
+<span class="nc" id="L254">			contactResponses.add(contactResponse);</span>
+<span class="nc" id="L255">		} catch (Exception e) {</span>
+<span class="nc" id="L256">			LOG.error(ERROR_IN_KYC_SERVICE_CHECK_KYC_METHOD, e);</span>
+<span class="nc" id="L257">			KYCContactResponse contactResponse = new KYCContactResponse();</span>
+<span class="nc" id="L258">			contactResponse.setId(contact.getId());</span>
+<span class="nc" id="L259">			contactResponse.setErrorCode(&quot;0999&quot;);</span>
+<span class="nc" id="L260">			contactResponse.setErrorDescription(&quot;Generic exception&quot;);</span>
+<span class="nc" id="L261">			contactResponse.setStatus(Constants.SERVICE_FAILURE);</span>
+			/**
+			 * Set ContactSFId if status is SERVICE_FAILURE -Saylee
+			 */
+<span class="nc" id="L265">			contactResponse.setContactSFId(contact.getContactSFId());</span>
+<span class="nc" id="L266">			contactResponses.add(contactResponse);</span>
+<span class="nc" id="L267">		}</span>
+<span class="nc" id="L268">	}</span>
+
+	/**
+	 * Creates the not required response.
+	 *
+	 * @param contact
+	 *            the contact
+	 * @return the KYC contact response
+	 */
+	private KYCContactResponse createNotRequiredResponse(KYCContactRequest contact) {
+<span class="nc" id="L278">		KYCContactResponse contactResponse = new KYCContactResponse();</span>
+<span class="nc" id="L279">		contactResponse.setId(contact.getId());</span>
+<span class="nc" id="L280">		contactResponse.setContactSFId(contact.getContactSFId());</span>
+<span class="nc" id="L281">		contactResponse.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L282">		contactResponse.setOverallScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L283">		return contactResponse;</span>
+	}
+
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IntuitionHistoricPaymentOutTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout</a> &gt; <span class="el_source">IntuitionHistoricPaymentOutTransformer.java</span></div><h1>IntuitionHistoricPaymentOutTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionHistoricPaymentsRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionHistoricPaymentRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.intuitionpaymentcsv.IntuitionHistoricPaymentEmailAlert;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+<span class="nc" id="L23">public class IntuitionHistoricPaymentOutTransformer extends AbstractTransformer{</span>
+	
+	/** The Constant LOG. */
+<span class="nc" id="L26">	private static final Logger LOG = LoggerFactory.getLogger(IntuitionHistoricPaymentOutTransformer.class);</span>
+	
+	@Autowired
+	FundsOutDBServiceImpl fundsOutDBServiceImpl;
+	
+	/** The Constant CFXETAILER. */
+	private static final String CFXETAILER = &quot;CFX-Etailer&quot;;
+
+	/** The Constant CHARACTER. */
+	private static final String CHARACTER = &quot;[\r\n]|[\t+]&quot;;
+	
+	/** The email alert. */
+	@Autowired
+	private IntuitionHistoricPaymentEmailAlert emailAlert;
+	
+	/** The Constant EMAIL_BODY_DATE_FORMAT. */
+	private static final String EMAIL_BODY_DATE_FORMAT = &quot;yyyy-MM-dd&quot;;
+
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L46">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L47">		IntuitionHistoricPaymentsRequest intuitionPaymentRequest = (IntuitionHistoricPaymentsRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L48">		List&lt;IntuitionHistoricPaymentRequest&gt; intuitionPaymentOutRequest = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L50">			List&lt;FundsOutRequest&gt; fundsOutRequest = fundsOutDBServiceImpl.getIntuitionHistoricPaymentOut();</span>
+<span class="nc" id="L51">			setDataForHistoricPaymentOut(fundsOutRequest, intuitionPaymentOutRequest);</span>
+<span class="nc" id="L52">			intuitionPaymentRequest.setIntuitionHistoricPaymentOutRequest(intuitionPaymentOutRequest);</span>
+		}
+<span class="nc" id="L54">		catch (Exception e) {</span>
+<span class="nc" id="L55">			LOG.error(&quot;Error in IntuitionHistoricPaymentOutTransformer transformRequest() : &quot;, e);</span>
+<span class="nc" id="L56">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L57">		}</span>
+		
+<span class="nc" id="L59">		return message;</span>
+	}
+
+	private void setDataForHistoricPaymentOut(List&lt;FundsOutRequest&gt; fundsOutRequests,
+			List&lt;IntuitionHistoricPaymentRequest&gt; intuitionPaymentOutRequests) throws ComplianceException {
+		try {
+<span class="nc bnc" id="L65" title="All 2 branches missed.">			for (FundsOutRequest request : fundsOutRequests) {</span>
+<span class="nc" id="L66">				IntuitionHistoricPaymentRequest intuitionHistoricPaymentRequest = new IntuitionHistoricPaymentRequest();</span>
+<span class="nc" id="L67">				intuitionHistoricPaymentRequest.setTradeIdentificationNumber(</span>
+<span class="nc" id="L68">						request.getTrade().getContractNumber() + &quot;_&quot; + request.getFundsOutId());</span>
+<span class="nc" id="L69">				intuitionHistoricPaymentRequest.setTradeContractNumber(request.getTrade().getContractNumber());</span>
+<span class="nc" id="L70">				intuitionHistoricPaymentRequest.setTradePaymentID(request.getBeneficiary().getPaymentFundsoutId().toString());</span>
+<span class="nc" id="L71">				intuitionHistoricPaymentRequest.setTradeAccountNumber(request.getTradeAccountNumber());</span>
+<span class="nc" id="L72">				intuitionHistoricPaymentRequest.setTimestamp(request.getBeneficiary().getTransactionDateTime());</span>
+<span class="nc" id="L73">				intuitionHistoricPaymentRequest.setMaturityDate(request.getTrade().getMaturityDate());</span>
+<span class="nc" id="L74">				intuitionHistoricPaymentRequest.setDealDate(request.getTrade().getDealDate());</span>
+<span class="nc" id="L75">				String etailer = (String) request.getAdditionalAttribute(Constants.ETAILER);</span>
+<span class="nc bnc" id="L76" title="All 4 branches missed.">				if (etailer != null &amp;&amp; etailer.equalsIgnoreCase(&quot;true&quot;)) {</span>
+<span class="nc" id="L77">					intuitionHistoricPaymentRequest.setCustType(CFXETAILER);</span>
+				} else {
+<span class="nc" id="L79">					intuitionHistoricPaymentRequest</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">							.setCustType(request.getTrade().getCustType() == null ? request.getCustType()</span>
+<span class="nc" id="L81">									: request.getTrade().getCustType()); //AT-5486</span>
+				}
+<span class="nc" id="L83">				intuitionHistoricPaymentRequest.setPurposeOfTrade(request.getTrade().getPurposeOfTrade());</span>
+<span class="nc" id="L84">				intuitionHistoricPaymentRequest.setBuyingAmount(request.getTrade().getBuyingAmount());</span>
+<span class="nc" id="L85">				intuitionHistoricPaymentRequest.setBuyCurrency(request.getTrade().getBuyCurrency());</span>
+<span class="nc" id="L86">				intuitionHistoricPaymentRequest.setSellCurrency(request.getTrade().getSellCurrency());</span>
+<span class="nc" id="L87">				intuitionHistoricPaymentRequest.setSellingAmount(request.getTrade().getSellingAmount());</span>
+<span class="nc" id="L88">				intuitionHistoricPaymentRequest.setCustomerLegalEntity(request.getTrade().getCustLegalEntity());</span>
+<span class="nc" id="L89">				intuitionHistoricPaymentRequest.setAmount(request.getBeneficiary().getAmount());</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">				intuitionHistoricPaymentRequest.setFirstName((request.getBeneficiary().getFirstName() != null)</span>
+<span class="nc" id="L91">						? request.getBeneficiary().getFirstName().replaceAll(CHARACTER, &quot; &quot;).replaceAll(&quot;\&quot;+&quot;, &quot;&quot;)</span>
+						: null);
+<span class="nc bnc" id="L93" title="All 2 branches missed.">				intuitionHistoricPaymentRequest.setLastName((request.getBeneficiary().getLastName() != null)</span>
+<span class="nc" id="L94">						? request.getBeneficiary().getLastName().replaceAll(CHARACTER, &quot; &quot;).replaceAll(&quot;\&quot;+&quot;, &quot;&quot;)</span>
+						: null);
+<span class="nc" id="L96">				intuitionHistoricPaymentRequest.setCountry(request.getBeneficiary().getCountry());</span>
+<span class="nc" id="L97">				intuitionHistoricPaymentRequest.setEmail(request.getBeneficiary().getEmail());</span>
+<span class="nc" id="L98">				intuitionHistoricPaymentRequest.setPhone(request.getBeneficiary().getPhone());</span>
+				
+<span class="nc" id="L100">				intuitionHistoricPaymentRequest.setAccountNumber(request.getBeneficiary().getAccountNumber());</span>
+<span class="nc" id="L101">				intuitionHistoricPaymentRequest.setBuyingAmountBaseValue(request.getTrade().getBuyingAmountBaseValue());</span>
+<span class="nc" id="L102">				intuitionHistoricPaymentRequest.setValueDate(request.getTrade().getValueDate());</span>
+<span class="nc" id="L103">				intuitionHistoricPaymentRequest.setOpiCreatedDate(request.getBeneficiary().getOpiCreatedDate());</span>
+<span class="nc" id="L104">				intuitionHistoricPaymentRequest.setCurrencyCode(request.getBeneficiary().getCurrencyCode());</span>
+<span class="nc" id="L105">				intuitionHistoricPaymentRequest.setBeneficiaryId(request.getBeneficiary().getBeneficiaryId().toString());</span>
+<span class="nc" id="L106">				intuitionHistoricPaymentRequest.setBeneficiaryBankid(request.getBeneficiary().getBeneficiaryBankid().toString());</span>
+<span class="nc" id="L107">				intuitionHistoricPaymentRequest.setBeneficaryBankName(request.getBeneficiary().getBeneficaryBankName());</span>
+<span class="nc" id="L108">				intuitionHistoricPaymentRequest.setBeneficaryBankAddress(request.getBeneficiary().getBeneficaryBankAddress());	</span>
+<span class="nc" id="L109">				intuitionHistoricPaymentRequest.setPaymentReference(request.getBeneficiary().getPaymentReference());</span>
+<span class="nc" id="L110">				intuitionHistoricPaymentRequest</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">						.setVersion(request.getVersion() != null ? request.getVersion().toString() : null);</span>
+<span class="nc" id="L112">				intuitionHistoricPaymentRequest.setTradeContactId(request.getTrade().getTradeContactId().toString());</span>
+<span class="nc" id="L113">				intuitionHistoricPaymentRequest.setTrxType(&quot;FUNDSOUT&quot;);</span>
+<span class="nc" id="L114">				intuitionHistoricPaymentRequest.setContractNumber(request.getTrade().getContractNumber());</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">				if (request.getDeviceInfo() != null) {</span>
+<span class="nc" id="L116">					setDeviceInfoData(request, intuitionHistoricPaymentRequest);</span>
+				}
+<span class="nc" id="L118">				setAllChecksStatusData(request, intuitionHistoricPaymentRequest);</span>
+<span class="nc" id="L119">				intuitionHistoricPaymentRequest.setAtlasSTPCodes((String) request.getAdditionalAttribute(&quot;STPFlag&quot;));</span>
+<span class="nc" id="L120">				intuitionHistoricPaymentRequest.setUpdateStatus((String) request.getAdditionalAttribute(&quot;status&quot;));</span>
+<span class="nc" id="L121">				intuitionHistoricPaymentRequest.setAccountId(request.getAccId());</span>
+<span class="nc" id="L122">				intuitionPaymentOutRequests.add(intuitionHistoricPaymentRequest);</span>
+				
+				
+<span class="nc" id="L125">			}</span>
+<span class="nc" id="L126">		} catch (Exception e) {</span>
+<span class="nc" id="L127">			LOG.error(&quot;Error in IntuitionHistoricPaymentOutTransformer setDataForHistoricPaymentOut() : &quot;, e);</span>
+			
+<span class="nc" id="L129">			emailAlert.sendEmailAlertForHistoricPaymentError(</span>
+					&quot;Intuition Historic Payment Out upload error - batch file generation&quot;,
+					&quot;Intuition (Transaction monitoring) Historical Payment Out upload failed due to batch file generation error on &quot;
+<span class="nc" id="L132">							+ new java.text.SimpleDateFormat(EMAIL_BODY_DATE_FORMAT).format(new java.util.Date())</span>
+							+ &quot;. Please alert compliance officer.&quot;);
+			
+<span class="nc" id="L135">			throw new ComplianceException(InternalProcessingCode.SERVICE_ERROR, e);</span>
+<span class="nc" id="L136">		}</span>
+
+<span class="nc" id="L138">	}</span>
+	private void setDeviceInfoData(FundsOutRequest request,
+			IntuitionHistoricPaymentRequest intuitionHistoricPaymentRequest) {
+<span class="nc" id="L141">		intuitionHistoricPaymentRequest.setBrwsrType(request.getDeviceInfo().getBrowserName());</span>
+<span class="nc" id="L142">		intuitionHistoricPaymentRequest.setBrwsrVersion(request.getDeviceInfo().getBrowserMajorVersion());</span>
+<span class="nc" id="L143">		intuitionHistoricPaymentRequest.setBrwsrLang(request.getDeviceInfo().getBrowserLanguage());</span>
+<span class="nc" id="L144">		intuitionHistoricPaymentRequest.setBrowserOnline(request.getDeviceInfo().getBrowserOnline());</span>
+<span class="nc" id="L145">		intuitionHistoricPaymentRequest.setDeviceName(request.getDeviceInfo().getDeviceName());</span>
+<span class="nc" id="L146">		intuitionHistoricPaymentRequest.setDeviceVersion(request.getDeviceInfo().getDeviceVersion());</span>
+<span class="nc" id="L147">		intuitionHistoricPaymentRequest.setDeviceId(request.getDeviceInfo().getDeviceId());</span>
+<span class="nc" id="L148">		intuitionHistoricPaymentRequest.setDeviceManufacturer(request.getDeviceInfo().getDeviceManufacturer());</span>
+<span class="nc" id="L149">		intuitionHistoricPaymentRequest.setDeviceType(request.getDeviceInfo().getDeviceType());</span>
+<span class="nc" id="L150">		intuitionHistoricPaymentRequest.setOsType(request.getDeviceInfo().getOsName());</span>
+<span class="nc" id="L151">		intuitionHistoricPaymentRequest.setScreenResolution(request.getDeviceInfo().getScreenResolution());</span>
+		
+<span class="nc" id="L153">	}</span>
+	private void setAllChecksStatusData(FundsOutRequest request,
+			IntuitionHistoricPaymentRequest intuitionHistoricPaymentRequest) throws ComplianceException {
+		
+<span class="nc" id="L157">		intuitionHistoricPaymentRequest.setBlacklist((String) request.getAdditionalAttribute(&quot;BLACKLIST_STATUS&quot;));</span>
+<span class="nc" id="L158">		intuitionHistoricPaymentRequest.setCustomCheck((String) request.getAdditionalAttribute(&quot;CUSTOM_CHECK_STATUS&quot;));</span>
+<span class="nc" id="L159">		intuitionHistoricPaymentRequest.setSanctionsContact((String) request.getAdditionalAttribute(&quot;SANCTION_STATUS&quot;));</span>
+<span class="nc" id="L160">		intuitionHistoricPaymentRequest.setFraudPredict((String) request.getAdditionalAttribute(&quot;FRAUGSTER_STATUS&quot;));</span>
+<span class="nc" id="L161">		intuitionHistoricPaymentRequest.setPaymentReferenceCheck((String) request.getAdditionalAttribute(&quot;PAYMENT_REFERENCE_STATUS&quot;));</span>
+
+<span class="nc" id="L163">		String countryCheckStatus = fundsOutDBServiceImpl.getCountryCheckStatusForIntuition(request);</span>
+<span class="nc" id="L164">		intuitionHistoricPaymentRequest.setCountryCheck(countryCheckStatus);</span>
+<span class="nc" id="L165">		String statusUpdateReason = fundsOutDBServiceImpl.getStatusUpdateReasonForIntuition(request);</span>
+<span class="nc" id="L166">		intuitionHistoricPaymentRequest.setStatusUpdateReason(statusUpdateReason);</span>
+<span class="nc" id="L167">		String contactSanctionStatus = fundsOutDBServiceImpl.getContactSanctionStatus(request.getContactId(),request.getFundsOutId());</span>
+<span class="nc" id="L168">		String beneficierySanctionStatus =fundsOutDBServiceImpl.getBeneficierySanctionStatus(request.getBeneficiary().getBeneficiaryId(), request.getFundsOutId());</span>
+<span class="nc" id="L169">		String bankSanctionStatus =fundsOutDBServiceImpl.getBankSanctionStatus(request.getBeneficiary().getBeneficiaryBankid(),request.getFundsOutId());</span>
+<span class="nc" id="L170">		intuitionHistoricPaymentRequest.setSanctionsContact(contactSanctionStatus);</span>
+<span class="nc" id="L171">		intuitionHistoricPaymentRequest.setSanctionsBeneficiary(beneficierySanctionStatus);</span>
+<span class="nc" id="L172">		intuitionHistoricPaymentRequest.setSanctionsBank(bankSanctionStatus);</span>
+<span class="nc" id="L173">		List&lt;String&gt; watchList = fundsOutDBServiceImpl.getContactWatchlist(request.getContactId());</span>
+<span class="nc" id="L174">		intuitionHistoricPaymentRequest.setWatchlist(watchList.toString());</span>
+<span class="nc" id="L175">	}</span>
+	
+	
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+
+<span class="nc" id="L181">		return null;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

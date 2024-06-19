@@ -1,0 +1,716 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ReportController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.httpport.report</a> &gt; <span class="el_source">ReportController.java</span></div><h1>ReportController.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.httpport.report;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.ModelAndView;
+
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.report.PaymentInReportFilter;
+import com.currenciesdirect.gtg.compliance.core.domain.report.PaymentInReportGenerator;
+import com.currenciesdirect.gtg.compliance.core.domain.report.PaymentInReportSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.report.PaymentOutReportFilter;
+import com.currenciesdirect.gtg.compliance.core.domain.report.PaymentOutReportGenerator;
+import com.currenciesdirect.gtg.compliance.core.domain.report.PaymentOutReportSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.report.RegistrationReportFilter;
+import com.currenciesdirect.gtg.compliance.core.domain.report.RegistrationReportGenerator;
+import com.currenciesdirect.gtg.compliance.core.domain.report.RegistrationReportSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.report.WorkEfficiencyReportDto;
+import com.currenciesdirect.gtg.compliance.core.domain.report.WorkEfficiencyReportGenerator;
+import com.currenciesdirect.gtg.compliance.core.domain.report.WorkEfficiencyReportSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.report.dashboard.Dashboard;
+import com.currenciesdirect.gtg.compliance.core.report.IDashboardService;
+import com.currenciesdirect.gtg.compliance.core.report.IPaymentInReportService;
+import com.currenciesdirect.gtg.compliance.core.report.IPaymentOutReportService;
+import com.currenciesdirect.gtg.compliance.core.report.IRegistrationReportService;
+import com.currenciesdirect.gtg.compliance.core.report.IReportGenerator;
+import com.currenciesdirect.gtg.compliance.core.report.IWorkEfficiencyReportService;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.httpport.BaseController;
+import com.currenciesdirect.gtg.compliance.httpport.ViewControllerConstant;
+import com.currenciesdirect.gtg.compliance.httpport.ViewNameEnum;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.FunctionsAllowed;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.UserPermissionFilterBuilder;
+
+/**
+ * The Class ReportController.
+ */
+@Controller
+<span class="fc" id="L56">public class ReportController extends BaseController {</span>
+
+	/** The Constant ERROR. */
+	private static final String ERROR = &quot;Exception &quot;;
+
+	/** The Constant EXCEL_VIEW. */
+	private static final String EXCEL_VIEW = &quot;excelView&quot;;
+
+	/** The Constant REPORT_VIEW. */
+	private static final String REPORT_VIEW = &quot;iReportGenerator&quot;;
+
+	/** The Constant REGISTRATION_QUEUE_DTO. */
+	private static final String REGISTRATION_QUEUE_DTO = &quot;registrationQueueDto&quot;;
+
+	/** The log. */
+<span class="fc" id="L71">	private Logger log = LoggerFactory.getLogger(ReportController.class);</span>
+
+	/** The i work efficiency report service. */
+	@Autowired
+	@Qualifier(&quot;workEfficiencyReportServiceImpl&quot;)
+	private IWorkEfficiencyReportService iWorkEfficiencyReportService;
+
+	/** The i registration report service. */
+	@Autowired
+	@Qualifier(&quot;registrationReportServiceImpl&quot;)
+	private IRegistrationReportService iRegistrationReportService;
+
+	/** The i payment in report service. */
+	@Autowired
+	@Qualifier(&quot;paymentInReportServiceImpl&quot;)
+	private IPaymentInReportService iPaymentInReportService;
+
+	/** The i dashboard compliance service. */
+	@Autowired
+	@Qualifier(&quot;dashboardComplianceServiceImpl&quot;)
+	private IDashboardService iDashboardComplianceService;
+
+	/** The i payment out report service. */
+	@Autowired
+	@Qualifier(&quot;paymentOutReportServiceImpl&quot;)
+	private IPaymentOutReportService iPaymentOutReportService;
+
+	/**
+	 * Gets the work efficiency report.
+	 *
+	 * @param user
+	 *            the user
+	 * @return the work efficiency report
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_WORK_EFFICIANCY_REPORT })
+	@GetMapping(value = &quot;/workEfficiencyReport&quot;)
+	public ModelAndView getWorkEfficiencyReport(@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L108">		ModelAndView modelAndView = new ModelAndView();</span>
+		WorkEfficiencyReportDto workEfficiencyReportDto;
+<span class="fc" id="L110">		modelAndView.setViewName(ViewNameEnum.WORK_EFFICIENCY_REPORT.getViewName());</span>
+		try {
+<span class="fc" id="L112">			workEfficiencyReportDto = iWorkEfficiencyReportService.getWorkEfficiencyReport();</span>
+<span class="fc" id="L113">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L114">			log.debug(ERROR, e);</span>
+<span class="fc" id="L115">			workEfficiencyReportDto = new WorkEfficiencyReportDto();</span>
+<span class="fc" id="L116">			workEfficiencyReportDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L117">			workEfficiencyReportDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L118">		}</span>
+<span class="fc" id="L119">		workEfficiencyReportDto.setUser(user);</span>
+<span class="fc" id="L120">		modelAndView.addObject(&quot;workEfficiencyReportDto&quot;, workEfficiencyReportDto);</span>
+
+<span class="fc" id="L122">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the work efficiency report with criteria .
+	 *
+	 * @param request
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return the work efficiency report with criteria
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_WORK_EFFICIANCY_REPORT })
+	@PostMapping(value = &quot;/workEfficiencyReport&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public WorkEfficiencyReportDto getWorkEfficiencyReportWithCriteria(
+			@RequestBody WorkEfficiencyReportSearchCriteria request, @RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L141">		WorkEfficiencyReportDto workEfficiencyReportDto = null;</span>
+		try {
+<span class="fc" id="L143">			workEfficiencyReportDto = iWorkEfficiencyReportService.getWorkEfficiencyReportWithCriteria(request);</span>
+<span class="fc" id="L144">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L145">			log.debug(ERROR, e);</span>
+<span class="fc" id="L146">			workEfficiencyReportDto = new WorkEfficiencyReportDto();</span>
+<span class="fc" id="L147">			workEfficiencyReportDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L148">			workEfficiencyReportDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L149">			workEfficiencyReportDto.setUser(user);</span>
+<span class="fc" id="L150">		}</span>
+<span class="fc" id="L151">		workEfficiencyReportDto.setUser(user);</span>
+<span class="fc" id="L152">		return workEfficiencyReportDto;</span>
+	}
+
+	/**
+	 * Gets the registration report.
+	 *
+	 * @param user
+	 *            the user
+	 * @return the registration report
+	 */
+
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_REGISTRTION_REPORT })
+	@GetMapping(value = &quot;/regReport&quot;)
+	public ModelAndView getRegistrationReport(@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L166">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="fc" id="L167">		RegistrationQueueDto registrationQueueDto = null;</span>
+		try {
+<span class="fc" id="L169">			RegistrationReportFilter filter = UserPermissionFilterBuilder</span>
+<span class="fc" id="L170">					.getFilterFromUserPermission(user.getPermissions(), RegistrationReportFilter.class);</span>
+<span class="fc" id="L171">			filter.setUserProfile(user);</span>
+<span class="fc" id="L172">			RegistrationReportSearchCriteria searchCriteria = new RegistrationReportSearchCriteria();</span>
+<span class="fc" id="L173">			searchCriteria.setIsFilterApply(Boolean.FALSE);</span>
+<span class="fc" id="L174">			searchCriteria.setFilter(filter);</span>
+<span class="fc" id="L175">			searchCriteria.setIsLandingPage(Boolean.TRUE);</span>
+<span class="fc" id="L176">			modelAndView.setViewName(ViewNameEnum.REG_REPORT.getViewName());</span>
+<span class="fc" id="L177">			registrationQueueDto = iRegistrationReportService.getRegistrationQueueWithCriteria(searchCriteria);</span>
+<span class="fc" id="L178">			registrationQueueDto.setUser(user);</span>
+<span class="fc" id="L179">			registrationQueueDto.setIsFromDetails(Boolean.FALSE);</span>
+<span class="fc" id="L180">			modelAndView.addObject(REGISTRATION_QUEUE_DTO, registrationQueueDto);</span>
+<span class="nc" id="L181">		} catch (CompliancePortalException e) {</span>
+
+<span class="nc" id="L183">			log.debug(ERROR, e);</span>
+<span class="fc" id="L184">		}</span>
+<span class="fc" id="L185">		return modelAndView;</span>
+
+	}
+
+	/**
+	 * Gets the registration queue with criteria.
+	 *
+	 * @param user
+	 *            the user
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @return the registration queue with criteria
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_REGISTRTION_QUQUE })
+	@PostMapping(value = &quot;/regReport&quot;)
+	public ModelAndView getRegistrationQueueWithCriteria(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria) {
+<span class="nc" id="L202">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="nc" id="L203">		RegistrationQueueDto registrationQueueDto = null;</span>
+
+		try {
+
+<span class="nc" id="L207">			RegistrationReportSearchCriteria searchCriteriaobj = JsonConverterUtil</span>
+<span class="nc" id="L208">					.convertToObject(RegistrationReportSearchCriteria.class, searchCriteria);</span>
+<span class="nc" id="L209">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L210">					user.getPermissions());</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">			if ((searchCriteriaobj.getFilter().getExcludeCustType() == null</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">					|| searchCriteriaobj.getFilter().getExcludeCustType().length == 0)</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">					&amp;&amp; (searchCriteriaobj.getFilter().getCustType() != null</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">							&amp;&amp; searchCriteriaobj.getFilter().getCustType().length == 0)) {</span>
+<span class="nc" id="L215">				searchCriteriaobj.getFilter().setCustType(new String[] { Constants.CUST_TYPE_PFX });</span>
+			}
+<span class="nc" id="L217">			searchCriteriaobj.getFilter().setUserProfile(user);</span>
+<span class="nc" id="L218">			searchCriteriaobj.setIsFilterApply(Boolean.TRUE);</span>
+<span class="nc" id="L219">			modelAndView.setViewName(ViewNameEnum.REG_REPORT.getViewName());</span>
+<span class="nc" id="L220">			registrationQueueDto = iRegistrationReportService.getRegistrationQueueWithCriteria(searchCriteriaobj);</span>
+<span class="nc" id="L221">			registrationQueueDto.setUser(user);</span>
+<span class="nc" id="L222">			registrationQueueDto.setIsFromDetails(Boolean.TRUE);</span>
+<span class="nc" id="L223">			modelAndView.addObject(REGISTRATION_QUEUE_DTO, registrationQueueDto);</span>
+<span class="nc" id="L224">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L225">			log.debug(&quot; {1}&quot;, e);</span>
+<span class="nc" id="L226">			registrationQueueDto = new RegistrationQueueDto();</span>
+<span class="nc" id="L227">			registrationQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L228">			registrationQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L229">		}</span>
+<span class="nc" id="L230">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the registration report with criteria .
+	 *
+	 * @param request
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return the registration report with criteria .
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_REGISTRTION_REPORT })
+	@PostMapping(value = &quot;/regReportCriteria&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public RegistrationQueueDto getRegistrationQueueWithCriteria(@RequestBody RegistrationReportSearchCriteria request,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L249">		RegistrationQueueDto registrationQueueDto = null;</span>
+		try {
+<span class="fc" id="L251">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(request.getFilter(), user.getPermissions());</span>
+<span class="fc" id="L252">			request.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L253">			registrationQueueDto = iRegistrationReportService.getRegistrationQueueWithCriteria(request);</span>
+<span class="fc" id="L254">			registrationQueueDto.setIsFromDetails(Boolean.FALSE);</span>
+<span class="fc" id="L255">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L256">			log.debug(ERROR, e);</span>
+<span class="fc" id="L257">			registrationQueueDto = new RegistrationQueueDto();</span>
+<span class="fc" id="L258">			registrationQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L259">			registrationQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L260">		}</span>
+<span class="fc" id="L261">		registrationQueueDto.setUser(user);</span>
+<span class="fc" id="L262">		return registrationQueueDto;</span>
+	}
+
+	/**
+	 * Gets the paymentIn report .
+	 *
+	 * @param user
+	 *            the user
+	 * @return the paymentIn report with criteria
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTIN_REPORT })
+	@GetMapping(value = &quot;/paymentInReport&quot;)
+	public ModelAndView getPaymentInReport(@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L275">		ModelAndView modelAndView = new ModelAndView();</span>
+		PaymentInQueueDto paymentInQueueDto;
+<span class="fc" id="L277">		modelAndView.setViewName(ViewNameEnum.PAYMENTIN_REPORT.getViewName());</span>
+		try {
+<span class="fc" id="L279">			PaymentInReportSearchCriteria searchCriteria = new PaymentInReportSearchCriteria();</span>
+<span class="fc" id="L280">			PaymentInReportFilter filter = UserPermissionFilterBuilder</span>
+<span class="fc" id="L281">					.getFilterFromUserPermission(user.getPermissions(), PaymentInReportFilter.class);</span>
+<span class="fc" id="L282">			filter.setUserProfile(user);</span>
+<span class="fc" id="L283">			searchCriteria.setFilter(filter);</span>
+<span class="fc" id="L284">			searchCriteria.setIsLandingPage(Boolean.TRUE);</span>
+<span class="fc" id="L285">			paymentInQueueDto = iPaymentInReportService.getPaymentInReportWithCriteria(searchCriteria);</span>
+<span class="fc" id="L286">			paymentInQueueDto.setUser(user);</span>
+<span class="fc" id="L287">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L288">			log.debug(ERROR, e);</span>
+<span class="fc" id="L289">			paymentInQueueDto = new PaymentInQueueDto();</span>
+<span class="fc" id="L290">			paymentInQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L291">			paymentInQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L292">		}</span>
+<span class="fc" id="L293">		modelAndView.addObject(&quot;paymentInQueueDto&quot;, paymentInQueueDto);</span>
+<span class="fc" id="L294">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the payment in queue.
+	 *
+	 * @param user
+	 *            the user
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @return the payment in queue
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTIN_QUQUE })
+	@PostMapping(value = &quot;/paymentInReport&quot;)
+	public ModelAndView getPaymentInQueue(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria) {
+
+<span class="nc" id="L311">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="nc" id="L312">		PaymentInQueueDto paymentInQueueDto = null;</span>
+<span class="nc" id="L313">		modelAndView.setViewName(ViewNameEnum.PAYMENTIN_REPORT.getViewName());</span>
+		try {
+<span class="nc" id="L315">			PaymentInReportSearchCriteria searchCriteriaobj = JsonConverterUtil</span>
+<span class="nc" id="L316">					.convertToObject(PaymentInReportSearchCriteria.class, searchCriteria);</span>
+<span class="nc" id="L317">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L318">					user.getPermissions());</span>
+<span class="nc" id="L319">			searchCriteriaobj.getFilter().setUserProfile(user);</span>
+<span class="nc bnc" id="L320" title="All 2 branches missed.">			if (Boolean.FALSE.equals(searchCriteriaobj.getIsFilterApply())) {</span>
+<span class="nc" id="L321">				searchCriteriaobj.setIsLandingPage(Boolean.TRUE);</span>
+			}
+<span class="nc" id="L323">			paymentInQueueDto = iPaymentInReportService.getPaymentInReportWithCriteria(searchCriteriaobj);</span>
+<span class="nc" id="L324">			paymentInQueueDto.setIsFromDetails(Boolean.TRUE);</span>
+<span class="nc" id="L325">			paymentInQueueDto.setUser(user);</span>
+<span class="nc" id="L326">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L327">			log.debug(&quot;error in getPaymentInQueue method paymentIncontroller class {1}&quot;, e);</span>
+<span class="nc" id="L328">			paymentInQueueDto = new PaymentInQueueDto();</span>
+<span class="nc" id="L329">			paymentInQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L330">			paymentInQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L331">		}</span>
+<span class="nc" id="L332">		modelAndView.addObject(&quot;paymentInQueueDto&quot;, paymentInQueueDto);</span>
+<span class="nc" id="L333">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the paymentIn report with criteria .
+	 *
+	 * @param request
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return the paymentIn report with criteria
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTIN_REPORT })
+	@PostMapping(value = &quot;/paymentInReportCriteria&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public PaymentInQueueDto getPaymentInReportWithCriteria(@RequestBody PaymentInReportSearchCriteria request,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L352">		PaymentInQueueDto paymentInQueueDto = new PaymentInQueueDto();</span>
+		try {
+<span class="fc" id="L354">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(request.getFilter(), user.getPermissions());</span>
+<span class="fc" id="L355">			request.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L356">			paymentInQueueDto = iPaymentInReportService.getPaymentInReportWithCriteria(request);</span>
+<span class="fc" id="L357">			paymentInQueueDto.setUser(user);</span>
+<span class="fc" id="L358">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L359">			log.debug(ERROR, e);</span>
+<span class="fc" id="L360">			paymentInQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L361">			paymentInQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L362">		}</span>
+
+<span class="fc" id="L364">		return paymentInQueueDto;</span>
+	}
+
+	/**
+	 * Handle request to download an Excel document.
+	 *
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @param user
+	 *            the user
+	 * @return the payment in report in excel format
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTIN_REPORT })
+	@PostMapping(value = &quot;/paymentInReportDownLoad&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(&quot;application/vnd.ms-excel&quot;)
+	@ResponseBody
+	public ModelAndView getPaymentInReportInExcelFormat(
+			@RequestParam(value = &quot;downloadCriteria&quot;, required = false) String searchCriteria,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L384">		PaymentInQueueDto paymentInQueueDto = new PaymentInQueueDto();</span>
+		try {
+<span class="fc" id="L386">			PaymentInReportSearchCriteria request = JsonConverterUtil</span>
+<span class="fc" id="L387">					.convertToObject(PaymentInReportSearchCriteria.class, searchCriteria);</span>
+<span class="fc" id="L388">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(request.getFilter(), user.getPermissions());</span>
+<span class="fc" id="L389">			request.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L390">			paymentInQueueDto = iPaymentInReportService.getPaymentInQueueWholeData(request);</span>
+<span class="fc" id="L391">			paymentInQueueDto.setUser(user);</span>
+<span class="nc" id="L392">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L393">			log.debug(ERROR, e);</span>
+<span class="nc" id="L394">			paymentInQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L395">			paymentInQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L396">		}</span>
+<span class="fc" id="L397">		IReportGenerator iReportGenerator = new PaymentInReportGenerator(paymentInQueueDto);</span>
+<span class="fc" id="L398">		return new ModelAndView(EXCEL_VIEW, REPORT_VIEW, iReportGenerator);</span>
+	}
+
+	/**
+	 * Gets the registration report in excel format.
+	 *
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @param user
+	 *            the user
+	 * @return the registration report in excel format
+	 */
+	/*
+	 **
+	 * Handle request to download an Excel document
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_REGISTRTION_REPORT })
+	@PostMapping(value = &quot;/registrationReportDownLoad&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(&quot;application/vnd.ms-excel&quot;)
+	@ResponseBody
+	public ModelAndView getRegistrationReportInExcelFormat(
+			@RequestParam(value = &quot;downloadCriteria&quot;, required = false) String searchCriteria,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L422">		RegistrationQueueDto registrationQueueDto = new RegistrationQueueDto();</span>
+		try {
+<span class="fc" id="L424">			RegistrationReportSearchCriteria requestDownloadCriteria = JsonConverterUtil</span>
+<span class="fc" id="L425">					.convertToObject(RegistrationReportSearchCriteria.class, searchCriteria);</span>
+<span class="fc" id="L426">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(requestDownloadCriteria.getFilter(),</span>
+<span class="fc" id="L427">					user.getPermissions());</span>
+<span class="fc" id="L428">			requestDownloadCriteria.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L429">			registrationQueueDto = iRegistrationReportService.getRegistrationQueueWholeData(requestDownloadCriteria);</span>
+<span class="fc" id="L430">			registrationQueueDto.setUser(user);</span>
+<span class="nc" id="L431">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L432">			log.debug(ERROR, e);</span>
+<span class="nc" id="L433">			registrationQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L434">			registrationQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L435">		}</span>
+
+<span class="fc" id="L437">		IReportGenerator iReportGenerator = new RegistrationReportGenerator(registrationQueueDto);</span>
+<span class="fc" id="L438">		return new ModelAndView(EXCEL_VIEW, REPORT_VIEW, iReportGenerator);</span>
+	}
+
+	/**
+	 * Gets the compliance dash board.
+	 *
+	 * @param user
+	 *            the user
+	 * @return the compliance dash board
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_DASHBOARD })
+	@GetMapping(value = &quot;/&quot;)
+	public ModelAndView getComplianceDashBoard(@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="nc" id="L451">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="nc" id="L452">		Dashboard dashboard = new Dashboard();</span>
+<span class="nc" id="L453">		modelAndView.setViewName(ViewNameEnum.DASHBOARD_COMPLIANCE.getViewName());</span>
+		try {
+<span class="nc" id="L455">			dashboard = iDashboardComplianceService.getDashboard();</span>
+<span class="nc" id="L456">			dashboard.setUser(user);</span>
+<span class="nc" id="L457">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L458">			log.debug(&quot;error in getComplianceDashBoard method reportcontroller class {1}&quot;, e);</span>
+<span class="nc" id="L459">			dashboard.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L460">			dashboard.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L461">		}</span>
+<span class="nc" id="L462">		modelAndView.addObject(&quot;dashboard&quot;, dashboard);</span>
+<span class="nc" id="L463">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the PaymentOut report.
+	 *
+	 * @param user
+	 *            the user
+	 * @return the PaymentOut report
+	 */
+
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTOUT_REPORT })
+	@GetMapping(value = &quot;/paymentOutReport&quot;)
+	public ModelAndView getPaymentOutReport(@RequestAttribute(&quot;user&quot;) UserProfile user) {
+
+		PaymentOutQueueDto paymentOutQueueDto;
+
+		try {
+<span class="fc" id="L481">			PaymentOutReportSearchCriteria searchCriteria = new PaymentOutReportSearchCriteria();</span>
+<span class="fc" id="L482">			PaymentOutReportFilter filter = UserPermissionFilterBuilder</span>
+<span class="fc" id="L483">					.getFilterFromUserPermission(user.getPermissions(), PaymentOutReportFilter.class);</span>
+<span class="fc" id="L484">			filter.setUserProfile(user);</span>
+<span class="fc" id="L485">			searchCriteria.setFilter(filter);</span>
+<span class="fc" id="L486">			searchCriteria.setIsLandingPage(Boolean.TRUE);</span>
+<span class="fc" id="L487">			paymentOutQueueDto = iPaymentOutReportService.getPaymentOutReportWithCriteria(searchCriteria);</span>
+<span class="fc" id="L488">			paymentOutQueueDto.setIsFromDetails(Boolean.FALSE);</span>
+<span class="fc" id="L489">			paymentOutQueueDto.setUser(user);</span>
+<span class="fc" id="L490">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L491">			log.debug(&quot;error in getPaymentInQueue method paymentIncontroller class {1}&quot;, e);</span>
+<span class="fc" id="L492">			paymentOutQueueDto = new PaymentOutQueueDto();</span>
+<span class="fc" id="L493">			paymentOutQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L494">			paymentOutQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L495">		}</span>
+<span class="fc" id="L496">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="fc" id="L497">		modelAndView.setViewName(ViewNameEnum.PAYMENTOUT_REPORT.getViewName());</span>
+<span class="fc" id="L498">		modelAndView.addObject(&quot;paymentOutQueueDto&quot;, paymentOutQueueDto);</span>
+<span class="fc" id="L499">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the payment out queue with criteria.
+	 *
+	 * @param user
+	 *            the user
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @return the payment out queue with criteria
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTOUT_QUQUE })
+	@PostMapping(value = &quot;/paymentOutReport&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ModelAndView getPaymentOutQueueWithCriteria(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria) {
+<span class="nc" id="L518">		ModelAndView modelAndView = new ModelAndView();</span>
+		PaymentOutQueueDto paymentOutQueueDto;
+<span class="nc" id="L520">		modelAndView.setViewName(ViewNameEnum.PAYMENTOUT_REPORT.getViewName());</span>
+		try {
+<span class="nc" id="L522">			PaymentOutReportSearchCriteria searchCriteriaobj = JsonConverterUtil</span>
+<span class="nc" id="L523">					.convertToObject(PaymentOutReportSearchCriteria.class, searchCriteria);</span>
+<span class="nc" id="L524">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L525">					user.getPermissions());</span>
+<span class="nc" id="L526">			searchCriteriaobj.getFilter().setUserProfile(user);</span>
+<span class="nc bnc" id="L527" title="All 2 branches missed.">			if (Boolean.FALSE.equals(searchCriteriaobj.getIsFilterApply())) {</span>
+<span class="nc" id="L528">				searchCriteriaobj.setIsLandingPage(Boolean.TRUE);</span>
+			}
+<span class="nc" id="L530">			paymentOutQueueDto = iPaymentOutReportService.getPaymentOutReportWithCriteria(searchCriteriaobj);</span>
+<span class="nc" id="L531">			paymentOutQueueDto.setIsFromDetails(Boolean.TRUE);</span>
+<span class="nc" id="L532">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L533">			log.debug(&quot; {1}&quot;, e);</span>
+<span class="nc" id="L534">			paymentOutQueueDto = new PaymentOutQueueDto();</span>
+<span class="nc" id="L535">			paymentOutQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L536">			paymentOutQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L537">		}</span>
+<span class="nc" id="L538">		paymentOutQueueDto.setUser(user);</span>
+<span class="nc" id="L539">		modelAndView.addObject(&quot;paymentOutQueueDto&quot;, paymentOutQueueDto);</span>
+<span class="nc" id="L540">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the paymentOut report with criteria .
+	 *
+	 * @param request
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return the paymentOut report with criteria
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTOUT_REPORT })
+	@PostMapping(value = &quot;/paymentOutReportCriteria&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public PaymentOutQueueDto getPaymentOutReportWithCriteria(@RequestBody PaymentOutReportSearchCriteria request,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L559">		PaymentOutQueueDto paymentOutQueueDto = new PaymentOutQueueDto();</span>
+		try {
+<span class="fc" id="L561">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(request.getFilter(), user.getPermissions());</span>
+<span class="fc" id="L562">			request.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L563">			paymentOutQueueDto = iPaymentOutReportService.getPaymentOutReportWithCriteria(request);</span>
+<span class="fc" id="L564">			paymentOutQueueDto.setUser(user);</span>
+<span class="fc" id="L565">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L566">			log.debug(&quot;error in getPaymentInQueueWithCriteria method paymentIncontroller class {1}&quot;, e);</span>
+<span class="fc" id="L567">			paymentOutQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L568">			paymentOutQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L569">		}</span>
+
+<span class="fc" id="L571">		return paymentOutQueueDto;</span>
+	}
+
+	/**
+	 * Handle request to download an Excel document.
+	 *
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @param user
+	 *            the user
+	 * @return the payment out report in excel format
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTOUT_REPORT })
+	@PostMapping(value = &quot;/paymentOutReportDownLoad&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(&quot;application/vnd.ms-excel&quot;)
+	@ResponseBody
+	public ModelAndView getPaymentOutReportInExcelFormat(
+			@RequestParam(value = &quot;downloadCriteria&quot;, required = false) String searchCriteria,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L591">		PaymentOutQueueDto paymentOutQueueDto = new PaymentOutQueueDto();</span>
+		try {
+<span class="fc" id="L593">			PaymentOutReportSearchCriteria request = JsonConverterUtil</span>
+<span class="fc" id="L594">					.convertToObject(PaymentOutReportSearchCriteria.class, searchCriteria);</span>
+<span class="fc" id="L595">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(request.getFilter(), user.getPermissions());</span>
+<span class="fc" id="L596">			request.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L597">			paymentOutQueueDto = iPaymentOutReportService.getPaymentOutQueueWholeData(request);</span>
+<span class="fc" id="L598">			paymentOutQueueDto.setUser(user);</span>
+<span class="nc" id="L599">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L600">			log.debug(&quot;error in getPaymentInQueueWithCriteria method paymentIncontroller class {1}&quot;, e);</span>
+<span class="nc" id="L601">			paymentOutQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L602">			paymentOutQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L603">		}</span>
+<span class="fc" id="L604">		IReportGenerator iReportGenerator = new PaymentOutReportGenerator(paymentOutQueueDto);</span>
+<span class="fc" id="L605">		return new ModelAndView(EXCEL_VIEW, REPORT_VIEW, iReportGenerator);</span>
+	}
+
+	/**
+	 * Gets the registration report in excel format.
+	 *
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @param user
+	 *            the user
+	 * @return the registration report in excel format
+	 */
+	/*
+	 **
+	 * Handle request to download an Excel document
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_WORK_EFFICIANCY_REPORT })
+	@PostMapping(value = &quot;/workEfficiencyReportDownLoad&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(&quot;application/vnd.ms-excel&quot;)
+	@ResponseBody
+	public ModelAndView getworkEfficiencyReportInExcelFormat(
+			@RequestParam(value = &quot;downloadCriteria&quot;, required = false) String searchCriteria,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L629">		WorkEfficiencyReportDto workEfficiencyReportDto = new WorkEfficiencyReportDto();</span>
+		try {
+<span class="fc" id="L631">			WorkEfficiencyReportSearchCriteria request = JsonConverterUtil</span>
+<span class="fc" id="L632">					.convertToObject(WorkEfficiencyReportSearchCriteria.class, searchCriteria);</span>
+<span class="fc" id="L633">			workEfficiencyReportDto = iWorkEfficiencyReportService</span>
+<span class="fc" id="L634">					.getWorkEfficiencyReportWithCriteriaInExcelFormat(request);</span>
+<span class="fc" id="L635">			workEfficiencyReportDto.setUser(user);</span>
+<span class="nc" id="L636">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L637">			log.debug(ERROR, e);</span>
+<span class="nc" id="L638">			workEfficiencyReportDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L639">			workEfficiencyReportDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L640">		}</span>
+
+<span class="fc" id="L642">		IReportGenerator iReportGenerator = new WorkEfficiencyReportGenerator(workEfficiencyReportDto);</span>
+<span class="fc" id="L643">		return new ModelAndView(EXCEL_VIEW, REPORT_VIEW, iReportGenerator);</span>
+	}
+
+	/**
+	 * Gets the holistic view report.
+	 *
+	 * @param user
+	 *            the user
+	 * @return the holistic view report
+	 */
+	// @FunctionsAllowed(functions = { CAN_VIEW_REGISTRTION_REPORT })
+	@GetMapping(value = &quot;/holisticViewReport&quot;)
+	public ModelAndView getHolisticViewReport(@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L656">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="fc" id="L657">		RegistrationQueueDto registrationQueueDto = null;</span>
+		try {
+<span class="fc" id="L659">			RegistrationReportFilter filter = UserPermissionFilterBuilder</span>
+<span class="fc" id="L660">					.getFilterFromUserPermission(user.getPermissions(), RegistrationReportFilter.class);</span>
+<span class="fc" id="L661">			filter.setUserProfile(user);</span>
+<span class="fc" id="L662">			RegistrationReportSearchCriteria searchCriteria = new RegistrationReportSearchCriteria();</span>
+<span class="fc" id="L663">			searchCriteria.setIsFilterApply(Boolean.TRUE);</span>
+<span class="fc" id="L664">			searchCriteria.setFilter(filter);</span>
+<span class="fc" id="L665">			searchCriteria.setIsLandingPage(Boolean.FALSE);</span>
+<span class="fc" id="L666">			modelAndView.setViewName(ViewNameEnum.HOLISTIC_REPORT.getViewName());</span>
+<span class="fc" id="L667">			registrationQueueDto = iRegistrationReportService.getRegistrationQueueWithCriteria(searchCriteria);</span>
+<span class="fc" id="L668">			registrationQueueDto.setUser(user);</span>
+<span class="fc" id="L669">			registrationQueueDto.setIsFromDetails(Boolean.FALSE);</span>
+<span class="fc" id="L670">			modelAndView.addObject(REGISTRATION_QUEUE_DTO, registrationQueueDto);</span>
+<span class="nc" id="L671">		} catch (CompliancePortalException e) {</span>
+
+<span class="nc" id="L673">			log.debug(ERROR, e);</span>
+<span class="fc" id="L674">		}</span>
+<span class="fc" id="L675">		return modelAndView;</span>
+
+	}
+
+	/**
+	 * Gets the holistic view report.
+	 *
+	 * @param user
+	 *            the user
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @return the holistic view report
+	 */
+	@PostMapping(value = &quot;/holisticViewReport&quot;)
+	public ModelAndView getHolisticViewReport(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria) {
+<span class="nc" id="L691">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="nc" id="L692">		RegistrationQueueDto registrationQueueDto = null;</span>
+
+		try {
+
+<span class="nc" id="L696">			RegistrationReportSearchCriteria searchCriteriaobj = JsonConverterUtil</span>
+<span class="nc" id="L697">					.convertToObject(RegistrationReportSearchCriteria.class, searchCriteria);</span>
+<span class="nc" id="L698">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L699">					user.getPermissions());</span>
+<span class="nc" id="L700">			searchCriteriaobj.getFilter().setUserProfile(user);</span>
+<span class="nc" id="L701">			searchCriteriaobj.setIsFilterApply(Boolean.TRUE);</span>
+<span class="nc" id="L702">			modelAndView.setViewName(ViewNameEnum.HOLISTIC_REPORT.getViewName());</span>
+<span class="nc" id="L703">			registrationQueueDto = iRegistrationReportService.getRegistrationQueueWithCriteria(searchCriteriaobj);</span>
+<span class="nc" id="L704">			registrationQueueDto.setUser(user);</span>
+<span class="nc" id="L705">			registrationQueueDto.setIsFromDetails(Boolean.TRUE);</span>
+<span class="nc" id="L706">			modelAndView.addObject(REGISTRATION_QUEUE_DTO, registrationQueueDto);</span>
+<span class="nc" id="L707">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L708">			log.debug(&quot; {1}&quot;, e);</span>
+<span class="nc" id="L709">			registrationQueueDto = new RegistrationQueueDto();</span>
+<span class="nc" id="L710">			registrationQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L711">			registrationQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L712">		}</span>
+<span class="nc" id="L713">		return modelAndView;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

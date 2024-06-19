@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PayeeServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.core.titan.payee</a> &gt; <span class="el_source">PayeeServiceImpl.java</span></div><h1>PayeeServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.core.titan.payee;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.ITokenizer;
+import com.currenciesdirect.gtg.compliance.commons.domain.titan.response.PayeeESResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.titan.response.PayeePaymentsRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.titan.response.PayeePaymentsResponse;
+import com.currenciesdirect.gtg.compliance.core.IPayeeDBService;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.fxtickets.Page;
+import com.currenciesdirect.gtg.compliance.core.domain.fxtickets.Sort;
+import com.currenciesdirect.gtg.compliance.core.domain.report.BeneficiaryReportSearchCriteria;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.HttpClientPool;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+
+/**
+ * The Class PayeeServiceImpl.
+ */
+@Component(&quot;payeeServiceImpl&quot;)
+<span class="nc" id="L35">public class PayeeServiceImpl implements IPayeeService {</span>
+
+	/** The log. */
+<span class="nc" id="L38">	private Logger log = LoggerFactory.getLogger(PayeeServiceImpl.class);</span>
+
+	/** The Constant BASE_TITAN_URL. */
+	private static final String BASE_TITAN_URL = &quot;baseTitanUrl&quot;;
+
+	/** The Constant AUTHORIZATION. */
+	public static final String AUTHORIZATION = &quot;Authorization&quot;;
+
+	/** The Constant CONTENT_TYPE. */
+	public static final String CONTENT_TYPE = &quot;Content-Type&quot;;
+
+	/** The Constant RETRY_COUNT. */
+	public static final int RETRY_COUNT = 3;
+	
+	/** The Constant TITAN. */
+	public static final String TITAN = &quot;titan&quot;;
+
+	/** The i tokenizer. */
+	@Autowired
+	@Qualifier(&quot;tokenizer&quot;)
+	private ITokenizer iTokenizer;
+
+	/** The i payee DB service. */
+	@Autowired
+	@Qualifier(&quot;iPayeeDBService&quot;)
+	private IPayeeDBService iPayeeDBService;
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.titan.payee.IPayeeService#
+	 * getBeneficiaryDetails(com.currenciesdirect.gtg.compliance.iam.core.domain
+	 * .UserProfile,
+	 * com.currenciesdirect.gtg.compliance.core.titan.payee.PayeeDetailsRequest,
+	 * com.currenciesdirect.gtg.compliance.core.domain.report.
+	 * BeneficiaryReportSearchCriteria)
+	 */
+	@Override
+	public PayeeResponse getBeneficiaryDetails(UserProfile user, PayeeDetailsRequest payeeRequest,
+			BeneficiaryReportSearchCriteria searchCriteria) throws CompliancePortalException {
+<span class="nc" id="L78">		PayeeResponse payeeResponse = new PayeeResponse();</span>
+<span class="nc" id="L79">		Boolean isBeneficiaryWhitelisted = Boolean.FALSE;</span>
+
+		try {
+<span class="nc" id="L82">			payeeResponse = fetchPayeeDetails(payeeRequest);</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">			if (null != payeeResponse.getPayee()) {</span>
+<span class="nc" id="L84">				isBeneficiaryWhitelisted = getIsBeneficiaryWhitelisted(payeeResponse, isBeneficiaryWhitelisted);</span>
+<span class="nc" id="L85">				payeeResponse.setIsBeneficiaryWhitelisted(isBeneficiaryWhitelisted);</span>
+			}
+<span class="nc" id="L87">		} catch (Exception e) {</span>
+<span class="nc" id="L88">			logError(e);</span>
+<span class="nc" id="L89">		}</span>
+<span class="nc" id="L90">		return payeeResponse;</span>
+
+	}
+
+	/**
+	 * Fetch payee details.
+	 *
+	 * @param payeeRequest
+	 *            the payee request
+	 * @return the payee response
+	 * @throws Exception 
+	 */
+	private PayeeResponse fetchPayeeDetails(PayeeDetailsRequest payeeRequest) throws Exception {
+<span class="nc" id="L103">		PayeeResponse response = new PayeeResponse();</span>
+<span class="nc" id="L104">		HttpClientPool clientPool = HttpClientPool.getInstance();</span>
+<span class="nc" id="L105">		MultivaluedHashMap&lt;String, Object&gt; headers = new MultivaluedHashMap&lt;&gt;();</span>
+<span class="nc" id="L106">		headers.putSingle(CONTENT_TYPE, MediaType.APPLICATION_JSON_TYPE);</span>
+<span class="nc" id="L107">		String baseUrl = System.getProperty(BASE_TITAN_URL);</span>
+		
+<span class="nc" id="L109">		String jsonPayeeRequest = JsonConverterUtil.convertToJsonWithoutNull(payeeRequest);</span>
+<span class="nc" id="L110">		log.warn(&quot;\n -------fetchPayeeDetails Payee Detail Request Start -------- \n  {}&quot;, jsonPayeeRequest);</span>
+<span class="nc" id="L111">		log.warn(&quot; \n -----------fetchPayeeDetails Payee Detail Request End ---------&quot;);</span>
+<span class="nc" id="L112">		boolean breakFlag = false;</span>
+<span class="nc" id="L113">		int count = 0;</span>
+		String token;
+		do {
+<span class="nc bnc" id="L116" title="All 2 branches missed.">			if(breakFlag)</span>
+<span class="nc" id="L117">				break;</span>
+			try {
+<span class="nc" id="L119">				token = iTokenizer.getAuthToken(TITAN,false);</span>
+<span class="nc" id="L120">				headers.putSingle(AUTHORIZATION, token);</span>
+
+<span class="nc" id="L122">				response = clientPool.sendRequest(baseUrl + &quot;/titan-wrapper/services/payee/getBeneficiaryDetails&quot;,</span>
+<span class="nc" id="L123">						&quot;POST&quot;, JsonConverterUtil.convertToJsonWithNull(payeeRequest), PayeeResponse.class, headers,</span>
+						MediaType.APPLICATION_JSON_TYPE);
+<span class="nc" id="L125">				breakFlag = true;</span>
+<span class="nc" id="L126">			} catch (CompliancePortalException e) {</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">				if (e.getCompliancePortalErrors()==CompliancePortalErrors.UNAUTHORISED_USER) {</span>
+<span class="nc" id="L128">					iTokenizer.setAuthToken(null,TITAN);</span>
+<span class="nc" id="L129">					count++;</span>
+				} else {
+<span class="nc" id="L131">					log.error(e.toString());</span>
+<span class="nc" id="L132">					breakFlag = true;</span>
+				}
+<span class="nc" id="L134">			}</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">		} while (count &lt; RETRY_COUNT);</span>
+		
+<span class="nc" id="L137">		String jsonPayeeResponse = JsonConverterUtil.convertToJsonWithoutNull(response);</span>
+<span class="nc" id="L138">		log.warn(&quot;\n -------fetchPayeeDetails Payee Detail Response Start -------- \n  {}&quot;, jsonPayeeResponse);</span>
+<span class="nc" id="L139">		log.warn(&quot; \n -----------fetchPayeeDetails Payee Detail Response End ---------&quot;);</span>
+		
+<span class="nc" id="L141">		return response;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.titan.payee.IPayeeService#
+	 * getBeneficiaryList(com.currenciesdirect.gtg.compliance.core.domain.report
+	 * .BeneficiaryReportSearchCriteria)
+	 */
+	@Override
+	public PayeeResponse getBeneficiaryList(BeneficiaryReportSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+
+<span class="nc" id="L155">		PayeeListRequest payeeListRequest = new PayeeListRequest();</span>
+<span class="nc" id="L156">		BeneficiaryReportSearchCriteria beneficiaryReportSearchCriteria = new BeneficiaryReportSearchCriteria();</span>
+<span class="nc" id="L157">		Sort sort = new Sort();</span>
+<span class="nc" id="L158">		Page page = new Page();</span>
+
+<span class="nc bnc" id="L160" title="All 4 branches missed.">		if (null != searchCriteria &amp;&amp; null != searchCriteria.getSort()</span>
+<span class="nc bnc" id="L161" title="All 2 branches missed.">				&amp;&amp; null != searchCriteria.getSort().getIsAscend())</span>
+<span class="nc" id="L162">			sort.setIsAscend(searchCriteria.getSort().getIsAscend());</span>
+		else
+<span class="nc" id="L164">			sort.setIsAscend(Boolean.FALSE);</span>
+<span class="nc" id="L165">		sort.setFieldName(&quot;date&quot;);</span>
+
+<span class="nc bnc" id="L167" title="All 4 branches missed.">		if (null != searchCriteria &amp;&amp; null != searchCriteria.getPage()</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">				&amp;&amp; null != searchCriteria.getPage().getCurrentPage())</span>
+<span class="nc" id="L169">			page.setCurrentPage(searchCriteria.getPage().getCurrentPage());</span>
+		else
+<span class="nc" id="L171">			page.setCurrentPage(1);</span>
+
+<span class="nc" id="L173">		page.setPageSize(Integer.valueOf(System.getProperty(Constants.PAGE_SIZE)));</span>
+<span class="nc" id="L174">		beneficiaryReportSearchCriteria.setPage(page);</span>
+<span class="nc" id="L175">		beneficiaryReportSearchCriteria.setSort(sort);</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">		if (null != searchCriteria) {</span>
+<span class="nc" id="L177">			beneficiaryReportSearchCriteria.setIsFilterApply(searchCriteria.getIsFilterApply());</span>
+<span class="nc" id="L178">			beneficiaryReportSearchCriteria.setFilter(searchCriteria.getFilter());</span>
+		}
+<span class="nc" id="L180">		payeeListRequest.setOsrId(UUID.randomUUID().toString());</span>
+<span class="nc" id="L181">		payeeListRequest.setSourceApplication(&quot;Atlas&quot;);</span>
+<span class="nc" id="L182">		payeeListRequest.setBaseSearchCriteria(beneficiaryReportSearchCriteria);</span>
+
+<span class="nc" id="L184">		PayeeResponse payeeResponse = new PayeeResponse();</span>
+
+		try {
+<span class="nc" id="L187">			payeeResponse = fetchPayeeList(payeeListRequest);</span>
+<span class="nc bnc" id="L188" title="All 4 branches missed.">			if (null != payeeResponse &amp;&amp; null != payeeResponse.getSearchCriteria())</span>
+<span class="nc" id="L189">				payeeResponse.setSearchCriteriaForUI(</span>
+<span class="nc" id="L190">						JsonConverterUtil.convertToJsonWithNull(payeeResponse.getSearchCriteria()));</span>
+
+<span class="nc" id="L192">		} catch (Exception e) {</span>
+<span class="nc" id="L193">			logError(e);</span>
+<span class="nc" id="L194">			payeeResponse.setIsSystemNotAvailaible(Boolean.TRUE);</span>
+<span class="nc" id="L195">		}</span>
+<span class="nc" id="L196">		return payeeResponse;</span>
+	}
+
+	/**
+	 * Log error.
+	 *
+	 * @param t
+	 *            the t
+	 */
+	private void logError(Throwable t) {
+<span class="nc" id="L206">		log.error(&quot;Exception: &quot;, t);</span>
+<span class="nc" id="L207">	}</span>
+
+	/**
+	 * Fetch payee details.
+	 *
+	 * @param payeeListRequest
+	 *            the payee list request
+	 * @return the payee response
+	 * @throws Exception 
+	 */
+	private PayeeResponse fetchPayeeList(PayeeListRequest payeeListRequest) throws Exception {
+<span class="nc" id="L218">		PayeeResponse response = new PayeeResponse();</span>
+<span class="nc" id="L219">		HttpClientPool clientPool = HttpClientPool.getInstance();</span>
+<span class="nc" id="L220">		MultivaluedHashMap&lt;String, Object&gt; headers = new MultivaluedHashMap&lt;&gt;();</span>
+<span class="nc" id="L221">		headers.putSingle(CONTENT_TYPE, MediaType.APPLICATION_JSON_TYPE);</span>
+<span class="nc" id="L222">		String baseUrl = System.getProperty(BASE_TITAN_URL);</span>
+<span class="nc" id="L223">		int count = 0;</span>
+		String token;
+		
+<span class="nc" id="L226">		String jsonPayeeRequest = JsonConverterUtil.convertToJsonWithoutNull(payeeListRequest);</span>
+<span class="nc" id="L227">		log.warn(&quot;\n -------fetchPayeeList Payee List Request Start -------- \n  {}&quot;, jsonPayeeRequest);</span>
+<span class="nc" id="L228">		log.warn(&quot; \n -----------fetchPayeeList Payee List Request End ---------&quot;);</span>
+<span class="nc" id="L229">		boolean breakFlag = false;</span>
+		do {
+<span class="nc bnc" id="L231" title="All 2 branches missed.">			if(breakFlag)</span>
+<span class="nc" id="L232">				break;</span>
+			try {
+<span class="nc" id="L234">				token = iTokenizer.getAuthToken(TITAN,false);</span>
+<span class="nc" id="L235">				headers.putSingle(AUTHORIZATION, token);</span>
+
+<span class="nc" id="L237">				response = clientPool.sendRequest(</span>
+						baseUrl + &quot;/titan-wrapper/services/payee/getMostRecentUsedBeneficiaries&quot;, &quot;POST&quot;,
+<span class="nc" id="L239">						JsonConverterUtil.convertToJsonWithNull(payeeListRequest), PayeeResponse.class, headers,</span>
+						MediaType.APPLICATION_JSON_TYPE);
+<span class="nc" id="L241">				JsonConverterUtil.convertToJsonWithNull(response);</span>
+<span class="nc bnc" id="L242" title="All 6 branches missed.">				if (null != payeeListRequest &amp;&amp; null != payeeListRequest.getBaseSearchCriteria() &amp;&amp; null != response</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">						&amp;&amp; null != response.getSearchCriteria())</span>
+<span class="nc" id="L244">					response.getSearchCriteria()</span>
+<span class="nc" id="L245">							.setIsFilterApply(payeeListRequest.getBaseSearchCriteria().getIsFilterApply());</span>
+<span class="nc" id="L246">				breakFlag = true;</span>
+<span class="nc" id="L247">			} catch (CompliancePortalException e) {</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">				if (e.getCompliancePortalErrors()==CompliancePortalErrors.UNAUTHORISED_USER) {</span>
+<span class="nc" id="L249">					iTokenizer.setAuthToken(null,TITAN);</span>
+<span class="nc" id="L250">					count++;</span>
+				} else {
+<span class="nc" id="L252">					log.error(e.toString());</span>
+<span class="nc" id="L253">					breakFlag = true;</span>
+				}
+<span class="nc" id="L255">			}</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">		} while (count &lt; RETRY_COUNT);</span>
+		
+<span class="nc" id="L258">		String jsonPayeeResponse = JsonConverterUtil.convertToJsonWithoutNull(response);</span>
+<span class="nc" id="L259">		log.warn(&quot;\n -------fetchPayeeList Payee List Response Start -------- \n  {}&quot;, jsonPayeeResponse);</span>
+<span class="nc" id="L260">		log.warn(&quot; \n -----------fetchPayeeList Payee List Response End ---------&quot;);</span>
+		
+<span class="nc" id="L262">		return response;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.titan.payee.IPayeeService#
+	 * getBeneficiaryListWithCriteria(com.currenciesdirect.gtg.compliance.core.
+	 * domain.report.BeneficiaryReportSearchCriteria)
+	 */
+	@Override
+	public PayeeQueueDto getBeneficiaryListWithCriteria(BeneficiaryReportSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+		try {
+<span class="nc" id="L276">			return iPayeeDBService.getPayeeWithCriteria(searchCriteria);</span>
+<span class="nc" id="L277">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L278">			logError(e.getOrgException());</span>
+<span class="nc" id="L279">			throw e;</span>
+		}
+
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.titan.payee.IPayeeService#
+	 * getRegistrationDetailsFromES(com.currenciesdirect.gtg.compliance.iam.core
+	 * .domain.UserProfile,
+	 * com.currenciesdirect.gtg.compliance.core.titan.payee.PayeeResponse)
+	 */
+	@Override
+	public PayeeESResponse getRegistrationDetailsFromES(UserProfile user, PayeeResponse payeeRequestObj)
+			throws CompliancePortalException {
+
+<span class="nc" id="L296">		PayeeESResponse customCheckPayeeResponse = new PayeeESResponse();</span>
+<span class="nc" id="L297">		List&lt;WrapperPayeePaymentMethod&gt; payeePaymentMethod = null;</span>
+<span class="nc" id="L298">		payeePaymentMethod = payeeRequestObj.getPayee().getPayeePaymentMethodList();</span>
+<span class="nc" id="L299">		String atlasBeneAccNumber = getAtlasBeneAccountNumber(payeePaymentMethod);</span>
+
+<span class="nc" id="L301">		HttpClientPool clientPool = HttpClientPool.getInstance();</span>
+<span class="nc" id="L302">		MultivaluedHashMap&lt;String, Object&gt; headers = new MultivaluedHashMap&lt;&gt;();</span>
+<span class="nc" id="L303">		ArrayList&lt;Object&gt; list = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L304">		list.add(user);</span>
+<span class="nc" id="L305">		headers.put(&quot;user&quot;, list);</span>
+<span class="nc" id="L306">		String baseUrl = System.getProperty(&quot;baseComplianceServiceUrl&quot;);</span>
+		try {
+<span class="nc" id="L308">			customCheckPayeeResponse = clientPool.sendRequest(baseUrl + &quot;/custom-checks-service/getBeneficiaryDetails&quot;,</span>
+					&quot;POST&quot;, atlasBeneAccNumber, PayeeESResponse.class, headers, MediaType.APPLICATION_JSON_TYPE);
+<span class="nc" id="L310">			customCheckPayeeResponse = iPayeeDBService.getPayeeClientsDetailsFromDB(customCheckPayeeResponse);</span>
+<span class="nc" id="L311">			customCheckPayeeResponse.setName(payeeRequestObj.getPayee().getFullName());</span>
+<span class="nc" id="L312">			customCheckPayeeResponse.setType(&quot;beneficiary&quot;);</span>
+
+<span class="nc" id="L314">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L315">			log.error(e.toString());</span>
+<span class="nc" id="L316">		}</span>
+<span class="nc" id="L317">		return customCheckPayeeResponse;</span>
+
+	}
+
+	private String getAtlasBeneAccountNumber(List&lt;WrapperPayeePaymentMethod&gt; payeePaymentMethod) {
+<span class="nc" id="L322">		String atlasBeneAccNumber = &quot;&quot;;</span>
+<span class="nc" id="L323">		String beneAccNumber = &quot;&quot;;</span>
+<span class="nc" id="L324">		String swiftCode = &quot;&quot;;</span>
+<span class="nc" id="L325">		String intraCountryCode = &quot;&quot;;</span>
+
+<span class="nc bnc" id="L327" title="All 2 branches missed.">		for (WrapperPayeePaymentMethod payeePayment : payeePaymentMethod) {</span>
+<span class="nc bnc" id="L328" title="All 4 branches missed.">			if (null != payeePayment &amp;&amp; null != payeePayment.getPayeeBank()) {</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">				if (null != payeePayment.getPayeeBank().getAccountNumber())</span>
+<span class="nc" id="L330">					beneAccNumber = payeePayment.getPayeeBank().getAccountNumber();</span>
+<span class="nc bnc" id="L331" title="All 2 branches missed.">				else if (null != payeePayment.getPayeeBank().getIban())</span>
+<span class="nc" id="L332">					beneAccNumber = payeePayment.getPayeeBank().getIban();</span>
+<span class="nc bnc" id="L333" title="All 2 branches missed.">				if (null != payeePayment.getPayeeBank().getBankBIC())</span>
+<span class="nc" id="L334">					swiftCode = payeePayment.getPayeeBank().getBankBIC();</span>
+<span class="nc bnc" id="L335" title="All 2 branches missed.">				if (null != payeePayment.getPayeeBank().getBankIntraCountryCode())</span>
+<span class="nc" id="L336">					intraCountryCode = payeePayment.getPayeeBank().getBankIntraCountryCode();</span>
+
+<span class="nc" id="L338">				atlasBeneAccNumber = atlasBeneAccNumber.concat(swiftCode).concat(beneAccNumber)</span>
+<span class="nc" id="L339">						.concat(intraCountryCode);</span>
+			}
+<span class="nc" id="L341">		}</span>
+<span class="nc" id="L342">		return atlasBeneAccNumber;</span>
+	}
+
+	private Boolean getIsBeneficiaryWhitelisted(PayeeResponse payeeResponse, Boolean isBeneficiaryWhitelisted)
+			throws CompliancePortalException {
+<span class="nc" id="L347">		String atlasBeneAccNumber = getAtlasBeneAccountNumber(payeeResponse.getPayee().getPayeePaymentMethodList());</span>
+<span class="nc" id="L348">		isBeneficiaryWhitelisted = iPayeeDBService.getIsBeneficiaryWhitelisted(atlasBeneAccNumber,</span>
+				isBeneficiaryWhitelisted);
+<span class="nc" id="L350">		return isBeneficiaryWhitelisted;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.titan.payee.IPayeeService#
+	 * getTransactionList(com.currenciesdirect.gtg.compliance.iam.core.domain.
+	 * UserProfile,
+	 * com.currenciesdirect.gtg.compliance.commons.domain.titan.response.
+	 * PayeePaymentsRequest)
+	 */
+	@Override
+	public List&lt;PayeePaymentsResponse&gt; getTransactionList(UserProfile user, PayeePaymentsRequest payeePaymentsRequest)
+			throws CompliancePortalException {
+		List&lt;PayeePaymentsResponse&gt; payeePayments;
+<span class="nc" id="L366">		payeePayments = iPayeeDBService.getTransactionList(payeePaymentsRequest);</span>
+<span class="nc" id="L367">		return payeePayments;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

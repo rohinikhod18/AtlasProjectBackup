@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ReprocessSanctionaFailed.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout</a> &gt; <span class="el_source">ReprocessSanctionaFailed.java</span></div><h1>ReprocessSanctionaFailed.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout;
+
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatus;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.FundsOutSanctionResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.ReprocessFailedSanctionRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.ReprocessFailedSanctionResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResendResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.FieldValidator;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.ValidationErrors;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.BroadCastQueueDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.FundsOutResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.BroadCastStatusEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.BroadcastEventToDB;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.MQEntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class ReprocessSanctionaFailed.
+ */
+<span class="nc" id="L41">public class ReprocessSanctionaFailed {</span>
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L44">	private static final Logger LOGGER = LoggerFactory.getLogger(ReprocessSanctionaFailed.class);</span>
+	
+	/** The funds out DB service. */
+	@Autowired
+	@Qualifier(&quot;fundsOutDBService&quot;)
+	private FundsOutDBServiceImpl fundsOutDBService;
+	
+	/** The broad cast DB service. */
+	@Autowired
+	@Qualifier(&quot;reg.BroadCastQueueDBServiceImpl&quot;)
+	private BroadCastQueueDBServiceImpl broadCastDBService;
+	
+	/** The http client. */
+<span class="nc" id="L57">	private HttpClientPool httpClient = new HttpClientPool();</span>
+	
+	 /** The Constant STATUSCODE_HEADER. */
+ 	private static final String STATUSCODE_HEADER = &quot;http_statusCode&quot;;
+
+	
+	
+	/**
+	 * Reprocess sanction failed.
+	 *
+	 * @param msg the msg
+	 * @return the message
+	 */
+	public Message&lt;ReprocessFailedSanctionResponse&gt; reprocessSanctionFailed(Message&lt;ReprocessFailedSanctionRequest&gt; msg){
+		
+<span class="nc" id="L72">		ReprocessFailedSanctionRequest request = msg.getPayload();</span>
+<span class="nc" id="L73">		ReprocessFailedSanctionResponse response = new ReprocessFailedSanctionResponse();</span>
+<span class="nc" id="L74">		validateRequest(request, response);</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">		if(!StringUtils.isNullOrTrimEmpty(response.getErrorCode())){</span>
+<span class="nc" id="L76">			return MessageBuilder.withPayload(response)</span>
+<span class="nc" id="L77">		            .copyHeadersIfAbsent(msg.getHeaders())</span>
+<span class="nc" id="L78">		            .setHeader(STATUSCODE_HEADER, HttpStatus.OK).build();</span>
+		}
+<span class="nc" id="L80">		Long repeatSanctionCount = 0L;</span>
+<span class="nc" id="L81">		Long clearPaymentCount = 0L;</span>
+<span class="nc" id="L82">		Set&lt;FundsOutSanctionResendRequest&gt; listToProcess = getListToprocess(request);</span>
+<span class="nc bnc" id="L83" title="All 4 branches missed.">		if(null != listToProcess &amp;&amp; !listToProcess.isEmpty()){</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">			for(FundsOutSanctionResendRequest req : listToProcess){</span>
+<span class="nc" id="L85">				getOtherEntityStatus(req);</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">				if(!isSanctionPass(req)){</span>
+<span class="nc" id="L87">					repeatSanctionChck(req);</span>
+<span class="nc" id="L88">					repeatSanctionCount++;</span>
+				}
+<span class="nc" id="L90">			}</span>
+
+<span class="nc bnc" id="L92" title="All 2 branches missed.">			for(FundsOutSanctionResendRequest req : listToProcess){</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">				if(ServiceStatus.PASS.getServiceStatusAsString().equals( getSanctionStatus(req))){</span>
+<span class="nc" id="L94">					clearPaymentOut(req);</span>
+<span class="nc" id="L95">					clearPaymentCount++;</span>
+				}
+<span class="nc" id="L97">			}</span>
+			
+		}
+		
+<span class="nc" id="L101">		response.setClearPaymentCount(clearPaymentCount);</span>
+<span class="nc" id="L102">		response.setRepeatSanctionCount(repeatSanctionCount);</span>
+<span class="nc" id="L103">		return MessageBuilder.withPayload(response)</span>
+<span class="nc" id="L104">	            .copyHeadersIfAbsent(msg.getHeaders())</span>
+<span class="nc" id="L105">	            .setHeader(STATUSCODE_HEADER, HttpStatus.OK)</span>
+<span class="nc" id="L106">	.build();</span>
+	}
+	
+	/**
+	 * Validate request.
+	 *
+	 * @param request the request
+	 * @param response the response
+	 * @return true, if successful
+	 */
+	private boolean validateRequest(ReprocessFailedSanctionRequest request,ReprocessFailedSanctionResponse response) {
+<span class="nc" id="L117">		boolean isValid = true;</span>
+<span class="nc" id="L118">		FieldValidator fv = new FieldValidator();</span>
+<span class="nc bnc" id="L119" title="All 4 branches missed.">		if(StringUtils.isNullOrTrimEmpty(request.getStartDate()) || StringUtils.isNullOrTrimEmpty(request.getEndDate()) ){</span>
+<span class="nc" id="L120">			isValid = false;</span>
+		}
+<span class="nc bnc" id="L122" title="All 4 branches missed.">		if(!StringUtils.isNullOrTrimEmpty(request.getStartDate()) &amp;&amp; !StringUtils.isNullOrTrimEmpty(request.getEndDate())){</span>
+<span class="nc" id="L123">			fv.getErrors().add(new ValidationErrors(&quot;Dates must be in 'yyyy-MM-dd HH:mm:ss' format&quot;,new ArrayList&lt;String&gt;()));</span>
+			
+<span class="nc bnc" id="L125" title="All 4 branches missed.">			if(!validateDate(request.getStartDate()) || !validateDate(request.getEndDate())){</span>
+<span class="nc" id="L126">				isValid = false;</span>
+			} 
+		} 
+		
+<span class="nc bnc" id="L130" title="All 2 branches missed.">		if(!isValid){</span>
+<span class="nc" id="L131">			response.setStatus(&quot;INV_REQ&quot;);</span>
+<span class="nc" id="L132">			response.setErrorCode(FundsOutReasonCode.MISSINGINFO.getFundsOutReasonCode());</span>
+<span class="nc bnc" id="L133" title="All 4 branches missed.">			if(fv.getErrors() == null || fv.getErrors().isEmpty()){</span>
+<span class="nc" id="L134">				response.setErrorDescription(FundsOutReasonCode.MISSINGINFO.getFundsOutReasonDescription());</span>
+			} else {
+<span class="nc" id="L136">				response.setErrorDescription(fv.getErrors().toString());</span>
+			}
+			
+		}
+<span class="nc" id="L140">		return isValid;</span>
+	}
+
+	/**
+	 * Checks if is sanction pass.
+	 *
+	 * @param req the req
+	 * @return true, if is sanction pass
+	 */
+	private boolean isSanctionPass(FundsOutSanctionResendRequest req){
+<span class="nc bnc" id="L150" title="All 2 branches missed.">		if(EntityEnum.BENEFICIARY.getEntityTypeAsString().equals(req.getEntityType()) ){</span>
+<span class="nc" id="L151">			return ServiceStatus.PASS.getServiceStatusAsString().equals(req.getBeneficiaryStatus());</span>
+		}
+<span class="nc bnc" id="L153" title="All 2 branches missed.">		if(EntityEnum.BANK.getEntityTypeAsString().equals(req.getEntityType()) ){</span>
+<span class="nc" id="L154">			return ServiceStatus.PASS.getServiceStatusAsString().equals(req.getBankStatus());</span>
+		}
+<span class="nc bnc" id="L156" title="All 2 branches missed.">		if(EntityEnum.CONTACT.getEntityTypeAsString().equals(req.getEntityType()) ){</span>
+<span class="nc" id="L157">			return ServiceStatus.PASS.getServiceStatusAsString().equals(req.getContactStatus());</span>
+		}
+<span class="nc" id="L159">		return true;</span>
+	}
+	
+	
+	/**
+	 * Gets the list toprocess.
+	 *
+	 * @param request the request
+	 * @return the list toprocess
+	 */
+	private Set &lt;FundsOutSanctionResendRequest&gt; getListToprocess(ReprocessFailedSanctionRequest request){
+<span class="nc" id="L170">		Set&lt;FundsOutSanctionResendRequest&gt; listToProcess = null;</span>
+		try {
+<span class="nc" id="L172">			listToProcess = fundsOutDBService.getSanctionFailedRecords(request);</span>
+<span class="nc" id="L173">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L174">			LOGGER.error(Constants.ERROR,e);</span>
+<span class="nc" id="L175">		}</span>
+		
+<span class="nc" id="L177">		return listToProcess;</span>
+	}
+	
+	
+	/**
+	 * Repeat sanction chck.
+	 *
+	 * @param req the req
+	 */
+	private void repeatSanctionChck(FundsOutSanctionResendRequest req){
+		try{
+<span class="nc" id="L188">			httpClient.sendRequest(System.getProperty(&quot;baseComplianceServiceUrl&quot;)+ &quot;/compliance-service/services-internal/repeatcheck/resendSanctionFailed&quot;, &quot;POST&quot;, req, SanctionResendResponse.class, null);</span>
+<span class="nc" id="L189">		}catch(Exception ex){</span>
+<span class="nc" id="L190">			LOGGER.error(Constants.ERROR,ex);</span>
+<span class="nc" id="L191">		}</span>
+<span class="nc" id="L192">	}</span>
+	
+	/**
+	 * Gets the other entity status.
+	 *
+	 * @param req the req
+	 * @return the other entity status
+	 */
+	private void getOtherEntityStatus(FundsOutSanctionResendRequest req){
+		
+		try {
+<span class="nc" id="L203">			fundsOutDBService.getOtherEntityStatus(req);</span>
+<span class="nc" id="L204">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L205">			LOGGER.error(Constants.ERROR,e);</span>
+<span class="nc" id="L206">		}</span>
+		
+<span class="nc" id="L208">	}</span>
+	
+	/**
+	 * Gets the sanction status.
+	 *
+	 * @param req the req
+	 * @return the sanction status
+	 */
+	private String getSanctionStatus(FundsOutSanctionResendRequest req){
+<span class="nc" id="L217">		String status = &quot;FAIL&quot;;</span>
+		
+		try {
+<span class="nc" id="L220">			status = fundsOutDBService.getSanctionStatus(req.getPaymentOutId());</span>
+<span class="nc" id="L221">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L222">			LOGGER.error(Constants.ERROR,e);</span>
+<span class="nc" id="L223">		}</span>
+		
+<span class="nc" id="L225">		return status ;</span>
+	}
+	
+	/**
+	 * Clear payment out.
+	 *
+	 * @param req the req
+	 */
+	private void clearPaymentOut(FundsOutSanctionResendRequest req){
+		try{
+<span class="nc" id="L235">			fundsOutDBService.updatePaymentsOutComplianceStatus(req.getPaymentOutId(), 1, FundsOutComplianceStatus.CLEAR);</span>
+<span class="nc" id="L236">			broadCastDBService.saveIntoBroadcastQueue(getBroadCastDBObject(req.getAccountId(),req.getPaymentOutId(),</span>
+<span class="nc" id="L237">					getPaymentOutResponse(FundsOutComplianceStatus.CLEAR, req.getTradeContractNumber(), req.getTradePaymentId().toString(), </span>
+<span class="nc" id="L238">							req.getOrgCode()), req.getOrgCode(), req.getContactID()));</span>
+<span class="nc" id="L239">		}catch(Exception ex){</span>
+<span class="nc" id="L240">			LOGGER.error(Constants.ERROR,ex);</span>
+<span class="nc" id="L241">		}</span>
+<span class="nc" id="L242">	}</span>
+	
+	
+	/**
+	 * Gets the payment out response.
+	 *
+	 * @param paymentOutComplianceStatus the payment out compliance status
+	 * @param tradeContractnumber the trade contractnumber
+	 * @param tradePaymentid the trade paymentid
+	 * @param orgCode the org code
+	 * @return the payment out response
+	 */
+	private String getPaymentOutResponse(FundsOutComplianceStatus paymentOutComplianceStatus, String tradeContractnumber,
+			String tradePaymentid, String orgCode) {
+
+<span class="nc" id="L257">		FundsOutResponse paymentOutResponse = new FundsOutResponse();</span>
+<span class="nc" id="L258">		paymentOutResponse.setOrgCode(orgCode);</span>
+		
+<span class="nc" id="L260">		paymentOutResponse.setTradeContractNumber(tradeContractnumber);</span>
+<span class="nc" id="L261">		paymentOutResponse.setTradePaymentID(Integer.parseInt(tradePaymentid));</span>
+<span class="nc" id="L262">		paymentOutResponse.setStatus(paymentOutComplianceStatus.name());</span>
+<span class="nc" id="L263">		paymentOutResponse.setResponseCode(FundsOutReasonCode.PASS.getFundsOutReasonCode());</span>
+<span class="nc" id="L264">		paymentOutResponse.setResponseDescription(FundsOutReasonCode.PASS.getFundsOutReasonDescription());</span>
+<span class="nc" id="L265">		return JsonConverterUtil.convertToJsonWithNull(paymentOutResponse);</span>
+	}
+	
+	/**
+	 * Gets the broad cast DB object.
+	 *
+	 * @param accountId the account id
+	 * @param paymentOutId the payment out id
+	 * @param statusJson the status json
+	 * @param orgCode the org code
+	 * @param contactId the contact id
+	 * @return the broad cast DB object
+	 */
+	private BroadcastEventToDB getBroadCastDBObject(Integer accountId, Integer paymentOutId, 
+			String statusJson, String orgCode,Integer contactId) {
+<span class="nc" id="L280">		BroadcastEventToDB db = new BroadcastEventToDB();</span>
+<span class="nc" id="L281">		db.setAccountId(accountId);</span>
+<span class="nc" id="L282">		db.setContactId(contactId);</span>
+<span class="nc" id="L283">		db.setPaymentOutId(paymentOutId);</span>
+<span class="nc" id="L284">		db.setCreatedBy(1);</span>
+<span class="nc" id="L285">		db.setCreatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L286">		db.setDeliveredOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L287">		db.setDeliverOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L288">		db.setDeliveryStatus(BroadCastStatusEnum.NEW.getBroadCastStatusAsString());</span>
+<span class="nc" id="L289">		db.setEntityType(MQEntityTypeEnum.PAYMENTOUT);</span>
+<span class="nc" id="L290">		db.setOrgCode(orgCode);</span>
+<span class="nc" id="L291">		db.setStatusJson(statusJson);</span>
+<span class="nc" id="L292">		return db;</span>
+	}
+	
+   /**
+    * Validate date.
+    *
+    * @param dateString the date string
+    * @return true, if successful
+    */
+   private	boolean validateDate(String dateString){
+<span class="nc" id="L302">	   boolean result=true;</span>
+<span class="nc" id="L303">		Date date = null;</span>
+		try {
+<span class="nc" id="L305">			date = new SimpleDateFormat(&quot;yyyy-MM-dd HH:mm:ss&quot;).parse(dateString);</span>
+<span class="nc" id="L306">		} catch (ParseException e) {</span>
+<span class="nc" id="L307">			result= false;</span>
+<span class="nc" id="L308">		}</span>
+<span class="nc" id="L309">		String convertedDate = new SimpleDateFormat(&quot;yyyy-MM-dd HH:mm:ss&quot;).format(date);</span>
+<span class="nc bnc" id="L310" title="All 4 branches missed.">		if(convertedDate == null || !convertedDate.equals(dateString)){</span>
+<span class="nc" id="L311">			result= false;</span>
+		}
+<span class="nc" id="L313">		return result;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

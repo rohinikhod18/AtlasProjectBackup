@@ -1,0 +1,112 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<int:channel id="FUNDSIN.REPEAT_CHECK_STATUS_UPDATE.in.channel" />
+	
+	<int:chain
+		id="fundsin.intuition.initChain"
+		input-channel="FUNDSIN.REPEAT_CHECK_STATUS_UPDATE.in.channel"
+		output-channel="INTUITIONUPDATE_PAYMENT_IN.RESPONSE">
+		<int:header-enricher id="fundsin.HeaderEnricher">
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+		</int:header-enricher>
+		<int:service-activator
+			id="fundsin.intuition.dataEnrich"
+			ref="fundsin.intuition.DataEnrich"
+			method="enrichDataForPaymentIn" />
+		<int:service-activator
+			id="fundsin.createEvent"
+			ref="eventDBServiceImpl"
+			method="createEvent" />	
+		
+		<int:transformer
+			ref="fundsin.transactionMonitoringTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsin.TRANSACTIONMONITORING"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_FUNDSIN_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsInRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentInResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsin.transactionMonitoringTransformer"
+			method="transformResponse" />
+			
+		<int:service-activator ref="eventDBServiceImpl"
+			method="createTransactionMonitoringEventSerivceLog">
+		</int:service-activator>
+		
+		<!-- <int:service-activator
+			ref="fundsin.RulesService"
+			method="processForManualUpdate">
+		</int:service-activator> -->
+		
+		<int:service-activator
+			ref="fundsInDBService"
+			method="updateAccountIntuitionClientRiskLevel">
+		</int:service-activator>
+		<int:service-activator
+			id="fundsin.kafkaTxExecutor"
+			ref="kafkaTxExecutorServiceImpl"
+			method="executeKafkaTx" />
+		
+		<int:filter
+			discard-channel="INTUITIONUPDATE_INTUITION.ERROR.CHANNEL"
+			expression="!payload.isFailed()" />
+			
+	</int:chain>
+	
+	<int:chain input-channel="INTUITIONUPDATE_PAYMENT_IN.RESPONSE"
+		output-channel="nullChannel">
+		<int:service-activator id="intuitionStatusResponse"
+			ref="updatePaymentInStatusResponse" method="processForFundsIn" />
+		<int:filter
+			discard-channel="INTUITIONUPDATE_INTUITION.ERROR.CHANNEL"
+			expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain input-channel="INTUITIONUPDATE_INTUITION.ERROR.CHANNEL" 
+			   output-channel="nullChannel">
+		<int:service-activator
+			ref="fundsInErrorHandler"
+			method="logError" />
+	</int:chain>
+	
+	<bean id="fundsInErrorHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInErrorHandler" />
+		
+	<bean id="fundsin.intuition.DataEnrich"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.DataEnricher" />
+		
+	<bean id="updatePaymentInStatusResponse"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.TransactionMonitoringUpdateStatusResponse" />
+		
+</beans>

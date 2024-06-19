@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>StateRuleService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">internalrule-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.core.globalcheck.staterulecheck</a> &gt; <span class="el_source">StateRuleService.java</span></div><h1>StateRuleService.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.core.globalcheck.staterulecheck;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Scanner;
+
+import org.kie.api.KieBase;
+import org.kie.api.KieServices;
+import org.kie.api.builder.KieBuilder;
+import org.kie.api.builder.KieFileSystem;
+import org.kie.api.builder.Message;
+import org.kie.api.builder.Results;
+import org.kie.api.io.KieResources;
+import org.kie.api.runtime.KieContainer;
+import org.kie.api.runtime.StatelessKieSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.GlobalCheckContactResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.globalcheck.StateRuleRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.globalcheck.StateRuleResult;
+import com.currenciesdirect.gtg.compliance.exception.globalcheck.GlobalCheckErrors;
+import com.currenciesdirect.gtg.compliance.exception.globalcheck.GlobalCheckException;
+import com.currenciesdirect.gtg.compliance.util.Constants;
+
+/**
+ * The Class StateRuleService.
+ */
+public class StateRuleService implements IRuleService {
+
+	/** The rule service. */
+<span class="nc" id="L34">	private static IRuleService ruleService = null;</span>
+
+	/** The rule data. */
+	private String ruleData;
+
+	/** The kie base. */
+	private KieBase kieBase;
+
+	/** The logger. */
+<span class="nc" id="L43">	private Logger logger = LoggerFactory.getLogger(StateRuleService.class);</span>
+
+	/**
+	 * Instantiates a new state rule service.
+	 */
+<span class="nc" id="L48">	private StateRuleService() {</span>
+<span class="nc" id="L49">		init();</span>
+<span class="nc" id="L50">	}</span>
+
+	/**
+	 * Gets the single instance of StateRuleService.
+	 *
+	 * @return single instance of StateRuleService
+	 */
+	public static IRuleService getInstance() {
+<span class="nc bnc" id="L58" title="All 2 branches missed.">		if (ruleService == null) {</span>
+<span class="nc" id="L59">			ruleService = new StateRuleService();</span>
+		}
+<span class="nc" id="L61">		return ruleService;</span>
+	}
+
+	/**
+	 * Gets the rule data.
+	 *
+	 * @return the rule data
+	 */
+	public String getRuleData() {
+<span class="nc" id="L70">		return ruleData;</span>
+	}
+
+	/**
+	 * Inits the.
+	 */
+	public void init() {
+<span class="nc" id="L77">		ruleData = loadRuleText();</span>
+<span class="nc bnc" id="L78" title="All 4 branches missed.">		if (ruleData == null || ruleData.trim().length() &lt;= 0) {</span>
+<span class="nc" id="L79">			throw new IllegalArgumentException(&quot;unable to read state rule file&quot;);</span>
+		}
+		try {
+<span class="nc" id="L82">			kieBase = parseRule(ruleData, &quot;state-rules.drl&quot;);</span>
+<span class="nc" id="L83">		} catch (GlobalCheckException e) {</span>
+<span class="nc" id="L84">			logger.error(&quot;Exception : {1}&quot;, e);</span>
+<span class="nc" id="L85">		}</span>
+<span class="nc" id="L86">	}</span>
+
+	/**
+	 * Load rule text.
+	 *
+	 * @return the string
+	 * @throws RuntimeException
+	 *             the runtime exception
+	 */
+	public String loadRuleText() {
+<span class="nc" id="L96">		InputStream stream = null;</span>
+		try {
+<span class="nc" id="L98">			stream = this.getClass().getClassLoader().getResourceAsStream(&quot;state-rules.drl&quot;);</span>
+<span class="nc" id="L99">			try (Scanner scanner = new Scanner(stream)) {</span>
+<span class="nc" id="L100">				return scanner.useDelimiter(&quot;\\Z&quot;).next();</span>
+			}
+<span class="nc" id="L102">		} catch (Exception ex) {</span>
+<span class="nc" id="L103">			throw new IllegalArgumentException(&quot;unable to read state rule file&quot;, ex);</span>
+		}
+	}
+
+	/**
+	 * Parses the rule.
+	 *
+	 * @param rule
+	 *            the rule
+	 * @param ruleName
+	 *            the rule name
+	 * @return the kie base
+	 * @throws GlobalCheckException
+	 *             the global check exception
+	 */
+	public KieBase parseRule(String rule, String ruleName) throws GlobalCheckException {
+<span class="nc" id="L119">		KieServices kieServices = KieServices.Factory.get();</span>
+<span class="nc" id="L120">		KieResources kieResources = kieServices.getResources();</span>
+<span class="nc" id="L121">		KieFileSystem kieFileSystem = kieServices.newKieFileSystem();</span>
+<span class="nc" id="L122">		InputStream is = new ByteArrayInputStream(rule.getBytes(StandardCharsets.UTF_8));</span>
+<span class="nc" id="L123">		String path = getUniquePath(ruleName);</span>
+<span class="nc" id="L124">		kieFileSystem.write(path, kieResources.newInputStreamResource(is, &quot;UTF-8&quot;));</span>
+<span class="nc" id="L125">		KieBuilder kieBuilder = kieServices.newKieBuilder(kieFileSystem);</span>
+<span class="nc" id="L126">		kieBuilder.buildAll();</span>
+<span class="nc" id="L127">		Results results = kieBuilder.getResults();</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">		if (results.hasMessages(Message.Level.ERROR)) {</span>
+<span class="nc" id="L129">			throw new IllegalStateException(&quot;There are errors in the rules:\n&quot;.concat(results.toString()));</span>
+		}
+<span class="nc" id="L131">		KieContainer kieContainer = kieServices.newKieContainer(kieBuilder.getKieModule().getReleaseId());</span>
+		try {
+<span class="nc" id="L133">			is.close();</span>
+<span class="nc" id="L134">		} catch (IOException e) {</span>
+<span class="nc" id="L135">			throw new GlobalCheckException(GlobalCheckErrors.APPLY_RULE_FAILED, e);</span>
+<span class="nc" id="L136">		}</span>
+<span class="nc" id="L137">		return kieContainer.getKieBase();</span>
+	}
+
+	/**
+	 * Gets the unique path.
+	 *
+	 * @param routeRuleName
+	 *            the route rule name
+	 * @return the unique path
+	 */
+	private static synchronized String getUniquePath(String routeRuleName) {
+<span class="nc" id="L148">		return &quot;src/main/resources/rules/&quot; + System.nanoTime() + &quot;/&quot; + routeRuleName;</span>
+	}
+
+	/**
+	 * Evaluate rule.
+	 *
+	 * @param orgnaizationCode
+	 *            the orgnaization code
+	 * @param isoAlpha3CountryCode
+	 *            the iso alpha 3 country code
+	 * @param state
+	 *            the state
+	 * @return the state rule result
+	 */
+	public StateRuleResult evaluateRule(String orgnaizationCode, String isoAlpha3CountryCode, String state,
+			String orgLegalEntity) {
+<span class="nc" id="L164">		StateParam sp = new StateParam(isoAlpha3CountryCode, state, orgnaizationCode, orgLegalEntity);</span>
+<span class="nc" id="L165">		StatelessKieSession ksession = kieBase.newStatelessKieSession();</span>
+<span class="nc" id="L166">		ksession.execute(sp);</span>
+<span class="nc bnc" id="L167" title="All 2 branches missed.">		if (sp.getResult() == null)</span>
+<span class="nc" id="L168">			sp.setResult(Constants.NOT_PERFORMED);</span>
+<span class="nc" id="L169">		return StateRuleResult.valueOf(sp.getResult());</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.globalcheck.staterulecheck.
+	 * IRuleService#applyRule(com.currenciesdirect.gtg.compliance.core.domain.
+	 * globalcheck.StateRuleRequest)
+	 */
+	@Override
+	public GlobalCheckContactResponse applyRule(StateRuleRequest request) throws GlobalCheckException {
+<span class="nc" id="L181">		GlobalCheckContactResponse checkResponse = new GlobalCheckContactResponse();</span>
+		try {
+			// change done to accept name of the state in any format and passing
+			// it to database to resolve AT-277 by Vishal J
+<span class="nc" id="L185">			StateRuleResult result = evaluateRule(request.getOrgCode(), request.getIsoAlpha3CountryCode(),</span>
+<span class="nc" id="L186">					request.getState().toUpperCase(), request.getOrgLegalEntity());</span>
+<span class="nc" id="L187">			checkResponse.setStatus(result.name());</span>
+<span class="nc" id="L188">			checkResponse.setCountry(request.getIsoAlpha3CountryCode());</span>
+<span class="nc" id="L189">			checkResponse.setState(request.getState());</span>
+<span class="nc" id="L190">		} catch (Exception e) {</span>
+<span class="nc" id="L191">			throw new GlobalCheckException(GlobalCheckErrors.APPLY_RULE_FAILED, e);</span>
+<span class="nc" id="L192">		}</span>
+<span class="nc" id="L193">		return checkResponse;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

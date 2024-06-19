@@ -1,0 +1,112 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="PROFILE.ONFIDO_STATUS_UPDATE.in.channel"/>
+	<int:channel id="PROFILE.ONFIDO_STATUS_UPDATE.DATAENRICHER"/>
+	<int:channel id="PROFILE.ONFIDO_STATUS_UPDATE.RESPONSE"/>
+	<int:channel id="PROFILE.ONFIDO_STATUS_UPDATE.ACTIVITY.LOG"/>
+	<int:channel id="PROFILE.ONFIDO_STATUS_UPDATE.EVENT.CHANNEL"/>
+	<int:channel id="UPDATE.PROFILE.ONFIDO.STATUS.channel"/>
+	<int:channel id="PROFILE.ONFIDO.STATUS.UPDATE.ERROR.HANDLER" />
+	
+	<int:chain id="updateOnfidoStatus" input-channel="PROFILE.ONFIDO_STATUS_UPDATE.in.channel">
+		<int:header-enricher>
+			<int:header name="correlationID" expression="T(java.util.UUID).randomUUID()" />
+			<int:header name="username" expression="headers['username']" />
+			<int:header name="password" expression="headers['password']" />
+		</int:header-enricher>
+		<int:service-activator ref="onfidoStatusUpdateMessageValidator" />
+		<int:router id="onfidoStatusUpdateValidation" expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="PROFILE.ONFIDO_STATUS_UPDATE.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="PROFILE.ONFIDO_STATUS_UPDATE.DATAENRICHER" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain id="enrichOnfidoStatusUpdateData" input-channel="PROFILE.ONFIDO_STATUS_UPDATE.DATAENRICHER">
+		<int:service-activator ref="onfidoStatusUpdateDataEnricher" method="process" />	
+		<int:service-activator ref="onfidoStatusUpdateDataValidator" />	
+		<int:router
+			id="onfidoDataValidator"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="PROFILE.ONFIDO_STATUS_UPDATE.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="PROFILE.ONFIDO_STATUS_UPDATE.EVENT.CHANNEL" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain id="onfidoStatusUpdateChannel" input-channel="PROFILE.ONFIDO_STATUS_UPDATE.EVENT.CHANNEL" output-channel="UPDATE.PROFILE.ONFIDO.STATUS.channel">
+		<int:transformer ref="onfidoStatusUpdateTransformer" method="transformRequest" />
+	    <int:service-activator id="onfidoStatusUpdateEvent"  method="updateEventSerivceLog" ref ="eventDBServiceImpl" />
+	    <int:transformer ref="onfidoStatusUpdateTransformer" method="transformResponse" />
+	    
+		<int:filter discard-channel="PROFILE.ONFIDO.STATUS.UPDATE.ERROR.HANDLER" expression="!payload.isFailed()"/>
+	</int:chain>
+	
+	<int:chain id="updateProfileOnfido" input-channel="UPDATE.PROFILE.ONFIDO.STATUS.channel" output-channel="PROFILE.ONFIDO_STATUS_UPDATE.ACTIVITY.LOG">
+		<int:service-activator id="profileOnfidoUpdate"  method="updateOnfidoStatus" ref ="onfidoStatusUpdate" />
+	    <int:filter discard-channel="PROFILE.ONFIDO.STATUS.UPDATE.ERROR.HANDLER" expression="!payload.isFailed()"/>
+	</int:chain>
+	
+	<int:chain id="createActivityForOnfido" input-channel="PROFILE.ONFIDO_STATUS_UPDATE.ACTIVITY.LOG" output-channel="PROFILE.ONFIDO_STATUS_UPDATE.RESPONSE">
+	    <int:service-activator id="onfidoUpdateActivity"  ref="onfidoStatusActivityLogs" method="createOnfidoStatusActivity" />
+	    <int:filter discard-channel="PROFILE.ONFIDO.STATUS.UPDATE.ERROR.HANDLER" expression="!payload.isFailed()"/>
+	</int:chain>
+	
+	<int:chain input-channel="PROFILE.ONFIDO_STATUS_UPDATE.RESPONSE" output-channel="nullChannel">
+		<int:service-activator id="ONFIDO_STATUS_UPDATE.RES" ref="onfidoUpdateResponse" method="process" />
+		<int:filter discard-channel="PROFILE.ONFIDO.STATUS.UPDATE.ERROR.HANDLER" expression="!payload.isFailed()"/>
+	</int:chain>
+	
+	<int:chain input-channel="PROFILE.ONFIDO.STATUS.UPDATE.ERROR.HANDLER" output-channel="nullChannel">
+		<int:service-activator ref="onfidoStatusUpdateErrorHandler"	method="logError" />
+	</int:chain>
+	
+	
+	<bean id="onfidoStatusUpdateMessageValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.onfidostatusupdate.OnfidoStatusUpdateMessageValidator" />
+	
+	<bean id="onfidoStatusUpdateDataEnricher" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.onfidostatusupdate.OnfidoStatusUpdateDataEnricher">
+		<property name="eventDBService" ref="eventDBServiceImpl" />
+	</bean>
+	
+	<bean id="onfidoStatusUpdateDataValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.onfidostatusupdate.OnfidoStatusUpdateDataValidator">
+		<property name="registrationDBService" ref="newRegistrationDBServiceImpl" />
+	</bean>
+	
+	<bean id="onfidoStatusUpdateTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.onfidostatusupdate.OnfidoStatusUpdateTransformer" />
+	
+	<!-- <bean id="updateEvent" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.onfidostatusupdate.OnfidoStatusUpdateEventServiceLogUpdate" /> -->
+	
+	<bean id="onfidoStatusUpdate" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.onfidostatusupdate.OnfidoStatusUpdate" />
+	
+	<bean id="onfidoStatusActivityLogs" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.onfidostatusupdate.OnfidoStatusUpdateActivityLogs" />
+	
+	<bean id="onfidoUpdateResponse" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.onfidostatusupdate.OnfidoStatusUpdateResponseHandler" />
+	
+	<bean id="onfidoStatusUpdateErrorHandler" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.onfidostatusupdate.OnfidoStatusUpdateErrorHandler" />
+	
+</beans>

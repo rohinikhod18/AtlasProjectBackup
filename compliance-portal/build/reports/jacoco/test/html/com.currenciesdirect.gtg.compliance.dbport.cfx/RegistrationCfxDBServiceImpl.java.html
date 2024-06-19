@@ -1,0 +1,943 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationCfxDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport.cfx</a> &gt; <span class="el_source">RegistrationCfxDBServiceImpl.java</span></div><h1>RegistrationCfxDBServiceImpl.java</h1><pre class="source lang-java linenums">/*
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.dbport.cfx;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.Contact;
+import com.currenciesdirect.gtg.compliance.commons.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.core.ICfxDBService;
+import com.currenciesdirect.gtg.compliance.core.IRegistrationDBService;
+import com.currenciesdirect.gtg.compliance.core.ITransform;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogDataWrapper;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.core.domain.BroadcastEventToDB;
+import com.currenciesdirect.gtg.compliance.core.domain.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.core.domain.ComplianceStatus;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.EventDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.IRegistrationDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.LockResourceDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.LockResourceResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationAccount;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationCfxDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationViewMoreRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.StatusReason;
+import com.currenciesdirect.gtg.compliance.core.domain.StatusReasonData;
+import com.currenciesdirect.gtg.compliance.core.domain.ViewMoreResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.ProfileActivityLogDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegUpdateDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationCfxDetailsDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationDetailsDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationSearchCriteria;
+import com.currenciesdirect.gtg.compliance.dbport.AbstractDBServiceRegistrationCFX;
+import com.currenciesdirect.gtg.compliance.dbport.ClauseType;
+import com.currenciesdirect.gtg.compliance.dbport.CriteriaBuilder;
+import com.currenciesdirect.gtg.compliance.dbport.RegistrationQueryConstant;
+import com.currenciesdirect.gtg.compliance.dbport.enums.BroadCastEntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.BroadCastStatusEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.EntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.ServiceStatusEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.UserLockResourceTypeEnum;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+import com.currenciesdirect.gtg.compliance.util.StringUtils;
+
+/**
+ * The Class RegistrationCfxDBServiceImpl.
+ */
+@Component(&quot;regCfxDBServiceImpl&quot;)
+<span class="fc" id="L77">public class RegistrationCfxDBServiceImpl extends AbstractDBServiceRegistrationCFX implements IRegistrationDBService, ICfxDBService {</span>
+
+<span class="fc" id="L79">	private static final Logger LOGGER = LoggerFactory.getLogger(RegistrationCfxDBServiceImpl.class);</span>
+	
+	private static final String CRM_CONTACT_ID = &quot;CRMContactID&quot;;
+	private static final String REASON = &quot;Reason&quot;;
+
+	@Autowired
+	@Qualifier(&quot;registrationCfxDetailsTransformer&quot;)
+	private ITransform&lt;RegistrationCfxDetailsDto, RegistrationCfxDetailsDBDto&gt; regDetailsTransformer;
+
+	@Autowired
+	@Qualifier(&quot;regActivityLogTransformer&quot;)
+	private ITransform&lt;ActivityLogs, RegUpdateDBDto&gt; regActivityLogTransformer;
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.cfx.core.IRegistrationCfxDBService#
+	 * getRegistrationCfxDetails(java.lang.Integer)
+	 * 
+	 * 1. execute query to get registrationCfxDetails. 2. table used:
+	 * dbo.AccountAttribute, dbo.ContactAttribute, dbo.EventServiceLog,
+	 * dbo.ContactComplianceStatus, dbo.AccountComplianceStatus,
+	 * dbo.ContactComplianceStatusEnum, dbo.AccountComplianceStatusEnum,
+	 * dbo.UserResourceLock, dbo.Organization, dbo.Compliance_ServiceTypeEnum 3.
+	 * get watch list details from dbo.Watchlist dbo.ContactWatchList 4. get
+	 * ActivityLog details from dbo.ProfileActivityLog,
+	 * dbo.ProfileActivityLogDetail and dbo.ActivityTypeEnum 5. get Status
+	 * reason from dbo.StatusUpdateReason and dbo.ProfileStatusReason . 6.. take
+	 * list of otherContacts including kyc, sanction, blacklist. 7. transform
+	 * result set object to RegistrationCfxDetailsDto. 8. return
+	 * RegistrationCfxDetailsDto object.
+	 */
+	@Override
+	public IRegistrationDetails getRegistrationDetails(Integer contactId, RegistrationSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+<span class="nc" id="L115">		List&lt;RegistrationDetailsDBDto&gt; regDetailDtoList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L116">		RegistrationCfxDetailsDBDto cfxDetailsDBDto = new RegistrationCfxDetailsDBDto();</span>
+
+<span class="nc" id="L118">		Connection connection = null;</span>
+<span class="nc" id="L119">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L120">		ResultSet rs = null;</span>
+<span class="nc" id="L121">		Integer accountId = null;</span>
+
+		try {
+<span class="nc" id="L124">			connection = getConnection(Boolean.TRUE);</span>
+			//AT-2248 - Modification for high query IOPS
+<span class="nc" id="L126">			regDetailDtoList = getRegCFXAccountContactDetails(connection,cfxDetailsDBDto,contactId);</span>
+<span class="nc" id="L127">			accountId = regDetailDtoList.get(0).getAccountId();</span>
+<span class="nc" id="L128">			regDetailDtoList = getCFXDashboardEventDetails(connection,regDetailDtoList,accountId);</span>
+<span class="nc" id="L129">			cfxDetailsDBDto.setRegCfxDetailsDBDto(regDetailDtoList);</span>
+<span class="nc" id="L130">			cfxDetailsDBDto.setDocumentTypeList(getUploadDocumentList(connection));</span>
+<span class="nc" id="L131">			cfxDetailsDBDto.setWatachList(getAccountWatchlistWithSelected(accountId, connection,searchCriteria.getFilter().getUserProfile()));</span>
+<span class="nc" id="L132">			cfxDetailsDBDto.setActivityLogs(getActivityLogsByAccount(accountId, connection));</span>
+<span class="nc" id="L133">			cfxDetailsDBDto.setContactStatusReason(getContactStatusReasonsByAccountId(accountId, connection));</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">			if(null != accountId){</span>
+<span class="nc" id="L135">				cfxDetailsDBDto.setAlertComplianceLog(getAlertComplianceLog(accountId));</span>
+			}
+
+<span class="nc" id="L138">		} catch (Exception e) {</span>
+<span class="nc" id="L139">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L141">			closeResultset(rs);</span>
+<span class="nc" id="L142">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L143">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L146">		return regDetailsTransformer.transform(cfxDetailsDBDto);</span>
+	}
+
+	private void checkAndSetContactId(Integer contactId, ResultSet rs, RegistrationDetailsDBDto detailDto)
+			throws SQLException {
+<span class="nc bnc" id="L151" title="All 2 branches missed.">		if (contactId.equals(rs.getInt(&quot;ID&quot;))) {</span>
+<span class="nc" id="L152">			detailDto.setCcCrmContactId(rs.getString(CRM_CONTACT_ID));</span>
+		}
+<span class="nc" id="L154">	}</span>
+
+	private void checkAndSetLockedBy(ResultSet rs, String locedkBy, RegistrationDetailsDBDto detailDto)
+			throws SQLException {
+<span class="nc bnc" id="L158" title="All 4 branches missed.">		if (null != locedkBy &amp;&amp; !locedkBy.equalsIgnoreCase(Constants.DUMMY_USER)) {</span>
+<span class="nc" id="L159">			detailDto.setLockedBy(rs.getString(&quot;LockedBy&quot;));</span>
+		}
+<span class="nc" id="L161">	}</span>
+
+	@Override
+	public LockResourceResponse insertLockResourceForMultiContact(LockResourceDBDto lockResourceDBDto)
+			throws CompliancePortalException {
+
+<span class="fc" id="L167">		Connection connection = null;</span>
+<span class="fc" id="L168">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L169">		ResultSet rs = null;</span>
+<span class="fc" id="L170">		LockResourceResponse lockResourceResponse = null;</span>
+		try {
+<span class="fc" id="L172">			connection = getConnection(Boolean.FALSE);</span>
+
+<span class="fc" id="L174">			lockResourceResponse = checkLockResourceByAccountId(lockResourceDBDto.getResourceId(),</span>
+<span class="fc" id="L175">					lockResourceDBDto.getResourceType(), connection);</span>
+<span class="pc bpc" id="L176" title="1 of 2 branches missed.">			if (lockResourceResponse != null) {</span>
+<span class="nc" id="L177">				return lockResourceResponse;</span>
+			}
+<span class="fc" id="L179">			lockResourceResponse = new LockResourceResponse();</span>
+
+<span class="fc" id="L181">			preparedStatement = connection.prepareStatement(</span>
+<span class="fc" id="L182">					RegistrationCfxDBQueryConstant.INSERT_USER_RESOURCE_LOCK_BY_ACCOUNT_ID.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="fc" id="L184">			preparedStatement.setString(1, lockResourceDBDto.getUserId());</span>
+<span class="fc" id="L185">			preparedStatement.setInt(2, UserLockResourceTypeEnum.getDbStatusFromUiStatus(lockResourceDBDto.getResourceType()));</span>
+<span class="fc" id="L186">			preparedStatement.setInt(3, lockResourceDBDto.getResourceId());</span>
+<span class="fc" id="L187">			preparedStatement.setTimestamp(4, lockResourceDBDto.getLockReleasedOn());</span>
+<span class="fc" id="L188">			preparedStatement.setString(5, lockResourceDBDto.getCreatedBy());</span>
+<span class="fc" id="L189">			preparedStatement.setTimestamp(6, lockResourceDBDto.getCreatedOn());</span>
+<span class="fc" id="L190">			preparedStatement.setTimestamp(7, null);</span>
+<span class="fc" id="L191">			int updateCount = preparedStatement.executeUpdate();</span>
+<span class="pc bpc" id="L192" title="1 of 2 branches missed.">			if (updateCount == 0) {</span>
+<span class="nc" id="L193">				lockResourceResponse.setStatus(&quot;Fail&quot;);</span>
+<span class="nc" id="L194">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+<span class="fc" id="L196">			rs = preparedStatement.getGeneratedKeys();</span>
+<span class="pc bpc" id="L197" title="1 of 2 branches missed.">			if (rs.next()) {</span>
+<span class="fc" id="L198">				lockResourceResponse.setUserResourceId(rs.getInt(1));</span>
+<span class="fc" id="L199">				lockResourceResponse.setStatus(&quot;Pass&quot;);</span>
+<span class="fc" id="L200">				lockResourceResponse.setResourceId(lockResourceDBDto.getResourceId());</span>
+<span class="fc" id="L201">				lockResourceResponse.setName(lockResourceDBDto.getUserId());</span>
+			}
+
+<span class="nc" id="L204">		} catch (Exception e) {</span>
+<span class="nc" id="L205">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L207">			closeResultset(rs);</span>
+<span class="fc" id="L208">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L209">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L211">		return lockResourceResponse;</span>
+
+	}
+
+	@Override
+	public LockResourceResponse updateLockResourceForMultiContact(LockResourceDBDto lockResourceDBDto)
+			throws CompliancePortalException {
+
+<span class="fc" id="L219">		Connection connection = null;</span>
+<span class="fc" id="L220">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L221">		LockResourceResponse lockResourceResponse = new LockResourceResponse();</span>
+		try {
+<span class="fc" id="L223">			connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L224">			preparedStatement = connection.prepareStatement(</span>
+<span class="fc" id="L225">					RegistrationCfxDBQueryConstant.UPDATE_USER_RESOURCE_LOCK_BY_ACCOUNT_ID.getQuery());</span>
+<span class="fc" id="L226">			preparedStatement.setTimestamp(1, lockResourceDBDto.getLockReleasedOn());</span>
+<span class="fc" id="L227">			preparedStatement.setInt(2, lockResourceDBDto.getResourceId());</span>
+<span class="fc" id="L228">			int updateCount = preparedStatement.executeUpdate();</span>
+<span class="pc bpc" id="L229" title="1 of 2 branches missed.">			if (updateCount == 0) {</span>
+<span class="nc" id="L230">				lockResourceResponse.setStatus(&quot;Fail&quot;);</span>
+<span class="nc" id="L231">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			} else {
+<span class="fc" id="L233">				lockResourceResponse.setStatus(&quot;Pass&quot;);</span>
+<span class="fc" id="L234">				lockResourceResponse.setUserResourceId(lockResourceDBDto.getId());</span>
+<span class="fc" id="L235">				lockResourceResponse.setResourceId(lockResourceDBDto.getResourceId());</span>
+<span class="fc" id="L236">				lockResourceResponse.setName(lockResourceDBDto.getUserId());</span>
+			}
+
+<span class="nc" id="L239">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L240">			throw exception;</span>
+<span class="nc" id="L241">		} catch (Exception e) {</span>
+<span class="nc" id="L242">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_UPDATING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L244">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L245">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L247">		return lockResourceResponse;</span>
+
+	}
+
+	private LockResourceResponse checkLockResourceByAccountId(Integer resourceId, String resourceType,
+			Connection connection) throws CompliancePortalException {
+<span class="fc" id="L253">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L254">		ResultSet resultSet = null;</span>
+
+		try {
+<span class="fc" id="L257">			preparedStatement = connection</span>
+<span class="fc" id="L258">					.prepareStatement(RegistrationCfxDBQueryConstant.GET_RECORDLOCK_STATUS_BY_ACCOUNT_ID.getQuery());</span>
+<span class="fc" id="L259">			preparedStatement.setInt(1, resourceId);</span>
+<span class="fc" id="L260">			preparedStatement.setInt(2,  UserLockResourceTypeEnum.getDbStatusFromUiStatus(resourceType));</span>
+<span class="fc" id="L261">			resultSet = preparedStatement.executeQuery();</span>
+<span class="pc bpc" id="L262" title="1 of 2 branches missed.">			if (resultSet.next()) {</span>
+<span class="nc" id="L263">				LockResourceResponse lockResourceDBDto = new LockResourceResponse();</span>
+<span class="nc" id="L264">				lockResourceDBDto.setName(resultSet.getString(&quot;UserID&quot;));</span>
+<span class="nc" id="L265">				lockResourceDBDto.setUserResourceId(resultSet.getInt(&quot;Id&quot;));</span>
+<span class="nc" id="L266">				return lockResourceDBDto;</span>
+			}
+<span class="nc" id="L268">		} catch (Exception e) {</span>
+<span class="nc" id="L269">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L271">			closeResultset(resultSet);</span>
+<span class="fc" id="L272">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="fc" id="L274">		return null;</span>
+	}
+
+	private ActivityLogs getActivityLogsByAccount(Integer accountID, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L279">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L280">		List&lt;ActivityLogDataWrapper&gt; activityLogDataList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L281">		activityLogs.setActivityLogData(activityLogDataList);</span>
+<span class="nc" id="L282">		PreparedStatement statement = null;</span>
+<span class="nc" id="L283">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L285">			statement = connection</span>
+<span class="nc" id="L286">					.prepareStatement(RegistrationCfxDBQueryConstant.GET_ACTIVITY_LOGS_OF_ACCOUNT_ID.getQuery());</span>
+<span class="nc" id="L287">			statement.setInt(1, accountID);</span>
+<span class="nc" id="L288">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L290">				ActivityLogDataWrapper activityLogData = new ActivityLogDataWrapper();</span>
+<span class="nc" id="L291">				activityLogData.setActivityType(ActivityType.getActivityLogDisplay(rs.getString(&quot;ActivityType&quot;)));</span>
+<span class="nc" id="L292">				activityLogData.setCreatedBy(rs.getString(&quot;User&quot;));</span>
+<span class="nc" id="L293">				Timestamp createdOn = rs.getTimestamp(&quot;CreatedOn&quot;);</span>
+<span class="nc bnc" id="L294" title="All 2 branches missed.">				activityLogData.setCreatedOn(createdOn != null ? DateTimeFormatter.dateTimeFormatter(createdOn) : null);</span>
+<span class="nc" id="L295">				activityLogData.setActivity(rs.getString(&quot;Activity&quot;));</span>
+<span class="nc" id="L296">				activityLogData.setComment(rs.getString(&quot;Comment&quot;));</span>
+<span class="nc" id="L297">				activityLogDataList.add(activityLogData);</span>
+				
+<span class="nc" id="L299">			}</span>
+
+			
+<span class="nc" id="L302">		} catch (Exception e) {</span>
+<span class="nc" id="L303">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L305">			closePrepareStatement(statement);</span>
+<span class="nc" id="L306">			closeResultset(rs);</span>
+		}
+<span class="nc" id="L308">		return activityLogs;</span>
+	}
+
+	private StatusReason getContactStatusReasonsByAccountId(Integer accountId, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L314">		StatusReason contactStatusReason = new StatusReason();</span>
+<span class="nc" id="L315">		List&lt;StatusReasonData&gt; contactStatusReasonList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L316">		contactStatusReason.setStatusReasonData(contactStatusReasonList);</span>
+<span class="nc" id="L317">		PreparedStatement statement = null;</span>
+<span class="nc" id="L318">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L320">			statement = connection.prepareStatement(</span>
+<span class="nc" id="L321">					RegistrationCfxDBQueryConstant.GET_PROFILE_STATUS_REASON_BY_ACCOUNT_ID.getQuery());</span>
+<span class="nc" id="L322">			statement.setInt(1, accountId);</span>
+<span class="nc" id="L323">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L324" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L325">				StatusReasonData contactStatusReasonData = new StatusReasonData();</span>
+<span class="nc" id="L326">				contactStatusReasonData.setName(rs.getString(REASON));</span>
+<span class="nc" id="L327">				Integer contactIdDb = rs.getInt(&quot;ContactId&quot;);</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">				if (contactIdDb != -1) {</span>
+<span class="nc" id="L329">					contactStatusReasonData.setValue(Boolean.TRUE);</span>
+				} else {
+<span class="nc" id="L331">					contactStatusReasonData.setValue(Boolean.FALSE);</span>
+				}
+<span class="nc" id="L333">				contactStatusReasonList.add(contactStatusReasonData);</span>
+<span class="nc" id="L334">			}</span>
+
+<span class="nc" id="L336">		} catch (Exception e) {</span>
+<span class="nc" id="L337">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L339">			closeResultset(rs);</span>
+<span class="nc" id="L340">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L342">		return contactStatusReason;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRegistrationDBService#updateContact(com.currenciesdirect.gtg.compliance.core.domain.registration.RegUpdateDBDto)
+	 */
+	@Override
+	public ActivityLogs updateContact(RegUpdateDBDto requestHandlerDto) throws CompliancePortalException {
+
+<span class="nc" id="L351">		Connection connection = null;</span>
+<span class="nc" id="L352">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L353">		ResultSet resultSet = null;</span>
+<span class="nc" id="L354">		Integer tradeAccountId = null;</span>
+<span class="nc" id="L355">		Connection readOnlyConn = null;</span>
+<span class="nc" id="L356">		String registrationStatusReason =null;</span>
+		try {
+<span class="nc" id="L358">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L359">			readOnlyConn = getConnection(Boolean.TRUE);</span>
+			
+<span class="nc" id="L361">			preparedStatement = readOnlyConn</span>
+<span class="nc" id="L362">					.prepareStatement(RegistrationCfxDBQueryConstant.GET_ACCOUNT_CONTACT_IDS_BY_ACCCOUNID.getQuery());</span>
+<span class="nc" id="L363">			preparedStatement.setInt(1, requestHandlerDto.getAccountId());</span>
+<span class="nc" id="L364">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L365" title="All 2 branches missed.">			if(resultSet.next()){</span>
+<span class="nc" id="L366">				tradeAccountId = resultSet.getInt(&quot;TradeAccountID&quot;);</span>
+			}
+<span class="nc" id="L368">			beginTransaction(connection);</span>
+<span class="nc" id="L369">			deleteWatchlist(requestHandlerDto, connection);</span>
+<span class="nc" id="L370">			addWatchlist(requestHandlerDto, connection);</span>
+			/**added getWatchListStatus() to update watch list status for paymentout and paymentin */
+<span class="nc" id="L372">			getWatchListStatus(requestHandlerDto,readOnlyConn);</span>
+<span class="nc" id="L373">			updateWatchlistStatus(requestHandlerDto,connection);</span>
+<span class="nc" id="L374">			deleteReasons(requestHandlerDto, connection);</span>
+<span class="nc" id="L375">			addReasons(requestHandlerDto, connection);</span>
+<span class="nc" id="L376">			addActivityLogs(requestHandlerDto, connection);</span>
+
+<span class="nc" id="L378">			String accountStatus = requestHandlerDto.getAccountStatus();</span>
+			/**Added ResponseStatus*/
+<span class="nc bnc" id="L380" title="All 4 branches missed.">			if (requestHandlerDto.getAddReasons() != null &amp;&amp; !(requestHandlerDto.getAddReasons().isEmpty())) {</span>
+<span class="nc" id="L381">				registrationStatusReason=requestHandlerDto.getAddReasons().toString().replace(&quot;[&quot;, &quot;&quot;).replace(&quot;]&quot;, &quot;&quot;);</span>
+			}
+			
+<span class="nc bnc" id="L384" title="All 4 branches missed.">			if (accountStatus != null &amp;&amp; !accountStatus.isEmpty()) {</span>
+<span class="nc" id="L385">				ComplianceStatus complianceStatus = getAccountStatus(accountStatus);</span>
+<span class="nc" id="L386">				updateAccountStatus(accountStatus, requestHandlerDto, connection);</span>
+
+<span class="nc" id="L388">				updateContactStatus(accountStatus, connection, requestHandlerDto);</span>
+<span class="nc" id="L389">				RegistrationAccount account = getAccountAttributes(requestHandlerDto.getAccountId(), connection);</span>
+<span class="nc bnc" id="L390" title="All 2 branches missed.">				if(account == null){</span>
+<span class="nc" id="L391">					throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR);</span>
+				}
+<span class="nc" id="L393">				account.setAccountStatus(accountStatus);</span>
+				//Previously updated status from UI were updated in AccountAttribute table so that compliance service side can fetch the updated value.
+			    //But Later on improvement compliance service started fetching value from Account table.So no need to update AccountAttribute from UI. : Laxmi B.
+				//Only account status will be updated ,no contact status is updated for CFX as per requirement :  Laxmi B.
+				
+<span class="nc bnc" id="L398" title="All 4 branches missed.">				if(accountStatus.equalsIgnoreCase(ComplianceStatus.ACTIVE.name()) || accountStatus.equalsIgnoreCase(ComplianceStatus.REJECTED.name()) ){</span>
+<span class="nc" id="L399">					updateWorkFlowTime(requestHandlerDto.getUserResourceId(),connection);	</span>
+				}
+				/**
+				 * Contact list has been sent in registration response creation as per JIRA AT-1576
+				 * */
+<span class="nc" id="L404">				saveIntoBroadcastQueue(getBroadCastDBObject(requestHandlerDto.getAccountId(),requestHandlerDto.getCreatedBy(),</span>
+<span class="nc" id="L405">	                                   getRegistrationResponse(complianceStatus,requestHandlerDto.getAccountSfId(),requestHandlerDto.getOrgCode(),tradeAccountId,registrationStatusReason,</span>
+<span class="nc" id="L406">								requestHandlerDto.getRegistrationInDate(),requestHandlerDto.getComplianceDoneOn()),</span>
+<span class="nc" id="L407">						requestHandlerDto.getOrgCode()), connection);</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">			}else if(Boolean.FALSE.equals(StringUtils.isNullOrEmpty(requestHandlerDto.getComment())) </span>
+<span class="nc bnc" id="L409" title="All 2 branches missed.">					&amp;&amp; Boolean.TRUE.equals(requestHandlerDto.getIsRequestFromQueue())){</span>
+<span class="nc" id="L410">				updateAccountIsOnQueueStatus(requestHandlerDto, connection);</span>
+			}
+<span class="nc" id="L412">			commitTransaction(connection);</span>
+
+<span class="nc" id="L414">		} catch (Exception e) {</span>
+<span class="nc" id="L415">			transactionRolledBack(connection);</span>
+<span class="nc" id="L416">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L418">			closeResultset(resultSet);</span>
+<span class="nc" id="L419">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L420">			closeConnection(readOnlyConn);</span>
+<span class="nc" id="L421">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L423">		return regActivityLogTransformer.transform(requestHandlerDto);</span>
+
+	}
+
+	/**
+	 * Update contact status.
+	 *
+	 * @param accountStatus the account status
+	 * @param connection the connection
+	 * @param requestHandlerDto the request handler dto
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	private void updateContactStatus(String accountStatus, Connection connection, RegUpdateDBDto requestHandlerDto) throws CompliancePortalException {
+<span class="nc" id="L436">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L438">			preparedStatement = connection.prepareStatement(RegistrationCfxDBQueryConstant.UPDATE_CONTACT_STATUS.getQuery());</span>
+<span class="nc" id="L439">			preparedStatement.setString(1, accountStatus);</span>
+<span class="nc" id="L440">			preparedStatement.setInt(2, requestHandlerDto.getAccountId());</span>
+<span class="nc" id="L441">			int count = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L442" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L443">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+<span class="nc" id="L445">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L446">			throw exception;</span>
+<span class="nc" id="L447">		} catch (Exception e) {</span>
+<span class="nc" id="L448">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_UPDATING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L450">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L452">	}</span>
+
+	/**
+	 * Update account is on queue status.
+	 * updateAccountIsOnQueueStatus() updates isOnQueue column for CFX records
+	 * @param requestHandlerDto the request handler dto
+	 * @param connection the connection
+	 * @throws CompliancePortalException the compliance portal exception
+	 * @author abhijeetg
+	 */
+	private void updateAccountIsOnQueueStatus(RegUpdateDBDto requestHandlerDto, Connection connection) throws CompliancePortalException {
+
+<span class="nc" id="L464">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L466">			preparedStatement = connection.prepareStatement(RegistrationCfxDBQueryConstant.UPDATE_ACCOUNT_IS_ON_QUEUE_STATUS.getQuery());</span>
+<span class="nc" id="L467">			preparedStatement.setString(1, requestHandlerDto.getCreatedBy());</span>
+<span class="nc" id="L468">			preparedStatement.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L469">			preparedStatement.setBoolean(3, requestHandlerDto.getIsAccountOnQueue());</span>
+<span class="nc" id="L470">			preparedStatement.setInt(4, requestHandlerDto.getAccountId());</span>
+<span class="nc" id="L471">			int count = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L472" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L473">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+
+<span class="nc" id="L476">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L477">			throw exception;</span>
+<span class="nc" id="L478">		} catch (Exception e) {</span>
+<span class="nc" id="L479">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L481">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L483">	}</span>
+
+	private void updateAccountStatus(String status,RegUpdateDBDto requestHandlerDto, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L488">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L489">		Boolean accountStatusActive=Boolean.FALSE;</span>
+		try {
+<span class="nc" id="L491">			String complianceDoneOn =requestHandlerDto.getComplianceDoneOn();</span>
+<span class="nc" id="L492">			String complianceExpiry = requestHandlerDto.getComplianceExpiry();</span>
+<span class="nc" id="L493">			preparedStatement = connection</span>
+<span class="nc" id="L494">					.prepareStatement(RegistrationCfxDBQueryConstant.UPDATE_ACCOUNT_STATUS.getQuery());</span>
+<span class="nc" id="L495">			preparedStatement.setString(1, status);</span>
+<span class="nc" id="L496">			preparedStatement.setString(2, status);</span>
+<span class="nc" id="L497">			accountStatusActive = status.equals(ComplianceStatus.ACTIVE.name());</span>
+<span class="nc bnc" id="L498" title="All 4 branches missed.">			if(Boolean.TRUE.equals(accountStatusActive) </span>
+<span class="nc bnc" id="L499" title="All 2 branches missed.">					&amp;&amp; (null == complianceDoneOn || Constants.DASH_UI.equals(complianceDoneOn))){</span>
+<span class="nc" id="L500">				preparedStatement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L501">				Calendar c = Calendar.getInstance();</span>
+<span class="nc" id="L502">				c.setTime(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L503">				c.add(Calendar.YEAR, SearchCriteriaUtil.getComplianceExpiryYears());</span>
+<span class="nc" id="L504">				preparedStatement.setTimestamp(4, new Timestamp(c.getTimeInMillis()));</span>
+<span class="nc" id="L505">				requestHandlerDto.setComplianceDoneOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L506">				requestHandlerDto.setComplianceExpiry(new Timestamp(c.getTimeInMillis()).toString());</span>
+<span class="nc" id="L507">			}else {</span>
+<span class="nc" id="L508">				Timestamp complianceDoneOnTimestamp =  DateTimeFormatter.getTimestamp(complianceDoneOn);</span>
+<span class="nc" id="L509">				Timestamp complianceExpiryTimestamp =  DateTimeFormatter.getTimestamp(complianceExpiry);</span>
+<span class="nc bnc" id="L510" title="All 4 branches missed.">				if(null == complianceDoneOn || Constants.DASH_UI.equals(complianceDoneOn)) {</span>
+<span class="nc" id="L511">					preparedStatement.setNull(3, Types.TIMESTAMP);</span>
+<span class="nc" id="L512">					preparedStatement.setNull(4, Types.TIMESTAMP);</span>
+<span class="nc" id="L513">					requestHandlerDto.setComplianceDoneOn(null);</span>
+<span class="nc" id="L514">					requestHandlerDto.setComplianceExpiry(null);</span>
+				}else {
+<span class="nc" id="L516">					preparedStatement.setTimestamp(3,complianceDoneOnTimestamp);</span>
+<span class="nc" id="L517">					preparedStatement.setTimestamp(4, complianceExpiryTimestamp);</span>
+<span class="nc" id="L518">					requestHandlerDto.setComplianceDoneOn(complianceDoneOnTimestamp.toString());</span>
+<span class="nc" id="L519">					requestHandlerDto.setComplianceExpiry(complianceExpiryTimestamp.toString());</span>
+				}
+			}
+			
+<span class="nc" id="L523">			preparedStatement.setBoolean(5, requestHandlerDto.getIsAccountOnQueue());</span>
+<span class="nc" id="L524">			preparedStatement.setInt(6, requestHandlerDto.getAccountId());</span>
+		
+			
+<span class="nc" id="L527">			int count = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L528" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L529">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+
+<span class="nc" id="L532">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L533">			throw exception;</span>
+<span class="nc" id="L534">		} catch (Exception e) {</span>
+<span class="nc" id="L535">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L537">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="nc" id="L540">	}</span>
+	
+	private void addActivityLogs(RegUpdateDBDto requestHandlerDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L544">		List&lt;ProfileActivityLogDto&gt; activityLogs = requestHandlerDto.getActivityLog();</span>
+<span class="nc bnc" id="L545" title="All 4 branches missed.">		if (activityLogs != null &amp;&amp; !activityLogs.isEmpty()) {</span>
+<span class="nc" id="L546">			insertProfileActivityLogs(activityLogs, connection);</span>
+<span class="nc" id="L547">			insertProfileActivityLogDetail(activityLogs, connection);</span>
+		}
+<span class="nc" id="L549">	}</span>
+
+	private void addReasons(RegUpdateDBDto requestHandlerDto, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L552">		List&lt;String&gt; addReasons = requestHandlerDto.getAddReasons();</span>
+<span class="nc bnc" id="L553" title="All 4 branches missed.">		if (addReasons != null &amp;&amp; !addReasons.isEmpty()) {</span>
+<span class="nc" id="L554">			insertContactReason(requestHandlerDto, connection);</span>
+		}
+<span class="nc" id="L556">	}</span>
+
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertContactReason(RegUpdateDBDto regReqHandlerDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L561">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L563">			preparedStatement = connection</span>
+<span class="nc" id="L564">					.prepareStatement(RegistrationCfxDBQueryConstant.INSERT_REASON_ACCOUNT_ID.getQuery());</span>
+<span class="nc bnc" id="L565" title="All 2 branches missed.">			for (String addReasonsStr : regReqHandlerDto.getAddReasons()) {</span>
+<span class="nc" id="L566">				preparedStatement.setString(1, regReqHandlerDto.getOrgCode());</span>
+<span class="nc" id="L567">				preparedStatement.setInt(2, regReqHandlerDto.getAccountId());</span>
+<span class="nc" id="L568">				preparedStatement.setString(3, addReasonsStr);</span>
+<span class="nc" id="L569">				preparedStatement.setString(4, regReqHandlerDto.getCreatedBy());</span>
+<span class="nc" id="L570">				preparedStatement.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L571">				preparedStatement.setString(6, regReqHandlerDto.getCreatedBy());</span>
+<span class="nc" id="L572">				preparedStatement.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L573">				preparedStatement.setInt(8, regReqHandlerDto.getAccountId());</span>
+<span class="nc" id="L574">				int addRowCnt = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">				if (addRowCnt == 0) {</span>
+<span class="nc" id="L576">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				}
+<span class="nc" id="L578">			}</span>
+
+<span class="nc" id="L580">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L581">			throw exception;</span>
+<span class="nc" id="L582">		} catch (Exception e) {</span>
+<span class="nc" id="L583">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L585">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L587">	}</span>
+
+	private void deleteReasons(RegUpdateDBDto requestHandlerDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L591">		Integer accountId = requestHandlerDto.getAccountId();</span>
+
+<span class="nc" id="L593">		List&lt;String&gt; delReasons = requestHandlerDto.getDeletedReasons();</span>
+<span class="nc bnc" id="L594" title="All 4 branches missed.">		if (delReasons != null &amp;&amp; !delReasons.isEmpty()) {</span>
+<span class="nc" id="L595">			String[] delReasonsArray = delReasons.toArray(new String[delReasons.size()]);</span>
+<span class="nc" id="L596">			CriteriaBuilder builder = new CriteriaBuilder(RegistrationQueryConstant.GET_STATUS_REASON_ID.getQuery());</span>
+<span class="nc" id="L597">			String query = builder.addCriteria(&quot;Module&quot;, new String[] { &quot;CONTACT&quot;, &quot;ALL&quot; }, &quot;AND&quot;, ClauseType.IN)</span>
+<span class="nc" id="L598">					.addCriteria(REASON, delReasonsArray, &quot;AND&quot;, ClauseType.IN).build();</span>
+<span class="nc" id="L599">			query = &quot;DELETE [ProfileStatusReason] WHERE ContactID IN (SELECT ID FROM Contact WHERE AccountId = &quot;</span>
+					+ accountId + &quot;) AND StatusUpdateReasonID IN (&quot; + query + &quot;)&quot;;
+<span class="nc" id="L601">			deleteContactReason(query, connection);</span>
+		}
+<span class="nc" id="L603">	}</span>
+
+	private void deleteContactReason(String query, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L606">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L608">			preparedStatement = connection.prepareStatement(query);</span>
+<span class="nc" id="L609">			int delRowCnt = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L610" title="All 2 branches missed.">			if (delRowCnt == 0) {</span>
+<span class="nc" id="L611">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+<span class="nc" id="L613">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L614">			throw exception;</span>
+<span class="nc" id="L615">		} catch (Exception e) {</span>
+<span class="nc" id="L616">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_DELETING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L618">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L620">	}</span>
+
+	private void addWatchlist(RegUpdateDBDto requestHandlerDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L624">		List&lt;String&gt; addWatchlist = requestHandlerDto.getAddWatchlist();</span>
+<span class="nc bnc" id="L625" title="All 4 branches missed.">		if (addWatchlist != null &amp;&amp; !addWatchlist.isEmpty()) {</span>
+<span class="nc" id="L626">			insertWatchlist(requestHandlerDto, connection);</span>
+		}
+<span class="nc" id="L628">	}</span>
+
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertWatchlist(RegUpdateDBDto regReqHandlerDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L633">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L635">			preparedStatement = connection</span>
+<span class="nc" id="L636">					.prepareStatement(RegistrationCfxDBQueryConstant.INSERT_WATCHLIST_BY_ACCOUNT_ID.getQuery());</span>
+<span class="nc bnc" id="L637" title="All 2 branches missed.">			for (String addWatchlistStr : regReqHandlerDto.getAddWatchlist()) {</span>
+<span class="nc" id="L638">				preparedStatement.setString(1, addWatchlistStr);</span>
+<span class="nc" id="L639">				preparedStatement.setString(2, regReqHandlerDto.getCreatedBy());</span>
+<span class="nc" id="L640">				preparedStatement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L641">				preparedStatement.setInt(4, regReqHandlerDto.getAccountId());</span>
+<span class="nc" id="L642">				preparedStatement.addBatch();</span>
+<span class="nc" id="L643">			}</span>
+<span class="nc" id="L644">			int[] count = preparedStatement.executeBatch();</span>
+<span class="nc bnc" id="L645" title="All 2 branches missed.">			for (int c : count) {</span>
+<span class="nc bnc" id="L646" title="All 2 branches missed.">				if (c == 0) {</span>
+<span class="nc" id="L647">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				}
+			}
+
+<span class="nc" id="L651">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L652">			throw exception;</span>
+<span class="nc" id="L653">		} catch (Exception e) {</span>
+<span class="nc" id="L654">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L656">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L658">	}</span>
+
+	private void deleteWatchlist(RegUpdateDBDto requestHandlerDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L662">		Integer accountId = requestHandlerDto.getAccountId();</span>
+
+<span class="nc" id="L664">		List&lt;String&gt; delWatchlist = requestHandlerDto.getDeletedWatchlist();</span>
+
+<span class="nc bnc" id="L666" title="All 4 branches missed.">		if (delWatchlist != null &amp;&amp; !delWatchlist.isEmpty()) {</span>
+<span class="nc" id="L667">			String[] delwatchlistArray = delWatchlist.toArray(new String[delWatchlist.size()]);</span>
+<span class="nc" id="L668">			CriteriaBuilder builder = new CriteriaBuilder(RegistrationQueryConstant.GET_WATCHLIST_REASON.getQuery());</span>
+<span class="nc" id="L669">			String query = builder.addCriteria(REASON, delwatchlistArray, &quot;AND&quot;, ClauseType.IN).build();</span>
+<span class="nc" id="L670">			query = &quot;DELETE ContactWatchList WHERE Contact IN (SELECT ID FROM CONTACT WHERE AccountId=&quot; + accountId</span>
+					+ &quot;) AND Reason IN(&quot; + query + &quot;)&quot;;
+<span class="nc" id="L672">			deleteWatchlist(query, connection);</span>
+		}
+<span class="nc" id="L674">	}</span>
+
+	private BroadcastEventToDB getBroadCastDBObject(Integer accountId, String createdBy,
+			String statusJson, String orgCode) {
+<span class="nc" id="L678">		BroadcastEventToDB db = new BroadcastEventToDB();</span>
+<span class="nc" id="L679">		db.setAccountId(accountId);</span>
+<span class="nc" id="L680">		db.setCreatedBy(createdBy);</span>
+<span class="nc" id="L681">		db.setCreatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L682">		db.setDeliveredOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L683">		db.setDeliverOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L684">		db.setDeliveryStatus(BroadCastStatusEnum.NEW.getBroadCastStatusAsString());</span>
+<span class="nc" id="L685">		db.setEntityType(BroadCastEntityTypeEnum.UPDATE.getBroadCastEntityTypeAsString());</span>
+<span class="nc" id="L686">		db.setOrgCode(orgCode);</span>
+<span class="nc" id="L687">		db.setStatusJson(statusJson);</span>
+<span class="nc" id="L688">		return db;</span>
+	}
+
+	private String getRegistrationResponse(ComplianceStatus accountStatus, String accSfId, String orgCode, Integer tradeAccountId,
+			String registrationStatusReason, String registrationInDate, String complianceDoneOn) {
+<span class="nc" id="L693">		RegistrationResponse response = new RegistrationResponse();		</span>
+<span class="nc" id="L694">		response.setOsrID(UUID.randomUUID().toString());</span>
+<span class="nc" id="L695">		ComplianceAccount account = new ComplianceAccount();</span>
+<span class="nc" id="L696">		account.setAccountSFID(accSfId);</span>
+
+<span class="nc" id="L698">		account.setAcs(accountStatus);</span>
+		/** Added Response Code and Response Description for manual activation : issue AT-461 - Abhijit G */
+<span class="nc" id="L700">		account.setResponseCode(Constants.REGISTRATION_RESPONE_CODE);</span>
+<span class="nc" id="L701">		account.setResponseDescription(Constants.REGISTRATION_RESPONE_DESCRIPTION);</span>
+<span class="nc" id="L702">		account.setTradeAccountID(tradeAccountId);</span>
+<span class="nc" id="L703">		account.setCustType(CustomerTypeEnum.CFX.getCustTypeAsString());</span>
+<span class="nc" id="L704">		response.setAccount(account);</span>
+<span class="nc" id="L705">		response.setOrgCode(orgCode);</span>
+		/**Added statusReason for save into BroadCastQueue*/
+<span class="nc" id="L707">		account.setReasonForInactive(registrationStatusReason);</span>
+<span class="nc" id="L708">		account.setRegistrationInDate(DateTimeFormatter.removeMillisFromTimeStamp(registrationInDate));</span>
+<span class="nc" id="L709">		account.setRegisteredDate(DateTimeFormatter.removeMillisFromTimeStamp(complianceDoneOn));</span>
+<span class="nc" id="L710">		return JsonConverterUtil.convertToJsonWithNull(response);</span>
+
+	}
+
+	private ComplianceStatus getAccountStatus(String accountStatus) {
+
+<span class="nc bnc" id="L716" title="All 2 branches missed.">		if (accountStatus.equals(ComplianceStatus.ACTIVE.name())) {</span>
+<span class="nc" id="L717">			return ComplianceStatus.ACTIVE;</span>
+<span class="nc bnc" id="L718" title="All 2 branches missed.">		} else if (accountStatus.equals(ComplianceStatus.INACTIVE.name())) {</span>
+<span class="nc" id="L719">			return ComplianceStatus.INACTIVE;</span>
+<span class="nc bnc" id="L720" title="All 2 branches missed.">		} else if (accountStatus.equals(ComplianceStatus.REJECTED.name())) {</span>
+<span class="nc" id="L721">			return ComplianceStatus.REJECTED;</span>
+		}
+<span class="nc" id="L723">		return null;</span>
+	}
+
+	@Override
+	public ActivityLogs getActivityLogs(ActivityLogRequest request) throws CompliancePortalException {
+
+<span class="fc" id="L729">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="fc" id="L730">		List&lt;ActivityLogDataWrapper&gt; activityLogDataList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L731">		activityLogs.setActivityLogData(activityLogDataList);</span>
+<span class="fc" id="L732">		PreparedStatement statement = null;</span>
+<span class="fc" id="L733">		Connection connection = null;</span>
+<span class="fc" id="L734">		ResultSet rs = null;</span>
+		try {
+<span class="fc" id="L736">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L737">			statement = connection</span>
+<span class="fc" id="L738">					.prepareStatement(RegistrationCfxDBQueryConstant.GET_CFX_PROFILE_ACTIVITY_LOGS_BY_ROWS.getQuery());</span>
+<span class="fc" id="L739">			statement.setInt(1, request.getEntityId());</span>
+<span class="fc" id="L740">			statement.setInt(2, request.getMinRecord());</span>
+<span class="fc" id="L741">			statement.setInt(3, request.getMaxRecord());</span>
+<span class="fc" id="L742">			rs = statement.executeQuery();</span>
+<span class="fc bfc" id="L743" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L744">				ActivityLogDataWrapper activityLogData = new ActivityLogDataWrapper();</span>
+<span class="fc" id="L745">				activityLogData.setActivity(rs.getString(&quot;Activity&quot;));</span>
+<span class="fc" id="L746">				activityLogData.setActivityType(ActivityType.getActivityLogDisplay(rs.getString(&quot;ActivityType&quot;)));</span>
+<span class="fc" id="L747">				activityLogData.setCreatedBy(rs.getString(&quot;User&quot;));</span>
+<span class="fc" id="L748">				Timestamp createdOn = rs.getTimestamp(&quot;CreatedOn&quot;);</span>
+<span class="pc bpc" id="L749" title="1 of 2 branches missed.">				activityLogData.setCreatedOn(createdOn != null ? DateTimeFormatter.dateTimeFormatter(createdOn) : null);</span>
+<span class="fc" id="L750">				activityLogData.setComment(rs.getString(&quot;Comment&quot;));</span>
+<span class="fc" id="L751">				activityLogDataList.add(activityLogData);</span>
+<span class="fc" id="L752">			}</span>
+
+<span class="nc" id="L754">		} catch (Exception e) {</span>
+<span class="nc" id="L755">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L757">			closeResultset(rs);</span>
+<span class="fc" id="L758">			closePrepareStatement(statement);</span>
+<span class="fc" id="L759">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L761">		return activityLogs;</span>
+
+	}
+
+	@Override
+	public RegistrationQueueDto getRegistrationQueueWithCriteria(RegistrationSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+<span class="nc" id="L768">		return null;</span>
+	}
+
+	@Override
+	public ViewMoreResponse getMoreKycDetails(RegistrationViewMoreRequest viewMoreRequest)
+			throws CompliancePortalException {
+<span class="nc" id="L774">		return null;</span>
+	}
+
+	@Override
+	public ViewMoreResponse getMoreSanctionDetails(RegistrationViewMoreRequest viewMoreRequest)
+			throws CompliancePortalException {
+<span class="nc" id="L780">		return null;</span>
+	}
+
+	@Override
+	public ViewMoreResponse getMoreCustomCheckDetails(RegistrationViewMoreRequest viewMoreRequest)
+			throws CompliancePortalException {
+<span class="nc" id="L786">		return null;</span>
+	}
+
+	@Override
+	public ViewMoreResponse getMoreFraugsterDetails(RegistrationViewMoreRequest viewMoreRequest)
+			throws CompliancePortalException {
+<span class="nc" id="L792">		return null;</span>
+	}
+	
+	@Override
+	public ViewMoreResponse getMoreOnfidoDetails(RegistrationViewMoreRequest viewMoreRequest)
+			throws CompliancePortalException {
+<span class="nc" id="L798">		return null;</span>
+	}
+	
+	/**
+	 * AT-2248 - Event table high IOPS - (to optimize CFXdashboard details query)
+	 * Gets the reg CFX account contact details.
+	 *
+	 * @param connection the connection
+	 * @param cfxDetailsDBDto the cfx details DB dto
+	 * @param contactId the contact id
+	 * @return the reg CFX account contact details
+	 */
+	private List&lt;RegistrationDetailsDBDto&gt; getRegCFXAccountContactDetails(Connection connection,RegistrationCfxDetailsDBDto cfxDetailsDBDto,
+			Integer contactId){
+<span class="nc" id="L812">		List&lt;RegistrationDetailsDBDto&gt; regDetailDtoList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L813">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L814">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L816">			preparedStatement = connection.prepareStatement(RegistrationCfxDBQueryConstant.GET_CFX_DASHBOARD_ACCOUNT_CONTACT_DETAILS.getQuery());</span>
+<span class="nc" id="L817">			preparedStatement.setInt(1, contactId);</span>
+<span class="nc" id="L818">			rs = preparedStatement.executeQuery();</span>
+<span class="nc" id="L819">			String locedkBy = null;</span>
+<span class="nc bnc" id="L820" title="All 2 branches missed.">			while(rs.next()) {</span>
+<span class="nc" id="L821">				RegistrationDetailsDBDto detailDto = new RegistrationDetailsDBDto();</span>
+<span class="nc" id="L822">				detailDto.setAccComplianceStatus(rs.getString(&quot;AccountComplianceStatus&quot;));</span>
+<span class="nc" id="L823">				detailDto.setConComplianceStatus(rs.getString(&quot;ContactComplianceStatus&quot;));</span>
+<span class="nc" id="L824">				detailDto.setAccountAttrib(rs.getString(&quot;AccountAttrib&quot;));</span>
+<span class="nc" id="L825">				detailDto.setContactAttrib(rs.getString(&quot;contactAttrib&quot;));</span>
+<span class="nc" id="L826">				detailDto.setAccountId(rs.getInt(&quot;AccountId&quot;));</span>
+<span class="nc" id="L827">				detailDto.setContactId(rs.getInt(&quot;ID&quot;));</span>
+<span class="nc" id="L828">				detailDto.setTradeAccountId(rs.getString(&quot;TradeAccountId&quot;));</span>
+<span class="nc" id="L829">				detailDto.setCrmAccountId(rs.getString(&quot;CRMAccountID&quot;));</span>
+<span class="nc" id="L830">				detailDto.setCrmContactId(rs.getString(CRM_CONTACT_ID));</span>
+<span class="nc" id="L831">				detailDto.setContactName(rs.getString(&quot;Name&quot;));</span>
+<span class="nc" id="L832">				detailDto.setOrgnization(rs.getString(&quot;Organization&quot;));</span>
+<span class="nc" id="L833">				detailDto.setRegComp(rs.getTimestamp(&quot;RegComplete&quot;));</span>
+<span class="nc" id="L834">				detailDto.setRegCompAccount(rs.getTimestamp(&quot;RegCompleteAcc&quot;));</span>
+<span class="nc" id="L835">				detailDto.setRegistrationInDate(rs.getTimestamp(&quot;RegistrationInDate&quot;));</span>
+<span class="nc" id="L836">				detailDto.setComplianceExpiry(rs.getTimestamp(&quot;ComplianceExpiry&quot;));</span>
+<span class="nc" id="L837">				detailDto.setRegIn(rs.getTimestamp(&quot;RegIn&quot;));</span>
+<span class="nc" id="L838">				detailDto.setTradeAccountNum(rs.getString(&quot;TradeAccountNumber&quot;));</span>
+<span class="nc" id="L839">				detailDto.setTradeContactId(rs.getString(&quot;TradeContactID&quot;));</span>
+<span class="nc" id="L840">				detailDto.setUserResourceId(rs.getInt(&quot;userResourceLockId&quot;));</span>
+<span class="nc" id="L841">				detailDto.setCountryOfResidenceFullName(rs.getString(&quot;countryFullName&quot;));</span>
+<span class="nc" id="L842">				detailDto.setAccountTMFlag(rs.getInt(&quot;accountTMFlag&quot;));</span>
+<span class="nc" id="L843">				detailDto.setIntuitionRiskLevel(rs.getString(&quot;riskLevel&quot;)); // Added for AT-4190</span>
+<span class="nc" id="L844">				detailDto.setAccountVersion(rs.getInt(&quot;AccountVersion&quot;));</span>
+<span class="nc" id="L845">				cfxDetailsDBDto.setIsOnQueue(rs.getBoolean(&quot;isOnQueue&quot;));</span>
+<span class="nc" id="L846">				cfxDetailsDBDto.setDataAnonStatus(rs.getString(&quot;dataAnonStatus&quot;));</span>
+<span class="nc" id="L847">				cfxDetailsDBDto.setPoiExists(rs.getString(&quot;poiExists&quot;));</span>
+<span class="nc" id="L848">				locedkBy = rs.getString(&quot;LockedBy&quot;);</span>
+<span class="nc" id="L849">				checkAndSetLockedBy(rs, locedkBy, detailDto);</span>
+<span class="nc" id="L850">				detailDto.setLegalEntity(rs.getString(&quot;LegalEntity&quot;));</span>
+<span class="nc" id="L851">				detailDto.setCurrentContactId(contactId);</span>
+<span class="nc" id="L852">				detailDto.setEventDBDto(new HashMap&lt;String, List&lt;EventDBDto&gt;&gt;());</span>
+<span class="nc" id="L853">				checkAndSetContactId(contactId, rs, detailDto);</span>
+<span class="nc" id="L854">				detailDto.setKycSupportedCountryList(getKycCountryList(connection));</span>
+<span class="nc" id="L855">				regDetailDtoList.add(detailDto);</span>
+<span class="nc" id="L856">			}</span>
+<span class="nc" id="L857">		}catch(Exception e) {</span>
+<span class="nc" id="L858">			LOGGER.error(&quot;Error in getRegCFXAccountContactDetails : {1}&quot;,e);</span>
+		}finally {
+<span class="nc" id="L860">			closeResultset(rs);</span>
+<span class="nc" id="L861">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L863">		return regDetailDtoList;</span>
+	}
+	
+	/**
+	 * Added under AT - 2248
+	 * Gets the CFX dashboard event details.
+	 *
+	 * @param connection the connection
+	 * @param regCfxDetailsList the reg cfx details list
+	 * @param accountId the account id
+	 * @return the CFX dashboard event details
+	 */
+	private List&lt;RegistrationDetailsDBDto&gt; getCFXDashboardEventDetails(Connection connection,List&lt;RegistrationDetailsDBDto&gt; regCfxDetailsList,Integer accountId){
+<span class="nc" id="L876">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L877">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L879">			preparedStatement = connection.prepareStatement(RegistrationCfxDBQueryConstant.GET_CFX_DASHBOARD_EVENTS_DETAILS.getQuery());</span>
+<span class="nc" id="L880">			preparedStatement.setInt(1,accountId);</span>
+<span class="nc" id="L881">			rs = preparedStatement.executeQuery();</span>
+<span class="nc" id="L882">			Map&lt;String, List&lt;EventDBDto&gt;&gt; mm = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L883" title="All 2 branches missed.">			while(rs.next()) {</span>
+<span class="nc" id="L884">				String serviceName = rs.getString(&quot;ServiceName&quot;);</span>
+<span class="nc" id="L885">				String entityType = EntityTypeEnum.getUiStatusFromDatabaseStatus(rs.getInt(&quot;EntityType&quot;));</span>
+<span class="nc" id="L886">				String entityId = rs.getString(&quot;Entityid&quot;);</span>
+<span class="nc" id="L887">				String key = entityId + serviceName + entityType;</span>
+
+<span class="nc" id="L889">				List&lt;EventDBDto&gt; eventDBDtoList = mm.get(key);</span>
+<span class="nc bnc" id="L890" title="All 2 branches missed.">				if (eventDBDtoList == null) {</span>
+<span class="nc" id="L891">					eventDBDtoList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L892">					mm.put(key, eventDBDtoList);</span>
+				}
+<span class="nc" id="L894">				EventDBDto eventDBDto = new EventDBDto();</span>
+<span class="nc" id="L895">				eventDBDto.setId(rs.getInt(&quot;EventServiceLogId&quot;));</span>
+<span class="nc" id="L896">				eventDBDto.setUpdatedBy(rs.getString(&quot;EventUpdatedBy&quot;));</span>
+<span class="nc" id="L897">				eventDBDto.setUpdatedOn(rs.getTimestamp(&quot;EventUpdatedOn&quot;));</span>
+<span class="nc" id="L898">				eventDBDto.setSummary(rs.getString(&quot;EventSummary&quot;));</span>
+<span class="nc" id="L899">				eventDBDto.setStatus(ServiceStatusEnum.getUiStatusFromDatabaseStatus( rs.getInt(&quot;EventStatus&quot;)));</span>
+<span class="nc" id="L900">				eventDBDto.setEntityId(entityId);</span>
+<span class="nc" id="L901">				eventDBDto.setServiceType(serviceName);</span>
+<span class="nc" id="L902">				eventDBDtoList.add(eventDBDto);</span>
+<span class="nc" id="L903">			}</span>
+<span class="nc bnc" id="L904" title="All 2 branches missed.">			for(RegistrationDetailsDBDto detailDto : regCfxDetailsList) {</span>
+<span class="nc" id="L905">				detailDto.setEventDBDto(mm);</span>
+<span class="nc" id="L906">			}</span>
+
+<span class="nc" id="L908">		}catch(Exception e) {</span>
+<span class="nc" id="L909">			LOGGER.error(&quot;Error in getCFXDashboardEventDetails : {1}&quot;,e);</span>
+		}finally {
+<span class="nc" id="L911">			closeResultset(rs);</span>
+<span class="nc" id="L912">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L914">		return regCfxDetailsList;</span>
+	}
+
+	@Override
+	public boolean setPoiExistsFlag(UserProfile user,Contact contact) throws CompliancePortalException {
+<span class="nc" id="L919">		Connection connection = null;</span>
+<span class="nc" id="L920">		PreparedStatement preparedStatement = null;</span>
+		try{
+<span class="nc" id="L922">			connection = getConnection(Boolean.TRUE);</span>
+			//update contact table to set POI Exists Flag
+<span class="nc" id="L924">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.UPDATE_CONTACT_POI_EXISTS_FLAG.getQuery());	</span>
+<span class="nc" id="L925">			preparedStatement.setString(1, contact.getContactSFID());</span>
+<span class="nc" id="L926">		    preparedStatement.executeUpdate();</span>
+<span class="nc" id="L927">	} catch (Exception e) {</span>
+<span class="nc" id="L928">		transactionRolledBack(connection);</span>
+<span class="nc" id="L929">		throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+	} finally {
+<span class="nc" id="L931">		closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L932">		closeConnection(connection);</span>
+	}
+<span class="nc" id="L934">		return true;</span>
+	}
+
+	@Override //AT-4114
+	public ViewMoreResponse getMoreIntuitionDetails(RegistrationViewMoreRequest viewMoreRequest)
+			throws CompliancePortalException {
+<span class="nc" id="L940">		return null;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

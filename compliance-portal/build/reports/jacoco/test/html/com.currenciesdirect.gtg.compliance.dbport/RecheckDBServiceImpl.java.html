@@ -1,0 +1,828 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RecheckDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">RecheckDBServiceImpl.java</span></div><h1>RecheckDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.ReprocessFailedDetails;
+import com.currenciesdirect.gtg.compliance.commons.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.commons.enums.ReprocessStatusEnum;
+import com.currenciesdirect.gtg.compliance.commons.enums.TransactionTypeEnum;
+import com.currenciesdirect.gtg.compliance.core.IRecheckDBService;
+import com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInRecheckFailureDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutRecheckFailureDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.RegistrationRecheckFailureDetails;
+import com.currenciesdirect.gtg.compliance.dbport.enums.PaymentComplianceStatus;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+
+/**
+ * The Class RecheckDBServiceImpl.
+ */
+@Component(&quot;reCheckDBServiceImpl&quot;)
+<span class="fc" id="L32">public class RecheckDBServiceImpl extends AbstractDao implements IRecheckDBService {</span>
+
+	/** The Constant STATUS. */
+	private static final String STATUS = &quot;Status&quot;;
+
+  /** The Constant ORG_CODE. */
+  public static final String ORG_CODE = &quot;orgCode&quot;;
+
+	/** The Constant ORG_ID. */
+	public static final String ORG_ID = &quot;orgID&quot;;
+
+	/** The Constant CONTACT_ID. */
+	public static final String CONTACT_ID = &quot;ContactID&quot;;
+
+	/** The Constant ACCOUNT_ID. */
+	public static final String ACCOUNT_ID = &quot;AccountID&quot;;
+
+	/** The Constant EID_FAIL. */
+	private static final String EID_FAIL = &quot;Eid_Fail&quot;;
+
+	/** The Constant CUSTOM_CHECK_FAIL. */
+	private static final String CUSTOM_CHECK_FAIL = &quot;CustomCheck_Fail&quot;;
+
+	/** The Constant SANCTION_FAIL. */
+	private static final String SANCTION_FAIL = &quot;Sanction_Fail&quot;;
+
+	/** The Constant BLACKLIST_FAIL. */
+	private static final String BLACKLIST_FAIL = &quot;Blacklist_Fail&quot;;
+
+	/** The Constant FRAUGSTER_FAIL. */
+	private static final String FRAUGSTER_FAIL = &quot;Fraugster_Fail&quot;;
+	
+	private static final String MAX_BATCH_ID = &quot;MaxBatchId&quot;;
+	
+	private static final String SOME_DATA_IS_MISSING = &quot;Some data is missing&quot;;
+	
+	private static final String COUNT = &quot;count&quot;;
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#
+	 * getFundsOutFailures(com.currenciesdirect.gtg.compliance.core.domain.
+	 * BaseRepeatCheckRequest)
+	 */
+	@Override
+	public List&lt;PaymentOutRecheckFailureDetails&gt; getFundsOutFailures(BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+
+<span class="fc" id="L81">		List&lt;PaymentOutRecheckFailureDetails&gt; failedPaymentOutList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L82">		String listQuery = PaymentOutQueryConstant.GET_SERVICE_FAILURE_PAYMENT_OUT_DETAILS.getQuery();</span>
+<span class="fc" id="L83">		Connection connection = null;</span>
+<span class="fc" id="L84">		PreparedStatement listStatement = null;</span>
+<span class="fc" id="L85">		ResultSet listRs = null;</span>
+		try {
+<span class="fc" id="L87">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L88">			listStatement = connection.prepareStatement(listQuery);</span>
+<span class="fc" id="L89">			listStatement.setString(1, request.getDateFrom());</span>
+<span class="fc" id="L90">			listStatement.setString(2, request.getDateTo());</span>
+<span class="fc" id="L91">			listRs = listStatement.executeQuery();</span>
+<span class="fc bfc" id="L92" title="All 2 branches covered.">			while (listRs.next()) {</span>
+<span class="fc" id="L93">				PaymentOutRecheckFailureDetails recheckFailureDetail = new PaymentOutRecheckFailureDetails();</span>
+<span class="fc" id="L94">				recheckFailureDetail.setAccountId(listRs.getInt(ACCOUNT_ID));</span>
+<span class="fc" id="L95">				recheckFailureDetail.setContactId(listRs.getInt(CONTACT_ID));</span>
+<span class="fc" id="L96">				recheckFailureDetail.setComplianceStatus(</span>
+<span class="fc" id="L97">						PaymentComplianceStatus.getStatusFromDatabaseStatus(listRs.getInt(&quot;compliancestatus&quot;)));</span>
+<span class="fc" id="L98">				recheckFailureDetail.setOrgId(listRs.getInt(ORG_ID));</span>
+<span class="fc" id="L99">				recheckFailureDetail.setOrgCode(listRs.getString(ORG_CODE));</span>
+<span class="fc" id="L100">				recheckFailureDetail.setTradePaymentId(listRs.getInt(&quot;TradePaymentID&quot;));</span>
+<span class="fc" id="L101">				recheckFailureDetail.setTradeContractNumber(listRs.getString(&quot;ContractNumber&quot;));</span>
+<span class="fc" id="L102">				recheckFailureDetail.setPaymentOutId(listRs.getInt(&quot;paymentID&quot;));</span>
+<span class="fc" id="L103">				failedPaymentOutList.add(recheckFailureDetail);</span>
+<span class="fc" id="L104">			}</span>
+<span class="nc" id="L105">		} catch (Exception e) {</span>
+<span class="nc" id="L106">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L108">			closeResultset(listRs);</span>
+<span class="fc" id="L109">			closePrepareStatement(listStatement);</span>
+<span class="fc" id="L110">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L112">		return failedPaymentOutList;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#
+	 * getRegistrationServiceFailureCount(com.currenciesdirect.gtg.compliance.
+	 * core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public List&lt;PaymentInRecheckFailureDetails&gt; getFundsInFailures(BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+		
+<span class="fc" id="L126">		List&lt;PaymentInRecheckFailureDetails&gt; failedPaymentInList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L127">		String listQuery = PaymentInQueryConstant.GET_SERVICE_FAILURE_PAYMENT_IN_DETAILS.getQuery();</span>
+<span class="fc" id="L128">		Connection connection = null;</span>
+<span class="fc" id="L129">		PreparedStatement listStatement = null;</span>
+<span class="fc" id="L130">		ResultSet listRs = null;</span>
+		try{
+<span class="fc" id="L132">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L133">			listStatement = connection.prepareStatement(listQuery);</span>
+<span class="fc" id="L134">			listStatement.setString(1, request.getDateFrom());</span>
+<span class="fc" id="L135">			listStatement.setString(2, request.getDateTo());</span>
+<span class="fc" id="L136">			listRs = listStatement.executeQuery();</span>
+<span class="fc bfc" id="L137" title="All 2 branches covered.">			while(listRs.next()) {</span>
+<span class="fc" id="L138">				PaymentInRecheckFailureDetails recheckFailureDetail = new PaymentInRecheckFailureDetails();</span>
+<span class="fc" id="L139">				recheckFailureDetail.setAccountId(listRs.getInt(ACCOUNT_ID));</span>
+<span class="fc" id="L140">				recheckFailureDetail.setContactId(listRs.getInt(CONTACT_ID));</span>
+<span class="fc" id="L141">				recheckFailureDetail.setComplianceStatus(PaymentComplianceStatus.getStatusFromDatabaseStatus(listRs.getInt(&quot;compliancestatus&quot;)));</span>
+<span class="fc" id="L142">				recheckFailureDetail.setOrgId(listRs.getInt(ORG_ID));</span>
+<span class="fc" id="L143">				recheckFailureDetail.setOrgCode(listRs.getString(ORG_CODE));</span>
+<span class="fc" id="L144">				recheckFailureDetail.setTradePaymentId(listRs.getInt(&quot;TradePaymentID&quot;));</span>
+<span class="fc" id="L145">				recheckFailureDetail.setTradeContractNumber(listRs.getString(&quot;TradeContractNumber&quot;));</span>
+<span class="fc" id="L146">				recheckFailureDetail.setPaymentInId(listRs.getInt(&quot;paymentID&quot;));</span>
+<span class="fc" id="L147">				failedPaymentInList.add(recheckFailureDetail);</span>
+<span class="fc" id="L148">			}</span>
+<span class="nc" id="L149">		} catch(Exception e) {</span>
+<span class="nc" id="L150">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L152">			closeResultset(listRs);</span>
+<span class="fc" id="L153">			closePrepareStatement(listStatement);</span>
+<span class="fc" id="L154">			closeConnection(connection);</span>
+		}		
+<span class="fc" id="L156">		return failedPaymentInList;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#getRegistrationServiceFailureCount(com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse getRegistrationServiceFailureCount(BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+<span class="nc" id="L165">		BaseRepeatCheckResponse baseRepeatCheckResponse = null;</span>
+		String listQuery;
+		
+		//AT-5465
+<span class="nc" id="L169">		Boolean scanActiveCustomerForBRC = Boolean.parseBoolean(System.getProperty(&quot;scanActiveCustomerForBRC&quot;));</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">		if(Boolean.TRUE.equals(scanActiveCustomerForBRC)) {</span>
+<span class="nc" id="L171">			 listQuery = RegistrationQueryConstant.GET_SERVICE_FAILURE_REG_COUNT_FOR_ACTIVE_CUSTOMER.getQuery();</span>
+		}else {
+<span class="nc" id="L173">			 listQuery = RegistrationQueryConstant.GET_SERVICE_FAILURE_REG_COUNT.getQuery();</span>
+		}
+		
+<span class="nc" id="L176">		Connection connection = null;</span>
+<span class="nc" id="L177">		PreparedStatement listStatement = null;</span>
+<span class="nc" id="L178">		ResultSet listRs = null;</span>
+		try {
+<span class="nc" id="L180">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L181">			listStatement = connection.prepareStatement(listQuery);</span>
+<span class="nc" id="L182">			listStatement.setString(1, request.getDateFrom());</span>
+<span class="nc" id="L183">			listStatement.setString(2, request.getDateTo());</span>
+<span class="nc" id="L184">			listStatement.setString(3, request.getDateFrom());</span>
+<span class="nc" id="L185">			listStatement.setString(4, request.getDateTo());</span>
+<span class="nc" id="L186">			listRs = listStatement.executeQuery();</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">			while (listRs.next()) {</span>
+<span class="nc" id="L188">				baseRepeatCheckResponse = new BaseRepeatCheckResponse();</span>
+<span class="nc" id="L189">				baseRepeatCheckResponse.setFraugsterFailCount(listRs.getInt(FRAUGSTER_FAIL));</span>
+<span class="nc" id="L190">				baseRepeatCheckResponse.setSanctionFailCount(listRs.getInt(SANCTION_FAIL));</span>
+<span class="nc" id="L191">				baseRepeatCheckResponse.setBlacklistFailCount(listRs.getInt(BLACKLIST_FAIL));</span>
+<span class="nc" id="L192">				baseRepeatCheckResponse.setEidFailCount(listRs.getInt(EID_FAIL));</span>
+			}
+<span class="nc" id="L194">		} catch (Exception e) {</span>
+<span class="nc" id="L195">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L197">			closeResultset(listRs);</span>
+<span class="nc" id="L198">			closePrepareStatement(listStatement);</span>
+<span class="nc" id="L199">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L202">		return baseRepeatCheckResponse;</span>
+	}
+	
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#
+	 * getFundsInServiceFailureCount(com.currenciesdirect.gtg.compliance.core.
+	 * domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse getFundsInServiceFailureCount(BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+<span class="fc" id="L215">		BaseRepeatCheckResponse baseRepeatCheckResponse = null;</span>
+<span class="fc" id="L216">		String listQuery = PaymentInQueryConstant.GET_SERVICE_FAILURE_PAYMENT_IN_COUNT.getQuery();</span>
+<span class="fc" id="L217">		Connection connection = null;</span>
+<span class="fc" id="L218">		PreparedStatement listStatement = null;</span>
+<span class="fc" id="L219">		ResultSet listRs = null;</span>
+		try {
+<span class="fc" id="L221">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L222">			listStatement = connection.prepareStatement(listQuery);</span>
+<span class="fc" id="L223">			listStatement.setString(1, request.getDateFrom());</span>
+<span class="fc" id="L224">			listStatement.setString(2, request.getDateTo());</span>
+<span class="fc" id="L225">			listRs = listStatement.executeQuery();</span>
+<span class="fc bfc" id="L226" title="All 2 branches covered.">			while (listRs.next()) {</span>
+<span class="fc" id="L227">				baseRepeatCheckResponse = new BaseRepeatCheckResponse();</span>
+<span class="fc" id="L228">				baseRepeatCheckResponse.setFraugsterFailCount(listRs.getInt(FRAUGSTER_FAIL));</span>
+<span class="fc" id="L229">				baseRepeatCheckResponse.setSanctionFailCount(listRs.getInt(SANCTION_FAIL));</span>
+<span class="fc" id="L230">				baseRepeatCheckResponse.setBlacklistFailCount(listRs.getInt(BLACKLIST_FAIL));</span>
+<span class="fc" id="L231">				baseRepeatCheckResponse.setCustomCheckFailCount(listRs.getInt(CUSTOM_CHECK_FAIL));</span>
+			}
+<span class="nc" id="L233">		} catch (Exception e) {</span>
+<span class="nc" id="L234">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L236">			closeResultset(listRs);</span>
+<span class="fc" id="L237">			closePrepareStatement(listStatement);</span>
+<span class="fc" id="L238">			closeConnection(connection);</span>
+		}
+
+<span class="fc" id="L241">		return baseRepeatCheckResponse;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#
+	 * getFundsOutServiceFailureCount(com.currenciesdirect.gtg.compliance.core.
+	 * domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse getFundsOutServiceFailureCount(BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+<span class="fc" id="L254">		BaseRepeatCheckResponse baseRepeatCheckResponse = null;</span>
+<span class="fc" id="L255">		String listQuery = PaymentOutQueryConstant.GET_SERVICE_FAILURE_PAYMENT_OUT_COUNT.getQuery();</span>
+<span class="fc" id="L256">		Connection connection = null;</span>
+<span class="fc" id="L257">		PreparedStatement listStatement = null;</span>
+<span class="fc" id="L258">		ResultSet listRs = null;</span>
+		try {
+<span class="fc" id="L260">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L261">			listStatement = connection.prepareStatement(listQuery);</span>
+<span class="fc" id="L262">			listStatement.setString(1, request.getDateFrom());</span>
+<span class="fc" id="L263">			listStatement.setString(2, request.getDateTo());</span>
+<span class="fc" id="L264">			listRs = listStatement.executeQuery();</span>
+<span class="fc bfc" id="L265" title="All 2 branches covered.">			while (listRs.next()) {</span>
+<span class="fc" id="L266">				baseRepeatCheckResponse = new BaseRepeatCheckResponse();</span>
+<span class="fc" id="L267">				baseRepeatCheckResponse.setFraugsterFailCount(listRs.getInt(FRAUGSTER_FAIL));</span>
+<span class="fc" id="L268">				baseRepeatCheckResponse.setSanctionFailCount(listRs.getInt(SANCTION_FAIL));</span>
+<span class="fc" id="L269">				baseRepeatCheckResponse.setBlacklistFailCount(listRs.getInt(BLACKLIST_FAIL));</span>
+<span class="fc" id="L270">				baseRepeatCheckResponse.setCustomCheckFailCount(listRs.getInt(CUSTOM_CHECK_FAIL));</span>
+			}
+<span class="nc" id="L272">		} catch (Exception e) {</span>
+<span class="nc" id="L273">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L275">			closeResultset(listRs);</span>
+<span class="fc" id="L276">			closePrepareStatement(listStatement);</span>
+<span class="fc" id="L277">			closeConnection(connection);</span>
+		}
+
+<span class="fc" id="L280">		return baseRepeatCheckResponse;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#getRegistrationFailures(com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public List&lt;RegistrationRecheckFailureDetails&gt; getRegistrationFailures(BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+
+<span class="fc" id="L290">		List&lt;RegistrationRecheckFailureDetails&gt; failedRegistrationList = new ArrayList&lt;&gt;();</span>
+		String listQueryForPfx;
+		//AT-5465
+<span class="fc" id="L293">		Boolean scanActiveCustomerForBRC = Boolean.parseBoolean(System.getProperty(&quot;scanActiveCustomerForBRC&quot;));</span>
+		
+<span class="pc bpc" id="L295" title="1 of 2 branches missed.">		if(Boolean.TRUE.equals(scanActiveCustomerForBRC)) {</span>
+<span class="nc" id="L296">			listQueryForPfx = RegistrationQueryConstant.GET_SERVICE_FAILURE_REGISTRATION_DETAILS_FOR_PFX_ACTIVE_CUSTOMER.getQuery();</span>
+		}else {
+<span class="fc" id="L298">			listQueryForPfx = RegistrationQueryConstant.GET_SERVICE_FAILURE_REGISTRATION_DETAILS_FOR_PFX.getQuery();</span>
+		}
+<span class="fc" id="L300">		Connection connectionForPfx = null;</span>
+<span class="fc" id="L301">		PreparedStatement listStatementForPfx = null;</span>
+<span class="fc" id="L302">		ResultSet listRsForPfx = null;</span>
+
+		//AT-5465
+		String listQueryForCfx; 
+<span class="pc bpc" id="L306" title="1 of 2 branches missed.">		if(Boolean.TRUE.equals(scanActiveCustomerForBRC)) { </span>
+<span class="nc" id="L307">			listQueryForCfx = RegistrationQueryConstant.GET_SERVICE_FAILURE_REGISTRATION_DETAILS_FOR_CFX_ACTIVE_CUSTOMER.getQuery();</span>
+		}else {
+<span class="fc" id="L309">			listQueryForCfx = RegistrationQueryConstant.GET_SERVICE_FAILURE_REGISTRATION_DETAILS_FOR_CFX.getQuery();</span>
+		}
+<span class="fc" id="L311">		Connection connectionForCfx = null;</span>
+<span class="fc" id="L312">		PreparedStatement listStatementForCfx = null;</span>
+<span class="fc" id="L313">		ResultSet listRsForCfx = null;</span>
+		try {
+			//PFX
+<span class="fc" id="L316">			connectionForPfx = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L317">			listStatementForPfx = connectionForPfx.prepareStatement(listQueryForPfx);</span>
+<span class="fc" id="L318">			listStatementForPfx.setString(1, request.getDateFrom());</span>
+<span class="fc" id="L319">			listStatementForPfx.setString(2, request.getDateTo());</span>
+<span class="fc" id="L320">			listRsForPfx = listStatementForPfx.executeQuery();</span>
+<span class="fc bfc" id="L321" title="All 2 branches covered.">			while (listRsForPfx.next()) {</span>
+<span class="fc" id="L322">				RegistrationRecheckFailureDetails recheckFailureDetail = new RegistrationRecheckFailureDetails();</span>
+<span class="fc" id="L323">				recheckFailureDetail.setAccountId(listRsForPfx.getInt(ACCOUNT_ID));</span>
+<span class="fc" id="L324">				recheckFailureDetail.setContactId(listRsForPfx.getInt(CONTACT_ID));</span>
+<span class="fc" id="L325">				recheckFailureDetail.setCustomerType(CustomerTypeEnum.getCustumerTypeAsString(listRsForPfx.getInt(&quot;type&quot;)));</span>
+<span class="fc" id="L326">				failedRegistrationList.add(recheckFailureDetail);</span>
+<span class="fc" id="L327">			}</span>
+			//CFX
+<span class="fc" id="L329">			connectionForCfx = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L330">			listStatementForCfx = connectionForCfx.prepareStatement(listQueryForCfx);</span>
+<span class="fc" id="L331">			listStatementForCfx.setString(1, request.getDateFrom());</span>
+<span class="fc" id="L332">			listStatementForCfx.setString(2, request.getDateTo());</span>
+<span class="fc" id="L333">			listStatementForCfx.setString(3, request.getDateFrom());</span>
+<span class="fc" id="L334">			listStatementForCfx.setString(4, request.getDateTo());</span>
+<span class="fc" id="L335">			listRsForCfx = listStatementForCfx.executeQuery();</span>
+<span class="pc bpc" id="L336" title="1 of 2 branches missed.">			while (listRsForCfx.next()) {</span>
+<span class="nc" id="L337">				RegistrationRecheckFailureDetails recheckFailureDetail = new RegistrationRecheckFailureDetails();</span>
+<span class="nc" id="L338">				recheckFailureDetail.setAccountId(listRsForCfx.getInt(ACCOUNT_ID));</span>
+<span class="nc" id="L339">				recheckFailureDetail.setContactId(listRsForCfx.getInt(CONTACT_ID));</span>
+<span class="nc" id="L340">				recheckFailureDetail.setCustomerType(CustomerTypeEnum.getCustumerTypeAsString(listRsForCfx.getInt(&quot;type&quot;)));</span>
+<span class="nc" id="L341">				failedRegistrationList.add(recheckFailureDetail);</span>
+<span class="nc" id="L342">			}</span>
+		
+<span class="nc" id="L344">		} catch (Exception e) {</span>
+<span class="nc" id="L345">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L347">			closeResultset(listRsForPfx);</span>
+<span class="fc" id="L348">			closePrepareStatement(listStatementForPfx);</span>
+<span class="fc" id="L349">			closeConnection(connectionForPfx);</span>
+<span class="fc" id="L350">			closeResultset(listRsForCfx);</span>
+<span class="fc" id="L351">			closePrepareStatement(listStatementForCfx);</span>
+<span class="fc" id="L352">			closeConnection(connectionForCfx);</span>
+		}
+<span class="fc" id="L354">		return failedRegistrationList;</span>
+	}
+
+	/**
+	 * Save failed details to DB.
+	 *
+	 * @param paymentOutFailedList the payment out failed list
+	 * @param baseRepeatCheckResponse the base repeat check response
+	 * @return the integer
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#saveFailedDetailsToDB(com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutRecheckFailureDetails)
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	@Override
+	public Integer saveFailedDetailsToDB(List&lt;PaymentOutRecheckFailureDetails&gt; paymentOutFailedList, BaseRepeatCheckResponse baseRepeatCheckResponse)
+			throws CompliancePortalException {
+<span class="fc" id="L372">		Integer maxBatchId = 0;</span>
+<span class="fc" id="L373">		Connection connection = null;</span>
+<span class="fc" id="L374">		Connection getBatchIdConn = null;</span>
+<span class="fc" id="L375">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L376">		PreparedStatement getBatchIdPreparedStatement = null;</span>
+<span class="fc" id="L377">		ResultSet resultSet = null;</span>
+		try{
+<span class="fc" id="L379">			getBatchIdConn = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L380">			getBatchIdPreparedStatement = getBatchIdConn.prepareStatement(</span>
+<span class="fc" id="L381">					PaymentOutQueryConstant.GET_MAX_BATCH_ID_FROM_REPROCESS_FAILED.getQuery());</span>
+<span class="fc" id="L382">			resultSet = getBatchIdPreparedStatement.executeQuery();</span>
+			
+<span class="pc bpc" id="L384" title="1 of 2 branches missed.">			if(resultSet.next()){</span>
+<span class="fc" id="L385">				maxBatchId = resultSet.getInt(MAX_BATCH_ID);</span>
+			}			
+			
+<span class="fc" id="L388">			connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L389">			preparedStatement = connection.prepareStatement(PaymentOutQueryConstant.INSERT_INTO_REPROCESS_FAILED.getQuery());</span>
+<span class="fc bfc" id="L390" title="All 2 branches covered.">			for(PaymentOutRecheckFailureDetails failedPaymentOutDetails : paymentOutFailedList){</span>
+<span class="fc" id="L391">				preparedStatement.setInt(1, TransactionTypeEnum.PAYMENTOUT.getTransactionTypeAsInteger());</span>
+<span class="fc" id="L392">				preparedStatement.setInt(2, maxBatchId+1);</span>
+<span class="fc" id="L393">				preparedStatement.setInt(3, failedPaymentOutDetails.getPaymentOutId());</span>
+<span class="fc" id="L394">				preparedStatement.setInt(4, ReprocessStatusEnum.FAILED.getReprocessStatusAsInteger());</span>
+<span class="fc" id="L395">				preparedStatement.setInt(5, 0);</span>
+<span class="fc" id="L396">				preparedStatement.setInt(6, 1);</span>
+<span class="fc" id="L397">				preparedStatement.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L398">				preparedStatement.addBatch();</span>
+<span class="fc" id="L399">			}</span>
+<span class="fc" id="L400">			int[] count = preparedStatement.executeBatch();</span>
+<span class="fc bfc" id="L401" title="All 2 branches covered.">			for (int fundsOutInsertCount : count) {</span>
+<span class="pc bpc" id="L402" title="1 of 2 branches missed.">				if (fundsOutInsertCount == 0) {</span>
+<span class="nc" id="L403">					throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA,</span>
+							new Exception(SOME_DATA_IS_MISSING));
+				}
+			}
+<span class="fc" id="L407">			baseRepeatCheckResponse.setBatchId(maxBatchId+1);</span>
+<span class="fc" id="L408">			return count.length;</span>
+<span class="nc" id="L409">		} catch(CompliancePortalException cpe) {</span>
+<span class="nc" id="L410">			throw cpe;</span>
+<span class="nc" id="L411">		}  catch(Exception e) {</span>
+<span class="nc" id="L412">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		}
+		finally {
+<span class="fc" id="L415">			closeResultset(resultSet);</span>
+<span class="fc" id="L416">			closePrepareStatement(getBatchIdPreparedStatement);</span>
+<span class="fc" id="L417">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L418">			closeConnection(getBatchIdConn);</span>
+<span class="fc" id="L419">			closeConnection(connection);</span>
+		}		
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#getFirstFailedPaymentOutToReprocess()
+	 */
+	@Override
+	public ReprocessFailedDetails getFirstFailedRecordToReprocess(BaseRepeatCheckResponse baseRepeatCheckResponse, BaseRepeatCheckRequest request) throws CompliancePortalException {
+<span class="nc" id="L428">		ReprocessFailedDetails failedRecordsDetails = new ReprocessFailedDetails();</span>
+<span class="nc" id="L429">		Connection connection = null;</span>
+<span class="nc" id="L430">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L431">		ResultSet resultSet = null;</span>
+		try {
+<span class="nc" id="L433">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L434">			preparedStatement = connection.prepareStatement(PaymentOutQueryConstant.GET_FIRST_FAILED_RECORD.getQuery());</span>
+<span class="nc" id="L435">			preparedStatement.setInt(1, baseRepeatCheckResponse.getBatchId());</span>
+			
+<span class="nc bnc" id="L437" title="All 2 branches missed.">			if(request.getModuleName().equalsIgnoreCase(&quot;Payment Out&quot;))</span>
+<span class="nc" id="L438">				preparedStatement.setInt(2, 3);</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">			if(request.getModuleName().equalsIgnoreCase(&quot;Payment In&quot;))</span>
+<span class="nc" id="L440">				preparedStatement.setInt(2, 2);</span>
+<span class="nc bnc" id="L441" title="All 2 branches missed.">			if(request.getModuleName().equalsIgnoreCase(&quot;Registration&quot;))</span>
+<span class="nc" id="L442">				preparedStatement.setInt(2, 1);</span>
+			
+<span class="nc" id="L444">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L445" title="All 2 branches missed.">			if (resultSet.next()) {</span>
+<span class="nc" id="L446">				failedRecordsDetails.setId(resultSet.getInt(&quot;ID&quot;));</span>
+<span class="nc" id="L447">				failedRecordsDetails.setBatchId(resultSet.getInt(&quot;BatchId&quot;));</span>
+<span class="nc" id="L448">				failedRecordsDetails.setTransId(resultSet.getInt(&quot;TransId&quot;));</span>
+<span class="nc" id="L449">				failedRecordsDetails.setTransType(TransactionTypeEnum.getTransactionTypeAsString(resultSet.getInt(&quot;TransType&quot;)));</span>
+<span class="nc" id="L450">				failedRecordsDetails.setStatus(ReprocessStatusEnum.getReprocessStatusAsString(resultSet.getInt(STATUS)));</span>
+			}
+<span class="nc" id="L452">		} catch (Exception e) {</span>
+<span class="nc" id="L453">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L455">			closeResultset(resultSet);</span>
+<span class="nc" id="L456">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L457">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L459">		return failedRecordsDetails;</span>
+		
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#getReprocessStatusForFailed(com.currenciesdirect.gtg.compliance.commons.domain.ReprocessFailedDetails)
+	 */
+	@Override
+	public boolean getReprocessStatusForFailed(ReprocessFailedDetails reprocessFailedDetails) throws CompliancePortalException {
+<span class="nc" id="L468">		Connection connection = null;</span>
+<span class="nc" id="L469">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L470">		ResultSet resultSet = null;</span>
+		try {
+<span class="nc" id="L472">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L473">			preparedStatement = connection.prepareStatement(PaymentOutQueryConstant.GET_REPROCESS_STATUS_FOR_FAILED_RECORD.getQuery());</span>
+<span class="nc" id="L474">			preparedStatement.setInt(1, reprocessFailedDetails.getTransId());</span>
+<span class="nc" id="L475">			preparedStatement.setInt(2, TransactionTypeEnum.getTransactionTypeAsInteger(reprocessFailedDetails.getTransType()));</span>
+<span class="nc" id="L476">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L477" title="All 4 branches missed.">			if (resultSet.next() &amp;&amp; (3 == resultSet.getInt(STATUS))) {</span>
+<span class="nc" id="L478">					return true;</span>
+			}
+<span class="nc" id="L480">		} catch (Exception e) {</span>
+<span class="nc" id="L481">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L483">			closeResultset(resultSet);</span>
+<span class="nc" id="L484">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L485">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L487">		return false;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#deleteReprocessFailed()
+	 */
+	@Override
+	public Integer deleteReprocessFailed(BaseRepeatCheckRequest request) throws CompliancePortalException {
+<span class="fc" id="L495">		Connection connection = null;</span>
+<span class="fc" id="L496">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L497">		Integer result = 0;</span>
+		try {
+<span class="fc" id="L499">			connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L500">			preparedStatement = connection.prepareStatement(PaymentOutQueryConstant.DELETE_REPROCESS_FAILED.getQuery());</span>
+<span class="fc" id="L501">			preparedStatement.setInt(1,request.getBatchId());</span>
+<span class="fc" id="L502">			result = preparedStatement.executeUpdate();</span>
+<span class="nc" id="L503">		} catch (Exception e) {</span>
+<span class="nc" id="L504">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L506">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L507">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L509">		return result;</span>
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#getReprocessPaymentsList(com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest, com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckResponse)
+	 */
+	@Override
+	public List&lt;ReprocessFailedDetails&gt; getReprocessList(BaseRepeatCheckRequest request, BaseRepeatCheckResponse baseRepeatCheckResponse)
+			throws CompliancePortalException {
+
+<span class="fc" id="L519">		List&lt;ReprocessFailedDetails&gt; reprocessPaymentList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L520">		String listQuery = &quot;&quot;;</span>
+<span class="fc bfc" id="L521" title="All 2 branches covered.">		if(request.getModuleName().equalsIgnoreCase(&quot;Registration&quot;))</span>
+<span class="fc" id="L522">			listQuery = RegistrationQueryConstant.GET_REPROCESS_ELIGIBLE_REGISTRATIONS.getQuery();</span>
+		else
+<span class="fc" id="L524">			listQuery = PaymentOutQueryConstant.GET_REPROCESS_ELIGIBLE_PAYMENTS.getQuery();</span>
+<span class="fc" id="L525">		Connection connection = null;</span>
+<span class="fc" id="L526">		PreparedStatement listStatement = null;</span>
+<span class="fc" id="L527">		ResultSet listRs = null;</span>
+		try {
+<span class="fc" id="L529">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L530">			listStatement = connection.prepareStatement(listQuery);</span>
+<span class="fc" id="L531">			listStatement.setInt(1, baseRepeatCheckResponse.getBatchId());</span>
+<span class="fc bfc" id="L532" title="All 2 branches covered.">			if(request.getModuleName().equalsIgnoreCase(&quot;Payment Out&quot;))</span>
+<span class="fc" id="L533">				listStatement.setInt(2, TransactionTypeEnum.PAYMENTOUT.getTransactionTypeAsInteger());</span>
+<span class="fc bfc" id="L534" title="All 2 branches covered.">			if(request.getModuleName().equalsIgnoreCase(&quot;Payment In&quot;))</span>
+<span class="fc" id="L535">				listStatement.setInt(2, TransactionTypeEnum.PAYMENTIN.getTransactionTypeAsInteger());</span>
+			
+<span class="fc" id="L537">			listRs = listStatement.executeQuery();</span>
+<span class="fc bfc" id="L538" title="All 2 branches covered.">			while (listRs.next()) {</span>
+<span class="fc" id="L539">				ReprocessFailedDetails reprocessFailedPaymentDetail = new ReprocessFailedDetails();</span>
+<span class="fc" id="L540">				reprocessFailedPaymentDetail.setId(listRs.getInt(&quot;ID&quot;));</span>
+<span class="fc" id="L541">				reprocessFailedPaymentDetail.setBatchId(listRs.getInt(&quot;BatchId&quot;));</span>
+<span class="fc" id="L542">				reprocessFailedPaymentDetail.setTransType(TransactionTypeEnum.getTransactionTypeAsString(listRs.getInt(&quot;TransType&quot;)));</span>
+<span class="fc" id="L543">				reprocessFailedPaymentDetail.setTransId(listRs.getInt(&quot;TransId&quot;));</span>
+<span class="fc" id="L544">				reprocessFailedPaymentDetail.setStatus(ReprocessStatusEnum.getReprocessStatusAsString(listRs.getInt(STATUS)));				</span>
+<span class="fc" id="L545">				reprocessPaymentList.add(reprocessFailedPaymentDetail);</span>
+<span class="fc" id="L546">			}</span>
+<span class="nc" id="L547">		} catch (Exception e) {</span>
+<span class="nc" id="L548">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L550">			closeResultset(listRs);</span>
+<span class="fc" id="L551">			closePrepareStatement(listStatement);</span>
+<span class="fc" id="L552">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L554">		return reprocessPaymentList;</span>
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#saveFailedFundsInDetailsToDB(java.util.List, com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckResponse)
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	@Override
+	public Integer saveFailedFundsInDetailsToDB(List&lt;PaymentInRecheckFailureDetails&gt; paymentInFailedList, BaseRepeatCheckResponse baseRepeatCheckResponse)
+			throws CompliancePortalException {
+<span class="fc" id="L564">		Integer maxBatchId = 0;</span>
+<span class="fc" id="L565">		Connection connection = null;</span>
+<span class="fc" id="L566">		Connection getBatchIdConn = null;</span>
+<span class="fc" id="L567">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L568">		PreparedStatement getBatchIdPreparedStatement = null;</span>
+<span class="fc" id="L569">		ResultSet resultSet = null;</span>
+		try{
+			
+<span class="fc" id="L572">			getBatchIdConn = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L573">			getBatchIdPreparedStatement = getBatchIdConn.prepareStatement(</span>
+<span class="fc" id="L574">					PaymentOutQueryConstant.GET_MAX_BATCH_ID_FROM_REPROCESS_FAILED.getQuery());</span>
+<span class="fc" id="L575">			resultSet = getBatchIdPreparedStatement.executeQuery();</span>
+			
+<span class="pc bpc" id="L577" title="1 of 2 branches missed.">			if(resultSet.next()){</span>
+<span class="fc" id="L578">				maxBatchId = resultSet.getInt(MAX_BATCH_ID);</span>
+			}			
+			
+<span class="fc" id="L581">			connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L582">			preparedStatement = connection.prepareStatement(PaymentOutQueryConstant.INSERT_INTO_REPROCESS_FAILED.getQuery());</span>
+<span class="fc bfc" id="L583" title="All 2 branches covered.">			for(PaymentInRecheckFailureDetails failedPaymentInDetails : paymentInFailedList){</span>
+<span class="fc" id="L584">				preparedStatement.setInt(1, TransactionTypeEnum.PAYMENTIN.getTransactionTypeAsInteger());</span>
+<span class="fc" id="L585">				preparedStatement.setInt(2, maxBatchId+1);</span>
+<span class="fc" id="L586">				preparedStatement.setInt(3, failedPaymentInDetails.getPaymentInId());</span>
+<span class="fc" id="L587">				preparedStatement.setInt(4, ReprocessStatusEnum.FAILED.getReprocessStatusAsInteger());</span>
+<span class="fc" id="L588">				preparedStatement.setInt(5, 0);</span>
+<span class="fc" id="L589">				preparedStatement.setInt(6, 1);</span>
+<span class="fc" id="L590">				preparedStatement.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L591">				preparedStatement.addBatch();</span>
+<span class="fc" id="L592">			}</span>
+<span class="fc" id="L593">			int[] count = preparedStatement.executeBatch();</span>
+<span class="fc bfc" id="L594" title="All 2 branches covered.">			for (int fundsOutInsertCount : count) {</span>
+<span class="pc bpc" id="L595" title="1 of 2 branches missed.">				if (fundsOutInsertCount == 0) {</span>
+<span class="nc" id="L596">					throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA,</span>
+							new Exception(SOME_DATA_IS_MISSING));
+				}
+			}
+<span class="fc" id="L600">			baseRepeatCheckResponse.setBatchId(maxBatchId+1);</span>
+<span class="fc" id="L601">			return count.length;</span>
+<span class="nc" id="L602">		} catch(CompliancePortalException cpe) {</span>
+<span class="nc" id="L603">			throw cpe;</span>
+<span class="nc" id="L604">		}  catch(Exception e) {</span>
+<span class="nc" id="L605">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		}
+		finally {
+<span class="fc" id="L608">			closeResultset(resultSet);</span>
+<span class="fc" id="L609">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L610">			closePrepareStatement(getBatchIdPreparedStatement);</span>
+<span class="fc" id="L611">			closeConnection(connection);</span>
+<span class="fc" id="L612">			closeConnection(getBatchIdConn);</span>
+		}		
+	}
+	
+	
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#getRepeatCheckProgressBar(com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public Integer getRepeatCheckProgressBar(BaseRepeatCheckRequest request) throws CompliancePortalException {
+<span class="nc" id="L623">		Integer response = null;</span>
+<span class="nc" id="L624">		Connection connection =null;</span>
+<span class="nc" id="L625">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L626">		ResultSet resultSet = null;</span>
+<span class="nc" id="L627">		String query = PaymentOutQueryConstant.GET_REPROCCESS_STATUS.getQuery();</span>
+		
+		try {
+<span class="nc" id="L630">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L631">			preparedStatement = connection.prepareStatement(query);</span>
+<span class="nc" id="L632">			preparedStatement.setInt(1,request.getBatchId());</span>
+<span class="nc" id="L633">			resultSet = preparedStatement.executeQuery();</span>
+			
+<span class="nc bnc" id="L635" title="All 2 branches missed.">			while(resultSet.next()) {</span>
+<span class="nc" id="L636">					response = resultSet.getInt(STATUS);</span>
+				}
+			}
+<span class="nc" id="L639">		catch (Exception e) {</span>
+<span class="nc" id="L640">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+			}
+		finally {
+<span class="nc" id="L643">			closeResultset(resultSet);</span>
+<span class="nc" id="L644">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L645">			closeConnection(connection);</span>
+		}	
+<span class="nc" id="L647">		return response;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckDBService#saveFailedRegDetailsToDB(java.util.List, com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckResponse)
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	@Override
+	public int saveFailedRegDetailsToDB(List&lt;RegistrationRecheckFailureDetails&gt; registrationFailedList,
+			BaseRepeatCheckResponse repeatCheckResponse) throws CompliancePortalException {
+<span class="fc" id="L657">		Integer maxBatchId = 0;</span>
+<span class="fc" id="L658">		Connection connection = null;</span>
+<span class="fc" id="L659">		Connection getBatchIdConn = null;</span>
+<span class="fc" id="L660">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L661">		PreparedStatement getBatchIdPreparedStatement = null;</span>
+<span class="fc" id="L662">		ResultSet resultSet = null;</span>
+		try{
+			
+<span class="fc" id="L665">			getBatchIdConn = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L666">			getBatchIdPreparedStatement = getBatchIdConn.prepareStatement(</span>
+<span class="fc" id="L667">					RegistrationQueryConstant.GET_MAX_BATCH_ID_FROM_REPROCESS_FAILED.getQuery());</span>
+<span class="fc" id="L668">			resultSet = getBatchIdPreparedStatement.executeQuery();</span>
+			
+<span class="pc bpc" id="L670" title="1 of 2 branches missed.">			if(resultSet.next()){</span>
+<span class="fc" id="L671">				maxBatchId = resultSet.getInt(MAX_BATCH_ID);</span>
+			}			
+			
+<span class="fc" id="L674">			connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L675">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.INSERT_INTO_REPROCESS_FAILED.getQuery());</span>
+<span class="fc bfc" id="L676" title="All 2 branches covered.">			for(RegistrationRecheckFailureDetails failedRegDetails : registrationFailedList){</span>
+<span class="fc bfc" id="L677" title="All 2 branches covered.">				if(0 != failedRegDetails.getAccountId()){</span>
+<span class="fc" id="L678">					preparedStatement.setInt(1, TransactionTypeEnum.ACCOUNT.getTransactionTypeAsInteger());</span>
+<span class="fc" id="L679">					preparedStatement.setInt(3, failedRegDetails.getAccountId());</span>
+				}
+				else{
+<span class="fc" id="L682">					preparedStatement.setInt(1, TransactionTypeEnum.CONTACT.getTransactionTypeAsInteger());</span>
+<span class="fc" id="L683">					preparedStatement.setInt(3, failedRegDetails.getContactId());</span>
+				}
+<span class="fc" id="L685">				preparedStatement.setInt(2, maxBatchId+1);</span>
+<span class="fc" id="L686">				preparedStatement.setInt(4, ReprocessStatusEnum.FAILED.getReprocessStatusAsInteger());</span>
+<span class="fc" id="L687">				preparedStatement.setInt(5, 0);</span>
+<span class="fc" id="L688">				preparedStatement.setInt(6, 1);</span>
+<span class="fc" id="L689">				preparedStatement.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L690">				preparedStatement.addBatch();</span>
+<span class="fc" id="L691">			}</span>
+<span class="fc" id="L692">			int[] count = preparedStatement.executeBatch();</span>
+<span class="fc bfc" id="L693" title="All 2 branches covered.">			for (int regInsertCount : count) {</span>
+<span class="pc bpc" id="L694" title="1 of 2 branches missed.">				if (regInsertCount == 0) {</span>
+<span class="nc" id="L695">					throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA,</span>
+							new Exception(SOME_DATA_IS_MISSING));
+				}
+			}
+<span class="fc" id="L699">			repeatCheckResponse.setBatchId(maxBatchId+1);</span>
+<span class="fc" id="L700">			return count.length;</span>
+<span class="nc" id="L701">		} catch(CompliancePortalException cpe) {</span>
+<span class="nc" id="L702">			throw cpe;</span>
+<span class="nc" id="L703">		}  catch(Exception e) {</span>
+<span class="nc" id="L704">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		}
+		finally {
+<span class="fc" id="L707">			closeResultset(resultSet);</span>
+<span class="fc" id="L708">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L709">			closePrepareStatement(getBatchIdPreparedStatement);</span>
+<span class="fc" id="L710">			closeConnection(connection);</span>
+<span class="fc" id="L711">			closeConnection(getBatchIdConn);</span>
+		}		
+	}
+	
+	/**
+	 * Update TMMQ retry count.
+	 *
+	 * @return true, if successful
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	@Override
+	public boolean updateTMMQRetryCount() throws CompliancePortalException {
+<span class="nc" id="L723">		Connection connection = null;</span>
+<span class="nc" id="L724">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L726">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L727">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.UPDATE_TMMQ_RETRY_COUNT.getQuery());</span>
+<span class="nc" id="L728">			preparedStatement.executeUpdate();</span>
+<span class="nc" id="L729">		} catch (Exception e) {</span>
+<span class="nc bnc" id="L730" title="All 2 branches missed.">			if(connection != null) {</span>
+<span class="nc" id="L731">				transactionRolledBack(connection);</span>
+			}
+<span class="nc" id="L733">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_UPDATING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L735">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L736">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L738">		return true;</span>
+	}
+	
+	
+	/**
+	 * Show count reprocess failed.
+	 *
+	 * @param batchId the batch id
+	 * @return the string
+	 * @throws CompliancePortalException the compliance portal exception
+	 */ //AT-4355
+	@Override
+	public String showCountReprocessFailed(Integer batchId) throws CompliancePortalException {
+<span class="nc" id="L751">		Connection connection = null;</span>
+<span class="nc" id="L752">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L753">		JSONArray countArray = new JSONArray();</span>
+<span class="nc" id="L754">		ResultSet listForCount = null;</span>
+		try {
+<span class="nc" id="L756">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L757">			preparedStatement = connection.prepareStatement(PaymentOutQueryConstant.COUNT_REPROCESS_FAILED.getQuery());</span>
+<span class="nc" id="L758">			preparedStatement.setInt(1, batchId);</span>
+<span class="nc" id="L759">			listForCount = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L760" title="All 2 branches missed.">			while (listForCount.next()) {</span>
+<span class="nc" id="L761">				countArray.put(new JSONObject().put(STATUS, &quot;Pass : &quot;).put(COUNT, listForCount.getString(&quot;Pass&quot;)))</span>
+<span class="nc" id="L762">						.put(new JSONObject().put(STATUS, &quot;Fail : &quot;).put(COUNT, listForCount.getString(&quot;Fail&quot;)))</span>
+<span class="nc" id="L763">						.put(new JSONObject().put(STATUS, &quot;Exception : &quot;).put(COUNT,listForCount.getString(&quot;Inprogress&quot;)));</span>
+			}
+<span class="nc" id="L765">		} catch (Exception e) {</span>
+<span class="nc" id="L766">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L768">			closeResultset(listForCount);</span>
+<span class="nc" id="L769">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L770">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L772">		return countArray.toString();</span>
+	}
+
+	/**
+	 * Clear reprocess failed.
+	 *
+	 * @return the integer
+	 * @throws CompliancePortalException the compliance portal exception
+	 */ //AT-4355
+	@Override
+	public Integer clearReprocessFailed() throws CompliancePortalException {
+<span class="nc" id="L783">		Connection connection = null;</span>
+<span class="nc" id="L784">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L785">		Integer result = 0;</span>
+		try {
+<span class="nc" id="L787">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L788">			preparedStatement = connection.prepareStatement(PaymentOutQueryConstant.CLEAR_REPROCESS_FAILED.getQuery());</span>
+<span class="nc" id="L789">			result = preparedStatement.executeUpdate();</span>
+<span class="nc" id="L790">		} catch (Exception e) {</span>
+<span class="nc" id="L791">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L793">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L794">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L796">		return result;</span>
+	}
+	
+	/**
+	 * Update post card TMMQ retry count.
+	 *
+	 * @return true, if successful
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	//Add For AT-5023
+	@Override
+	public boolean updatePostCardTMMQRetryCount() throws CompliancePortalException {
+<span class="nc" id="L808">		Connection connection = null;</span>
+<span class="nc" id="L809">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L811">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L812">			preparedStatement = connection</span>
+<span class="nc" id="L813">					.prepareStatement(RegistrationQueryConstant.UPDATE_POST_CARD_TMMQ_RETRY_COUNT.getQuery());</span>
+<span class="nc" id="L814">			preparedStatement.executeUpdate();</span>
+<span class="nc" id="L815">		} catch (Exception e) {</span>
+<span class="nc bnc" id="L816" title="All 2 branches missed.">			if (connection != null) {</span>
+<span class="nc" id="L817">				transactionRolledBack(connection);</span>
+			}
+<span class="nc" id="L819">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_UPDATING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L821">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L822">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L824">		return true;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

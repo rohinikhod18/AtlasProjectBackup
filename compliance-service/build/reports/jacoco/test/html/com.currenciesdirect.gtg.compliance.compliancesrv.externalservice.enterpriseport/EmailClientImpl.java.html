@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>EmailClientImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.externalservice.enterpriseport</a> &gt; <span class="el_source">EmailClientImpl.java</span></div><h1>EmailClientImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.externalservice.enterpriseport;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailHeader;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailPayload;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.SendEmailRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.Address;
+import com.currenciesdirect.gtg.compliance.commons.externalservice.commhubport.ICommHubServiceImpl;
+import com.currenciesdirect.gtg.compliance.commons.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+
+/**
+ * The Class EmailClientImpl.
+ */
+<span class="nc" id="L21">public class EmailClientImpl implements IEmailClient {</span>
+
+	/** The log. */
+<span class="nc" id="L24">	private static Logger log = LoggerFactory.getLogger(EmailClientImpl.class);</span>
+	
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.externalservice.
+	 * enterpriseport.IEmailClient#sendEmail(com.currenciesdirect.gtg.compliance
+	 * .commons.domain.kyc.Address,
+	 * com.currenciesdirect.gtg.compliance.commons.domain.kyc.Address,
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.
+	 * RegistrationServiceRequest)
+	 */
+	@Override
+	public void sendEmail(Address oldAddress, Address newAddress, RegistrationServiceRequest request,ICommHubServiceImpl iCommHubServiceImpl) {
+		//AT-1999 
+<span class="nc" id="L39">		SendEmailRequest sendEmailRequest = new SendEmailRequest(); </span>
+		try {
+<span class="nc" id="L41">			sendEmailRequest = prepareMessageForAddressUpdate(sendEmailRequest,oldAddress, newAddress,request);</span>
+<span class="nc" id="L42">			iCommHubServiceImpl.sendEmail(sendEmailRequest,true);</span>
+<span class="nc" id="L43">		} catch (Exception e) {</span>
+<span class="nc" id="L44">			log.error(&quot;Error in SendEmail()&quot;, e);</span>
+<span class="nc" id="L45">		}</span>
+<span class="nc" id="L46">	}</span>
+	
+	/**
+	 * Prepare message for address update.
+	 *
+	 * @param sendEmailRequest the send email request
+	 * @return the send email request
+	 */
+	private SendEmailRequest prepareMessageForAddressUpdate(SendEmailRequest sendEmailRequest,Address oldAddress, Address newAddress,
+			RegistrationServiceRequest request) {
+		
+<span class="nc" id="L57">		EmailHeader header = new EmailHeader();</span>
+<span class="nc" id="L58">		EmailPayload payload = new EmailPayload();</span>
+<span class="nc" id="L59">		Map&lt;String, String&gt; placeholders = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L60">		String[] notificationType = new String[] {&quot;EMAIL&quot;};</span>
+<span class="nc" id="L61">		Account account = request.getAccount();</span>
+		
+<span class="nc" id="L63">		createPlaceHolders(oldAddress, newAddress, placeholders, account);</span>
+
+<span class="nc" id="L65">		header.setCustNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L66">		header.setCustomerType(account.getCustType());</span>
+<span class="nc" id="L67">		header.setEvent(Constants.ADDRESS_UPDATE_EVENT);</span>
+<span class="nc" id="L68">		header.setSourceSystem(Constants.SOURCE_ATLAS);</span>
+<span class="nc" id="L69">		header.setLocale(Constants.LOCALE_EN);</span>
+<span class="nc" id="L70">		header.setNotificationType(notificationType);</span>
+<span class="nc" id="L71">		header.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L72">		header.setLegalEntity(account.getCustLegalEntity());</span>
+<span class="nc" id="L73">		header.setRetryTimeout(&quot;60000&quot;);</span>
+		
+<span class="nc" id="L75">		payload.setEmailId(System.getProperty(Constants.ADDRESS_UPDATE + Constants.EAMIL_SENDTO));</span>
+<span class="nc" id="L76">		payload.setSubject(&quot;Address updated&quot;);</span>
+<span class="nc" id="L77">		payload.setPlaceHolder(placeholders);</span>
+		
+<span class="nc" id="L79">		sendEmailRequest.setHeader(header);</span>
+<span class="nc" id="L80">		sendEmailRequest.setPayload(payload);</span>
+		
+<span class="nc" id="L82">		return sendEmailRequest;</span>
+	}
+
+
+	/**
+	 * @param oldAddress
+	 * @param newAddress
+	 * @param placeholders
+	 * @param account
+	 */
+	private void createPlaceHolders(Address oldAddress, Address newAddress, Map&lt;String, String&gt; placeholders,
+			Account account) {
+		
+<span class="nc" id="L95">		placeholders.put(&quot;#customer_name&quot;, getPlaceholdersValue(account.getContacts().get(0).getFirstAndLastName()));</span>
+<span class="nc" id="L96">		placeholders.put(&quot;#customer_number&quot;, getPlaceholdersValue(account.getTradeAccountNumber()));</span>
+		
+<span class="nc" id="L98">		placeholders.put(&quot;#old_building_name&quot;, getPlaceholdersValue(oldAddress.getBuildingName()));</span>
+<span class="nc" id="L99">		placeholders.put(&quot;#old_address1&quot;, getPlaceholdersValue(oldAddress.getAddress1()));</span>
+<span class="nc" id="L100">		placeholders.put(&quot;#old_city&quot;, getPlaceholdersValue(oldAddress.getCity()));</span>
+<span class="nc" id="L101">		placeholders.put(&quot;#old_sub_city&quot;, getPlaceholdersValue(oldAddress.getSubCity()));</span>
+<span class="nc" id="L102">		placeholders.put(&quot;#old_state&quot;, getPlaceholdersValue(oldAddress.getState()));</span>
+<span class="nc" id="L103">		placeholders.put(&quot;#old_postal_code&quot;, getPlaceholdersValue(oldAddress.getPostCode()));</span>
+<span class="nc" id="L104">		placeholders.put(&quot;#old_country&quot;, getPlaceholdersValue(oldAddress.getCountry()));</span>
+
+<span class="nc" id="L106">		placeholders.put(&quot;#new_building_name&quot;, getPlaceholdersValue(newAddress.getBuildingName()));</span>
+<span class="nc" id="L107">		placeholders.put(&quot;#new_address1&quot;, getPlaceholdersValue(newAddress.getAddress1()));</span>
+<span class="nc" id="L108">		placeholders.put(&quot;#new_city&quot;, getPlaceholdersValue(newAddress.getCity()));</span>
+<span class="nc" id="L109">		placeholders.put(&quot;#new_sub_city&quot;, getPlaceholdersValue(newAddress.getSubCity()));</span>
+<span class="nc" id="L110">		placeholders.put(&quot;#new_state&quot;, getPlaceholdersValue(newAddress.getState()));</span>
+<span class="nc" id="L111">		placeholders.put(&quot;#new_postal_code&quot;, getPlaceholdersValue(newAddress.getPostCode()));</span>
+<span class="nc" id="L112">		placeholders.put(&quot;#new_country&quot;, getPlaceholdersValue(newAddress.getCountry()));</span>
+<span class="nc" id="L113">	}</span>
+	
+	/**
+	 * Gets the placeholders value.
+	 *
+	 * @param placeholders the placeholders
+	 * @return the placeholders value
+	 */
+	private String getPlaceholdersValue(String placeholders) {
+<span class="nc bnc" id="L122" title="All 4 branches missed.">		if(null != placeholders &amp;&amp; !placeholders.isEmpty())</span>
+<span class="nc" id="L123">			return placeholders;</span>
+<span class="nc" id="L124">		return &quot; &quot;;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

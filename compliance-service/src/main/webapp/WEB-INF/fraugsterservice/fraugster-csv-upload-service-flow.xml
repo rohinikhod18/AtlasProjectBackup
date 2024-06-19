@@ -1,0 +1,104 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:int-sftp="http://www.springframework.org/schema/integration/sftp"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+	http://www.springframework.org/schema/beans/spring-beans.xsd 
+	http://www.springframework.org/schema/integration 
+	http://www.springframework.org/schema/integration/spring-integration.xsd 
+	http://www.springframework.org/schema/task 
+	http://www.springframework.org/schema/task/spring-task.xsd 
+	http://www.springframework.org/schema/context 
+	http://www.springframework.org/schema/context/spring-context.xsd 
+	http://www.springframework.org/schema/integration/http
+	http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+	http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd
+	http://www.springframework.org/schema/integration/sftp
+	http://www.springframework.org/schema/integration/sftp/spring-integration-sftp.xsd">
+
+	<int:gateway id="FraugsterSFTPGateway" default-request-channel="FraugsterSFTPMaker" 
+		service-interface="com.currenciesdirect.gtg.compliance.compliancesrv.core.FraugsterCsvUploadGateway" >
+	</int:gateway>	
+
+	<int:channel id="FraugsterSFTPMaker"/>
+	<int:channel id="FraugsterSFTPSender"/>
+	<int:channel id="FraugsterUploadSuccessChannel"/>
+	<int:channel id="FraugsterUploadErrorChannel"/>
+	
+	<int:service-activator id="FraugsterCsvMakerActivator" ref="FraugsterCsvMaker" method="createCsv" 
+		input-channel="FraugsterSFTPMaker" output-channel="FraugsterSFTPSender" /> 
+	
+	<bean id="sftpSessionFactory"
+		class="org.springframework.integration.sftp.session.DefaultSftpSessionFactory">
+		<property name="host" value="#{FraugsterServerConf.session.host}" />
+		<property name="port" value="#{FraugsterServerConf.session.port}" />
+		<property name="user" value="#{FraugsterServerConf.session.username}" />
+		<property name="password" value="#{FraugsterServerConf.session.password}"/>
+		<property name="sessionConfig" ref="sessionConfig"/>
+	</bean>
+	<util:properties id="sessionConfig">
+   		<prop key="StrictHostKeyChecking">no</prop>
+	</util:properties>
+	
+	<int:chain id="createFragusterCsv" input-channel="FraugsterSFTPMaker">
+		<int:service-activator id="FraugsterCsvMakerActivator" ref="FraugsterCsvMaker" method="createCsv"  />
+			<int:router
+			id="csvValidation"
+			expression="payload.isEmpty()">
+			<int:mapping
+				value="true"
+				channel="nullChannel" />
+			<int:mapping
+				value="false"
+				channel="FraugsterSFTPSender" />
+		</int:router>
+		
+		</int:chain>
+
+<int-sftp:outbound-channel-adapter id="sftpOutboundAdapter"
+	session-factory="sftpSessionFactory" channel="FraugsterSFTPSender" charset="UTF-8"
+	remote-file-separator="/" remote-directory="#{FraugsterServerConf.remoteDirectory}"
+	remote-filename-generator-expression="new java.text.SimpleDateFormat('yyyyMMddHHmmssSSS').format(new java.util.Date()) + '.csv'"
+	use-temporary-file-name="true"
+	auto-create-directory="true" chmod="#{FraugsterServerConf.chmod}" mode="#{FraugsterServerConf.mode}" >
+	<int-sftp:request-handler-advice-chain>
+        <bean class="org.springframework.integration.handler.advice.ExpressionEvaluatingRequestHandlerAdvice">
+        	<property name="onSuccessExpression" value="#root" />
+            <property name="successChannel" ref="FraugsterUploadSuccessChannel" />
+            <property name="onFailureExpression" value="#root" />
+			<property name="failureChannel" ref="FraugsterUploadErrorChannel" />
+        </bean>
+    </int-sftp:request-handler-advice-chain>
+    </int-sftp:outbound-channel-adapter>
+	
+	<int:service-activator id="onSuccess" input-channel="FraugsterUploadSuccessChannel" output-channel="nullChannel" ref="FraugsterCsvSuccesser" method="onSuccess"></int:service-activator>
+	<int:service-activator id="onError" input-channel="FraugsterUploadErrorChannel" output-channel="nullChannel" ref="FraugsterCsvFailure" method="onError"></int:service-activator>
+
+	<bean id="FraugsterSessionConf" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.FraugsterCsvUploadSessionConf">
+			<property name="host" value="${fraguster.csv.server.ip}" />
+            <property name="port" value="${fraguster.csv.server.port}" />
+            <property name="username" value="${fraguster.csv.server.username}" />
+			<property name="password" value="${fraguster.csv.server.password}" />
+	</bean>
+	<bean id="FraugsterServerConf" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.FraugsterCsvUploadServerConf">
+ 	    <property name="session" ref="FraugsterSessionConf" />
+	 	<property name="remoteDirectory" value="${fraguster.csv.server.directory}" />
+     	<property name="chmod" value="600" />
+    	<property name="mode" value="REPLACE" />
+	</bean>
+
+	<bean id="fileNameGenerator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.FileNameGeneratorImpl">
+		<property name="name" value="fraugster"></property>
+		<property name="ext" value="csv"></property>
+	</bean>
+
+	<bean id="FraugsterCsvMaker" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.FraugsterCsvMaker" ></bean>
+	<bean id="FraugsterCsvSuccesser" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.FraugsterUploadSuccessHandler"></bean>
+	<bean id="FraugsterCsvFailure" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.FraugsterUplaodErrorHandler"></bean>
+</beans>

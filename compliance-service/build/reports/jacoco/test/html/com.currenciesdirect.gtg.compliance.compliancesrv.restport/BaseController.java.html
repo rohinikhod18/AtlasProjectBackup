@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BaseController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.restport</a> &gt; <span class="el_source">BaseController.java</span></div><h1>BaseController.java</h1><pre class="source lang-java linenums">/*
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.restport;
+
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+import javax.servlet.http.HttpServletRequest;
+
+import org.keycloak.representations.AccessToken;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.http.ResponseEntity;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.web.context.request.async.DeferredResult;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessage;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+
+import io.swagger.annotations.ApiModelProperty;
+
+/**
+ * The Class BaseController.
+ */
+<span class="fc" id="L41">public class BaseController {</span>
+
+	/** The Constant LOGGER. */
+<span class="fc" id="L44">	private static final Logger LOGGER = LoggerFactory.getLogger(BaseController.class);</span>
+
+	/** The Constant ORG_IN_CHANNEL. */
+	private static final String ORG_IN_CHANNEL = &quot;%s.%s.%s.in.channel&quot;;
+
+	/** The Constant DEFAULT_IN_CHANNEL. */
+	private static final String DEFAULT_IN_CHANNEL = &quot;%s.%s.in.channel&quot;;
+
+	/** The application context. */
+	@Autowired
+	private ApplicationContext applicationContext;
+
+	/**
+	 * Inits the.
+	 */
+	@PostConstruct
+	public void init() {
+<span class="nc" id="L61">		LOGGER.debug(&quot;Controller [{}] initialized&quot;, this.getClass());</span>
+<span class="nc" id="L62">	}</span>
+
+	/**
+	 * Destroy.
+	 */
+	@PreDestroy
+	public void destroy() {
+<span class="nc" id="L69">		LOGGER.debug(&quot;Controller [{}] destroyed&quot;, this.getClass());</span>
+<span class="nc" id="L70">	}</span>
+
+	/**
+	 * Execute workflow.
+	 *
+	 * @param messageContext
+	 *            the message context
+	 * @param userToken
+	 *            the user token
+	 * @return the deferred result
+	 */
+
+	@ApiModelProperty(value = &quot;Returns the result object and the setOrExpired boolean (true if this DeferredResult is no longer usable)&quot;, required = true)
+	public DeferredResult&lt;ResponseEntity&gt; executeWorkflow(final MessageContext messageContext, AccessToken userToken) {
+<span class="nc" id="L84">		DeferredResult&lt;ResponseEntity&gt; deferredResult = new DeferredResult&lt;&gt;(-1L);// 8000L,</span>
+																					// &quot;timeout
+																					// occured&quot;
+
+<span class="nc" id="L88">		MessageExchange gateWayMessageExchange = messageContext.getMessageCollection().get(0).getMessageExchange();</span>
+
+<span class="nc bnc" id="L90" title="All 2 branches missed.">		if (null == gateWayMessageExchange.getRequest().getOsrId()</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">				|| gateWayMessageExchange.getRequest().getOsrId().isEmpty()) {</span>
+<span class="nc" id="L92">			gateWayMessageExchange.getRequest().setOsrId(UUID.randomUUID().toString());</span>
+		}
+
+<span class="nc" id="L95">		Map&lt;String, Object&gt; messageHeaders = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L96">		messageHeaders.put(MessageContextHeaders.GATEWAY_REQUEST_RECEIVE_TIME,</span>
+<span class="nc" id="L97">				messageContext.getAuditInfo().getCreatedOn());</span>
+<span class="nc" id="L98">		messageHeaders.put(MessageContextHeaders.GATEWAY_SERVICE_ID, gateWayMessageExchange.getServiceInterface());</span>
+<span class="nc" id="L99">		messageHeaders.put(MessageContextHeaders.GATEWAY_OPERATION, gateWayMessageExchange.getOperation().name());</span>
+<span class="nc" id="L100">		messageHeaders.put(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT, deferredResult);</span>
+<span class="nc" id="L101">		messageHeaders.put(MessageContextHeaders.GATEWAY_REQUEST_ORG, messageContext.getOrgCode());</span>
+<span class="nc" id="L102">		messageHeaders.put(MessageContextHeaders.GATEWAY_USER, mapUserProfile(userToken));</span>
+<span class="nc" id="L103">		messageHeaders.put(MessageContextHeaders.OSR_ID, gateWayMessageExchange.getRequest().getOsrId());</span>
+<span class="nc" id="L104">		messageHeaders.put(&quot;correlationID&quot;, UUID.randomUUID().toString());</span>
+<span class="nc" id="L105">		Message&lt;MessageContext&gt; message = MessageBuilder.withPayload(messageContext).copyHeaders(messageHeaders)</span>
+<span class="nc" id="L106">				.build();</span>
+
+<span class="nc" id="L108">		MessageChannel messageChannel = getInMessageChannel(gateWayMessageExchange.getOperation().name(),</span>
+<span class="nc" id="L109">				gateWayMessageExchange.getServiceInterface().name(), messageContext.getOrgCode());</span>
+
+<span class="nc" id="L111">		messageChannel.send(message);</span>
+
+<span class="nc" id="L113">		return deferredResult;</span>
+	}
+
+	/**
+	 * Gets the in message channel.
+	 *
+	 * @param operation
+	 *            the operation
+	 * @param gatewayService
+	 *            the gateway service
+	 * @param orgCode
+	 *            the org code
+	 * @return the in message channel
+	 */
+	private MessageChannel getInMessageChannel(final String operation, final String gatewayService,
+			final String orgCode) {
+		MessageChannel messageChannel;
+<span class="nc" id="L130">		String inChannel = String.format(ORG_IN_CHANNEL, orgCode, gatewayService, operation);</span>
+		try {
+<span class="nc" id="L132">			messageChannel = applicationContext.getBean(inChannel, MessageChannel.class);</span>
+<span class="nc" id="L133">		} catch (NoSuchBeanDefinitionException nbde) {</span>
+<span class="nc" id="L134">			inChannel = String.format(DEFAULT_IN_CHANNEL, gatewayService, operation);</span>
+<span class="nc" id="L135">			String logData = &quot;message forwarding to default channel [&quot;;</span>
+<span class="nc" id="L136">			logData = logData.concat(inChannel).concat(&quot;], exception was= &quot;).concat(nbde.toString());</span>
+<span class="nc" id="L137">			LOGGER.debug(logData);</span>
+<span class="nc" id="L138">			messageChannel = applicationContext.getBean(inChannel, MessageChannel.class);</span>
+<span class="nc" id="L139">		}</span>
+<span class="nc" id="L140">		return messageChannel;</span>
+	}
+
+	/**
+	 * Builds the message context.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param serviceType
+	 *            the service type
+	 * @param serviceInterface
+	 *            the service interface
+	 * @param operation
+	 *            the operation
+	 * @param orgCode
+	 *            the org code
+	 * @param payload
+	 *            the payload
+	 * @return the message context
+	 */
+	public MessageContext buildMessageContext(final HttpServletRequest httpRequest, final ServiceTypeEnum serviceType,
+			final ServiceInterfaceType serviceInterface, final OperationEnum operation, final String orgCode,
+			final ServiceMessage payload) {
+
+<span class="fc" id="L164">		MessageExchange gateWayMessageExchange = new MessageExchange();</span>
+<span class="fc" id="L165">		gateWayMessageExchange.setServiceTypeEnum(serviceType);</span>
+<span class="fc" id="L166">		gateWayMessageExchange.setServiceInterface(serviceInterface);</span>
+<span class="fc" id="L167">		gateWayMessageExchange.setOperation(operation);</span>
+<span class="fc" id="L168">		gateWayMessageExchange.setRequest(payload);</span>
+
+<span class="fc" id="L170">		addHTTPHeaders(httpRequest, payload);</span>
+
+<span class="fc" id="L172">		MessageContext messageContext = new MessageContext();</span>
+<span class="pc bpc" id="L173" title="1 of 2 branches missed.">		if (null != orgCode)</span>
+<span class="fc" id="L174">			messageContext.setOrgCode(orgCode.toUpperCase());</span>
+<span class="fc" id="L175">		messageContext.appendMessageExchange(gateWayMessageExchange);</span>
+
+<span class="fc" id="L177">		return messageContext;</span>
+	}
+
+	/**
+	 * Map user profile.
+	 *
+	 * @param userToken
+	 *            the user token
+	 * @return the user profile
+	 */
+	private UserProfile mapUserProfile(AccessToken userToken) {
+<span class="nc" id="L188">		UserProfile user = new UserProfile();</span>
+<span class="nc" id="L189">		user.setBirthdate(userToken.getBirthdate());</span>
+<span class="nc" id="L190">		user.setEmail(userToken.getEmail());</span>
+<span class="nc" id="L191">		user.setFamilyName(userToken.getFamilyName());</span>
+<span class="nc" id="L192">		user.setGender(userToken.getGender());</span>
+<span class="nc" id="L193">		user.setGivenName(userToken.getGivenName());</span>
+<span class="nc" id="L194">		user.setMiddleName(userToken.getMiddleName());</span>
+<span class="nc" id="L195">		user.setName(userToken.getName());</span>
+<span class="nc" id="L196">		user.setNickName(userToken.getNickName());</span>
+<span class="nc" id="L197">		user.setPhoneNumber(userToken.getPhoneNumber());</span>
+<span class="nc" id="L198">		user.setPreferredUserName(userToken.getPreferredUsername());</span>
+<span class="nc" id="L199">		user.setWebsite(userToken.getWebsite());</span>
+<span class="nc" id="L200">		user.setZoneinfo(userToken.getZoneinfo());</span>
+<span class="nc" id="L201">		return user;</span>
+	}
+
+	/**
+	 * Adds the HTTP headers.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param payload
+	 *            the payload
+	 */
+	private void addHTTPHeaders(final HttpServletRequest httpRequest, final ServiceMessage payload) {
+<span class="fc" id="L213">		Enumeration&lt;String&gt; headerNames = httpRequest.getHeaderNames();</span>
+		StringBuilder values;
+		String headerName;
+		Enumeration&lt;String&gt; headers;
+<span class="fc bfc" id="L217" title="All 2 branches covered.">		while (headerNames.hasMoreElements()) {</span>
+<span class="fc" id="L218">			headerName = headerNames.nextElement();</span>
+<span class="fc" id="L219">			headers = httpRequest.getHeaders(headerName);</span>
+<span class="fc" id="L220">			values = new StringBuilder();</span>
+<span class="fc bfc" id="L221" title="All 2 branches covered.">			while (headers.hasMoreElements()) {</span>
+<span class="fc bfc" id="L222" title="All 2 branches covered.">				if (values.length() &gt; 0) {</span>
+<span class="fc" id="L223">					values.append(',');</span>
+				}
+<span class="fc" id="L225">				values.append(headers.nextElement());</span>
+			}
+<span class="fc" id="L227">			payload.addAttribute(&quot;http.header.&quot;.concat(headerName), values.toString());</span>
+		}
+<span class="fc" id="L229">		payload.addAttribute(&quot;http.header.requestURI&quot;, httpRequest.getRequestURI());</span>
+<span class="fc" id="L230">		payload.addAttribute(&quot;http.header.remoteAddr&quot;, httpRequest.getRemoteAddr());</span>
+<span class="fc" id="L231">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

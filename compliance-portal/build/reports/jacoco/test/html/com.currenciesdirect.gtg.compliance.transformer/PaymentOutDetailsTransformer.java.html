@@ -1,0 +1,452 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PaymentOutDetailsTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.transformer</a> &gt; <span class="el_source">PaymentOutDetailsTransformer.java</span></div><h1>PaymentOutDetailsTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.transformer;
+
+import java.util.List;
+
+import org.json.JSONObject;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistPayRefSummary;
+import com.currenciesdirect.gtg.compliance.core.ITransform;
+import com.currenciesdirect.gtg.compliance.core.domain.Blacklist;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.CountryCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.CustomCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.EventDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.Sanction;
+import com.currenciesdirect.gtg.compliance.core.domain.Watchlist;
+import com.currenciesdirect.gtg.compliance.core.domain.internalrule.BlacklistSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutBlacklist;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutInfo;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutPaymentReference;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutSanction;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.DecimalFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.StringUtils;
+
+/**
+ * The Class PaymentOutDetailsTransform.
+ */
+@Component(&quot;paymentOutDetailsTransformer&quot;)
+<span class="nc" id="L34">public class PaymentOutDetailsTransformer extends BaseDetailsTransformer implements ITransform&lt;PaymentOutDetailsDto, PaymentOutDBDto&gt; {</span>
+
+	@Override
+	public PaymentOutDetailsDto transform(PaymentOutDBDto paymentOutDBDto) {
+<span class="nc" id="L38">		PaymentOutDetailsDto paymentOutDetailDto = new PaymentOutDetailsDto();</span>
+<span class="nc" id="L39">		paymentOutDetailDto.setPaginationDetails(paymentOutDBDto.getPaginationDetails());</span>
+<span class="nc" id="L40">		paymentOutDetailDto.setCurrentRecord(3);</span>
+<span class="nc" id="L41">		paymentOutDetailDto.setTotalRecords(30);</span>
+<span class="nc bnc" id="L42" title="All 4 branches missed.">		if (paymentOutDBDto.getLockedBy() != null &amp;&amp; !paymentOutDBDto.getLockedBy().isEmpty()) {</span>
+<span class="nc" id="L43">			paymentOutDetailDto.setLocked(Boolean.TRUE);</span>
+<span class="nc" id="L44">			paymentOutDetailDto.setLockedBy(paymentOutDBDto.getLockedBy());</span>
+<span class="nc" id="L45">			paymentOutDetailDto.setUserResourceId(paymentOutDBDto.getUserResourceId());</span>
+		}
+<span class="nc" id="L47">		Watchlist watchlist = deleteDuplicateWatclist(paymentOutDBDto.getWatchList());</span>
+<span class="nc" id="L48">		paymentOutDetailDto.setWatchlist(watchlist);</span>
+<span class="nc" id="L49">		paymentOutDetailDto.setContactWatchlist(watchlist);</span>
+<span class="nc" id="L50">		paymentOutDetailDto.setStatusReason(paymentOutDBDto.getStatusReason());</span>
+	
+<span class="nc" id="L52">		paymentOutDetailDto.setCurrentContact(getContactDetails(paymentOutDBDto));</span>
+<span class="nc" id="L53">		paymentOutDetailDto.setAccount(getAccountDetails(paymentOutDBDto));</span>
+		
+<span class="nc" id="L55">		paymentOutDetailDto.setPaymentOutInfo(getPaymentOutInfo(paymentOutDBDto));</span>
+<span class="nc" id="L56">		Integer totalRecords = paymentOutDBDto.getActivityLogs().getActivityLogData().size();</span>
+<span class="nc bnc" id="L57" title="All 2 branches missed.">		if (paymentOutDBDto.getActivityLogs().getActivityLogData().size() &lt;= 10) {</span>
+<span class="nc" id="L58">			paymentOutDetailDto.setActivityLogs(paymentOutDBDto.getActivityLogs());</span>
+<span class="nc" id="L59">			paymentOutDetailDto.getActivityLogs().setTotalRecords(totalRecords);</span>
+		} else {
+<span class="nc" id="L61">			paymentOutDBDto.getActivityLogs()</span>
+<span class="nc" id="L62">					.setActivityLogData(paymentOutDBDto.getActivityLogs().getActivityLogData().subList(0, 10));</span>
+<span class="nc" id="L63">			paymentOutDetailDto.setActivityLogs(paymentOutDBDto.getActivityLogs());</span>
+<span class="nc" id="L64">			paymentOutDetailDto.getActivityLogs().setTotalRecords(totalRecords);</span>
+		}
+<span class="nc" id="L66">		paymentOutDetailDto.setActivityLogs(paymentOutDBDto.getActivityLogs());</span>
+<span class="nc" id="L67">		paymentOutDetailDto.setBlacklist(getBlacklist(paymentOutDBDto));</span>
+<span class="nc" id="L68">		paymentOutDetailDto.setSanction(getSanction(paymentOutDBDto));</span>
+<span class="nc" id="L69">		paymentOutDetailDto.setFraugster(getFraugster(paymentOutDBDto));</span>
+<span class="nc" id="L70">		paymentOutDetailDto.setStatus(paymentOutDBDto.getStatus());</span>
+<span class="nc" id="L71">		paymentOutDetailDto.setFurtherPaymentDetails(paymentOutDBDto.getFurtherpaymentDetails());</span>
+<span class="nc" id="L72">		paymentOutDetailDto.setDocumentList(paymentOutDBDto.getDocumentList());</span>
+<span class="nc" id="L73">		paymentOutDetailDto.setAlertComplianceLog(paymentOutDBDto.getAlertComplianceLog());</span>
+<span class="nc" id="L74">		paymentOutDetailDto.setPaymentReference(getPaymentReference(paymentOutDBDto)); //AT-3658</span>
+<span class="nc" id="L75">		paymentOutDetailDto.setIntuition(getIntuition(paymentOutDBDto)); //AT-4306</span>
+		
+<span class="nc bnc" id="L77" title="All 2 branches missed.">		if(paymentOutDetailDto.getAccount().getClientType().equalsIgnoreCase(Constants.CUST_TYPE_PFX)){</span>
+<span class="nc" id="L78">			paymentOutDetailDto.setName(paymentOutDetailDto.getCurrentContact().getName());</span>
+		}
+		else {
+<span class="nc" id="L81">			paymentOutDetailDto.setName(paymentOutDetailDto.getAccount().getName());</span>
+		}
+<span class="nc" id="L83">		paymentOutDetailDto.setCustomCheck(getCustomCheck(paymentOutDBDto));</span>
+		//added for AT-898 for Sprint 1
+<span class="nc" id="L85">		paymentOutDetailDto.setNoOfContactsForAccount(paymentOutDBDto.getNoOfContactsForAccount());</span>
+<span class="nc" id="L86">		paymentOutDetailDto.setIsOnQueue(paymentOutDBDto.getIsOnQueue());</span>
+<span class="nc" id="L87">		paymentOutDetailDto.setCustomRuleFPFlag(paymentOutDBDto.getCustomRuleFPFlag());//Add for AT-3161</span>
+<span class="nc" id="L88">		paymentOutDetailDto.setPoiExists(paymentOutDBDto.getPoiExists()); //AT-3450</span>
+<span class="nc" id="L89">		paymentOutDetailDto.setAccountTMFlag(paymentOutDBDto.getAccountTMFlag()); //AT-4451</span>
+<span class="nc" id="L90">		paymentOutDetailDto.setAccountVersion(paymentOutDBDto.getAccountVersion()); //AT-4451</span>
+<span class="nc" id="L91">		return paymentOutDetailDto;</span>
+	}
+
+
+	private PaymentOutInfo getPaymentOutInfo(PaymentOutDBDto detailsDBDto) {
+<span class="nc" id="L96">		FundsOutRequest request = JsonConverterUtil.convertToObject(FundsOutRequest.class, detailsDBDto.getPaymentOutAttributes());</span>
+<span class="nc" id="L97">		PaymentOutInfo paymentOutInfo = new PaymentOutInfo();</span>
+<span class="nc bnc" id="L98" title="All 4 branches missed.">		if(request != null &amp;&amp; request.getBeneficiary() != null) {</span>
+<span class="nc" id="L99">			paymentOutInfo.setAmount(StringUtils.getNumberFormat(DecimalFormatter.convertToFourDigit(request.getBeneficiary().getAmount())));</span>
+<span class="nc" id="L100">			paymentOutInfo.setInitialStatus(detailsDBDto.getInitialStatus());//AT-3471</span>
+			/**Code added if last name of beneficiary is null - Vishal J*/
+<span class="nc bnc" id="L102" title="All 4 branches missed.">			if(null!= request.getBeneficiary().getLastName() &amp;&amp; !request.getBeneficiary().getLastName().isEmpty())</span>
+<span class="nc" id="L103">				paymentOutInfo.setBeneficiaryName(detailsDBDto.getBeneficiaryName());</span>
+<span class="nc" id="L104">			else paymentOutInfo.setBeneficiaryName(request.getBeneficiary().getFirstName());</span>
+		}
+		//added by neelesh pant
+<span class="nc bnc" id="L107" title="All 6 branches missed.">		if (request != null &amp;&amp; request.getTrade() != null &amp;&amp; request.getTrade().getMaturityDate() != null)</span>
+		{
+	
+<span class="nc" id="L110">           paymentOutInfo.setMaturityDate(DateTimeFormatter.dateFormat(request.getTrade().getMaturityDate()));</span>
+        }
+		
+<span class="nc" id="L113">		updateDeletedFlag(detailsDBDto, paymentOutInfo);</span>
+		
+<span class="nc" id="L115">		getPaymentOutInfoData(detailsDBDto, paymentOutInfo);</span>
+		
+<span class="nc" id="L117">		setLegalEntityOnUI(detailsDBDto, paymentOutInfo);</span>
+		
+<span class="nc bnc" id="L119" title="All 2 branches missed.">		if(null!=request)</span>
+<span class="nc" id="L120">			paymentOutInfo.setBeneAccountNumber(request.getBeneficiary().getAccountNumber());</span>
+		
+<span class="nc" id="L122">		return paymentOutInfo;</span>
+	}
+	
+	private void setLegalEntityOnUI(PaymentOutDBDto paymentOutDBDto, PaymentOutInfo paymentOutInfo) {
+<span class="nc bnc" id="L126" title="All 2 branches missed.">		if(isNullOrEmpty(paymentOutDBDto.getLegalEntity())) {</span>
+<span class="nc" id="L127">			paymentOutInfo.setLegalEntity(Constants.DASH_UI);</span>
+		} else {
+<span class="nc" id="L129">			paymentOutInfo.setLegalEntity(paymentOutDBDto.getLegalEntity());</span>
+		}
+<span class="nc" id="L131">	}</span>
+
+	private void getPaymentOutInfoData(PaymentOutDBDto detailsDBDto, PaymentOutInfo paymentOutInfo) {
+<span class="nc" id="L134">		paymentOutInfo.setBuyCurrency(detailsDBDto.getBuyCurrency());</span>
+<span class="nc" id="L135">		paymentOutInfo.setCountryOfBeneficiary(detailsDBDto.getBeneficiaryCountry());</span>
+<span class="nc bnc" id="L136" title="All 4 branches missed.">		if(null != detailsDBDto.getBeneficiaryCountryFullName() &amp;&amp; !detailsDBDto.getBeneficiaryCountryFullName().isEmpty()){</span>
+<span class="nc" id="L137">			paymentOutInfo.setCountryOfBeneficiaryFullName(detailsDBDto.getBeneficiaryCountryFullName());</span>
+		}else {
+<span class="nc" id="L139">			paymentOutInfo.setCountryOfBeneficiaryFullName(Constants.DASH_UI);</span>
+		}
+<span class="nc" id="L141">		paymentOutInfo.setDateOfPayment(DateTimeFormatter.removeTimeFromDate(detailsDBDto.getDateOfPayment()));</span>
+<span class="nc" id="L142">		paymentOutInfo.setId(detailsDBDto.getPaymentOutId());</span>
+<span class="nc" id="L143">		paymentOutInfo.setReasonForTransfer(detailsDBDto.getReasonOfTransfer());</span>
+<span class="nc" id="L144">		paymentOutInfo.setStatus(detailsDBDto.getPaymentOutStatus());</span>
+<span class="nc" id="L145">		paymentOutInfo.setTransactionNumber(detailsDBDto.getContractNumber());</span>
+<span class="nc" id="L146">		paymentOutInfo.setTradePaymentId(detailsDBDto.getTradePaymentId());</span>
+<span class="nc" id="L147">		paymentOutInfo.setTradeBeneficiaryId(detailsDBDto.getTradeBeneficiaryId());</span>
+<span class="nc" id="L148">		paymentOutInfo.setThirdPartyPayment(getPaymentOutThirdPartyPayment(detailsDBDto));</span>
+<span class="nc bnc" id="L149" title="All 4 branches missed.">		if(null != detailsDBDto.getIntuitionRiskLevel() &amp;&amp; !detailsDBDto.getIntuitionRiskLevel().isEmpty()){ //AT-4187</span>
+<span class="nc" id="L150">			paymentOutInfo.setIntuitionRiskLevel(detailsDBDto.getIntuitionRiskLevel());</span>
+		}else {
+<span class="nc" id="L152">			paymentOutInfo.setIntuitionRiskLevel(Constants.DASH_UI);</span>
+		}
+<span class="nc" id="L154">	}</span>
+
+	/**
+	 * Gets the sanction.
+	 *
+	 * @param detailsDBDto
+	 *            the details DB dto
+	 * @return the sanction
+	 */
+	private PaymentOutSanction getSanction(PaymentOutDBDto detailsDBDto) {
+<span class="nc" id="L164">		PaymentOutSanction sanction = new PaymentOutSanction();</span>
+<span class="nc" id="L165">		sanction.setBankSanction(getBankSanction(detailsDBDto));</span>
+<span class="nc" id="L166">		sanction.setBeneficiarySanction(getBeneficiarySanction(detailsDBDto));</span>
+<span class="nc" id="L167">		sanction.setContactSanction(getContactSanction(detailsDBDto));</span>
+<span class="nc" id="L168">		return sanction;</span>
+
+	}
+
+	private Sanction getBeneficiarySanction(PaymentOutDBDto detailsDBDto) {
+		//constant added by Vishal J
+<span class="nc" id="L174">		List&lt;EventDBDto&gt; eventDBDtos = detailsDBDto.getEventDBDtos().get(Constants.SANCTIONBENEFICIARY);</span>
+<span class="nc" id="L175">		Sanction sanction = new Sanction();</span>
+<span class="nc" id="L176">		int passCount = 0;</span>
+<span class="nc" id="L177">		int failCount = 0;</span>
+<span class="nc bnc" id="L178" title="All 4 branches missed.">		if (eventDBDtos == null || eventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L179">			sanction.setEntityId(detailsDBDto.getTradeBeneficiaryId());</span>
+<span class="nc" id="L180">			sanction.setEntityType(Constants.BENEFECIARY);</span>
+<span class="nc" id="L181">			return sanction;</span>
+		}
+<span class="nc" id="L183">		EventDBDto eventDBDto = eventDBDtos.get(0);</span>
+<span class="nc" id="L184">		sanction = getSanction(eventDBDto);</span>
+<span class="nc bnc" id="L185" title="All 2 branches missed.">		if (Boolean.TRUE.equals(sanction.getStatus())) {</span>
+<span class="nc" id="L186">			passCount = eventDBDtos.size();</span>
+		} else {
+<span class="nc" id="L188">			failCount = eventDBDtos.size();</span>
+		}
+<span class="nc" id="L190">		sanction.setFailCount(failCount);</span>
+<span class="nc" id="L191">		sanction.setPassCount(passCount);</span>
+<span class="nc" id="L192">		sanction.setSanctionTotalRecords(eventDBDtos.size());</span>
+<span class="nc" id="L193">		return sanction;</span>
+
+	} 
+
+	private Sanction getBankSanction(PaymentOutDBDto detailsDBDto) {
+		//constant added by Vishal J
+<span class="nc" id="L199">		List&lt;EventDBDto&gt; eventDBDtos = detailsDBDto.getEventDBDtos().get(Constants.SANCTIONBANK);</span>
+<span class="nc" id="L200">		Sanction sanction = new Sanction();</span>
+<span class="nc" id="L201">		int passCount = 0;</span>
+<span class="nc" id="L202">		int failCount = 0;</span>
+<span class="nc bnc" id="L203" title="All 4 branches missed.">		if (eventDBDtos == null || eventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L204">			sanction.setEntityId(detailsDBDto.getBankid());</span>
+<span class="nc" id="L205">			sanction.setEntityType(Constants.BANK);</span>
+<span class="nc" id="L206">			return sanction;</span>
+		}
+<span class="nc" id="L208">		EventDBDto eventDBDto = eventDBDtos.get(0);</span>
+<span class="nc" id="L209">		sanction = getSanction(eventDBDto);</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">		if (Boolean.TRUE.equals(sanction.getStatus())) {</span>
+<span class="nc" id="L211">			passCount = eventDBDtos.size();</span>
+		} else {
+<span class="nc" id="L213">			failCount = eventDBDtos.size();</span>
+		}
+<span class="nc" id="L215">		sanction.setFailCount(failCount);</span>
+<span class="nc" id="L216">		sanction.setPassCount(passCount);</span>
+<span class="nc" id="L217">		sanction.setSanctionTotalRecords(eventDBDtos.size());</span>
+<span class="nc" id="L218">		return sanction;</span>
+
+	}
+
+	private PaymentOutBlacklist getBlacklist(PaymentOutDBDto detailsDBDto) {
+<span class="nc" id="L223">		PaymentOutBlacklist blacklist = new PaymentOutBlacklist();</span>
+<span class="nc" id="L224">		blacklist.setBankBlacklist(getBankBlacklist(detailsDBDto));</span>
+<span class="nc" id="L225">		blacklist.setBenficiaryBlacklist(getBeneficiaryBlacklist(detailsDBDto));</span>
+<span class="nc" id="L226">		blacklist.setContactBlacklist(getContactBlacklist(detailsDBDto));</span>
+<span class="nc" id="L227">		return blacklist;</span>
+
+	}
+
+	private Blacklist getBankBlacklist(PaymentOutDBDto detailsDBDto) {
+<span class="nc" id="L232">		List&lt;EventDBDto&gt; blacklistEventDBDtos = detailsDBDto.getEventDBDtos().get(&quot;BLACKLISTBANK&quot;);</span>
+<span class="nc" id="L233">		Blacklist blacklist = new Blacklist();</span>
+<span class="nc bnc" id="L234" title="All 4 branches missed.">		if (blacklistEventDBDtos == null || blacklistEventDBDtos.isEmpty()) {</span>
+
+<span class="nc" id="L236">			return blacklist;</span>
+		}
+<span class="nc" id="L238">		EventDBDto eventDBDto = blacklistEventDBDtos.get(0);</span>
+<span class="nc" id="L239">		return getBlacklist(eventDBDto);</span>
+
+	}
+
+	private Blacklist getContactBlacklist(PaymentOutDBDto detailsDBDto) {
+<span class="nc" id="L244">		List&lt;EventDBDto&gt; blacklistEventDBDtos = detailsDBDto.getEventDBDtos().get(&quot;BLACKLISTCONTACT&quot;);</span>
+<span class="nc" id="L245">		Blacklist blacklist = new Blacklist();</span>
+<span class="nc bnc" id="L246" title="All 4 branches missed.">		if (blacklistEventDBDtos == null || blacklistEventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L247">			return blacklist;</span>
+		}
+<span class="nc" id="L249">		EventDBDto eventDBDto = blacklistEventDBDtos.get(0);</span>
+<span class="nc" id="L250">		blacklist = getBlacklist(eventDBDto);</span>
+		//condition added by Vishal J to avoid null pointer exception
+<span class="nc bnc" id="L252" title="All 2 branches missed.">		if(Boolean.TRUE.equals(blacklist.getIsRequired()))</span>
+		{
+<span class="nc" id="L254">			setContactBlacklistPassAndFailCount(blacklist);</span>
+		}
+<span class="nc" id="L256">		return blacklist;</span>
+
+	}
+
+	private Blacklist getBeneficiaryBlacklist(PaymentOutDBDto detailsDBDto) {
+		//constant added by Vishal J
+<span class="nc" id="L262">		List&lt;EventDBDto&gt; blacklistEventDBDtos = detailsDBDto.getEventDBDtos().get(Constants.BLACKLISTBENEFICIARY);</span>
+<span class="nc" id="L263">		Blacklist blacklist = new Blacklist();</span>
+<span class="nc bnc" id="L264" title="All 4 branches missed.">		if (blacklistEventDBDtos == null || blacklistEventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L265">			return blacklist;</span>
+		}
+<span class="nc" id="L267">		EventDBDto eventDBDto = blacklistEventDBDtos.get(0);</span>
+<span class="nc" id="L268">		blacklist = getBlacklist(eventDBDto);</span>
+<span class="nc" id="L269">		BlacklistSummary blacklistSummary = JsonConverterUtil.convertToObject(BlacklistSummary.class,</span>
+<span class="nc" id="L270">				eventDBDto.getSummary());</span>
+		//condition added by Vishal J to avoid null pointer exception
+<span class="nc bnc" id="L272" title="All 2 branches missed.">		if(Boolean.TRUE.equals(blacklist.getIsRequired()))</span>
+		{
+<span class="nc" id="L274">			setBeneficiaryBlacklistPassAndFailCount(blacklist);</span>
+		}
+	
+<span class="nc bnc" id="L277" title="All 2 branches missed.">		if (Constants.SERVICE_FAILURE.equalsIgnoreCase(blacklistSummary.getStatus())) </span>
+<span class="nc" id="L278">			blacklist.setFailCount(3);	</span>
+		
+<span class="nc" id="L280">		return blacklist;</span>
+
+	}
+	
+	private CustomCheck getCustomCheck(PaymentOutDBDto detailsDBDto) {
+<span class="nc" id="L285">		CustomCheck customCheck = new CustomCheck();</span>
+<span class="nc" id="L286">		customCheck.setCountryCheck(getCountryCheck(detailsDBDto));</span>
+<span class="nc" id="L287">		customCheck.setPaymentOutCustomCheck(getPaymentOutCustomCheck(detailsDBDto));</span>
+<span class="nc" id="L288">		return customCheck;</span>
+	}
+
+	/*
+	 * 1) We are checking whether country check is required to perform or not first, if it is 'NOT REQUIRED' then we will show that status on UI 
+	 *	Changes done by Vishal J
+	 */
+	private CountryCheck getCountryCheck(PaymentOutDBDto detailsDBDto) {
+		//constant added by Vishal J
+<span class="nc" id="L297">		List&lt;EventDBDto&gt; countryCheckEventDBDtos = detailsDBDto.getEventDBDtos().get(Constants.COUNTRYCHECK_BENEFICIARY);</span>
+<span class="nc" id="L298">		CountryCheck countryCheck = new CountryCheck();</span>
+
+<span class="nc bnc" id="L300" title="All 4 branches missed.">		if (countryCheckEventDBDtos == null || countryCheckEventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L301">			countryCheck.setCountryCheckTotalRecords(0);</span>
+<span class="nc" id="L302">			return countryCheck;</span>
+		}
+
+<span class="nc" id="L305">		EventDBDto eventDBDto = countryCheckEventDBDtos.get(0);</span>
+		
+<span class="nc" id="L307">		Integer passCount = 0;</span>
+<span class="nc" id="L308">		Integer failCount = 0;</span>
+		
+		//If country check status is other than 'NOT REQUIRED' then get details
+<span class="nc bnc" id="L311" title="All 2 branches missed.">		if(!Constants.NOT_REQUIRED.equalsIgnoreCase(eventDBDto.getStatus()))</span>
+		{
+<span class="nc" id="L313">			countryCheck = getCountryCheckSummary(eventDBDto);</span>
+<span class="nc bnc" id="L314" title="All 2 branches missed.">			if (Constants.PASS.equalsIgnoreCase(eventDBDto.getStatus())) {</span>
+<span class="nc" id="L315">				passCount = countryCheckEventDBDtos.size();</span>
+			} else {
+<span class="nc" id="L317">				failCount = countryCheckEventDBDtos.size();</span>
+			}
+<span class="nc" id="L319">			countryCheck.setPassCount(passCount);</span>
+<span class="nc" id="L320">			countryCheck.setFailCount(failCount);</span>
+	
+	
+<span class="nc bnc" id="L323" title="All 2 branches missed.">			if (eventDBDto.getUpdatedOn() != null) {</span>
+<span class="nc" id="L324">				countryCheck.setCheckedOn(DateTimeFormatter.dateTimeFormatter(eventDBDto.getUpdatedOn()));</span>
+			}
+	
+<span class="nc" id="L327">			countryCheck.setEntityType(eventDBDto.getEitityType());</span>
+<span class="nc" id="L328">			countryCheck.setId(eventDBDto.getId());</span>
+<span class="nc" id="L329">			countryCheck.setStatus(eventDBDto.getStatus());</span>
+<span class="nc" id="L330">			countryCheck.setCountryCheckTotalRecords(countryCheckEventDBDtos.size());</span>
+<span class="nc" id="L331">			countryCheck.setIsRequired(true);</span>
+		}
+		else
+		{
+			//passing status value ('NOT_REQUIRED') to UI
+<span class="nc" id="L336">			countryCheck.setIsRequired(false);</span>
+<span class="nc bnc" id="L337" title="All 2 branches missed.">			if (eventDBDto.getUpdatedOn() != null) {</span>
+<span class="nc" id="L338">				countryCheck.setCheckedOn(DateTimeFormatter.dateTimeFormatter(eventDBDto.getUpdatedOn()));</span>
+			}
+<span class="nc" id="L340">			countryCheck.setStatusValue(Constants.NOT_REQUIRED_UI);</span>
+<span class="nc" id="L341">			countryCheck.setRiskLevel(Constants.NOT_REQUIRED_UI);</span>
+		}
+<span class="nc" id="L343">		return countryCheck;</span>
+	}
+
+	private void setContactBlacklistPassAndFailCount(Blacklist blacklist) {
+<span class="nc" id="L347">		Integer passCount = 0;</span>
+<span class="nc" id="L348">		Integer failCount = 0;</span>
+<span class="nc bnc" id="L349" title="All 2 branches missed.">		if (Constants.FALSE.equalsIgnoreCase(blacklist.getEmail())) {</span>
+<span class="nc" id="L350">			passCount++;</span>
+<span class="nc bnc" id="L351" title="All 2 branches missed.">		} else if (Constants.TRUE.equalsIgnoreCase(blacklist.getEmail())){</span>
+<span class="nc" id="L352">			failCount++;</span>
+		}
+<span class="nc bnc" id="L354" title="All 2 branches missed.">		if (Constants.FALSE.equalsIgnoreCase(blacklist.getIp())) {</span>
+<span class="nc" id="L355">			passCount++;</span>
+<span class="nc bnc" id="L356" title="All 2 branches missed.">		} else if (Constants.TRUE.equalsIgnoreCase(blacklist.getIp())){</span>
+<span class="nc" id="L357">			failCount++;</span>
+		}
+<span class="nc bnc" id="L359" title="All 2 branches missed.">		if (Boolean.TRUE.equals(blacklist.getPhone())) {</span>
+<span class="nc" id="L360">			passCount++;</span>
+		} else {
+<span class="nc" id="L362">			failCount++;</span>
+		}
+<span class="nc bnc" id="L364" title="All 2 branches missed.">		if (Boolean.TRUE.equals(blacklist.getStatus())) {</span>
+<span class="nc" id="L365">			passCount++;</span>
+		} else {
+<span class="nc" id="L367">			failCount++;</span>
+		}
+<span class="nc" id="L369">		blacklist.setPassCount(passCount);</span>
+<span class="nc" id="L370">		blacklist.setFailCount(failCount);</span>
+<span class="nc" id="L371">	}</span>
+	
+	private Boolean getPaymentOutThirdPartyPayment(PaymentOutDBDto detailsDBDto) {
+<span class="nc" id="L374">		boolean isThirdParty = false;</span>
+		try {
+<span class="nc" id="L376">		String paymentOutAttribute = detailsDBDto.getPaymentOutAttributes();</span>
+<span class="nc" id="L377">		JSONObject paymentOutAttributeObject = new JSONObject(paymentOutAttribute);</span>
+<span class="nc" id="L378">		JSONObject paymentOutAttributeObjectTrade =  paymentOutAttributeObject.getJSONObject(&quot;trade&quot;);</span>
+		
+<span class="nc" id="L380">		Boolean thirdPartyPayment = paymentOutAttributeObjectTrade.getBoolean(&quot;third_party_payment&quot;);</span>
+<span class="nc bnc" id="L381" title="All 2 branches missed.">		if(Boolean.TRUE.equals(thirdPartyPayment)) {</span>
+<span class="nc" id="L382">			isThirdParty = true;</span>
+		}
+<span class="nc" id="L384">		return isThirdParty;</span>
+		}
+<span class="nc" id="L386">		catch(Exception e) {</span>
+<span class="nc" id="L387">			return Boolean.FALSE;</span>
+		}
+	}
+	
+	private void updateDeletedFlag(PaymentOutDBDto paymentoutDBDto, PaymentOutInfo paymentOutInfo) {
+<span class="nc bnc" id="L392" title="All 2 branches missed.">	    if(paymentoutDBDto.getIsDeleted().equals(&quot;true&quot;)) {</span>
+<span class="nc" id="L393">	    	paymentOutInfo.setIsDeleted(paymentoutDBDto.getIsDeleted());</span>
+<span class="nc" id="L394">	    	paymentOutInfo.setUpdatedOn(paymentoutDBDto.getUpdatedOn());</span>
+		}else{
+<span class="nc" id="L396">			paymentOutInfo.setIsDeleted(Constants.DASH_UI);</span>
+<span class="nc" id="L397">			paymentOutInfo.setUpdatedOn(Constants.DASH_UI);</span>
+		} 
+<span class="nc" id="L399">	 }</span>
+	
+	//Added for AT-3658
+		protected PaymentOutPaymentReference getPaymentReference(PaymentOutDBDto detailsDBDto) {
+<span class="nc" id="L403">			List&lt;EventDBDto&gt; eventDBDtoPayRef = detailsDBDto.getEventDBDtos().get(&quot;BLACKLIST_PAY_REFBENEFICIARY&quot;);</span>
+<span class="nc" id="L404">			PaymentOutPaymentReference paymentReference = new PaymentOutPaymentReference();</span>
+
+<span class="nc" id="L406">			Integer passCount = 0;</span>
+<span class="nc" id="L407">			Integer failCount = 0;</span>
+			
+<span class="nc" id="L409">			paymentReference.setIsRequired(Boolean.TRUE);</span>
+			
+<span class="nc bnc" id="L411" title="All 4 branches missed.">			if (eventDBDtoPayRef == null || eventDBDtoPayRef.isEmpty()) {</span>
+<span class="nc" id="L412">				paymentReference.setCheckedOn(Constants.DASH_UI);</span>
+<span class="nc" id="L413">				paymentReference.setPaymentReference(Constants.DASH_UI);</span>
+<span class="nc" id="L414">				paymentReference.setMatchedKeyword(Constants.DASH_UI);</span>
+<span class="nc" id="L415">				paymentReference.setOverallStatus(Constants.NOT_AVAILABLE_UI);</span>
+<span class="nc" id="L416">				paymentReference.setTotalRecords(0);</span>
+<span class="nc" id="L417">				return paymentReference;</span>
+			}
+<span class="nc" id="L419">			EventDBDto eventDBDto = eventDBDtoPayRef.get(0);</span>
+<span class="nc" id="L420">			BlacklistPayRefSummary payRefSummary = JsonConverterUtil.convertToObject(BlacklistPayRefSummary.class,</span>
+<span class="nc" id="L421">					(eventDBDto).getSummary());</span>
+			
+<span class="nc bnc" id="L423" title="All 2 branches missed.">			if(payRefSummary != null)</span>
+			{
+<span class="nc bnc" id="L425" title="All 2 branches missed.">				if (eventDBDto.getUpdatedOn() != null) {</span>
+<span class="nc" id="L426">					paymentReference.setCheckedOn(DateTimeFormatter.dateTimeFormatter(eventDBDto.getUpdatedOn()));</span>
+				}
+<span class="nc" id="L428">				paymentReference.setPaymentReference(payRefSummary.getPaymentReference());</span>
+<span class="nc" id="L429">				paymentReference.setMatchedKeyword(payRefSummary.getSanctionText());</span>
+<span class="nc" id="L430">				paymentReference.setClosenessScore(payRefSummary.getTokenSetRatio());</span>
+<span class="nc" id="L431">				paymentReference.setOverallStatus(eventDBDto.getStatus());</span>
+			} else {
+<span class="nc" id="L433">				paymentReference.setCheckedOn(Constants.DASH_UI);</span>
+<span class="nc" id="L434">				paymentReference.setPaymentReference(Constants.DASH_UI);</span>
+<span class="nc" id="L435">				paymentReference.setMatchedKeyword(Constants.DASH_UI);</span>
+<span class="nc" id="L436">				paymentReference.setOverallStatus(Constants.NOT_AVAILABLE_UI);</span>
+			}
+			
+<span class="nc bnc" id="L439" title="All 2 branches missed.">			if (Constants.PASS.equalsIgnoreCase(eventDBDto.getStatus())) {</span>
+<span class="nc" id="L440">				passCount = eventDBDtoPayRef.size();</span>
+			} else {
+<span class="nc" id="L442">				failCount = eventDBDtoPayRef.size();</span>
+			}
+			
+<span class="nc" id="L445">			paymentReference.setPassCount(passCount);</span>
+<span class="nc" id="L446">			paymentReference.setFailCount(failCount);</span>
+<span class="nc" id="L447">			paymentReference.setTotalRecords(eventDBDtoPayRef.size());</span>
+			
+<span class="nc" id="L449">			return paymentReference;</span>
+		}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

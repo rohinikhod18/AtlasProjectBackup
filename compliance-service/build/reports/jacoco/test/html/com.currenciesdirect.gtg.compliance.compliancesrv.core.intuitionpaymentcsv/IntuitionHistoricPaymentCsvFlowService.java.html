@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IntuitionHistoricPaymentCsvFlowService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.intuitionpaymentcsv</a> &gt; <span class="el_source">IntuitionHistoricPaymentCsvFlowService.java</span></div><h1>IntuitionHistoricPaymentCsvFlowService.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.intuitionpaymentcsv;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.http.ResponseEntity;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.async.DeferredResult;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionHistoricPaymentsRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+
+@Component
+<span class="nc" id="L26">public class IntuitionHistoricPaymentCsvFlowService {</span>
+	
+	/** The Constant LOG. */
+<span class="nc" id="L29">	private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(IntuitionHistoricPaymentCsvFlowService.class);</span>
+	
+	/** The application context. */
+	@Autowired
+	private ApplicationContext applicationContext;
+	
+	/** The intuition payment scheduler cron job. */
+	@Autowired
+	private IntuitionHistoricPaymentSchedulerCronJob intuitionPaymentSchedulerCronJob;
+	
+	/**
+	 * Gets the intuition payment cron job.
+	 *
+	 * @return the intuition payment cron job
+	 */
+	@Bean
+	public String getIntuitionPaymentCronJob() {
+<span class="nc" id="L46">		return intuitionPaymentSchedulerCronJob.geIntuitionCronJob();</span>
+	}
+	
+	
+	/**
+	 * Initiate flow.
+	 */
+	public void initiateFlow(){
+<span class="nc bnc" id="L54" title="All 2 branches missed.">		boolean isFlowEnable = System.getProperty(&quot;intuition.historic.payment.flow.enable&quot;) != null</span>
+<span class="nc" id="L55">				? Boolean.parseBoolean(System.getProperty(&quot;intuition.historic.payment.flow.enable&quot;))</span>
+<span class="nc" id="L56">				: Boolean.FALSE;</span>
+		
+<span class="nc bnc" id="L58" title="All 2 branches missed.">		if (isFlowEnable) {</span>
+<span class="nc" id="L59">			LOG.info(&quot;---------------------Intuition Historic Payment Scheduler flow is enabled---------------------&quot;);</span>
+<span class="nc" id="L60">			MessageContext messageContext = new MessageContext();</span>
+<span class="nc" id="L61">			executeWorkflow(messageContext);</span>
+<span class="nc" id="L62">		} else {</span>
+<span class="nc" id="L63">			LOG.info(&quot;---------------------Intuition Historic Payment Scheduler flow is disabled---------------------&quot;);</span>
+		}
+<span class="nc" id="L65">	}</span>
+
+
+	/**
+	 * Execute workflow.
+	 *
+	 * @param messageContext the message context
+	 * @return the deferred result
+	 */
+	private DeferredResult&lt;ResponseEntity&gt; executeWorkflow(MessageContext messageContext) {
+<span class="nc" id="L75">		DeferredResult&lt;ResponseEntity&gt; deferredResult = new DeferredResult&lt;&gt;(-1L);</span>
+
+<span class="nc" id="L77">		Map&lt;String, Object&gt; messageHeaders = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L78">		messageHeaders.put(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT, deferredResult);</span>
+		
+<span class="nc" id="L80">		MessageExchange gateWayMessageExchange = new MessageExchange();</span>
+<span class="nc" id="L81">		IntuitionHistoricPaymentsRequest intuitionPaymentRequest = new IntuitionHistoricPaymentsRequest();</span>
+<span class="nc" id="L82">		gateWayMessageExchange.setServiceTypeEnum(ServiceTypeEnum.GATEWAY_SERVICE);</span>
+<span class="nc" id="L83">		gateWayMessageExchange.setRequest(intuitionPaymentRequest);</span>
+<span class="nc" id="L84">		messageContext.appendMessageExchange(gateWayMessageExchange);</span>
+		
+<span class="nc" id="L86">		Message&lt;MessageContext&gt; message = MessageBuilder.withPayload(messageContext).copyHeaders(messageHeaders).build();</span>
+<span class="nc" id="L87">		MessageChannel messageChannel = getInMessageChannel();</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">		if (messageChannel != null)</span>
+<span class="nc" id="L89">			messageChannel.send(message);</span>
+<span class="nc" id="L90">		return deferredResult;</span>
+
+	}
+
+
+	/**
+	 * Gets the in message channel.
+	 *
+	 * @return the in message channel
+	 */
+	private MessageChannel getInMessageChannel() {
+<span class="nc" id="L101">		MessageChannel messageChannel = null;</span>
+		try {
+<span class="nc" id="L103">			messageChannel = applicationContext.getBean(&quot;INTUITION_PAYMENT.CSV.IN.CHANNEL&quot;, MessageChannel.class);</span>
+<span class="nc" id="L104">		} catch (NoSuchBeanDefinitionException nbde) {</span>
+<span class="nc" id="L105">			LOG.error(&quot;Error in IntuitionPaymentCsvFlowService &quot;, nbde);</span>
+<span class="nc" id="L106">		}</span>
+<span class="nc" id="L107">		return messageChannel;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>KYCDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">kyc-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.kyc.dbport</a> &gt; <span class="el_source">KYCDBServiceImpl.java</span></div><h1>KYCDBServiceImpl.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.kyc.dbport;
+
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import com.currenciesdirect.gtg.compliance.kyc.core.IKYCDBService;
+import com.currenciesdirect.gtg.compliance.kyc.core.domain.KYCProviderProperty;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCErrors;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCException;
+import com.currenciesdirect.gtg.compliance.kyc.util.Constants;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * The Class KYCDBServiceImpl.
+ *
+ * @author manish
+ */
+@SuppressWarnings(&quot;squid:S2095&quot;)
+public class KYCDBServiceImpl extends AbstractDao implements IKYCDBService {
+	
+	/** The Constant LOG. */
+<span class="nc" id="L33">	private static final Logger LOG = LoggerFactory.getLogger(KYCDBServiceImpl.class);</span>
+
+	/** The k YC dao impl. */
+<span class="nc" id="L36">	private static IKYCDBService kYCDaoImpl = null;</span>
+
+	private static final String COUNTRY = &quot;Country&quot;;
+	
+	/**
+	 * Instantiates a new KYCDB service impl.
+	 */
+	private KYCDBServiceImpl() {
+
+	}
+
+	/**
+	 * Gets the single instance of KYCDBServiceImpl.
+	 *
+	 * @return single instance of KYCDBServiceImpl
+	 */
+	public static IKYCDBService getInstance() {
+<span class="nc bnc" id="L53" title="All 2 branches missed.">		if (kYCDaoImpl == null) {</span>
+<span class="nc" id="L54">			kYCDaoImpl = new KYCDBServiceImpl();</span>
+		}
+<span class="nc" id="L56">		return kYCDaoImpl;</span>
+	}
+
+	/**
+	 * 
+	 * 1) Load list of countries per provider *.
+	 *
+	 * @return the concurrent map
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	@Override
+	public ConcurrentMap&lt;String, List&lt;String&gt;&gt; fetchKYCInitData() throws KYCException {
+<span class="nc" id="L69">		LOG.debug(&quot;Start KYCDaoImpl : fetchKYCInitData.&quot;);</span>
+
+<span class="nc" id="L71">		PreparedStatement stmt = null;</span>
+<span class="nc" id="L72">		PreparedStatement stmt1 = null;</span>
+<span class="nc" id="L73">		PreparedStatement stmt2 = null;</span>
+<span class="nc" id="L74">		ResultSet resultSet = null;</span>
+<span class="nc" id="L75">		ResultSet resultSet1 = null;</span>
+<span class="nc" id="L76">		ResultSet resultSet2 = null;</span>
+<span class="nc" id="L77">		StringBuilder queryString = new StringBuilder();</span>
+<span class="nc" id="L78">		Connection conn = null;</span>
+<span class="nc" id="L79">		ConcurrentHashMap&lt;String, List&lt;String&gt;&gt; mp = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="nc" id="L80">		List&lt;String&gt; lexisNExisLst = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="nc" id="L81">		List&lt;String&gt; gbGroupLst = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="nc" id="L82">		List&lt;String&gt; carbonLst = new CopyOnWriteArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L84">			conn = getConnection();</span>
+<span class="nc" id="L85">			queryString.setLength(0);</span>
+
+			// build list of lexis nexis
+<span class="nc" id="L88">			stmt = conn.prepareStatement(KYCQueryConstants.LOAD_KYC_COUNTRY_PROVIDER_MAPPING);</span>
+<span class="nc" id="L89">			stmt.setString(1, Constants.LEXISNEXIS_PROVIDER);</span>
+<span class="nc" id="L90">			resultSet = stmt.executeQuery();</span>
+
+<span class="nc bnc" id="L92" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+
+<span class="nc" id="L94">				lexisNExisLst.add(resultSet.getString(COUNTRY));</span>
+			}
+<span class="nc" id="L96">			closePrepareStatement(stmt);</span>
+<span class="nc" id="L97">			closeResultset(resultSet);</span>
+			// build list of GBGROUP
+<span class="nc" id="L99">			stmt1 = conn.prepareStatement(KYCQueryConstants.LOAD_KYC_COUNTRY_PROVIDER_MAPPING);</span>
+<span class="nc" id="L100">			stmt1.setString(1, Constants.GBGROUP_PROVIDER);</span>
+<span class="nc" id="L101">			resultSet1 = stmt1.executeQuery();</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">			while (resultSet1.next()) {</span>
+
+<span class="nc" id="L104">				gbGroupLst.add(resultSet1.getString(COUNTRY));</span>
+			}
+<span class="nc" id="L106">			closePrepareStatement(stmt1);</span>
+<span class="nc" id="L107">			closeResultset(resultSet1);</span>
+			
+			// build list of carbon
+<span class="nc" id="L110">			stmt2 = conn.prepareStatement(KYCQueryConstants.LOAD_KYC_COUNTRY_PROVIDER_MAPPING);</span>
+<span class="nc" id="L111">			stmt2.setString(1, Constants.CARBONSERVICE_PROVIDER);</span>
+<span class="nc" id="L112">			resultSet2 = stmt2.executeQuery();</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">				while (resultSet2.next()) {</span>
+
+<span class="nc" id="L115">					carbonLst.add(resultSet2.getString(COUNTRY));</span>
+				}
+				
+<span class="nc" id="L118">			mp.put(Constants.LEXISNEXIS_PROVIDER, lexisNExisLst);</span>
+<span class="nc" id="L119">			mp.put(Constants.GBGROUP_PROVIDER, gbGroupLst);</span>
+<span class="nc" id="L120">			mp.put(Constants.CARBONSERVICE_PROVIDER, carbonLst);</span>
+
+
+<span class="nc" id="L123">		} catch (Exception e) {</span>
+<span class="nc" id="L124">			throw new KYCException(KYCErrors.ERROR_WHILE_LOADING_CACHE, e);</span>
+		} finally {
+<span class="nc" id="L126">			closeResultset(resultSet2);</span>
+<span class="nc" id="L127">			closeResultset(resultSet);</span>
+<span class="nc" id="L128">			closePrepareStatement(stmt2);</span>
+<span class="nc" id="L129">			closePrepareStatement(stmt);</span>
+<span class="nc" id="L130">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L132">		LOG.debug(&quot;END KYCDaoImpl : fetchKYCInitData. &quot;);</span>
+<span class="nc" id="L133">		return mp;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.kyc.core.IKYCDBService#
+	 * getKYCProviderinitConfigProperties()
+	 */
+	@Override
+	public ConcurrentMap&lt;String, KYCProviderProperty&gt; getKYCProviderinitConfigProperties() throws KYCException {
+
+<span class="nc" id="L145">		Connection conn = null;</span>
+<span class="nc" id="L146">		PreparedStatement stmt = null;</span>
+<span class="nc" id="L147">		ResultSet resultSet = null;</span>
+<span class="nc" id="L148">		String json = null;</span>
+<span class="nc" id="L149">		ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L150">		ConcurrentHashMap&lt;String, KYCProviderProperty&gt; mp = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="nc" id="L151">		String providerName = null;</span>
+		try {
+<span class="nc" id="L153">			conn = getConnection();</span>
+<span class="nc" id="L154">			stmt = conn.prepareStatement(KYCQueryConstants.GET_KYC_PROVIDER_INIT_CONFIG_PROPERTY);</span>
+<span class="nc" id="L155">			resultSet = stmt.executeQuery();</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L157">				KYCProviderProperty property = new KYCProviderProperty();</span>
+<span class="nc" id="L158">				json = resultSet.getString(&quot;Attribute&quot;);</span>
+<span class="nc" id="L159">				providerName = resultSet.getString(&quot;Code&quot;);</span>
+<span class="nc" id="L160">				property = mapper.readValue(json, KYCProviderProperty.class);</span>
+<span class="nc" id="L161">				mp.put(providerName, property);</span>
+<span class="nc" id="L162">			}</span>
+<span class="nc" id="L163">		} catch (Exception e) {</span>
+<span class="nc" id="L164">			throw new KYCException(KYCErrors.DATABASE_GENERIC_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L166">			closeResultset(resultSet);</span>
+<span class="nc" id="L167">			closePrepareStatement(stmt);</span>
+<span class="nc" id="L168">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L170">		return mp;</span>
+
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.kyc.core.IKYCDBService#getCountryShortCode(java.lang.String)
+	 */
+	@Override
+	public String getCountryShortCode(String country) throws KYCException {
+<span class="nc" id="L179">		String countryShortCode = null;</span>
+<span class="nc" id="L180">		Connection conn = null;</span>
+<span class="nc" id="L181">		PreparedStatement stmt = null;</span>
+<span class="nc" id="L182">		ResultSet resultSet = null;</span>
+		
+		try {
+<span class="nc" id="L185">			conn = getConnection();</span>
+<span class="nc" id="L186">			stmt = conn.prepareStatement(KYCQueryConstants.GET_SHORT_COUNTRY_CODE);</span>
+<span class="nc" id="L187">			stmt.setString(1, country);</span>
+<span class="nc" id="L188">			resultSet = stmt.executeQuery();</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L190">				countryShortCode = resultSet.getString(&quot;shortcode&quot;);</span>
+			}
+<span class="nc" id="L192">		} catch (Exception e) {</span>
+<span class="nc" id="L193">			throw new KYCException(KYCErrors.DATABASE_GENERIC_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L195">			closeResultset(resultSet);</span>
+<span class="nc" id="L196">			closePrepareStatement(stmt);</span>
+<span class="nc" id="L197">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L199">		return countryShortCode;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PaymentInServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.core</a> &gt; <span class="el_source">PaymentInServiceImpl.java</span></div><h1>PaymentInServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.core;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.ITokenizer;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailHeader;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailPayload;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.SendEmailRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.Contact;
+import com.currenciesdirect.gtg.compliance.commons.externalservice.commhubport.ICommHubServiceImpl;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.CustomUpdateRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.CustomUpdateResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentInViewMoreRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ViewMoreResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.docupload.Document;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInUpdateDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInUpdateRequest;
+import com.currenciesdirect.gtg.compliance.docuploadport.UploadDocumentPort;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.HttpClientPool;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+
+@Component(&quot;paymentInServiceImpl&quot;)
+<span class="fc" id="L47">public class PaymentInServiceImpl implements IPaymentInService {</span>
+	
+	@Autowired
+	@Qualifier(&quot;commHubServiceImpl&quot;)
+	private ICommHubServiceImpl iCommHubServiceImpl;
+
+	@Autowired
+	@Qualifier(&quot;payInDBServiceImpl&quot;)
+	private IPaymentInDBService iPaymentInDBService;
+
+	@Autowired
+	@Qualifier(&quot;paymentInUpdateTransformer&quot;)
+	private ITransform&lt;PaymentInUpdateDBDto, PaymentInUpdateRequest&gt; paymentInUpdateTransformer;
+
+<span class="fc" id="L61">	private Logger log = LoggerFactory.getLogger(PaymentInServiceImpl.class);</span>
+	
+	/** The Constant CONTENT_TYPE. */
+	public static final String CONTENT_TYPE = &quot;Content-Type&quot;;
+	
+	/** The Constant AUTHORIZATION. */
+	public static final String AUTHORIZATION = &quot;Authorization&quot;;
+	
+	/** The i tokenizer. */
+	@Autowired
+	@Qualifier(&quot;tokenizer&quot;)
+	private ITokenizer iTokenizer;
+	
+
+	@Override
+	public PaymentInQueueDto getPaymentInQueueWithCriteria(PaymentInSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+		try {
+<span class="fc" id="L79">			return iPaymentInDBService.getPaymentInQueueWithCriteria(searchCriteria);</span>
+<span class="fc" id="L80">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L81">			logError(e.getOrgException());</span>
+<span class="fc" id="L82">			throw e;</span>
+		}
+
+	}
+
+	private void logError(Throwable t) {
+<span class="fc" id="L88">		log.error(&quot;Exception: &quot;, t);</span>
+<span class="fc" id="L89">	}</span>
+
+	@Override
+	public PaymentInDetailsDto getPaymentInDetails(Integer paymentInId, String custType,
+			PaymentInSearchCriteria searchCriteria) throws CompliancePortalException {
+		try {
+<span class="nc" id="L95">			PaymentInDetailsDto paymentInDetailDto = iPaymentInDBService.getPaymentInDetails(paymentInId, custType,</span>
+					searchCriteria);
+<span class="nc" id="L97">			addDocuments(paymentInDetailDto);</span>
+<span class="nc bnc" id="L98" title="All 4 branches missed.">			if (searchCriteria != null &amp;&amp; searchCriteria.getPage() != null) {</span>
+<span class="nc" id="L99">				paymentInDetailDto.setCurrentRecord(searchCriteria.getPage().getCurrentRecord());</span>
+<span class="nc" id="L100">				paymentInDetailDto.setTotalRecords(searchCriteria.getPage().getTotalRecords());</span>
+			}
+<span class="nc" id="L102">			return paymentInDetailDto;</span>
+<span class="nc" id="L103">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L104">			logError(e.getOrgException());</span>
+<span class="nc" id="L105">			throw e;</span>
+		}
+
+	}
+
+	private void addDocuments(PaymentInDetailsDto paymentInDetailsDto) throws CompliancePortalException {
+<span class="nc bnc" id="L111" title="All 4 branches missed.">		if (paymentInDetailsDto.getAccount() != null &amp;&amp; paymentInDetailsDto.getCurrentContact() != null) {</span>
+<span class="nc" id="L112">			List&lt;Document&gt; documents = UploadDocumentPort.getAttachedDocument(</span>
+<span class="nc" id="L113">					paymentInDetailsDto.getCurrentContact().getCrmAccountId(),</span>
+<span class="nc" id="L114">					paymentInDetailsDto.getCurrentContact().getCrmContactId(),</span>
+<span class="nc" id="L115">					paymentInDetailsDto.getAccount().getOrgCode(), Constants.SOURCE_SALESFORCE);</span>
+<span class="nc" id="L116">			paymentInDetailsDto.setDocuments(UploadDocumentPort.updateDocumentDateFormat(documents));</span>
+		}
+
+<span class="nc" id="L119">	}</span>
+
+	@Override
+	public ActivityLogs updatePaymentIn(PaymentInUpdateRequest paymentInUpdateRequest)
+			throws CompliancePortalException {
+		try {
+<span class="fc" id="L125">			PaymentInUpdateDBDto paymentInUpdateDBDto = paymentInUpdateTransformer.transform(paymentInUpdateRequest);</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">			if (&quot;CLEAR&quot;.equalsIgnoreCase(paymentInUpdateRequest.getUpdatedPaymentInStatus())) {</span>
+				CustomUpdateResponse customUpdateResponse;
+<span class="nc" id="L128">				customUpdateResponse = customUpdateService(paymentInUpdateRequest.getOrgCode(),</span>
+<span class="nc" id="L129">						paymentInUpdateRequest.getPaymentinId(),</span>
+<span class="nc" id="L130">						JsonConverterUtil.convertToJsonWithNull(paymentInUpdateRequest.getUser()),</span>
+<span class="nc" id="L131">						paymentInUpdateRequest.getCountryRiskLevel());</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">				if (&quot;PASS&quot;.equalsIgnoreCase(customUpdateResponse.getOverallStatus())) {</span>
+<span class="nc" id="L133">					return iPaymentInDBService.updatePaymentIn(paymentInUpdateDBDto);</span>
+				}
+<span class="nc" id="L135">			} else {</span>
+<span class="fc" id="L136">				ActivityLogs activityLogs = iPaymentInDBService.updatePaymentIn(paymentInUpdateDBDto);</span>
+				
+				//Add Code comment for jira AT-4519
+				//sendEmailOnRejectOrSeizeByCommhub(paymentInUpdateRequest);
+<span class="fc" id="L140">				return activityLogs;</span>
+			}
+<span class="fc" id="L142">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L143">			logError(e);</span>
+<span class="fc" id="L144">			throw e;</span>
+<span class="nc" id="L145">		} catch (Exception e) {</span>
+<span class="nc" id="L146">			logError(e);</span>
+<span class="nc" id="L147">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_UPDATING_DATA, e);</span>
+<span class="nc" id="L148">		}</span>
+<span class="nc" id="L149">		return null;</span>
+
+	}
+
+	private CustomUpdateResponse customUpdateService(String orgCode, Integer paymentInId, String userProfile, String countryRiskLevel)
+			throws CompliancePortalException {
+<span class="nc" id="L155">		Integer paymentOutId = null;</span>
+<span class="nc" id="L156">		CustomUpdateRequest customUpdateRequest = getCustomUpdateRequest(orgCode, paymentInId, paymentOutId, countryRiskLevel);</span>
+<span class="nc" id="L157">		HttpClientPool clientPool = HttpClientPool.getInstance();</span>
+<span class="nc" id="L158">		MultivaluedHashMap&lt;String, Object&gt; headers = new MultivaluedHashMap&lt;&gt;();</span>
+<span class="nc" id="L159">		ArrayList&lt;Object&gt; list = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L160">		list.add(userProfile);</span>
+<span class="nc" id="L161">		headers.put(&quot;user&quot;, list);</span>
+<span class="nc" id="L162">		String baseUrl = System.getProperty(&quot;baseComplianceServiceUrl&quot;);</span>
+<span class="nc" id="L163">		return clientPool.sendRequest(</span>
+				baseUrl + &quot;/compliance-service/services-internal/repeatcheck/updateWhiteListDatafundsIn&quot;, &quot;POST&quot;,
+				customUpdateRequest, CustomUpdateResponse.class, headers, MediaType.APPLICATION_JSON_TYPE);
+	}
+
+	private CustomUpdateRequest getCustomUpdateRequest(String orgCode, Integer paymentInId, Integer paymentOutId, String countryRiskLevel) {
+
+<span class="nc" id="L170">		CustomUpdateRequest customUpdateRequest = new CustomUpdateRequest();</span>
+<span class="nc" id="L171">		customUpdateRequest.setOrgCode(orgCode);</span>
+<span class="nc" id="L172">		customUpdateRequest.setPaymentOutId(paymentOutId);</span>
+<span class="nc" id="L173">		customUpdateRequest.setPaymentInId(paymentInId);</span>
+<span class="nc" id="L174">		customUpdateRequest.setCountryRiskLevel(countryRiskLevel);</span>
+<span class="nc" id="L175">		return customUpdateRequest;</span>
+	}
+
+	@Override
+	public ActivityLogs getActivityLogs(ActivityLogRequest request) throws CompliancePortalException {
+		try {
+<span class="nc bnc" id="L181" title="All 2 branches missed.">			if (request == null) {</span>
+<span class="nc" id="L182">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			} else {
+<span class="nc" id="L184">				return iPaymentInDBService.getActivityLogs(request);</span>
+			}
+
+<span class="nc" id="L187">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L188">			logError(e);</span>
+<span class="nc" id="L189">			throw e;</span>
+
+<span class="nc" id="L191">		} catch (Exception e) {</span>
+<span class="nc" id="L192">			logError(e);</span>
+<span class="nc" id="L193">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		}
+	}
+
+	@Override
+	public ViewMoreResponse viewMoreDetails(PaymentInViewMoreRequest viewMoreRequest) throws CompliancePortalException {
+
+<span class="fc" id="L200">		ViewMoreResponse viewMoreResponse = null;</span>
+		try {
+
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">			if (&quot;SANCTION&quot;.equalsIgnoreCase(viewMoreRequest.getServiceType())) {</span>
+
+<span class="fc" id="L205">				viewMoreResponse = iPaymentInDBService.getMoreSanctionDetails(viewMoreRequest);</span>
+
+<span class="nc bnc" id="L207" title="All 2 branches missed.">			} else if (&quot;VELOCITYCHECK&quot;.equalsIgnoreCase(viewMoreRequest.getServiceType())) {</span>
+
+<span class="nc" id="L209">				viewMoreResponse = iPaymentInDBService.getMoreCustomCheckDetails(viewMoreRequest);</span>
+
+<span class="nc bnc" id="L211" title="All 2 branches missed.">			} else if (&quot;FRAUGSTER&quot;.equalsIgnoreCase(viewMoreRequest.getServiceType())) {</span>
+
+<span class="nc" id="L213">				viewMoreResponse = iPaymentInDBService.getMoreFraugsterDetails(viewMoreRequest);</span>
+
+<span class="nc bnc" id="L215" title="All 2 branches missed.">			} else if (&quot;TRANSACTION_MONITORING&quot;.equalsIgnoreCase(viewMoreRequest.getServiceType())) {</span>
+
+<span class="nc" id="L217">				viewMoreResponse = iPaymentInDBService.getMoreIntuitionDetails(viewMoreRequest); //AT-4306</span>
+
+			}
+<span class="fc" id="L220">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L221">			logError(e);</span>
+<span class="fc" id="L222">			throw e;</span>
+<span class="nc" id="L223">		} catch (Exception e) {</span>
+<span class="nc" id="L224">			logError(e);</span>
+<span class="nc" id="L225">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L226">		}</span>
+<span class="fc" id="L227">		return viewMoreResponse;</span>
+	}
+
+	
+	/**
+	 * Send email on reject or seize by commhub.
+	 *
+	 * @param paymentInUpdateRequest the payment in update request
+	 */
+	
+	//Code add for AT-1999 Commhub API
+	private void sendEmailOnRejectOrSeizeByCommhub(PaymentInUpdateRequest paymentInUpdateRequest) {
+		try {
+<span class="nc" id="L240">			Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">			if (Constants.REJECT.equalsIgnoreCase(paymentInUpdateRequest.getUpdatedPaymentInStatus())</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">					|| Constants.SEIZE.equalsIgnoreCase(paymentInUpdateRequest.getUpdatedPaymentInStatus())) {</span>
+<span class="nc" id="L243">				SendEmailRequest emailrequest = new SendEmailRequest();</span>
+<span class="nc" id="L244">				EmailHeader header =  new EmailHeader();</span>
+<span class="nc" id="L245">				header.setOrgCode(paymentInUpdateRequest.getOrgCode());</span>
+<span class="nc" id="L246">				header.setLegalEntity(paymentInUpdateRequest.getLegalEntity());</span>
+<span class="nc" id="L247">				header.setCustomerType(paymentInUpdateRequest.getCustType());</span>
+<span class="nc" id="L248">				header.setCustNumber(paymentInUpdateRequest.getClientNumber());</span>
+<span class="nc" id="L249">				String[] notification = {&quot;Email&quot;};</span>
+<span class="nc" id="L250">	 			header.setNotificationType(notification);</span>
+<span class="nc" id="L251">				header.setEvent(Constants.PAYMENT_IN_REJECT_EVENT);</span>
+<span class="nc" id="L252">				header.setLocale(Constants.LOCALE_EN);</span>
+<span class="nc" id="L253">				header.setSourceSystem(&quot;Atlas&quot;);</span>
+<span class="nc" id="L254">				header.setRetryTimeout(&quot;60000&quot;);</span>
+<span class="nc" id="L255">				header.setOsrId(UUID.randomUUID().toString());</span>
+				
+<span class="nc" id="L257">				EmailPayload payload = new EmailPayload();</span>
+<span class="nc" id="L258">				payload.setEmailId(System.getProperty(paymentInUpdateRequest.getOrgCode().replaceAll(&quot;\\s+&quot;, &quot;&quot;).toLowerCase()+Constants.EAMIL_SENDTO));</span>
+<span class="nc" id="L259">				payload.setSubject(&quot;Payment In Rejected/Seized&quot;);</span>
+<span class="nc" id="L260">					Map&lt;String,String&gt; attributes = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L261">					attributes.put(&quot;#updated_payment_status&quot;, getPlaceholdersValue(paymentInUpdateRequest.getUpdatedPaymentInStatus()));</span>
+<span class="nc" id="L262">					attributes.put(&quot;#customer_number&quot;, getPlaceholdersValue(paymentInUpdateRequest.getClientNumber()));</span>
+<span class="nc" id="L263">					attributes.put(&quot;#trade_contractId&quot;, getPlaceholdersValue(paymentInUpdateRequest.getTradeContractNumber()));</span>
+<span class="nc" id="L264">					attributes.put(&quot;#debtor_amount&quot;, getPlaceholdersValue(paymentInUpdateRequest.getDebtorAmount()));</span>
+<span class="nc" id="L265">					attributes.put(&quot;#currency&quot;, getPlaceholdersValue(paymentInUpdateRequest.getSellCurrency()));</span>
+<span class="nc" id="L266">					attributes.put(&quot;#payment_status&quot;, getPlaceholdersValue(paymentInUpdateRequest.getPrePaymentInStatus()));</span>
+<span class="nc" id="L267">					attributes.put(&quot;#today_date&quot;, DateTimeFormatter.dateTimeFormatter(timestamp));</span>
+<span class="nc" id="L268">					attributes.put(&quot;#username&quot;, getPlaceholdersValue(paymentInUpdateRequest.getUserName()));</span>
+<span class="nc" id="L269">					attributes.put(&quot;#status_reason&quot;, getPlaceholdersValue(paymentInUpdateRequest.getStatusReason()));</span>
+<span class="nc" id="L270">					attributes.put(&quot;#comment&quot;, getPlaceholdersValue(paymentInUpdateRequest.getComment()));</span>
+<span class="nc" id="L271">					attributes.put(&quot;#payment_method&quot;, getPlaceholdersValue(paymentInUpdateRequest.getPaymentMethod()));</span>
+<span class="nc" id="L272">				payload.setPlaceHolder(attributes);</span>
+					
+<span class="nc" id="L274">				emailrequest.setHeader(header);</span>
+<span class="nc" id="L275">				emailrequest.setPayload(payload);</span>
+
+<span class="nc" id="L277">				iCommHubServiceImpl.sendEmail(emailrequest,true);</span>
+			}
+<span class="nc" id="L279">		} catch(Exception e) {</span>
+<span class="nc" id="L280">			logError(e);</span>
+<span class="nc" id="L281">		}</span>
+<span class="nc" id="L282">	}</span>
+	
+	/**
+	 * Gets the placeholders value.
+	 *
+	 * @param placeholders the placeholders
+	 * @return the placeholders value
+	 */
+	private String getPlaceholdersValue(String placeholders) {
+<span class="nc bnc" id="L291" title="All 4 branches missed.">		if(null != placeholders &amp;&amp; !placeholders.isEmpty())</span>
+<span class="nc" id="L292">			return placeholders;</span>
+<span class="nc" id="L293">		return &quot; &quot;;</span>
+	}
+
+	@Override
+	public boolean setPoiExistsFlagForPaymentIn(UserProfile user, Contact contact) throws CompliancePortalException {
+<span class="nc" id="L298">		boolean poiExists = false;</span>
+		try {
+<span class="nc" id="L300">			poiExists = iPaymentInDBService.setPoiExistsFlagForPaymentIn(user,contact);</span>
+<span class="nc" id="L301">		}catch (Exception e) {</span>
+<span class="nc" id="L302">			throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L303">		}</span>
+<span class="nc" id="L304">		return poiExists;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

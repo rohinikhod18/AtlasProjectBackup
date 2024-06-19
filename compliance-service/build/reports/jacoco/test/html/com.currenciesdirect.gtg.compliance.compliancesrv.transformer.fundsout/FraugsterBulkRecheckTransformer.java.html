@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FraugsterBulkRecheckTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout</a> &gt; <span class="el_source">FraugsterBulkRecheckTransformer.java</span></div><h1>FraugsterBulkRecheckTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.DeviceInfo;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.Beneficiary;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ProvideCacheLoader;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.Trade;
+
+<span class="nc" id="L37">public class FraugsterBulkRecheckTransformer extends AbstractTransformer{</span>
+
+	private static final String CONTACT = &quot;contact&quot;;
+
+	/** The Constant LOG. */
+<span class="nc" id="L42">	private static final Logger LOG = LoggerFactory.getLogger(FraugsterBulkRecheckTransformer.class);</span>
+	
+	/** The country cache. */
+<span class="nc" id="L45">	private ProvideCacheLoader countryCache = ProvideCacheLoader.getInstance();</span>
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer#transformRequest(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="nc" id="L53">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L54">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L55">			FundsOutRequest fundsOutRequest = (FundsOutRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L56">			Contact contact = (Contact) fundsOutRequest.getAdditionalAttribute(CONTACT);</span>
+			
+<span class="nc" id="L58">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L59">					.getAdditionalAttribute(&quot;eventId&quot;);</span>
+<span class="nc" id="L60">			FraugsterPaymentsOutRequest request = createServiceRequest(fundsOutRequest, messageExchange.getServiceInterface().name());</span>
+<span class="nc" id="L61">			FraugsterPaymentsOutContactResponse defaultResponse=new FraugsterPaymentsOutContactResponse();</span>
+<span class="nc" id="L62">			FraugsterSummary summary=new FraugsterSummary();	</span>
+			
+			FraugsterPaymentsOutResponse fPaymentOutResponse;
+			MessageExchange ccExchange;
+<span class="nc" id="L66">			fPaymentOutResponse = createServiceDeafaultResponse(ServiceStatus.NOT_PERFORMED,fundsOutRequest);</span>
+<span class="nc" id="L67">			defaultResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L68">			summary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+			// use this to update the FraugsterSchedularData table.
+<span class="nc" id="L70">			summary.setCdTrasId(request.getContactRequests().get(0).getTransactionID());</span>
+<span class="nc" id="L71">			ccExchange = createMessageExchange(request, fPaymentOutResponse, ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+			
+<span class="nc" id="L73">			ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId,</span>
+					ServiceTypeEnum.FRAUGSTER_SERVICE, ServiceProviderEnum.FRAUGSTER_FUNDSOUT_SERVICE,
+<span class="nc" id="L75">					contact.getId(), contact.getVersion(), EntityEnum.CONTACT.name(), token.getUserID(),</span>
+					defaultResponse, summary, ServiceStatus.NOT_PERFORMED));
+			
+<span class="nc" id="L78">			message.getPayload().removeMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L79">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L80">		} catch (Exception e) {</span>
+<span class="nc" id="L81">			LOG.error(&quot;Error in Fraugster transformer class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L82">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L83">		}</span>
+<span class="nc" id="L84">		return message;</span>
+	}
+
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="nc" id="L90">			MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L91">			transformPaymentOutResponse(exchange);</span>
+<span class="nc" id="L92">		}catch(Exception e){</span>
+<span class="nc" id="L93">			LOG.error(&quot;Exception in transformResponse() of Fraugster transformer&quot;, e);</span>
+<span class="nc" id="L94">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L95">		}</span>
+		
+<span class="nc" id="L97">		return message;</span>
+	}
+	
+	/**
+	 * Transform payment out response.
+	 *
+	 * @param exchange the exchange
+	 */
+	private void transformPaymentOutResponse(MessageExchange exchange) {
+<span class="nc" id="L106">		FraugsterPaymentsOutResponse fResponse = (FraugsterPaymentsOutResponse) exchange.getResponse();</span>
+<span class="nc" id="L107">		FraugsterPaymentsOutRequest request = exchange.getRequest(FraugsterPaymentsOutRequest.class);</span>
+
+<span class="nc bnc" id="L109" title="All 2 branches missed.">		if (fResponse == null</span>
+<span class="nc bnc" id="L110" title="All 2 branches missed.">				|| fResponse.getContactResponses().get(0).getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L111">			fResponse = crateServiceDownResponse(exchange, request);</span>
+		}
+<span class="nc bnc" id="L113" title="All 2 branches missed.">		if (&quot;SUCCESS&quot;.equalsIgnoreCase(fResponse.getStatus()))</span>
+<span class="nc" id="L114">			fResponse.setStatus(ServiceStatus.PASS.name());</span>
+	
+<span class="nc" id="L116">		List&lt;FraugsterPaymentsOutContactResponse&gt; identityResponse = fResponse.getContactResponses();</span>
+		
+<span class="nc bnc" id="L118" title="All 2 branches missed.">			for (FraugsterPaymentsOutContactResponse response : identityResponse) {</span>
+<span class="nc bnc" id="L119" title="All 4 branches missed.">				if (identityResponse != null &amp;&amp; !response.getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">					if (&quot;SUCCESS&quot;.equalsIgnoreCase(response.getStatus())) {</span>
+<span class="nc" id="L121">						response.setStatus(ServiceStatus.PASS.name());</span>
+					}
+<span class="nc" id="L123">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L124">						EntityEnum.CONTACT.name(), response.getId());</span>
+<span class="nc" id="L125">				readResponse(eventServiceLog, response);</span>
+			}
+<span class="nc" id="L127">		}</span>
+<span class="nc" id="L128">	}</span>
+	
+	/**
+	 * Crate service down response.
+	 *
+	 * @param exchange the exchange
+	 * @param request the request
+	 * @return the fraugster payments out response
+	 */
+	private FraugsterPaymentsOutResponse crateServiceDownResponse(MessageExchange exchange,
+			FraugsterPaymentsOutRequest request) {
+		FraugsterPaymentsOutResponse fResponse;
+<span class="nc" id="L140">		fResponse = new FraugsterPaymentsOutResponse();</span>
+<span class="nc" id="L141">		List&lt;FraugsterPaymentsOutContactResponse&gt; conactResponseList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L142">		FraugsterSummary fraugsterSummary = new FraugsterSummary();</span>
+		
+<span class="nc bnc" id="L144" title="All 2 branches missed.">		for (FraugsterPaymentsOutContactRequest contact : request.getContactRequests()) {</span>
+
+<span class="nc" id="L146">			FraugsterPaymentsOutContactResponse conactResponse = new FraugsterPaymentsOutContactResponse();</span>
+<span class="nc" id="L147">			EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L148">					EntityEnum.CONTACT.name(), contact.getId());</span>
+
+<span class="nc" id="L150">			conactResponse.setId(contact.getId());</span>
+<span class="nc" id="L151">			conactResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L152">			conactResponseList.add(conactResponse);</span>
+<span class="nc" id="L153">			fResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L154">			fResponse.setContactResponses(null);</span>
+<span class="nc" id="L155">			fraugsterSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L156">			fraugsterSummary.setFrgTransId(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L157">			fraugsterSummary.setScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L158">			eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L159">			eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(fraugsterSummary));</span>
+<span class="nc" id="L160">			eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(conactResponse));</span>
+<span class="nc" id="L161">		}</span>
+<span class="nc" id="L162">		fResponse.setContactResponses(conactResponseList);</span>
+<span class="nc" id="L163">		exchange.setResponse(fResponse);</span>
+<span class="nc" id="L164">		return fResponse;</span>
+	}
+
+	
+	/**
+	 * Creates the service request.
+	 *
+	 * @param fundsOutRequest the funds out request
+	 * @param type the type
+	 * @return the fraugster payments out request
+	 * @throws ComplianceException the compliance exception
+	 */
+	private FraugsterPaymentsOutRequest createServiceRequest(FundsOutRequest fundsOutRequest, String type) throws ComplianceException {
+<span class="nc" id="L177">		FraugsterPaymentsOutRequest request = new FraugsterPaymentsOutRequest();</span>
+<span class="nc" id="L178">		List&lt;FraugsterPaymentsOutContactRequest&gt; fContactRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L179">		Account account = (Account) fundsOutRequest.getAdditionalAttribute(&quot;account&quot;);</span>
+		FraugsterPaymentsOutContactRequest fContactRequest;
+<span class="nc" id="L181">		fContactRequest = transformPaymantOutRequest(fundsOutRequest);</span>
+<span class="nc" id="L182">		fContactRequests.add(fContactRequest);</span>
+<span class="nc" id="L183">		request.setContactRequests(fContactRequests);</span>
+<span class="nc" id="L184">		request.setOrgCode(fundsOutRequest.getOrgCode());</span>
+<span class="nc" id="L185">		request.setCorrelationID(fundsOutRequest.getCorrelationID());</span>
+<span class="nc" id="L186">		request.setSourceApplication(fundsOutRequest.getSourceApplication());</span>
+<span class="nc" id="L187">		request.setRequestType(type);</span>
+<span class="nc" id="L188">		request.setCustType(CustomerTypeEnum.getCustumerTypeAsString(account.getCustomerType()));</span>
+<span class="nc" id="L189">		return request;</span>
+	}
+	
+	/**
+	 * Transform paymant out request.
+	 *
+	 * @param fundsOutRequest the funds out request
+	 * @return the fraugster payments out contact request
+	 * @throws ComplianceException the compliance exception
+	 */
+	private FraugsterPaymentsOutContactRequest transformPaymantOutRequest(FundsOutRequest fundsOutRequest)
+			throws ComplianceException {
+<span class="nc" id="L201">		Account account = (Account) fundsOutRequest.getAdditionalAttribute(&quot;account&quot;);</span>
+<span class="nc" id="L202">		Contact contact = (Contact) fundsOutRequest.getAdditionalAttribute(CONTACT);</span>
+<span class="nc" id="L203">		DeviceInfo deviceInfo = fundsOutRequest.getDeviceInfo();</span>
+<span class="nc" id="L204">		Beneficiary bene = fundsOutRequest.getBeneficiary();</span>
+<span class="nc" id="L205">		Trade trade = fundsOutRequest.getTrade();</span>
+<span class="nc" id="L206">		FraugsterPaymentsOutContactRequest requestData = new FraugsterPaymentsOutContactRequest();</span>
+
+<span class="nc" id="L208">		requestData.setEventType(&quot;payment_out&quot;);</span>
+<span class="nc" id="L209">		requestData.setBuyingAmount(Double.toString(trade.getBuyingAmount()));</span>
+<span class="nc" id="L210">		requestData.setCustomerNo(trade.getTradeAccountNumber());</span>
+<span class="nc" id="L211">		requestData.setContracrNumber(trade.getContractNumber());</span>
+<span class="nc" id="L212">		requestData.setPurposeOfTrade(trade.getPurposeOfTrade());</span>
+<span class="nc" id="L213">		requestData.setSellingCurrency(trade.getSellCurrency());</span>
+		
+<span class="nc" id="L215">		requestData.setBeneficiaryType(bene.getBeneficiaryType());</span>
+<span class="nc" id="L216">		requestData.setBeneficiaryCurrencyCode(bene.getCurrencyCode());</span>
+<span class="nc" id="L217">		requestData.setBeneficiaryAccountNumber(bene.getAccountNumber());</span>
+<span class="nc" id="L218">		requestData.setBeneficiaryBankAddress(bene.getBeneficaryBankAddress());</span>
+<span class="nc" id="L219">		requestData.setBeneficiaryBankName(bene.getBeneficaryBankName());</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">		if(null!=bene.getCountry()){</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">		requestData.setBeneficiaryCountry(null != countryCache.getCountryFullName(bene.getCountry())</span>
+<span class="nc" id="L222">				? countryCache.getCountryFullName(bene.getCountry()) : &quot;&quot;);</span>
+<span class="nc" id="L223">		requestData.setBeneficiaryCountryCode(bene.getCountry());</span>
+		}
+<span class="nc" id="L225">		requestData.setBeneficiaryCurrency(bene.getCurrencyCode());</span>
+<span class="nc" id="L226">		requestData.setBeneficiaryEmail(bene.getEmail());</span>
+<span class="nc" id="L227">		requestData.setBeneficiaryFirstName(bene.getFirstName());</span>
+<span class="nc" id="L228">		requestData.setBeneficiaryLastName(bene.getLastName());</span>
+<span class="nc" id="L229">		requestData.setBeneficiarySwift(bene.getBeneficiarySwift());</span>
+<span class="nc" id="L230">		requestData.setTransactionDateTime(bene.getTransactionDateTime());</span>
+
+<span class="nc" id="L232">		requestData.setCustID(leftPadWithZero(account.getId()));</span>
+		/**
+		 * Changes made for to set unique TransactionID by concatenate PaymentOutID and TradeAccountNumber- Saylee
+		 */
+<span class="nc" id="L236">		requestData.setTransactionID(String.valueOf(fundsOutRequest.getFundsOutId())</span>
+<span class="nc" id="L237">				+ (String.valueOf(fundsOutRequest.getTrade().getTradeAccountNumber())));</span>
+		// ??
+<span class="nc" id="L239">		requestData.setCurrency(fundsOutRequest.getTrade().getBuyCurrency());</span>
+		// ??
+<span class="nc" id="L241">		requestData.setCustomerAccountNumber(fundsOutRequest.getTrade().getTradeAccountNumber());</span>
+<span class="nc" id="L242">		requestData.setCustomerFirstName(contact.getFirstName());</span>
+<span class="nc" id="L243">		requestData.setCustomerLastName(contact.getLastName());</span>
+<span class="nc" id="L244">		requestData.setCustomerType(account.getCustType());</span>
+<span class="nc" id="L245">		requestData.setValueDate(fundsOutRequest.getTrade().getValueDate());</span>
+<span class="nc" id="L246">		requestData.setoPICreatedDate(fundsOutRequest.getBeneficiary().getOpiCreatedDate());</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">		if (null != deviceInfo) {</span>
+<span class="nc" id="L248">		    requestData.setUserAgent(deviceInfo.getUserAgent());</span>
+<span class="nc" id="L249">			requestData.setBrowserLanguage(deviceInfo.getBrowserLanguage());</span>
+<span class="nc" id="L250">			requestData.setBrowserMajorVersion(deviceInfo.getBrowserMajorVersion());</span>
+<span class="nc" id="L251">			requestData.setBrowserName(deviceInfo.getBrowserName());</span>
+<span class="nc" id="L252">			requestData.setBrowserOnline(deviceInfo.getBrowserOnline());</span>
+			//Added ScreenResolution instead of BrowserScreenResolution and DeviceResolution
+<span class="nc" id="L254">			requestData.setBrowserScreenResolution(deviceInfo.getScreenResolution());</span>
+<span class="nc" id="L255">			requestData.setDeviceID(deviceInfo.getDeviceId());</span>
+<span class="nc" id="L256">			requestData.setDeviceManufacturer(deviceInfo.getDeviceManufacturer());</span>
+<span class="nc" id="L257">			requestData.setDeviceName(deviceInfo.getDeviceName());</span>
+<span class="nc" id="L258">			requestData.setDeviceType(deviceInfo.getDeviceType());</span>
+<span class="nc" id="L259">			requestData.setDeviceVersion(deviceInfo.getDeviceVersion());</span>
+<span class="nc" id="L260">			requestData.setOsDateAndTime(deviceInfo.getOsDateAndTime());</span>
+<span class="nc" id="L261">			requestData.setOsName(deviceInfo.getOsName());</span>
+		}
+<span class="nc" id="L263">		requestData.setDealId(fundsOutRequest.getTrade().getContractNumber());</span>
+		
+<span class="nc" id="L265">		requestData.setId(contact.getId());</span>
+		
+		/** set fraugster signup score **/
+<span class="nc" id="L268">		String fraugsterSignupScore = (String) fundsOutRequest</span>
+<span class="nc" id="L269">				.getAdditionalAttribute(&quot;FraugsterSignupScore&quot;);</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">		if(null!=fraugsterSignupScore){</span>
+<span class="nc" id="L271">			requestData.setCustSignupScore(Float.parseFloat(fraugsterSignupScore));</span>
+		}
+
+<span class="nc" id="L274">		return requestData;</span>
+	}
+	
+	/**
+	 * Left pad with zero.
+	 *
+	 * @param id the id
+	 * @return the string
+	 */
+	private String leftPadWithZero(Integer id) {
+<span class="nc" id="L284">		String pad = &quot;0000000000&quot;;</span>
+<span class="nc" id="L285">		return (pad + id).substring((pad + id).length() - 10);</span>
+	}
+	
+	/**
+	 * Creates the service deafault response.
+	 *
+	 * @param status the status
+	 * @param fundsOutRequest the funds out request
+	 * @return the fraugster payments out response
+	 */
+	private FraugsterPaymentsOutResponse createServiceDeafaultResponse(ServiceStatus status,FundsOutRequest fundsOutRequest) {
+<span class="nc" id="L296">		Contact contact = (Contact) fundsOutRequest.getAdditionalAttribute(CONTACT);</span>
+<span class="nc" id="L297">		FraugsterPaymentsOutResponse fPaymentOutResponse = new FraugsterPaymentsOutResponse();</span>
+<span class="nc" id="L298">		List&lt;FraugsterPaymentsOutContactResponse&gt; fContactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L299">		fPaymentOutResponse.setStatus(status.name());</span>
+<span class="nc" id="L300">		FraugsterPaymentsOutContactResponse response = new FraugsterPaymentsOutContactResponse();</span>
+<span class="nc" id="L301">		response.setId(contact.getId());</span>
+<span class="nc" id="L302">		response.setStatus(status.name());</span>
+<span class="nc" id="L303">		fContactResponses.add(response);</span>
+<span class="nc" id="L304">		fPaymentOutResponse.setContactResponses(fContactResponses);</span>
+<span class="nc" id="L305">		return fPaymentOutResponse;</span>
+	}
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

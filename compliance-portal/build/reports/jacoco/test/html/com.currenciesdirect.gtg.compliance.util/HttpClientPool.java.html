@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>HttpClientPool.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.util</a> &gt; <span class="el_source">HttpClientPool.java</span></div><h1>HttpClientPool.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.util;
+
+
+
+import java.util.concurrent.Future;
+
+import javax.ws.rs.client.AsyncInvoker;
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.Invocation.Builder;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedMap;
+import javax.ws.rs.core.Response;
+
+import org.jboss.resteasy.client.jaxrs.ResteasyClient;
+import org.jboss.resteasy.client.jaxrs.ResteasyWebTarget;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.core.RecheckServiceImpl;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+
+
+/**
+ * The Class HttpClientPool.
+ */
+<span class="nc" id="L27">public final class HttpClientPool {</span>
+
+<span class="nc" id="L29">	private Logger log = LoggerFactory.getLogger(HttpClientPool.class);</span>
+	/** The resteasy client handler. */
+<span class="nc" id="L31">	private ResteasyClientHandler resteasyClientHandler = ResteasyClientHandler.getInstance();</span>
+
+	/** The Constant httpClientPool. */
+<span class="nc" id="L34">	private static HttpClientPool httpClientPool = null;</span>
+	
+	/**
+	 * Gets the single instance of ResteasyClientHandler.
+	 *
+	 * @return single instance of ResteasyClientHandler
+	 */
+	public static HttpClientPool getInstance() {
+<span class="nc" id="L42">		synchronized (HttpClientPool.class) {</span>
+<span class="nc bnc" id="L43" title="All 2 branches missed.">			if (httpClientPool == null) {</span>
+<span class="nc" id="L44">				httpClientPool = new HttpClientPool();</span>
+			}
+<span class="nc" id="L46">		}</span>
+<span class="nc" id="L47">		return httpClientPool;</span>
+	}
+	/**
+	 * Send request.
+	 *
+	 * @param &lt;T&gt;
+	 *            the generic type
+	 * @param url
+	 *            the url
+	 * @param method
+	 *            the method
+	 * @param request
+	 *            the request
+	 * @param clazz
+	 *            the clazz
+	 * @param headers
+	 *            the headers
+	 * @param mediaType
+	 *            the media type
+	 * @return the t
+	 * @throws CompliancePortalException 
+	 */
+	public &lt;T&gt; T sendRequest(String url, String method, Object request, Class&lt;T&gt; clazz,
+			MultivaluedMap&lt;String, Object&gt; headers, MediaType mediaType) throws CompliancePortalException {
+		Response response;
+<span class="nc" id="L72">		T responseObject = null;</span>
+<span class="nc" id="L73">		ResteasyClient resteasyClient = resteasyClientHandler.getRetEasyClient();</span>
+<span class="nc" id="L74">		ResteasyWebTarget target = resteasyClient.target(url);</span>
+<span class="nc" id="L75">		Builder clientrequest = target.request();</span>
+<span class="nc bnc" id="L76" title="All 4 branches missed.">		if (headers != null &amp;&amp; !headers.isEmpty()) {</span>
+<span class="nc" id="L77">			clientrequest.headers(headers);</span>
+		}
+<span class="nc bnc" id="L79" title="All 3 branches missed.">		switch (method) {</span>
+		case &quot;POST&quot;:
+<span class="nc" id="L81">			response = clientrequest.post(Entity.entity(request, mediaType));</span>
+<span class="nc" id="L82">			break;</span>
+		case &quot;PUT&quot;:
+<span class="nc" id="L84">			response = clientrequest.put(Entity.entity(request, mediaType));</span>
+<span class="nc" id="L85">			break;</span>
+		default:
+<span class="nc" id="L87">			response = clientrequest.get();</span>
+		}
+
+<span class="nc bnc" id="L90" title="All 3 branches missed.">		switch(response.getStatus()){</span>
+		case 200:
+<span class="nc bnc" id="L92" title="All 2 branches missed.">			if(response.hasEntity()) {</span>
+<span class="nc" id="L93">				responseObject = response.readEntity(clazz);</span>
+			}
+			break;
+		case 401:
+<span class="nc" id="L97">			throw new CompliancePortalException(CompliancePortalErrors.UNAUTHORISED_USER);</span>
+			
+		case 403:
+		case 500:
+		default:	
+<span class="nc" id="L102">			throw new CompliancePortalException(CompliancePortalErrors.FAILED);</span>
+			
+		}
+		
+		
+<span class="nc" id="L107">		response.close();</span>
+
+<span class="nc" id="L109">		return responseObject;</span>
+	}
+	/**
+	 * Send Async request.
+	 *
+	 * @param &lt;T&gt;
+	 *            the generic type
+	 * @param url
+	 *            the url
+	 * @param method
+	 *            the method
+	 * @param request
+	 *            the request
+	 * @param clazz
+	 *            the clazz
+	 * @param headers
+	 *            the headers
+	 * @param mediaType
+	 *            the media type
+	 * @return the t
+	 * @throws CompliancePortalException 
+	 */
+	public  Future&lt;Response&gt; sendAsyncRequest(String url, String method, Object request, 
+			MultivaluedMap&lt;String, Object&gt; headers, MediaType mediaType) throws CompliancePortalException {
+		Future&lt;Response&gt; response;
+		
+		try {
+<span class="nc" id="L136">			ResteasyClient resteasyClient = resteasyClientHandler.getRetEasyClient();</span>
+<span class="nc" id="L137">			ResteasyWebTarget target = resteasyClient.target(url);</span>
+<span class="nc" id="L138">			Builder clientrequest = target.request();</span>
+<span class="nc bnc" id="L139" title="All 4 branches missed.">			if (headers != null &amp;&amp; !headers.isEmpty()) {</span>
+<span class="nc" id="L140">				clientrequest.headers(headers);</span>
+			}
+<span class="nc bnc" id="L142" title="All 3 branches missed.">			switch (method) {</span>
+			case &quot;POST&quot;:
+<span class="nc" id="L144">				response = clientrequest.async().post(Entity.entity(request, mediaType));</span>
+<span class="nc" id="L145">				break;</span>
+			case &quot;PUT&quot;:
+<span class="nc" id="L147">				response = clientrequest.async().put(Entity.entity(request, mediaType));</span>
+<span class="nc" id="L148">				break;</span>
+			default:
+<span class="nc" id="L150">				response = clientrequest.async().get();</span>
+			}
+<span class="nc" id="L152">			return response;</span>
+<span class="nc" id="L153">		}catch(Exception e) {</span>
+<span class="nc" id="L154">			log.error(&quot;Async Request Failed with &quot;+e.getMessage());</span>
+<span class="nc" id="L155">			throw new CompliancePortalException(CompliancePortalErrors.FAILED);</span>
+		}
+
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

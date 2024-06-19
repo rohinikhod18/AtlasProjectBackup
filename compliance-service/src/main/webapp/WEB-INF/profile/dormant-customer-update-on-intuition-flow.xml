@@ -1,0 +1,79 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+
+
+	<int:channel id="INTUITION.NEW_REGISTRATION.in.channel" />
+
+	<int:chain
+		input-channel="INTUITION.NEW_REGISTRATION.in.channel"
+		output-channel="INTUITION.NEW_REGISTRATION.respose.handler">
+
+		<int:header-enricher>
+			<int:header name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+		</int:header-enricher>
+
+		<int:service-activator ref="eventDBServiceImpl"
+			method="createEvent" />
+
+		<int:transformer
+			ref="transactionMonitoringTransformer" method="transformRequest" />
+
+		<int:service-activator method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse" />
+		</int:service-activator>
+
+		<int:transformer
+			ref="transactionMonitoringTransformer" method="transformResponse" />
+
+		<int:service-activator ref="eventDBServiceImpl"
+			method="createTransactionMonitoringEventSerivceLog" />
+
+		<int:service-activator
+			ref="transactionMonitoringDBServiceImpl"
+			method="updateAccountTMFlagAndDormantFlag" />
+
+		<int:filter
+			discard-channel="INTUITION.NEW_REGISTRATION.respose.handler"
+			expression="!payload.isFailed()" />
+
+	</int:chain>
+
+	<int:chain
+		input-channel="INTUITION.NEW_REGISTRATION.respose.handler"
+		output-channel="nullChannel">
+		<int:service-activator ref="tmResponseHandler"
+			method="responseHandlerForDormantCustomerUpdateToIntuition" />
+	</int:chain>
+
+	<bean id="transactionMonitoringDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.TransactionMonitoringDBServiceImpl" />
+
+	<bean id="tmResponseHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.IntuitionResponseHandler" />
+
+</beans>

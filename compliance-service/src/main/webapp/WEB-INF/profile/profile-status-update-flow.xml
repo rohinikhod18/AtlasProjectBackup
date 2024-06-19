@@ -1,0 +1,191 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<int:channel id="PROFILE.STATUS_UPDATE.in.channel" />
+
+	<int:channel id="PROFILE.UPDATE_STATUS_RULES.in.channel" />
+	<int:channel id="STATUS.UPDATE.DATA.VALIDATION.in.channel" />
+	<int:channel id="STATUS.UPDATE.REPLY.HANDLER.IN" />
+	
+	<int:chain
+		id="statusUpdate.initChain"
+		input-channel="PROFILE.STATUS_UPDATE.in.channel">
+		<int:header-enricher id="statusUpdate.HeaderEnricher">
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header
+				name="username"
+				expression="headers['username']" />
+		</int:header-enricher>
+		<int:service-activator
+			id="statusUpdate.VALIDATOR"
+			ref="statusMessageValidator"	 />
+		<int:router
+			id="statusUpdate.postValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="STATUS.UPDATE.DATA.VALIDATION.in.channel">
+			<int:mapping
+				value="FAIL"
+				channel="STATUS.UPDATE.REPLY.HANDLER.IN" />
+			<int:mapping
+				value="SUCCESS"
+				channel="STATUS.UPDATE.DATA.VALIDATION.in.channel" />
+		</int:router>
+	</int:chain>
+
+	<int:chain
+		id="statusUpdate.dataValidations"
+		input-channel="STATUS.UPDATE.DATA.VALIDATION.in.channel">
+		<int:service-activator
+			id="statusUpdateDataEnricher"
+			ref="statusUpdateDataEnricher"
+			method="process"/>
+		<int:service-activator
+			id="statusUpdateDataValidator"
+			ref="statusUpdateDataValidator"
+			method="process"/>	
+		<int:router
+			id="statusUpdate.postDataValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="PROFILE.UPDATE_STATUS_RULES.in.channel">
+			<int:mapping
+				value="FAIL"
+				channel="STATUS.UPDATE.REPLY.HANDLER.IN" />
+			<int:mapping
+				value="SUCCESS"
+				channel="PROFILE.UPDATE_STATUS_RULES.in.channel" />
+		</int:router>	
+	</int:chain>
+	
+	<int:chain
+		id="statusUpdate.profileStatus"
+		input-channel="PROFILE.UPDATE_STATUS_RULES.in.channel"
+		output-channel="PROFILE.UPDATE_STATUS_BROADCAST.DECISION.IN">
+		
+		<int:service-activator
+			id="SAVE.EVENT"
+			method="createStatusUpdateEvent"
+			ref="statusUpdateEventDBServiceImpl" />
+		
+		<int:service-activator
+			id="profileStatusUpdate"
+			ref="profileStatusUpdate"
+			method="process"/>
+			
+		<int:transformer
+			id="transformer"
+			ref="onfidoTransformer"
+			method="transformResponse"/>
+		
+		<int:service-activator
+			id="SAVE.EVENT.SERVICE"
+			ref="statusUpdateEventDBServiceImpl"
+			method="createStatusUpdateEventSerivceLog" />
+		
+		<int:service-activator 
+			ref="statusUpdateWatchListRules"
+			method="processStatusUpdateWatchList" />
+			
+		<int:transformer
+			id="PROFILE_UPDATE.UPDATE_STATUS"
+			ref="profileUpdateStatusAfterPOI"
+			method="updateAccountStatusAfterPOI" />
+			
+		<int:transformer
+			id="PROFILE_UPDATE.ACTIVITYLOG"
+			ref="activityDBServiceImpl"
+			method="createUpdateProfileActivityLog" />
+	</int:chain>
+	
+	 <int:channel id="PROFILE.UPDATE_STATUS_BROADCAST.DECISION.IN" />	
+	 <int:chain
+		id="statusUpdate.isBroadcast.check"
+		input-channel="PROFILE.UPDATE_STATUS_BROADCAST.DECISION.IN">			
+		 <int:router
+				resolution-required="true"
+				expression="payload.isBroadcastRequired()">
+				<int:mapping
+					value="false"
+					channel="STATUS.UPDATE.REPLY.HANDLER.IN" />
+				<int:mapping
+					value="true"
+					channel="PROFILE.UPDATE_STATUS_SAVETOBROADCAST.IN" />
+			</int:router>
+	</int:chain> 
+			 
+	<int:channel id="PROFILE.UPDATE_STATUS_SAVETOBROADCAST.IN" />			 
+	<int:chain
+		id="profileUpdateBroadCastChain"
+		input-channel="PROFILE.UPDATE_STATUS_SAVETOBROADCAST.IN"
+		output-channel="STATUS.UPDATE.REPLY.HANDLER.IN">
+		<int:transformer
+			id="STATUS_UPDATE_PROFILE.BROADCAST.TRANSFORM"
+			ref="saveToBroadCastTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="STATUS_UPDATE_PROFILE.SAVETOBROADCAST"
+			ref="reg.BroadCastQueueDBServiceImpl"
+			method="saveIntoBroadcastQueue">
+		</int:service-activator>
+	</int:chain>
+	
+	<int:chain 
+		id="statusUpdateReplyHandlerChain"
+		input-channel="STATUS.UPDATE.REPLY.HANDLER.IN"
+		output-channel="nullChannel">
+		<int:service-activator
+			ref="statusUpdateReplyHandler"
+			method="process" />
+	</int:chain>
+	
+
+	<!--Bean Definations start -->
+		<bean
+		id="statusMessageValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate.MessageValidator" />
+	<bean
+		id="statusUpdateDataValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate.DataValidator" />
+	<bean
+		id="statusUpdateDataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate.DataEnricher" />
+	<bean
+		id="statusUpdateEventDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate.EventDBServiceImpl" />
+	<bean 
+		id="statusUpdateWatchListRules" 
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate.WatchlistRules"/>
+	<bean
+		id="profileStatusUpdate"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate.UpdateProfileStatus"	/>
+	<bean
+		id="onfidoTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate.StatusUpdateTransformer" />
+	<bean
+		id="profileUpdateStatusAfterPOI"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.UpdateRegistrationDBServiceImpl" /> 
+	<bean
+		id="statusUpdateReplyHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate.ReplyHandler" />
+</beans>

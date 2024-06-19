@@ -1,0 +1,342 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UpdateProfileStatus.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate</a> &gt; <span class="el_source">UpdateProfileStatus.java</span></div><h1>UpdateProfileStatus.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate;
+
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.Header;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.onfido.OnfidoReport;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.statusupdate.StatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ContactComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OnfidoStatusEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.PropertyHandler;
+
+/**
+ * @author basits
+ *
+ */
+<span class="nc" id="L38">public class UpdateProfileStatus {</span>
+
+	/** The Constant LOGGER. */
+<span class="nc" id="L41">	private static final Logger LOGGER = LoggerFactory.getLogger(UpdateProfileStatus.class);</span>
+	
+	/**
+	 * @param message
+	 * @param correlationID
+	 * @return
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+
+<span class="nc" id="L51">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L52">		StatusUpdateRequest statusUpdateRequest = messageExchange.getRequest(StatusUpdateRequest.class);</span>
+<span class="nc" id="L53">		StatusUpdateResponse response = new StatusUpdateResponse();</span>
+		try {
+<span class="nc" id="L55">			Account oldAccount = (Account) statusUpdateRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L56">			statusUpdateRequest.addAttribute(Constants.FIELD_BROADCAST_REQUIRED, Boolean.FALSE);</span>
+<span class="nc" id="L57">			statusUpdateRequest.addAttribute(&quot;Details_Not_Match&quot;, Boolean.FALSE);</span>
+<span class="nc" id="L58">			String serviceStatus = &quot;&quot;;</span>
+<span class="nc" id="L59">			String serviceSubStatus = &quot;&quot;;</span>
+			
+			//To check for all the reports in the onfido response json for clear
+<span class="nc" id="L62">			getOnfidoResult(statusUpdateRequest);</span>
+<span class="nc" id="L63">			serviceStatus = (String) statusUpdateRequest.getAdditionalAttribute(&quot;onfidoResult&quot;);</span>
+<span class="nc" id="L64">			serviceSubStatus = (String) statusUpdateRequest.getAdditionalAttribute(&quot;onfidoSubResult&quot;);</span>
+	
+<span class="nc" id="L66">			Contact oldContact = null;</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">			for (Contact contact : oldAccount.getContacts()) {</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">				if (contact.getContactSFID().equals(statusUpdateRequest.getCrmContactId())) {</span>
+<span class="nc" id="L69">					oldContact = contact;</span>
+<span class="nc" id="L70">					break;</span>
+				}
+<span class="nc" id="L72">			}</span>
+<span class="nc bnc" id="L73" title="All 4 branches missed.">			if (CustomerTypeEnum.PFX.name().equals(oldAccount.getCustType()) &amp;&amp; checkProfileStatus(statusUpdateRequest, oldAccount, oldContact,serviceStatus,serviceSubStatus)) {</span>
+<span class="nc" id="L74">				statusUpdateDecision(statusUpdateRequest, oldAccount,oldContact,response,serviceStatus,serviceSubStatus);</span>
+			}
+			else {
+				RegistrationResponse updateResponse;
+<span class="nc" id="L78">				updateResponse = setAccountContactStatusAndReason(statusUpdateRequest, oldContact, oldAccount,ContactComplianceStatus.INACTIVE,ComplianceReasonCode.MISSINGINFO,response);</span>
+<span class="nc" id="L79">				statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT_REASON,serviceStatus);</span>
+<span class="nc" id="L80">				statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT,ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L81">				response.getAccount().setReasonForInactive(&quot;Contact details does not match from documents or contact is on blacklist&quot;);</span>
+<span class="nc" id="L82">				response.setResponseCode(ComplianceReasonCode.MISSINGINFO.getReasonCode());</span>
+<span class="nc" id="L83">				response.setResponseDescription(ComplianceReasonCode.MISSINGINFO.getReasonDescription());</span>
+<span class="nc" id="L84">				statusUpdateRequest.addAttribute(Constants.FIELD_BROADCAST_RESPONSE, updateResponse);</span>
+<span class="nc" id="L85">				statusUpdateRequest.addAttribute(&quot;Details_Not_Match&quot;, Boolean.TRUE);</span>
+			}
+<span class="nc" id="L87">			response.setOsrID(statusUpdateRequest.getOsrId());</span>
+<span class="nc" id="L88">			messageExchange.setResponse(response);</span>
+<span class="nc" id="L89">		} catch (Exception e) {</span>
+<span class="nc" id="L90">			LOGGER.error(&quot;Error in UpdateProfileStatus: {1}&quot;, e);</span>
+<span class="nc" id="L91">		}</span>
+<span class="nc" id="L92">		return message;</span>
+	}
+
+	/**
+	 * @param statusUpdateRequest
+	 * @param oldAccount
+	 */
+	private boolean checkProfileStatus(StatusUpdateRequest statusUpdateRequest, Account oldAccount, Contact oldContact,String serviceStatus,String serviceSubStatus) {
+<span class="nc" id="L100">		String firstName = &quot;&quot;;</span>
+<span class="nc" id="L101">		String lastName = &quot;&quot;;</span>
+<span class="nc" id="L102">		String birthDate = &quot;&quot;;</span>
+		try {
+<span class="nc bnc" id="L104" title="All 2 branches missed.">			for (OnfidoReport report : statusUpdateRequest.getReports()) {</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">				if (&quot;document&quot;.equalsIgnoreCase(report.getName())) {</span>
+<span class="nc" id="L106">					firstName = report.getProperties().getFirstName();</span>
+<span class="nc" id="L107">					lastName = report.getProperties().getLastName();</span>
+<span class="nc" id="L108">					birthDate = report.getProperties().getDateOfBirth();</span>
+				}
+<span class="nc" id="L110">			}</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">			if(OnfidoStatusEnum.CONSIDER.getOnfidoStatusAsString().equalsIgnoreCase(serviceStatus)</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">					&amp;&amp; OnfidoStatusEnum.REJECT.getOnfidoStatusAsString().equalsIgnoreCase(serviceSubStatus)</span>
+<span class="nc bnc" id="L113" title="All 4 branches missed.">					&amp;&amp; oldContact.isPoiNeeded() &amp;&amp; !isAnyContactBlacklisted(oldAccount, oldContact)) {</span>
+<span class="nc" id="L114">				return true;</span>
+			}
+<span class="nc bnc" id="L116" title="All 10 branches missed.">			if ((null != firstName &amp;&amp; null != lastName &amp;&amp; null != birthDate) &amp;&amp; doesContactMatch(oldContact, firstName, lastName, birthDate) &amp;&amp; oldContact.isPoiNeeded()</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">					&amp;&amp; !isAnyContactBlacklisted(oldAccount, oldContact)) {</span>
+<span class="nc" id="L118">				return true;</span>
+			}
+<span class="nc" id="L120">		} catch (Exception e) {</span>
+<span class="nc" id="L121">			LOGGER.error(&quot;Exception....&quot;, e);</span>
+<span class="nc" id="L122">		}</span>
+<span class="nc" id="L123">		return false;</span>
+	}
+
+	/**
+	 * @param statusUpdateRequest
+	 * @return
+	 */
+	private RegistrationResponse setAccountContactStatusAndReason(StatusUpdateRequest statusUpdateRequest, Contact oldContact, Account oldAccount, ContactComplianceStatus status, ComplianceReasonCode reason,StatusUpdateResponse response) {
+<span class="nc" id="L131">		List&lt;ComplianceContact&gt; contactsList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L132">		ComplianceContact responseContact = new ComplianceContact();</span>
+<span class="nc" id="L133">		responseContact.setContactSFID(statusUpdateRequest.getCrmContactId());</span>
+<span class="nc" id="L134">		responseContact.setId(oldContact.getId());</span>
+<span class="nc" id="L135">		responseContact.setCcs(status);</span>
+<span class="nc" id="L136">		responseContact.setCrc(reason);</span>
+<span class="nc" id="L137">		responseContact.setTradeContactID(oldContact.getTradeContactID());</span>
+<span class="nc" id="L138">		contactsList.add(responseContact);</span>
+
+<span class="nc" id="L140">		ComplianceAccount acc = new ComplianceAccount();</span>
+<span class="nc" id="L141">		acc.setAccountSFID(statusUpdateRequest.getCrmAccountId());</span>
+<span class="nc" id="L142">		acc.setAcs(status);</span>
+<span class="nc" id="L143">		acc.setArc(reason);</span>
+<span class="nc" id="L144">		acc.setTradeAccountID(oldAccount.getTradeAccountID());</span>
+<span class="nc" id="L145">		acc.setRegistrationInDate((Timestamp) statusUpdateRequest.getAdditionalAttribute(&quot;AccountRegisteredDate&quot;));</span>
+		
+<span class="nc" id="L147">		setComplianceDoneOnAndExpiryDate(statusUpdateRequest, acc);</span>
+<span class="nc" id="L148">		acc.setContacts(contactsList);</span>
+
+<span class="nc" id="L150">		RegistrationResponse updateResponse = new RegistrationResponse();</span>
+<span class="nc" id="L151">		updateResponse.setAccount(acc);</span>
+<span class="nc" id="L152">		updateResponse.setOrgCode(statusUpdateRequest.getOrgCode());</span>
+<span class="nc" id="L153">		updateResponse.setOsrID(statusUpdateRequest.getOsrId());</span>
+<span class="nc" id="L154">		response.setAccount(acc);</span>
+<span class="nc" id="L155">		response.setOrgCode(statusUpdateRequest.getOrgCode());</span>
+<span class="nc" id="L156">		response.setOsrID(statusUpdateRequest.getOsrId());</span>
+<span class="nc" id="L157">		return updateResponse;</span>
+	}
+
+	/**
+	 * @param statusUpdateRequest
+	 * @param acc
+	 */
+	private void setComplianceDoneOnAndExpiryDate(StatusUpdateRequest statusUpdateRequest, ComplianceAccount acc) {
+<span class="nc" id="L165">		Timestamp complianceDoneOn = (Timestamp) statusUpdateRequest.getAdditionalAttribute(&quot;AccountRegisteredDate&quot;);</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">		if(null != complianceDoneOn){</span>
+<span class="nc" id="L167">			acc.setRegisteredDate(complianceDoneOn);</span>
+		} else {
+<span class="nc" id="L169">			acc.setRegisteredDate(new Timestamp(System.currentTimeMillis()));</span>
+		}
+		
+<span class="nc" id="L172">		Timestamp complianceExpiryDate = (Timestamp) statusUpdateRequest.getAdditionalAttribute(&quot;AccountExpiryDate&quot;);</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">		if(null != complianceExpiryDate){</span>
+<span class="nc" id="L174">			acc.setExpiryDate(complianceExpiryDate);</span>
+		} else{
+<span class="nc" id="L176">			Timestamp time = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L177">			Calendar c = Calendar.getInstance();</span>
+<span class="nc" id="L178">			c.setTime(time);</span>
+<span class="nc" id="L179">			c.add(Calendar.YEAR, PropertyHandler.getComplianceExpiryYears());</span>
+<span class="nc" id="L180">			acc.setExpiryDate(new Timestamp(c.getTimeInMillis()));</span>
+		}
+<span class="nc" id="L182">	}</span>
+
+	/**
+	 * @param oldContact
+	 * @param firstName
+	 * @param lastName
+	 * @param inBirthDate
+	 * @return
+	 * @throws ParseException
+	 */
+	private boolean doesContactMatch(Contact oldContact, String firstName, String lastName, String inBirthDate)
+			throws ParseException {
+<span class="nc" id="L194">		SimpleDateFormat dateFormat = new SimpleDateFormat(&quot;yyyy-MM-dd&quot;);</span>
+		Date birthDate;
+		Date oldBirthDate;
+<span class="nc" id="L197">		boolean result = false;</span>
+<span class="nc" id="L198">		birthDate = dateFormat.parse(inBirthDate);</span>
+<span class="nc" id="L199">		oldBirthDate = dateFormat.parse(oldContact.getDob());</span>
+
+<span class="nc bnc" id="L201" title="All 2 branches missed.">		if (firstName.equalsIgnoreCase(oldContact.getFirstName()) </span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">				&amp;&amp; lastName.equalsIgnoreCase(oldContact.getLastName())</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">				&amp;&amp; birthDate.equals(oldBirthDate)) {</span>
+<span class="nc" id="L204">			result = true;</span>
+		}
+<span class="nc" id="L206">		return result;</span>
+	}
+
+	/**
+	 * @param oldAccount
+	 * @param oldContact
+	 * @return
+	 */
+	private boolean isAnyContactBlacklisted(Account oldAccount, Contact oldContact) {
+<span class="nc" id="L215">		boolean result = false;</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">		for (Contact contact : oldAccount.getContacts()) {</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">			if (!contact.getContactSFID().equals(oldContact.getContactSFID())</span>
+<span class="nc bnc" id="L218" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.FAIL.name().equals(contact.getPreviousBlacklistStatus())) {</span>
+<span class="nc" id="L219">				result = true;</span>
+<span class="nc" id="L220">				break;</span>
+			}
+<span class="nc" id="L222">		}</span>
+<span class="nc" id="L223">		return result;</span>
+	}
+	
+	/**
+	 * Status update decision.
+	 *
+	 * @param statusUpdateRequest the status update request
+	 * @param oldAccount the old account
+	 */
+	private void statusUpdateDecision(StatusUpdateRequest statusUpdateRequest, Account oldAccount,Contact oldContact, StatusUpdateResponse response, String serviceStatus, String serviceSubStatus) {
+<span class="nc bnc" id="L233" title="All 2 branches missed.">		if(null != oldContact) {</span>
+<span class="nc" id="L234">			actualStatusDecision(statusUpdateRequest, oldAccount, response, serviceStatus, oldContact,serviceSubStatus);</span>
+		}
+<span class="nc" id="L236">	}</span>
+
+	/**
+	 * @param statusUpdateRequest
+	 * @param oldAccount
+	 * @param response
+	 * @param serviceStatus
+	 * @param oldContact
+	 */
+	private void actualStatusDecision(StatusUpdateRequest statusUpdateRequest, Account oldAccount,
+			StatusUpdateResponse response, String serviceStatus, Contact oldContact, String serviceSubStatus) {
+		RegistrationResponse updateResponse;
+<span class="nc bnc" id="L248" title="All 4 branches missed.">		if(OnfidoStatusEnum.CLEAR.getOnfidoStatusAsString().equalsIgnoreCase(serviceStatus) &amp;&amp; otherServicesStatusChecks(oldContact)) {</span>
+<span class="nc" id="L249">			updateResponse = setAccountContactStatusAndReason(statusUpdateRequest, oldContact, oldAccount,ContactComplianceStatus.ACTIVE,ComplianceReasonCode.PASS,response);</span>
+<span class="nc" id="L250">			statusUpdateRequest.addAttribute(Constants.FIELD_BROADCAST_REQUIRED, Boolean.TRUE);</span>
+<span class="nc" id="L251">			statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT_REASON,serviceStatus);</span>
+<span class="nc" id="L252">			statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT,ServiceStatus.PASS.name());</span>
+<span class="nc" id="L253">			response.setResponseCode(ComplianceReasonCode.PASS.getReasonCode());</span>
+<span class="nc" id="L254">			response.setResponseDescription(ComplianceReasonCode.PASS.getReasonDescription());</span>
+		}
+<span class="nc bnc" id="L256" title="All 4 branches missed.">		else if(OnfidoStatusEnum.CONSIDER.getOnfidoStatusAsString().equalsIgnoreCase(serviceStatus)  &amp;&amp; otherServicesStatusChecks(oldContact)) {</span>
+<span class="nc bnc" id="L257" title="All 2 branches missed.">			if(OnfidoStatusEnum.CAUTION.getOnfidoStatusAsString().equalsIgnoreCase(serviceSubStatus)) {</span>
+<span class="nc" id="L258">				updateResponse = setAccountContactStatusAndReason(statusUpdateRequest, oldContact, oldAccount,ContactComplianceStatus.INACTIVE,ComplianceReasonCode.ONFIDO_CAUTION,response);</span>
+<span class="nc" id="L259">				statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT_REASON,serviceSubStatus);</span>
+<span class="nc" id="L260">				statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT,ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L261">				statusUpdateRequest.addAttribute(Constants.STATUS_UPDATE_REASON, Boolean.TRUE);</span>
+<span class="nc" id="L262">				response.setResponseCode(ComplianceReasonCode.ONFIDO_CAUTION.getReasonCode());</span>
+<span class="nc" id="L263">				response.setResponseDescription(ComplianceReasonCode.ONFIDO_CAUTION.getReasonDescription());</span>
+			}
+<span class="nc bnc" id="L265" title="All 2 branches missed.">			else if(OnfidoStatusEnum.REJECT.getOnfidoStatusAsString().equalsIgnoreCase(serviceSubStatus)) {</span>
+<span class="nc" id="L266">				updateResponse = setAccountContactStatusAndReason(statusUpdateRequest, oldContact, oldAccount,ContactComplianceStatus.INACTIVE,ComplianceReasonCode.ONFIDO_REJECT,response);</span>
+<span class="nc" id="L267">				statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT_REASON,serviceSubStatus);</span>
+<span class="nc" id="L268">				statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT,ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L269">				statusUpdateRequest.addAttribute(Constants.STATUS_UPDATE_REASON, Boolean.TRUE);</span>
+<span class="nc" id="L270">				response.setResponseCode(ComplianceReasonCode.ONFIDO_REJECT.getReasonCode());</span>
+<span class="nc" id="L271">				response.setResponseDescription(ComplianceReasonCode.ONFIDO_REJECT.getReasonDescription());</span>
+			}
+<span class="nc bnc" id="L273" title="All 2 branches missed.">			else if(OnfidoStatusEnum.SUSPECT.getOnfidoStatusAsString().equalsIgnoreCase(serviceSubStatus)) {</span>
+<span class="nc" id="L274">				updateResponse = setAccountContactStatusAndReason(statusUpdateRequest, oldContact, oldAccount,ContactComplianceStatus.INACTIVE,ComplianceReasonCode.ONFIDO_SUSPECT,response);</span>
+<span class="nc" id="L275">				statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT_REASON,serviceSubStatus);</span>
+<span class="nc" id="L276">				statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT,ServiceStatus.WATCH_LIST.name());</span>
+<span class="nc" id="L277">				statusUpdateRequest.addAttribute(Constants.STATUS_UPDATE_REASON, Boolean.TRUE);</span>
+<span class="nc" id="L278">				response.setResponseCode(ComplianceReasonCode.ONFIDO_SUSPECT.getReasonCode());</span>
+<span class="nc" id="L279">				response.setResponseDescription(ComplianceReasonCode.ONFIDO_SUSPECT.getReasonDescription());</span>
+			}
+			else {
+<span class="nc" id="L282">				updateResponse = setAccountContactStatusAndReason(statusUpdateRequest, oldContact, oldAccount,ContactComplianceStatus.INACTIVE,ComplianceReasonCode.MISSINGINFO,response);</span>
+<span class="nc" id="L283">				statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT_REASON,serviceStatus);</span>
+<span class="nc" id="L284">				statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT,ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L285">				response.getAccount().setReasonForInactive(&quot;Status update failed Onfido Sub-result not found&quot;);</span>
+<span class="nc" id="L286">				response.setResponseCode(ComplianceReasonCode.MISSINGINFO.getReasonCode());</span>
+<span class="nc" id="L287">				response.setResponseDescription(ComplianceReasonCode.MISSINGINFO.getReasonDescription());</span>
+			}
+		}
+		else {
+<span class="nc" id="L291">			updateResponse = setAccountContactStatusAndReason(statusUpdateRequest, oldContact, oldAccount,ContactComplianceStatus.INACTIVE,ComplianceReasonCode.MISSINGINFO,response);</span>
+<span class="nc" id="L292">			statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT_REASON,serviceStatus);</span>
+<span class="nc" id="L293">			statusUpdateRequest.addAttribute(Constants.ONFIDO_RESULT,ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L294">			response.getAccount().setReasonForInactive(&quot;Other service checks are failed for account&quot;);</span>
+<span class="nc" id="L295">			response.setResponseCode(ComplianceReasonCode.MISSINGINFO.getReasonCode());</span>
+<span class="nc" id="L296">			response.setResponseDescription(ComplianceReasonCode.MISSINGINFO.getReasonDescription());</span>
+		}
+<span class="nc" id="L298">		statusUpdateRequest.addAttribute(Constants.FIELD_BROADCAST_RESPONSE, updateResponse);</span>
+		// remove all contacts and keep only modified one
+<span class="nc" id="L300">		oldAccount.getContacts().clear();</span>
+<span class="nc" id="L301">		oldAccount.getContacts().add(oldContact);</span>
+<span class="nc" id="L302">	}</span>
+	
+	/**
+	 * Other services status checks.
+	 *
+	 * @param oldContact the old contact
+	 * @return true, if successful
+	 */
+	private boolean otherServicesStatusChecks(Contact oldContact) {
+<span class="nc bnc" id="L311" title="All 2 branches missed.">		return (ServiceStatus.PASS.name().equals(oldContact.getPreviousSanctionStatus())</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.PASS.name().equals(oldContact.getPreviousBlacklistStatus())</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.PASS.name().equals(oldContact.getPreviousCountryGlobalCheckStatus())</span>
+<span class="nc bnc" id="L314" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.PASS.name().equals(oldContact.getPreviousFraugsterStatus()));</span>
+	}
+	
+	/**
+	 * Gets the onfido result.
+	 *
+	 * @param statusUpdateRequest the status update request
+	 * @param onfidoResult the onfido result
+	 * @param onfidoSubResult the onfido sub result
+	 * @return the onfido result
+	 */
+	private void getOnfidoResult(StatusUpdateRequest statusUpdateRequest) {
+<span class="nc" id="L326">		String onfidoResult = OnfidoStatusEnum.CLEAR.getOnfidoStatusAsString();</span>
+<span class="nc" id="L327">		String onfidoSubResult = ServiceStatus.NOT_REQUIRED.name();</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">		for(OnfidoReport report: statusUpdateRequest.getReports()){</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">			if(!OnfidoStatusEnum.CLEAR.getOnfidoStatusAsString().equalsIgnoreCase(report.getResult())) {</span>
+<span class="nc" id="L330">				onfidoResult = report.getResult();</span>
+<span class="nc" id="L331">				onfidoSubResult = report.getSubResult();</span>
+<span class="nc" id="L332">				break;</span>
+			}
+<span class="nc" id="L334">		}</span>
+<span class="nc bnc" id="L335" title="All 2 branches missed.">		if(null == onfidoSubResult) {</span>
+<span class="nc" id="L336">			onfidoSubResult = ServiceStatus.NOT_REQUIRED.name();</span>
+		}
+<span class="nc" id="L338">		statusUpdateRequest.addAttribute(&quot;onfidoResult&quot;, onfidoResult);</span>
+<span class="nc" id="L339">		statusUpdateRequest.addAttribute(&quot;onfidoSubResult&quot;, onfidoSubResult);</span>
+<span class="nc" id="L340">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

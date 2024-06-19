@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataEnricher.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.card.update</a> &gt; <span class="el_source">DataEnricher.java</span></div><h1>DataEnricher.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.card.update;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.util.ObjectCloner;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.AbstractDataEnricher;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.CardDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.ordercardsrv.OrderCardStatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.ordercardsrv.response.OrderCardResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Card;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.CopyObjectUtil;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.Header;
+
+/**
+ * The Class DataEnricher.
+ */
+<span class="nc" id="L32">public class DataEnricher extends AbstractDataEnricher {</span>
+
+	/** The Constant LOGGER. */
+<span class="nc" id="L35">	private static final Logger LOGGER = LoggerFactory.getLogger(DataEnricher.class);</span>
+	
+	/** The Constant REQUEST_IS_NOT_VALID. */
+	private static final String REQUEST_IS_NOT_VALID = &quot;Request is not valid&quot;;
+
+	@Autowired
+	protected CardDBServiceImpl cardDBServiceImpl;
+
+	/**
+	 * Process.
+	 *
+	 * @param message the message
+	 * @param correlationID the correlation ID
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message, @Header UUID correlationID)  {
+<span class="nc" id="L53">		LOGGER.debug(&quot;Gateway message headers=[{}], payload=[{}]&quot;, message.getHeaders(),</span>
+<span class="nc" id="L54">				message.getPayload());</span>
+
+<span class="nc" id="L56">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L57">		OrderCardResponse orderCardResponse = messageExchange.getResponse(OrderCardResponse.class);</span>
+<span class="nc" id="L58">		OrderCardStatusUpdateRequest orderCardStatusUpdateRequest = messageExchange.getRequest(OrderCardStatusUpdateRequest.class);</span>
+		
+		try {
+<span class="nc" id="L61">			RegistrationServiceRequest registrationServiceRequest = new RegistrationServiceRequest();</span>
+<span class="nc" id="L62">			RegistrationResponse registrationResponse = new RegistrationResponse();</span>
+			
+<span class="nc" id="L64">			Card oldRequest=getCardDetails(orderCardStatusUpdateRequest.getCardId());</span>
+<span class="nc" id="L65">			Card intuitionCardStatusUpdateRequest = setCardInformation(orderCardStatusUpdateRequest, oldRequest);</span>
+<span class="nc" id="L66">			Card newRequest=(Card) ObjectCloner.deepCopy(intuitionCardStatusUpdateRequest);</span>
+	        
+<span class="nc bnc" id="L68" title="All 2 branches missed.">	        if(oldRequest != null) {</span>
+<span class="nc" id="L69">	            CopyObjectUtil.copyNullFields(newRequest, oldRequest, Card.class);</span>
+<span class="nc" id="L70">	            updateCard(message, messageExchange, orderCardResponse, newRequest,</span>
+						registrationServiceRequest, registrationResponse);
+<span class="nc" id="L72">	            messageExchange.getRequest().addAttribute(&quot;isUpdateCard&quot;, Boolean.TRUE);</span>
+	        }else {
+<span class="nc" id="L74">	        	updateCard(message, messageExchange, orderCardResponse, intuitionCardStatusUpdateRequest,</span>
+						registrationServiceRequest, registrationResponse);
+<span class="nc" id="L76">	        	messageExchange.getRequest().addAttribute(&quot;isUpdateCard&quot;, Boolean.FALSE);</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">	        	if(messageExchange.getResponse().getErrorCode()==null) {</span>
+<span class="nc" id="L78">	        		return message;</span>
+	        	}
+	        	else{        		
+<span class="nc" id="L81">	        		LOGGER.error(REQUEST_IS_NOT_VALID);</span>
+<span class="nc" id="L82">	    			orderCardResponse.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L83">	    			orderCardResponse.setResponseCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L84">	    			orderCardResponse.setResponseDescription(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L85">	    			messageExchange.setResponse(orderCardResponse);</span>
+<span class="nc" id="L86">	    			return message;</span>
+	        	}	
+	        }	
+			
+<span class="nc" id="L90">		}catch (Exception e) {</span>
+<span class="nc" id="L91">			LOGGER.error(REQUEST_IS_NOT_VALID, e);</span>
+<span class="nc" id="L92">			orderCardResponse.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L93">			orderCardResponse.setResponseCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L94">			orderCardResponse.setResponseDescription(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L95">			messageExchange.setResponse(orderCardResponse);</span>
+<span class="nc" id="L96">			return message;</span>
+<span class="nc" id="L97">		}</span>
+<span class="nc" id="L98">		return message;</span>
+	}
+	
+	/**
+	 * Sets the card information.
+	 *
+	 * @param orderCardStatusUpdateRequest the order card status update request
+	 * @param oldRequest the old request
+	 * @return the card
+	 */
+	private Card setCardInformation(OrderCardStatusUpdateRequest orderCardStatusUpdateRequest, Card oldRequest) {
+<span class="nc" id="L109">		Card card = new Card();</span>
+<span class="nc" id="L110">		CardStatusEnumValues enumValues = CardStatusEnumValues.getInstance();</span>
+<span class="nc" id="L111">		card.setCardID(orderCardStatusUpdateRequest.getCardId());</span>
+<span class="nc" id="L112">		card.setTradeAccountNumber(orderCardStatusUpdateRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L113">		card.setEventType(orderCardStatusUpdateRequest.getEventType());</span>
+<span class="nc" id="L114">		card.setIsCardActive(orderCardStatusUpdateRequest.getIsCardActive());</span>
+<span class="nc" id="L115">		card.setContactId(Integer.parseInt(orderCardStatusUpdateRequest.getContactId()));</span>
+		
+<span class="nc bnc" id="L117" title="All 2 branches missed.">		if(orderCardStatusUpdateRequest.getEventType()!=null) {</span>
+<span class="nc" id="L118">			setEventDate(orderCardStatusUpdateRequest, card);</span>
+		}
+		
+		
+		//if cardActive field is true at a first time then set DateCardActivated OR in update case check cardActive value is false or null
+<span class="nc bnc" id="L123" title="All 6 branches missed.">		if((oldRequest!=null &amp;&amp; (oldRequest.getIsCardActive() == null || Boolean.FALSE.equals(oldRequest.getIsCardActive())) </span>
+<span class="nc bnc" id="L124" title="All 4 branches missed.">				&amp;&amp; Boolean.TRUE.equals(orderCardStatusUpdateRequest.getIsCardActive())) ||</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">				(oldRequest == null &amp;&amp; Boolean.TRUE.equals(orderCardStatusUpdateRequest.getIsCardActive()))) {</span>
+<span class="nc" id="L126">				card.setDateCardActivated(orderCardStatusUpdateRequest.getEventDate());</span>
+		}	
+		
+<span class="nc bnc" id="L129" title="All 2 branches missed.">		if(Boolean.TRUE.equals(enumValues.checkFreezeStatus(orderCardStatusUpdateRequest.getEventStatus()))) {</span>
+<span class="nc" id="L130">			card.setDateCardFrozen(orderCardStatusUpdateRequest.getEventDate());</span>
+<span class="nc" id="L131">			card.setFreezeReason(orderCardStatusUpdateRequest.getEventReason());	</span>
+		}
+		
+<span class="nc bnc" id="L134" title="All 2 branches missed.">		if(Boolean.TRUE.equals(enumValues.checkBlockStatus(orderCardStatusUpdateRequest.getEventStatus()))) {</span>
+<span class="nc" id="L135">			card.setDateCardBlocked(orderCardStatusUpdateRequest.getEventDate());</span>
+<span class="nc" id="L136">			card.setReasonForBlock(orderCardStatusUpdateRequest.getEventReason());</span>
+		}	
+		
+<span class="nc bnc" id="L139" title="All 4 branches missed.">		if(oldRequest!=null &amp;&amp; oldRequest.getCardStatusFlag() != null) {</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">			if(Boolean.TRUE.equals(enumValues.checkFreezeStatus(oldRequest.getCardStatusFlag())) </span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">					&amp;&amp; orderCardStatusUpdateRequest.getEventStatus().equalsIgnoreCase(&quot;ALL_GOOD&quot;)) {</span>
+<span class="nc" id="L142">				card.setDateCardUnfrozen(orderCardStatusUpdateRequest.getEventDate());</span>
+			}
+			
+<span class="nc bnc" id="L145" title="All 2 branches missed.">			if(Boolean.TRUE.equals(enumValues.checkBlockStatus(oldRequest.getCardStatusFlag())) </span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">					&amp;&amp; orderCardStatusUpdateRequest.getEventStatus().equalsIgnoreCase(&quot;ALL_GOOD&quot;)) {</span>
+<span class="nc" id="L147">				card.setDateCardUnblocked(orderCardStatusUpdateRequest.getEventDate());</span>
+			}
+		}
+		
+<span class="nc" id="L151">		return card;</span>
+	}
+
+	/**
+	 * @param orderCardStatusUpdateRequest
+	 * @param card
+	 */
+	private void setEventDate(OrderCardStatusUpdateRequest orderCardStatusUpdateRequest, Card card) {
+<span class="nc bnc" id="L159" title="All 2 branches missed.">		if(orderCardStatusUpdateRequest.getEventType().equalsIgnoreCase(&quot;ViewPIN&quot;)) {</span>
+<span class="nc" id="L160">			card.setDateLastCardPinView(orderCardStatusUpdateRequest.getEventDate());</span>
+		}
+<span class="nc bnc" id="L162" title="All 2 branches missed.">		else if(orderCardStatusUpdateRequest.getEventType().equalsIgnoreCase(&quot;ViewPAN&quot;)){</span>
+<span class="nc" id="L163">			card.setDateLastCardPanView(orderCardStatusUpdateRequest.getEventDate());</span>
+		}
+<span class="nc bnc" id="L165" title="All 2 branches missed.">		else if(orderCardStatusUpdateRequest.getEventType().equalsIgnoreCase(&quot;CreateCard&quot;)) {</span>
+<span class="nc" id="L166">			card.setDateCardDispatched(orderCardStatusUpdateRequest.getEventDate());</span>
+		}
+		
+<span class="nc bnc" id="L169" title="All 2 branches missed.">		if(orderCardStatusUpdateRequest.getEventType().equalsIgnoreCase(&quot;CreateCard&quot;) || </span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">				orderCardStatusUpdateRequest.getEventType().equalsIgnoreCase(&quot;StatusUpdate&quot;)) {</span>
+<span class="nc" id="L171">			card.setCardStatusFlag(orderCardStatusUpdateRequest.getEventStatus());</span>
+		}
+<span class="nc" id="L173">	}</span>
+	  
+	/**
+	 * Update card.
+	 *
+	 * @param message the message
+	 * @param messageExchange the message exchange
+	 * @param orderCardResponse the order card response
+	 * @param orderCardStatusUpdateRequest the order card status update request
+	 * @param registrationServiceRequest the registration service request
+	 * @param registrationResponse the registration response
+	 */
+	private void updateCard(Message&lt;MessageContext&gt; message, MessageExchange messageExchange,
+			OrderCardResponse orderCardResponse, Card intuitionCardStatusUpdateRequest,
+			RegistrationServiceRequest registrationServiceRequest, RegistrationResponse registrationResponse) {
+<span class="nc" id="L188">		Card card=new Card();</span>
+<span class="nc" id="L189">		HashMap&lt;String, Integer&gt; pair=new HashMap&lt;&gt;();</span>
+		try {
+<span class="nc" id="L191">			getUserTableId(message);</span>
+<span class="nc" id="L192">			Map&lt;String, String&gt; accountInfo = getAccountId (intuitionCardStatusUpdateRequest.getTradeAccountNumber(), intuitionCardStatusUpdateRequest.getContactId());</span>
+<span class="nc" id="L193">				Account account = new Account();</span>
+<span class="nc" id="L194">			account.setTradeAccountNumber(intuitionCardStatusUpdateRequest.getTradeAccountNumber());</span>
+			
+<span class="nc bnc" id="L196" title="All 2 branches missed.">			if(accountInfo.isEmpty()) {</span>
+<span class="nc" id="L197">				registrationServiceRequest.setAccount(account);</span>
+<span class="nc" id="L198">				pair.put(intuitionCardStatusUpdateRequest.getTradeAccountNumber(), intuitionCardStatusUpdateRequest.getContactId());			</span>
+<span class="nc" id="L199">				registrationServiceRequest.addAttribute(&quot;CONTACT_ID_WRONG&quot;, pair);</span>
+<span class="nc" id="L200">				account.setId(null);</span>
+<span class="nc" id="L201">				throw new Exception();</span>
+			}else {
+<span class="nc" id="L203">				account.setId(Integer.parseInt(accountInfo.get(&quot;id&quot;)));</span>
+			}			
+<span class="nc" id="L205">			account.setVersion(1);</span>
+
+<span class="nc" id="L207">			card = setCardIntuitionInformation(intuitionCardStatusUpdateRequest);</span>
+<span class="nc" id="L208">			card.setContactId(Integer.parseInt(accountInfo.get(&quot;contactId&quot;)));</span>
+			
+<span class="nc" id="L210">			registrationServiceRequest.setOrgCode(accountInfo.get(&quot;orgCode&quot;));</span>
+<span class="nc" id="L211">			registrationServiceRequest.setIsCardApply(&quot;U&quot;);</span>
+<span class="nc" id="L212">			registrationServiceRequest.setAccount(account);</span>
+<span class="nc" id="L213">			registrationServiceRequest.setCard(card);</span>
+
+<span class="nc" id="L215">			ComplianceAccount complianceAccount = new ComplianceAccount();</span>
+<span class="nc" id="L216">			registrationResponse.setAccount(complianceAccount);</span>
+<span class="nc" id="L217">			message.getPayload().setOrgCode(accountInfo.get(&quot;orgCode&quot;));</span>
+<span class="nc" id="L218">			messageExchange.setRequest(registrationServiceRequest);</span>
+<span class="nc" id="L219">			messageExchange.setResponse(registrationResponse);</span>
+<span class="nc" id="L220">			messageExchange.getRequest().addAttribute(&quot;card&quot;, card);</span>
+<span class="nc" id="L221">		} catch (Exception e) {</span>
+<span class="nc" id="L222">			LOGGER.error(REQUEST_IS_NOT_VALID, e);</span>
+<span class="nc" id="L223">			orderCardResponse.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L224">			orderCardResponse.setResponseCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L225">			orderCardResponse.setResponseDescription(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L226">			orderCardResponse.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L227">			messageExchange.setRequest(registrationServiceRequest);</span>
+<span class="nc" id="L228">			messageExchange.setResponse(orderCardResponse);</span>
+<span class="nc" id="L229">			message.getPayload().setFailed(true);</span>
+			
+<span class="nc" id="L231">		}</span>
+<span class="nc" id="L232">	}</span>
+
+	/**	
+	 * Sets the card intuition information.
+	 *
+	 * @param orderCardStatusUpdateRequest the order card status update request
+	 * @return the card
+	 */
+	private Card setCardIntuitionInformation(Card orderCardStatusUpdateRequest) {
+<span class="nc" id="L241">		Card card = new Card();</span>
+<span class="nc" id="L242">		card.setCardID(orderCardStatusUpdateRequest.getCardID());</span>
+<span class="nc" id="L243">		card.setCardStatusFlag(orderCardStatusUpdateRequest.getCardStatusFlag());</span>
+<span class="nc" id="L244">		card.setDateCardDispatched(orderCardStatusUpdateRequest.getDateCardDispatched());</span>
+<span class="nc" id="L245">		card.setDateCardActivated(orderCardStatusUpdateRequest.getDateCardActivated());</span>
+<span class="nc" id="L246">		card.setDateCardFrozen(orderCardStatusUpdateRequest.getDateCardFrozen());</span>
+<span class="nc" id="L247">		card.setFreezeReason(orderCardStatusUpdateRequest.getFreezeReason());</span>
+<span class="nc" id="L248">		card.setDateCardUnfrozen(orderCardStatusUpdateRequest.getDateCardUnfrozen());</span>
+<span class="nc" id="L249">		card.setDateCardBlocked(orderCardStatusUpdateRequest.getDateCardBlocked());</span>
+<span class="nc" id="L250">		card.setReasonForBlock(orderCardStatusUpdateRequest.getReasonForBlock());</span>
+<span class="nc" id="L251">		card.setDateCardUnblocked(orderCardStatusUpdateRequest.getDateCardUnblocked());</span>
+<span class="nc" id="L252">		card.setDateLastCardPinView(orderCardStatusUpdateRequest.getDateLastCardPinView());</span>
+<span class="nc" id="L253">		card.setDateLastCardPanView(orderCardStatusUpdateRequest.getDateLastCardPanView());</span>
+<span class="nc" id="L254">		card.setTradeAccountNumber(orderCardStatusUpdateRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L255">		card.setEventType(orderCardStatusUpdateRequest.getEventType());</span>
+<span class="nc" id="L256">		card.setIsCardActive(orderCardStatusUpdateRequest.getIsCardActive());</span>
+		
+<span class="nc" id="L258">		return card;</span>
+	}
+	
+	 /**
+ 	 * Gets the account id.
+ 	 *
+ 	 * @param tradeAccountNumber the trade account number
+ 	 * @return the account id
+ 	 */
+	public Map&lt;String, String&gt; getAccountId(String tradeAccountNumber, Integer tradeContactId) {
+<span class="nc" id="L268">		Map&lt;String, String&gt; map = null;</span>
+        try {
+<span class="nc" id="L270">        	map = newRegistrationDBServiceImpl.getAccountIdByTradeAccountNumber(tradeAccountNumber, tradeContactId);</span>
+<span class="nc bnc" id="L271" title="All 2 branches missed.">        	if(map.isEmpty()) throw new ComplianceException(InternalProcessingCode.INV_REQUEST);</span>
+<span class="nc" id="L272">        } catch (ComplianceException e) {</span>
+<span class="nc" id="L273">        	LOGGER.error(&quot;Error in getAccountId method:&quot;, e);</span>
+<span class="nc" id="L274">        }</span>
+<span class="nc" id="L275">        return map;</span>
+	}
+	 
+	/**
+	 * Gets the card details.
+	 *
+	 * @param cardRequest the card request
+	 * @return the card details
+	 */
+	// Added for AT-4812
+    public Card getCardDetails(String cardId) {
+<span class="nc" id="L286">        Card oldRequest = null;</span>
+        try {
+<span class="nc" id="L288">            oldRequest = cardDBServiceImpl.getCardDetailsFromDb(cardId);</span>
+<span class="nc" id="L289">            return oldRequest;</span>
+<span class="nc" id="L290">        } catch (ComplianceException e) {</span>
+<span class="nc" id="L291">        	LOGGER.error(&quot;Error getCardDetails method:&quot;, e);</span>
+        }
+<span class="nc" id="L293">        return oldRequest;</span>
+    }
+  
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

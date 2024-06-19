@@ -1,0 +1,1260 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FundsOutRulesService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.rules</a> &gt; <span class="el_source">FundsOutRulesService.java</span></div><h1>FundsOutRulesService.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.rules;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.CustomChecksRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistSTPData;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.ContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessage;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringFundsProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ContactComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.WatchList;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutShortReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.BulkRecheckResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.FundsOutContactResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.FundsOutResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class FundsOutRulesService.
+ */
+<span class="nc" id="L58">public class FundsOutRulesService {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L61">	private static final Logger LOG = LoggerFactory.getLogger(FundsOutRulesService.class);</span>
+	private static final String REASONS_OF_WATCHLIST = &quot;reasonsOfWatchlist&quot;;
+
+	/**
+	 * Process.
+	 *
+	 * @param msg
+	 *            the msg
+	 * @return the message
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; msg) {
+
+		try {
+
+<span class="nc" id="L76">			MessageExchange exchange = msg.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L77">			ServiceInterfaceType serviceInterfaceType = exchange.getServiceInterface();</span>
+<span class="nc" id="L78">			OperationEnum operation = exchange.getOperation();</span>
+			
+<span class="nc" id="L80">			TransactionMonitoringPaymentsOutRequest tmRequest = new TransactionMonitoringPaymentsOutRequest();</span>
+			
+<span class="nc" id="L82">			List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L83">			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L84">			FundsOutResponse fundsOutResponse = (FundsOutResponse) exchange.getResponse();</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">			if (fundsOutResponse == null) {</span>
+<span class="nc" id="L86">				fundsOutResponse = new FundsOutResponse();</span>
+			}
+
+<span class="nc bnc" id="L89" title="All 6 branches missed.">			if (serviceInterfaceType == ServiceInterfaceType.FUNDSOUT &amp;&amp; (operation == OperationEnum.FUNDS_OUT </span>
+					|| operation == OperationEnum.RECHECK_FAILURES)) {
+<span class="nc" id="L91">				 tmRequest = (TransactionMonitoringPaymentsOutRequest) msg</span>
+<span class="nc" id="L92">						.getPayload().getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE).getRequest(); //AT-4716</span>
+<span class="nc" id="L93">				responseReasons = processFundsOutCreateResponse(msg, fundsOutResponse, shortResponseReasons);</span>
+<span class="nc" id="L94">				setResponseForBulkRecheck(msg, operation, responseReasons, fundsOutResponse);				</span>
+
+<span class="nc bnc" id="L96" title="All 4 branches missed.">			} else if (serviceInterfaceType == ServiceInterfaceType.FUNDSOUT &amp;&amp; operation == OperationEnum.UPDATE_OPI) {</span>
+<span class="nc" id="L97">				processFundsOutUpdateResponse(msg, exchange, responseReasons, fundsOutResponse, shortResponseReasons);</span>
+<span class="nc bnc" id="L98" title="All 4 branches missed.">			} else if (serviceInterfaceType == ServiceInterfaceType.FUNDSOUT &amp;&amp; operation == OperationEnum.DELETE_OPI) {</span>
+<span class="nc" id="L99">				processFundsOutDeleteResponse(exchange, fundsOutResponse);</span>
+			}
+			/*
+			 * set all services response status , this status response are store
+			 * in db : Abhijit G
+			 */
+<span class="nc" id="L105">			setAllCheckResponseStatus(msg, fundsOutResponse, operation);</span>
+
+<span class="nc bnc" id="L107" title="All 2 branches missed.">			if (!responseReasons.isEmpty()) {</span>
+<span class="nc" id="L108">				fundsOutResponse.setResponseReason(FundsOutReasonCode.MULTIPLE_FAILURE);</span>
+<span class="nc" id="L109">				StringBuilder sb = gatherAllReasons(responseReasons);</span>
+<span class="nc" id="L110">				fundsOutResponse.setResponseDescription(sb.toString());</span>
+<span class="nc" id="L111">				fundsOutResponse.setStatus(FundsInComplianceStatus.HOLD.name());</span>
+				//Add for AT-3470
+				/*
+				 * if(operation == OperationEnum.FUNDS_OUT) {
+				 * addNewShortReasonCode(fundsOutResponse, shortResponseReasons); }
+				 */
+			}
+			//Add for AT-3470
+<span class="nc bnc" id="L119" title="All 4 branches missed.">			if(operation == OperationEnum.FUNDS_OUT &amp;&amp; !shortResponseReasons.isEmpty()) {</span>
+<span class="nc" id="L120">				addNewShortReasonCode(fundsOutResponse, shortResponseReasons);</span>
+			}
+			//setIntuitionResponse(fundsOutResponse); // AT-4594
+<span class="nc" id="L123">			setFundsOutSTPFlagStatus(fundsOutResponse);</span>
+<span class="nc bnc" id="L124" title="All 6 branches missed.">			if (serviceInterfaceType == ServiceInterfaceType.FUNDSOUT &amp;&amp; (operation == OperationEnum.FUNDS_OUT </span>
+					|| operation == OperationEnum.RECHECK_FAILURES)) {
+<span class="nc" id="L126">				tmRequest.setUpdateStatus(fundsOutResponse.getStatus()); //AT-4716</span>
+			}
+<span class="nc" id="L128">		} catch (Exception e) {</span>
+<span class="nc" id="L129">			LOG.error(&quot;Error while sting services response in FundsOutRulesService :: process() ::  &quot;, e);</span>
+<span class="nc" id="L130">			msg.getPayload().setFailed(true);</span>
+<span class="nc" id="L131">		}</span>
+
+<span class="nc" id="L133">		return msg;</span>
+	}
+	
+	/**
+	 * Adds the new short reason code.
+	 *
+	 * @param fundsOutResponse the funds out response
+	 * @param shortResponseReasons the short response reasons
+	 */
+	private void addNewShortReasonCode(FundsOutResponse fundsOutResponse,
+			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+		
+<span class="nc" id="L145">			StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">			for (FundsOutShortReasonCode field : shortResponseReasons) {</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">				if (!(sb.toString().contains(field.getFundsOutReasonShort()))) {</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">					if (sb.length() &gt; 0) {</span>
+<span class="nc" id="L149">						sb.append(&quot;, &quot;);</span>
+					}
+<span class="nc" id="L151">					sb.append(field.getFundsOutReasonShort());</span>
+				}
+<span class="nc" id="L153">				fundsOutResponse.setShortResponseCode(&quot;NSTP;&quot;.concat(sb.toString()));</span>
+<span class="nc" id="L154">			}</span>
+<span class="nc" id="L155">	}</span>
+
+	/**
+	 * Sets the response for bulk recheck.
+	 *
+	 * @param msg the msg
+	 * @param operation the operation
+	 * @param responseReasons the response reasons
+	 * @param fundsOutResponse 
+	 */
+	private void setResponseForBulkRecheck(Message&lt;MessageContext&gt; msg, OperationEnum operation,
+			List&lt;FundsOutReasonCode&gt; responseReasons, FundsOutResponse fundsOutResponse) {
+<span class="nc bnc" id="L167" title="All 2 branches missed.">		if(operation == OperationEnum.RECHECK_FAILURES) {</span>
+<span class="nc" id="L168">			BulkRecheckResponse recheckResponse = new BulkRecheckResponse();</span>
+			
+<span class="nc bnc" id="L170" title="All 2 branches missed.">			if(responseReasons.contains(FundsOutReasonCode.RECHECK_PASS)) {</span>
+<span class="nc" id="L171">				recheckResponse.setStatus(&quot;PASS&quot;);</span>
+<span class="nc" id="L172">				recheckResponse.setTradePaymentID(fundsOutResponse.getTradePaymentID());</span>
+			} else {
+<span class="nc" id="L174">				recheckResponse.setStatus(&quot;FAIL&quot;);</span>
+<span class="nc" id="L175">				recheckResponse.setTradePaymentID(fundsOutResponse.getTradePaymentID());</span>
+			}
+<span class="nc" id="L177">			responseReasons.remove(FundsOutReasonCode.RECHECK_PASS);</span>
+<span class="nc" id="L178">			MessageExchange recheckExchange = new MessageExchange();</span>
+<span class="nc" id="L179">			recheckExchange.setServiceTypeEnum(ServiceTypeEnum.FUNDSOUT_BULK_RECHECK_SERVICE);</span>
+<span class="nc" id="L180">			recheckExchange.setResponse(recheckResponse);</span>
+<span class="nc" id="L181">			msg.getPayload().appendMessageExchange(recheckExchange);</span>
+		}
+<span class="nc" id="L183">	}</span>
+
+	// This will set STPFLag for FundsOut
+	/**
+	 * @param fundsOutResponse
+	 */
+	private void setFundsOutSTPFlagStatus(FundsOutResponse fundsOutResponse) {
+<span class="nc" id="L190">		fundsOutResponse.setSTPFlag(Boolean.FALSE);</span>
+<span class="nc bnc" id="L191" title="All 2 branches missed.">		if (fundsOutResponse.getStatus().equals(FundsOutComplianceStatus.CLEAR.name()))</span>
+<span class="nc" id="L192">			fundsOutResponse.setSTPFlag(Boolean.TRUE);</span>
+<span class="nc" id="L193">	}</span>
+
+	private StringBuilder gatherAllReasons(List&lt;FundsOutReasonCode&gt; responseReasons) {
+<span class="nc" id="L196">		StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">		for (FundsOutReasonCode field : responseReasons) {</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">			if (!(sb.toString().contains(field.getFundsOutReasonDescription()))) {</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">			if (sb.length() &gt; 0) {</span>
+<span class="nc" id="L200">				sb.append(&quot;, &quot;);</span>
+			}
+<span class="nc" id="L202">			sb.append(field.getFundsOutReasonDescription());</span>
+		}
+<span class="nc" id="L204">		}</span>
+<span class="nc" id="L205">		return sb;</span>
+	}
+
+	private void processFundsOutDeleteResponse(MessageExchange exchange, FundsOutResponse fundsOutResponse) {
+<span class="nc" id="L209">		FundsOutDeleteRequest fRequest = (FundsOutDeleteRequest) exchange.getRequest();</span>
+<span class="nc" id="L210">		FundsOutRequest oldRequest = (FundsOutRequest) fRequest.getAdditionalAttribute(&quot;oldRequest&quot;);</span>
+<span class="nc" id="L211">		fundsOutResponse.setResponseReason(FundsOutReasonCode.PASS);</span>
+<span class="nc" id="L212">		fundsOutResponse.setCorrelationID(fRequest.getCorrelationID());</span>
+<span class="nc" id="L213">		fundsOutResponse.setOrgCode(fRequest.getOrgCode());</span>
+<span class="nc" id="L214">		fundsOutResponse.setOsrID(fRequest.getOsrId());</span>
+<span class="nc" id="L215">		fundsOutResponse.setStatus(FundsOutComplianceStatus.REVERSED.name());</span>
+<span class="nc" id="L216">		fundsOutResponse.setTradeContractNumber(oldRequest.getTrade().getContractNumber());</span>
+<span class="nc" id="L217">		fundsOutResponse.setTradePaymentID(oldRequest.getBeneficiary().getPaymentFundsoutId());</span>
+<span class="nc" id="L218">	}</span>
+
+	private void processFundsOutUpdateResponse(Message&lt;MessageContext&gt; msg, MessageExchange exchange,
+			List&lt;FundsOutReasonCode&gt; responseReasons, FundsOutResponse fundsOutResponse, List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc" id="L222">		FundsOutUpdateRequest fRequest = (FundsOutUpdateRequest) exchange.getRequest();</span>
+<span class="nc" id="L223">		FundsOutRequest oldRequest = (FundsOutRequest) fRequest.getAdditionalAttribute(&quot;oldRequest&quot;);</span>
+<span class="nc" id="L224">		fundsOutResponse.setTradePaymentID(fRequest.getPaymentFundsoutId());</span>
+<span class="nc" id="L225">		fundsOutResponse.setTradeAccountNumber(fundsOutResponse.getTradeAccountNumber());</span>
+<span class="nc" id="L226">		fundsOutResponse.setTradeContractNumber(oldRequest.getTrade().getContractNumber());</span>
+<span class="nc" id="L227">		fundsOutResponse.setCorrelationID(fRequest.getCorrelationID());</span>
+<span class="nc" id="L228">		fundsOutResponse.setOrgCode(fRequest.getOrgCode());</span>
+<span class="nc" id="L229">		fundsOutResponse.setOsrID(fRequest.getOsrId());</span>
+<span class="nc" id="L230">		fundsOutResponse.setStatus(FundsOutComplianceStatus.CLEAR.name());</span>
+
+<span class="nc bnc" id="L232" title="All 2 branches missed.">		if (isCustomerInactive(fRequest)) {</span>
+<span class="nc" id="L233">			responseReasons.add(FundsOutReasonCode.INACTIVE_CUSTOMER);</span>
+		} else {
+<span class="nc" id="L235">			CustomCheckResponse cResponse = (CustomCheckResponse) msg.getPayload()</span>
+<span class="nc" id="L236">					.getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE).getResponse();</span>
+<span class="nc" id="L237">			responseReasons.addAll(getCustomChecksStatus(cResponse, oldRequest, shortResponseReasons));//Add for AT-3161</span>
+		}
+<span class="nc" id="L239">	}</span>
+
+	/**
+	 * Process funds out create response.
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param fundsOutResponse
+	 *            the funds out response
+	 * @return the list
+	 */
+	private List&lt;FundsOutReasonCode&gt; processFundsOutCreateResponse(Message&lt;MessageContext&gt; msg,
+			FundsOutResponse fundsOutResponse, List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc" id="L252">		FundsOutRequest fundsOutRequest = (FundsOutRequest) msg.getPayload().getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L253">		createDefaultResponse(fundsOutRequest, fundsOutResponse);</span>
+<span class="nc" id="L254">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L255">		Integer accountTMFlag = (Integer) fundsOutRequest.getAdditionalAttribute(&quot;AccountTMFlag&quot;); //AT-4594</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">		if (isCustomerInactive(fundsOutRequest)) {</span>
+<span class="nc" id="L257">			responseReasons.add(FundsOutReasonCode.INACTIVE_CUSTOMER);</span>
+<span class="nc" id="L258">			shortResponseReasons.add(FundsOutShortReasonCode.INACTIVE_CUSTOMER);//AT-3470</span>
+<span class="nc" id="L259">			return responseReasons;</span>
+		}
+		try {
+<span class="nc" id="L262">			CustomCheckResponse cResponse = (CustomCheckResponse) msg.getPayload()</span>
+<span class="nc" id="L263">					.getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE).getResponse();</span>
+
+<span class="nc" id="L265">			InternalServiceResponse internalServiceResponse = (InternalServiceResponse) msg.getPayload()</span>
+<span class="nc" id="L266">					.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE).getResponse();</span>
+
+<span class="nc" id="L268">			responseReasons.addAll(getBlacklistStatus(internalServiceResponse, shortResponseReasons));</span>
+<span class="nc" id="L269">			responseReasons.addAll(getCountryCheckStatus(internalServiceResponse, cResponse, shortResponseReasons, fundsOutRequest));</span>
+<span class="nc" id="L270">			responseReasons.addAll(getBlacklistPayRefStatus(internalServiceResponse, shortResponseReasons));//Add for AT-3649</span>
+            
+<span class="nc" id="L272">            FraugsterPaymentsOutResponse fResponse = (FraugsterPaymentsOutResponse) msg.getPayload()</span>
+<span class="nc" id="L273">					.getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE).getResponse();</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">            if(!&quot;NOT_REQUIRED&quot;.equals(fResponse.getStatus()) </span>
+<span class="nc bnc" id="L275" title="All 2 branches missed.">            		&amp;&amp; CustomerTypeEnum.PFX.name().equals(fundsOutRequest.getTrade().getCustType()) ) {</span>
+<span class="nc" id="L276">				responseReasons.addAll(getFraugsterStatus(fResponse, shortResponseReasons));</span>
+			}
+            
+<span class="nc" id="L279">            responseReasons.addAll(getCustomChecksStatus(cResponse, fundsOutRequest, shortResponseReasons));//Add for AT-3161</span>
+
+         // AT-4594
+<span class="nc bnc" id="L282" title="All 6 branches missed.">    		if(accountTMFlag == 1 || accountTMFlag == 2 || accountTMFlag == 4) </span>
+<span class="nc" id="L283">    			responseReasons.clear();// AT-4594</span>
+            
+<span class="nc" id="L285">            SanctionResponse sanctionResponse = (SanctionResponse) msg.getPayload()</span>
+<span class="nc" id="L286">					.getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE).getResponse();</span>
+<span class="nc" id="L287">			responseReasons.addAll(getSanctionStatus(sanctionResponse, shortResponseReasons));</span>
+			
+			//AT-4594
+<span class="nc" id="L290">			TransactionMonitoringPaymentOutResponse tmResponse = (TransactionMonitoringPaymentOutResponse) msg.getPayload()</span>
+<span class="nc" id="L291">					.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE).getResponse();</span>
+<span class="nc" id="L292">			responseReasons.addAll(getTransactionMonitoringStatus(tmResponse, shortResponseReasons));</span>
+            
+			List&lt;String&gt; usClientListBBeneAccNumber;
+<span class="nc bnc" id="L295" title="All 2 branches missed.">			if (null != cResponse.getAccountWhiteList()){</span>
+<span class="nc" id="L296">				usClientListBBeneAccNumber = cResponse.getAccountWhiteList()</span>
+<span class="nc" id="L297">						.getUsClientListBBeneAccNumber();</span>
+			} else {
+<span class="nc" id="L299">				usClientListBBeneAccNumber = new ArrayList&lt;&gt;();</span>
+			}
+			
+			// AT-4594
+<span class="nc bnc" id="L303" title="All 6 branches missed.">			if(accountTMFlag != 1 &amp;&amp; accountTMFlag != 2 &amp;&amp; accountTMFlag != 4) {</span>
+				
+<span class="nc bnc" id="L305" title="All 2 branches missed.">				if (fundsOutRequest.getAdditionalAttribute(Constants.PERFORM_CHECKS).equals(Boolean.TRUE)) {</span>
+<span class="nc" id="L306">					responseReasons.addAll(checksContactsWatchListStatus(fundsOutRequest));</span>
+				}
+				
+				//changes for AT-2986
+<span class="nc bnc" id="L310" title="All 2 branches missed.">				if(fundsOutRequest.getTrade().getCustType().equalsIgnoreCase(&quot;PFX&quot;)){</span>
+<span class="nc" id="L311">					checkAccNumberAndWatchlistReasonsForPFX(responseReasons, msg, usClientListBBeneAccNumber,fundsOutResponse);</span>
+				}else{
+<span class="nc" id="L313">					checkAccNumberAndWatchlistReasons(responseReasons, msg, usClientListBBeneAccNumber,fundsOutResponse);</span>
+				}
+			}
+			
+<span class="nc" id="L317">			getBulkRecheckServiceStatus(msg, responseReasons, cResponse, internalServiceResponse, sanctionResponse,</span>
+					fResponse);
+
+<span class="nc" id="L320">		} catch (Exception ex) {</span>
+<span class="nc" id="L321">			LOG.error(&quot;{1}&quot;,ex);</span>
+<span class="nc" id="L322">		}</span>
+<span class="nc" id="L323">		return responseReasons;</span>
+	}
+
+	/**
+	 * Gets the bulk recheck service status.
+	 *
+	 * @param msg the msg
+	 * @param responseReasons the response reasons
+	 * @param cResponse the c response
+	 * @param internalServiceResponse the internal service response
+	 * @param sanctionResponse the sanction response
+	 * @param fResponse the f response
+	 * @return the bulk recheck service status
+	 */
+	private void getBulkRecheckServiceStatus(Message&lt;MessageContext&gt; msg, List&lt;FundsOutReasonCode&gt; responseReasons,
+			CustomCheckResponse cResponse, InternalServiceResponse internalServiceResponse,
+			SanctionResponse sanctionResponse, FraugsterPaymentsOutResponse fResponse) {
+<span class="nc bnc" id="L340" title="All 2 branches missed.">		if(msg.getPayload().getGatewayMessageExchange().getOperation() == OperationEnum.RECHECK_FAILURES) {</span>
+			
+<span class="nc" id="L342">			SanctionContactResponse scResponse = sanctionResponse.getContactResponses().get(0);</span>
+<span class="nc" id="L343">			SanctionBankResponse sBankResponse = sanctionResponse.getBankResponses().get(0);</span>
+<span class="nc" id="L344">			SanctionBeneficiaryResponse sBeneResponse = sanctionResponse.getBeneficiaryResponses().get(0);</span>
+			
+<span class="nc bnc" id="L346" title="All 2 branches missed.">			Boolean sanctionOverallStatus = !ServiceStatus.SERVICE_FAILURE.name().equals(scResponse.getStatus()) &amp;&amp;</span>
+<span class="nc bnc" id="L347" title="All 2 branches missed.">					!ServiceStatus.SERVICE_FAILURE.name().equals(sBankResponse.getStatus()) &amp;&amp;</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">					!ServiceStatus.SERVICE_FAILURE.name().equals(sBeneResponse.getStatus());</span>
+			
+<span class="nc" id="L350">			Boolean internalServiceOverallStatus = getOverallInternalRuleStatus(internalServiceResponse.getContacts().get(0));</span>
+			
+<span class="nc bnc" id="L352" title="All 2 branches missed.">			if(!cResponse.getOverallStatus().equalsIgnoreCase(ServiceStatus.SERVICE_FAILURE.getServiceStatusAsString()) &amp;&amp;</span>
+<span class="nc bnc" id="L353" title="All 4 branches missed.">					Boolean.TRUE.equals(internalServiceOverallStatus) &amp;&amp; Boolean.TRUE.equals(sanctionOverallStatus) </span>
+<span class="nc bnc" id="L354" title="All 2 branches missed.">					&amp;&amp; !fResponse.getStatus().equalsIgnoreCase(ServiceStatus.SERVICE_FAILURE.getServiceStatusAsString())){</span>
+<span class="nc" id="L355">				responseReasons.add(FundsOutReasonCode.RECHECK_PASS);</span>
+			}
+		}
+<span class="nc" id="L358">	}</span>
+
+	/**
+	 * Gets the overall internal rule status.
+	 *
+	 * @param c the c
+	 * @return the overall internal rule status
+	 */
+	private Boolean getOverallInternalRuleStatus(ContactResponse c) {
+<span class="nc bnc" id="L367" title="All 2 branches missed.">		return (!ServiceStatus.SERVICE_FAILURE.name().equals(c.getBlacklist().getStatus())</span>
+<span class="nc bnc" id="L368" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(c.getCountryCheck().getStatus()));</span>
+	}
+
+	@SuppressWarnings(&quot;unchecked&quot;)
+	private void checkAccNumberAndWatchlistReasons(List&lt;FundsOutReasonCode&gt; responseReasons,
+			Message&lt;MessageContext&gt; msg, List&lt;String&gt; usClientListBBeneAccNumber,FundsOutResponse fundsOutResponse) {
+<span class="nc" id="L374">		MessageExchange exchange = msg.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L375">		FundsOutRequest oldRequest = (FundsOutRequest) exchange.getRequest()</span>
+<span class="nc" id="L376">				.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+<span class="nc" id="L377">		List&lt;String&gt; watchListDetails = (List&lt;String&gt;) oldRequest.getAdditionalAttribute(REASONS_OF_WATCHLIST);</span>
+<span class="nc" id="L378">		String beneficiaryAccountNumber = oldRequest.getBeneficiary().getAccountNumber();</span>
+<span class="nc bnc" id="L379" title="All 2 branches missed.">		for (String reason : watchListDetails) {</span>
+<span class="nc bnc" id="L380" title="All 4 branches missed.">			boolean notIsClientBList = null != reason &amp;&amp; !WatchList.US_CLIENT_LIST_B_CLIENT.getDescription().equals(reason);</span>
+<span class="nc bnc" id="L381" title="All 2 branches missed.">			boolean isClientBList = WatchList.US_CLIENT_LIST_B_CLIENT.getDescription().equals(reason)</span>
+<span class="nc bnc" id="L382" title="All 2 branches missed.">					&amp;&amp; !checkUSClientBWatchListedAccountNumber(reason, usClientListBBeneAccNumber,</span>
+							beneficiaryAccountNumber);
+<span class="nc" id="L384">			setUsClientListBClientWLFlag(reason, fundsOutResponse, isClientBList);</span>
+<span class="nc bnc" id="L385" title="All 4 branches missed.">			if (isClientBList || notIsClientBList) {</span>
+<span class="nc" id="L386">				responseReasons.add(FundsOutReasonCode.CONTACT_WATCHLIST);</span>
+			}
+
+<span class="nc" id="L389">		}</span>
+<span class="nc" id="L390">	}</span>
+	
+	@SuppressWarnings(&quot;unchecked&quot;)
+	private void checkAccNumberAndWatchlistReasonsForPFX(List&lt;FundsOutReasonCode&gt; responseReasons,
+			Message&lt;MessageContext&gt; msg, List&lt;String&gt; usClientListBBeneAccNumber,FundsOutResponse fundsOutResponse) {
+<span class="nc" id="L395">		MessageExchange exchange = msg.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L396">		FundsOutRequest oldRequest = (FundsOutRequest) exchange.getRequest()</span>
+<span class="nc" id="L397">				.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+		
+<span class="nc" id="L399">		HashMap&lt;Integer, List&lt;String&gt;&gt; watchlisttradecon = (HashMap&lt;Integer, List&lt;String&gt;&gt;) oldRequest.getAdditionalAttribute(&quot;watchlist_with_trade&amp;cont&quot;);</span>
+<span class="nc" id="L400">		String beneficiaryAccountNumber = oldRequest.getBeneficiary().getAccountNumber();</span>
+		
+<span class="nc bnc" id="L402" title="All 2 branches missed.">		for (Map.Entry&lt;Integer, List&lt;String&gt;&gt; e : watchlisttradecon.entrySet()) {	</span>
+<span class="nc bnc" id="L403" title="All 2 branches missed.">			if(e.getKey().equals(oldRequest.getTrade().getTradeContactId())){</span>
+<span class="nc" id="L404">				List&lt;String&gt; watchlist = e.getValue();</span>
+<span class="nc bnc" id="L405" title="All 2 branches missed.">				for( String value : watchlist){</span>
+<span class="nc bnc" id="L406" title="All 4 branches missed.">					boolean notIsClientBList = null != value &amp;&amp; !WatchList.US_CLIENT_LIST_B_CLIENT.getDescription().equals(value);</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">					boolean isClientBList = WatchList.US_CLIENT_LIST_B_CLIENT.getDescription().equals(value)</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">							&amp;&amp; !checkUSClientBWatchListedAccountNumber(value, usClientListBBeneAccNumber,</span>
+								beneficiaryAccountNumber);
+<span class="nc" id="L410">					setUsClientListBClientWLFlag(value, fundsOutResponse, isClientBList);</span>
+<span class="nc bnc" id="L411" title="All 4 branches missed.">					if (isClientBList || notIsClientBList) {</span>
+<span class="nc" id="L412">						responseReasons.add(FundsOutReasonCode.CONTACT_WATCHLIST);</span>
+					}
+<span class="nc" id="L414">				}</span>
+			}
+<span class="nc" id="L416">		}</span>
+<span class="nc" id="L417">	}</span>
+
+	private void setUsClientListBClientWLFlag(String reason, FundsOutResponse fundsOutResponse, boolean isClientBList) {
+<span class="nc bnc" id="L420" title="All 2 branches missed.">		if (WatchList.US_CLIENT_LIST_B_CLIENT.getDescription().equals(reason)) {  // Added changes for AT-5174</span>
+<span class="nc bnc" id="L421" title="All 2 branches missed.">			if (Boolean.TRUE.equals(isClientBList)) {</span>
+<span class="nc" id="L422">				fundsOutResponse.setUsClientListBClientWLFlag(Boolean.TRUE);</span>
+			} else {
+<span class="nc" id="L424">				fundsOutResponse.setUsClientListBClientWLFlag(Boolean.FALSE);</span>
+			}
+		}
+<span class="nc" id="L427">	}</span>
+
+	private boolean checkUSClientBWatchListedAccountNumber(String reason,
+			List&lt;String&gt; usClientBlistFundsOutAccountNumbers, String beneficiaryAccountNumber) {
+<span class="nc" id="L431">		boolean result = false;</span>
+<span class="nc bnc" id="L432" title="All 2 branches missed.">		if (WatchList.US_CLIENT_LIST_B_CLIENT.getDescription().equals(reason)) {</span>
+<span class="nc bnc" id="L433" title="All 2 branches missed.">			for (String accountNumber : usClientBlistFundsOutAccountNumbers) {</span>
+<span class="nc bnc" id="L434" title="All 2 branches missed.">				if (beneficiaryAccountNumber.equalsIgnoreCase(accountNumber)) {</span>
+<span class="nc" id="L435">					result = true;</span>
+<span class="nc" id="L436">					break;</span>
+				}
+<span class="nc" id="L438">			}</span>
+		}
+<span class="nc" id="L440">		return result;</span>
+	}
+
+	/**
+	 * Checks contacts watch list status.
+	 * 
+	 * @param fundsOutRequest
+	 *            the funds out request
+	 * @return the list
+	 */
+	private List&lt;FundsOutReasonCode&gt; checksContactsWatchListStatus(FundsOutRequest fundsOutRequest) {
+<span class="nc" id="L451">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L452">		Integer noOfContacts = (Integer) fundsOutRequest.getAdditionalAttribute(&quot;noOfContacts&quot;);</span>
+
+<span class="nc bnc" id="L454" title="All 4 branches missed.">		if (null != noOfContacts &amp;&amp; noOfContacts &gt; 0) {</span>
+<span class="nc" id="L455">			processWatchListReasons(fundsOutRequest, responseReasons, noOfContacts);</span>
+		}
+<span class="nc" id="L457">		return responseReasons;</span>
+	}
+
+	private void processWatchListReasons(FundsOutRequest fundsOutRequest, List&lt;FundsOutReasonCode&gt; responseReasons,
+			Integer noOfContacts) {
+		String reason;
+<span class="nc bnc" id="L463" title="All 2 branches missed.">		for (int i = 1; i &lt;= noOfContacts; i++) {</span>
+<span class="nc" id="L464">			reason = (String) fundsOutRequest.getAdditionalAttribute(&quot;watchlistreasonname&quot; + i);</span>
+<span class="nc bnc" id="L465" title="All 4 branches missed.">			if (shouldSkipWatchListReason(reason) &amp;&amp; isContactAndBeneficiarySame(fundsOutRequest)) {</span>
+<span class="nc" id="L466">				return;</span>
+			}
+			// if condition is added for AT-1178
+<span class="nc bnc" id="L469" title="All 2 branches missed.">			if (null != reason) {</span>
+<span class="nc" id="L470">				responseReasons.add(FundsOutReasonCode.CONTACT_WATCHLIST);</span>
+			}
+		}
+<span class="nc" id="L473">	}</span>
+
+	private boolean shouldSkipWatchListReason(String reason) {
+<span class="nc bnc" id="L476" title="All 4 branches missed.">		return (!StringUtils.isNullOrEmpty(reason) &amp;&amp; (WatchList.USGLOBALCHECK.getDescription().equals(reason)</span>
+<span class="nc bnc" id="L477" title="All 2 branches missed.">				|| WatchList.INTER_COMPANY.getDescription().equals(reason)));</span>
+	}
+
+	/**
+	 * Checks if is contact and beneficiary same.
+	 *
+	 * @param fundsOutRequest
+	 *            the funds out request
+	 * @return true, if is contact and beneficiary same
+	 */
+	// Added Code for US Client List B LOGIC (JIRA AT-990)
+	private boolean isContactAndBeneficiarySame(FundsOutRequest fundsOutRequest) {
+
+		String nameToCompare;
+<span class="nc bnc" id="L491" title="All 2 branches missed.">		if (Constants.CFX.equals(fundsOutRequest.getTrade().getCustType())) {</span>
+<span class="nc" id="L492">			Account reqAccount = fundsOutRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT, Account.class);</span>
+<span class="nc" id="L493">			nameToCompare = reqAccount.getAccountName();</span>
+<span class="nc" id="L494">		} else {</span>
+<span class="nc" id="L495">			Contact reqContact = fundsOutRequest.getAdditionalAttribute(Constants.FIELD_CONTACT, Contact.class);</span>
+<span class="nc" id="L496">			nameToCompare = reqContact.getFullName();</span>
+		}
+<span class="nc" id="L498">		String beneficiaryName = fundsOutRequest.getBeneficiary().getFullName();</span>
+<span class="nc bnc" id="L499" title="All 6 branches missed.">		return beneficiaryName != null &amp;&amp; nameToCompare != null &amp;&amp; beneficiaryName.equalsIgnoreCase(nameToCompare);</span>
+	}
+
+	/**
+	 * Creates the default response.
+	 *
+	 * @param fundsOutRequest
+	 *            the funds out request
+	 * @param fundsOutResponse
+	 *            the funds out response
+	 */
+	private void createDefaultResponse(FundsOutRequest fundsOutRequest, FundsOutResponse fundsOutResponse) {
+<span class="nc" id="L511">		FundsOutContactResponse contact = new FundsOutContactResponse();</span>
+<span class="nc" id="L512">		contact.setTradeContactId(fundsOutRequest.getTrade().getTradeContactId());</span>
+<span class="nc" id="L513">		contact.setContactCs(ContactComplianceStatus.ACTIVE.name());</span>
+<span class="nc" id="L514">		fundsOutResponse.setTradeAccountNumber(fundsOutRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L515">		fundsOutResponse.setTradeContractNumber(fundsOutRequest.getTrade().getContractNumber());</span>
+<span class="nc" id="L516">		fundsOutResponse.setCorrelationID(fundsOutRequest.getCorrelationID());</span>
+<span class="nc" id="L517">		fundsOutResponse.setOrgCode(fundsOutRequest.getOrgCode());</span>
+<span class="nc" id="L518">		fundsOutResponse.setOsrID(fundsOutRequest.getOsrId());</span>
+<span class="nc" id="L519">		fundsOutResponse.setStatus(FundsOutComplianceStatus.CLEAR.name());</span>
+<span class="nc" id="L520">		fundsOutResponse.setResponseReason(FundsOutReasonCode.PASS);</span>
+<span class="nc" id="L521">		fundsOutResponse.setShortResponseCode(FundsOutShortReasonCode.PASS.getFundsOutReasonShort());// Add for AT-3470</span>
+		/**
+		 * TradePaymentID added in response to broadcast Bulk Recheck response successfully towards Enterprise
+		 * - Vishal J 
+		 * */
+<span class="nc" id="L526">		fundsOutResponse.setTradePaymentID(fundsOutRequest.getBeneficiary().getPaymentFundsoutId());</span>
+<span class="nc" id="L527">	}</span>
+
+	/**
+	 * Gets the blacklist status.
+	 *
+	 * @param serviceResponse
+	 *            the service response
+	 * @return the blacklist status
+	 */
+	private List&lt;FundsOutReasonCode&gt; getBlacklistStatus(InternalServiceResponse serviceResponse, 
+			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc" id="L538">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L539" title="All 2 branches missed.">		for (ContactResponse c : serviceResponse.getContacts()) {</span>
+<span class="nc bnc" id="L540" title="All 2 branches missed.">			if (!ServiceStatus.PASS.name().equals(c.getBlacklist().getStatus())</span>
+<span class="nc bnc" id="L541" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(c.getBlacklist().getStatus())</span>
+<span class="nc bnc" id="L542" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(c.getBlacklist().getStatus())) {</span>
+<span class="nc" id="L543">				responseReasons.add(FundsOutReasonCode.BLACKLISTED_BENE);</span>
+<span class="nc" id="L544">				addShortBlacklistReasonCode(shortResponseReasons, c.getBlacklist());//Add for AT-3470</span>
+<span class="nc bnc" id="L545" title="All 2 branches missed.">			} else if (ServiceStatus.SERVICE_FAILURE.name().equals(c.getBlacklist().getStatus())) {</span>
+<span class="nc" id="L546">				responseReasons.add(FundsOutReasonCode.SYSTEM_FAILURE);</span>
+<span class="nc" id="L547">				shortResponseReasons.add(FundsOutShortReasonCode.BLACKLIST_SERVICE_FAIL);//Add for AT-3470</span>
+			}
+<span class="nc" id="L549">		}</span>
+<span class="nc" id="L550">		return responseReasons;</span>
+	}
+	
+	/**
+	 * Adds the short blacklist reason code.
+	 *
+	 * @param shortResponseReasons the short response reasons
+	 * @param blacklistContactResponse the blacklist contact response
+	 */
+	private void addShortBlacklistReasonCode(List&lt;FundsOutShortReasonCode&gt; shortResponseReasons, BlacklistContactResponse blacklistContactResponse) {
+		
+<span class="nc bnc" id="L561" title="All 2 branches missed.">		for (BlacklistSTPData data : blacklistContactResponse.getData()) {</span>
+<span class="nc bnc" id="L562" title="All 2 branches missed.">			if(Boolean.TRUE.equals(data.getFound())) {</span>
+<span class="nc bnc" id="L563" title="All 2 branches missed.">				if(data.getRequestType().equalsIgnoreCase(&quot;CONTACT NAME&quot;)) {</span>
+<span class="nc" id="L564">					shortResponseReasons.add(FundsOutShortReasonCode.BLACKLISTED_NAME);</span>
+				}
+<span class="nc bnc" id="L566" title="All 2 branches missed.">				else if(data.getRequestType().equalsIgnoreCase(&quot;BANK NAME&quot;)) {</span>
+<span class="nc" id="L567">					shortResponseReasons.add(FundsOutShortReasonCode.BLACKLISTED_BANK_NAME);</span>
+				}
+<span class="nc bnc" id="L569" title="All 2 branches missed.">				else if(data.getRequestType().equalsIgnoreCase(&quot;ACC_NUMBER&quot;)) {</span>
+<span class="nc" id="L570">					shortResponseReasons.add(FundsOutShortReasonCode.BLACKLISTED_ACC_NUMBER);</span>
+				}
+			}
+<span class="nc" id="L573">		}</span>
+<span class="nc" id="L574">	}</span>
+
+	/**
+	 * Gets the country check status.
+	 *
+	 * @param serviceResponse
+	 *            the service response
+	 * @param cResponse
+	 *            the c response
+	 * @return the country check status
+	 */
+	private List&lt;FundsOutReasonCode&gt; getCountryCheckStatus(InternalServiceResponse serviceResponse,
+			CustomCheckResponse cResponse, List&lt;FundsOutShortReasonCode&gt; shortResponseReasons, FundsOutRequest fundsOutRequest) {
+<span class="nc" id="L587">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L588" title="All 2 branches missed.">		for (ContactResponse c : serviceResponse.getContacts()) {</span>
+<span class="nc bnc" id="L589" title="All 4 branches missed.">			if (cResponse.isCountryWhitelisted() &amp;&amp; countryCheckForRUSandUKR(fundsOutRequest)) { //Add for AT-4180</span>
+<span class="nc" id="L590">				c.getCountryCheck().setStatus(ServiceStatus.PASS.name());</span>
+<span class="nc bnc" id="L591" title="All 2 branches missed.">			} else if (!ServiceStatus.PASS.name().equals(c.getCountryCheck().getStatus())</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(c.getBlacklist().getStatus())</span>
+<span class="nc bnc" id="L593" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(c.getCountryCheck().getStatus())) {</span>
+<span class="nc" id="L594">				responseReasons.add(FundsOutReasonCode.BLACKLISTED_COUNTRY);</span>
+<span class="nc" id="L595">				shortResponseReasons.add(FundsOutShortReasonCode.BLACKLISTED_COUNTRY);//Add for AT-3470</span>
+<span class="nc bnc" id="L596" title="All 2 branches missed.">			} else if (ServiceStatus.SERVICE_FAILURE.name().equals(c.getCountryCheck().getStatus())) {</span>
+<span class="nc" id="L597">				responseReasons.add(FundsOutReasonCode.SYSTEM_FAILURE);</span>
+<span class="nc" id="L598">				shortResponseReasons.add(FundsOutShortReasonCode.COUNTRY_CHECK_SERVICE_FAIL);//Add for AT-3470</span>
+			}
+<span class="nc" id="L600">		}</span>
+<span class="nc" id="L601">		return responseReasons;</span>
+	}
+	
+	//Add for AT-4180
+	private boolean countryCheckForRUSandUKR(FundsOutRequest fundsOutRequest) {
+<span class="nc bnc" id="L606" title="All 2 branches missed.">		return !fundsOutRequest.getBeneficiary().getCountry().equalsIgnoreCase(&quot;RUS&quot;) &amp;&amp; </span>
+<span class="nc bnc" id="L607" title="All 2 branches missed.">				!fundsOutRequest.getBeneficiary().getCountry().equalsIgnoreCase(&quot;UKR&quot;);</span>
+	}
+	
+	/**
+	 * Gets the blacklist pay ref status.
+	 *
+	 * @param serviceResponse the service response
+	 * @param shortResponseReasons the short response reasons
+	 * @return the blacklist pay ref status
+	 */
+	//Add for AT-3649
+	private List&lt;FundsOutReasonCode&gt; getBlacklistPayRefStatus(InternalServiceResponse serviceResponse, 
+			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc" id="L620">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L621" title="All 2 branches missed.">		for (ContactResponse c : serviceResponse.getContacts()) {</span>
+<span class="nc bnc" id="L622" title="All 2 branches missed.">			if (!ServiceStatus.PASS.name().equals(c.getBlacklistPayref().getStatus())</span>
+<span class="nc bnc" id="L623" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.NOT_PERFORMED.name().equals(c.getBlacklistPayref().getStatus())</span>
+<span class="nc bnc" id="L624" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(c.getBlacklistPayref().getStatus())) {</span>
+<span class="nc" id="L625">				responseReasons.add(FundsOutReasonCode.BLACKLISTED_PAY_REF);</span>
+<span class="nc" id="L626">				shortResponseReasons.add(FundsOutShortReasonCode.BLACKLISTED_PAY_REF);</span>
+<span class="nc bnc" id="L627" title="All 2 branches missed.">			} else if (ServiceStatus.SERVICE_FAILURE.name().equals(c.getBlacklistPayref().getStatus())) {</span>
+<span class="nc" id="L628">				responseReasons.add(FundsOutReasonCode.BLACKLISTED_PAY_REF_SERVICE_FAIL);</span>
+<span class="nc" id="L629">				shortResponseReasons.add(FundsOutShortReasonCode.BLACKLISTED_PAY_REF_SERVICE_FAIL);</span>
+			}
+<span class="nc" id="L631">		}</span>
+<span class="nc" id="L632">		return responseReasons;</span>
+	}
+
+	/**
+	 * Gets the sanction status.
+	 *
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @return the sanction status
+	 */
+	private List&lt;FundsOutReasonCode&gt; getSanctionStatus(SanctionResponse sanctionResponse,
+			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc" id="L644">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L645">		SanctionContactResponse scResponse = sanctionResponse.getContactResponses().get(0);</span>
+<span class="nc" id="L646">		SanctionBankResponse sBankResponse = sanctionResponse.getBankResponses().get(0);</span>
+<span class="nc" id="L647">		SanctionBeneficiaryResponse sBeneResponse = sanctionResponse.getBeneficiaryResponses().get(0);</span>
+		
+<span class="nc bnc" id="L649" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(scResponse.getStatus())</span>
+<span class="nc bnc" id="L650" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(scResponse.getStatus())</span>
+<span class="nc bnc" id="L651" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(scResponse.getStatus())) {</span>
+<span class="nc" id="L652">			responseReasons.add(FundsOutReasonCode.CONTACT_SANCTIONED);</span>
+<span class="nc" id="L653">			shortResponseReasons.add(FundsOutShortReasonCode.CONTACT_SANCTIONED);</span>
+<span class="nc bnc" id="L654" title="All 2 branches missed.">		} else if (ServiceStatus.NOT_REQUIRED.name().equals(scResponse.getStatus())) {</span>
+<span class="nc" id="L655">			responseReasons.add(FundsOutReasonCode.INACTIVE_CUSTOMER);</span>
+		}
+
+<span class="nc bnc" id="L658" title="All 2 branches missed.">		if (!ServiceStatus.NOT_REQUIRED.name().equals(scResponse.getStatus())) {</span>
+<span class="nc bnc" id="L659" title="All 2 branches missed.">			if (!ServiceStatus.PASS.name().equals(sBankResponse.getStatus())</span>
+<span class="nc bnc" id="L660" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(sBankResponse.getStatus())) {</span>
+<span class="nc" id="L661">				responseReasons.add(FundsOutReasonCode.BANK_SANCTIONED);</span>
+<span class="nc" id="L662">				shortResponseReasons.add(FundsOutShortReasonCode.BANK_SANCTIONED);</span>
+			}
+
+<span class="nc bnc" id="L665" title="All 2 branches missed.">			if (!ServiceStatus.PASS.name().equals(sBeneResponse.getStatus())</span>
+<span class="nc bnc" id="L666" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(sBeneResponse.getStatus())) {</span>
+<span class="nc" id="L667">				responseReasons.add(FundsOutReasonCode.BENEFICIARY_SANCTIONED);</span>
+<span class="nc" id="L668">				shortResponseReasons.add(FundsOutShortReasonCode.BENEFICIARY_SANCTIONED);</span>
+			}
+		}
+		//Add for AT-3580
+<span class="nc bnc" id="L672" title="All 2 branches missed.">		if(ServiceStatus.SERVICE_FAILURE.name().equals(scResponse.getStatus())</span>
+<span class="nc bnc" id="L673" title="All 2 branches missed.">				|| ServiceStatus.SERVICE_FAILURE.name().equals(sBankResponse.getStatus())</span>
+<span class="nc bnc" id="L674" title="All 2 branches missed.">				|| ServiceStatus.SERVICE_FAILURE.name().equals(sBeneResponse.getStatus())) {</span>
+<span class="nc" id="L675">			responseReasons.add(FundsOutReasonCode.SANCTION_SERVICE_FAIL);</span>
+<span class="nc" id="L676">			shortResponseReasons.add(FundsOutShortReasonCode.SANCTION_SERVICE_FAIL);</span>
+		}
+		
+<span class="nc" id="L679">		return responseReasons;</span>
+	}
+
+	/**
+	 * Gets the fraugster status.
+	 *
+	 * @param fResponse
+	 *            the f response
+	 * @return the fraugster status
+	 */
+	private List&lt;FundsOutReasonCode&gt; getFraugsterStatus(FraugsterPaymentsOutResponse fResponse,
+			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc" id="L691">		FraugsterPaymentsOutContactResponse response = fResponse.getContactResponses().get(0);</span>
+<span class="nc" id="L692">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;(1);</span>
+<span class="nc bnc" id="L693" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(response.getStatus())</span>
+<span class="nc bnc" id="L694" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(fResponse.getStatus())</span>
+<span class="nc bnc" id="L695" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(fResponse.getStatus())) {</span>
+<span class="nc" id="L696">			responseReasons.add(FundsOutReasonCode.FRAUGSTER_WATCHLIST);</span>
+<span class="nc" id="L697">			shortResponseReasons.add(FundsOutShortReasonCode.FRAUGSTER_WATCHLIST);</span>
+		}
+		//Add for AT-3580
+<span class="nc bnc" id="L700" title="All 2 branches missed.">		else if(ServiceStatus.SERVICE_FAILURE.name().equals(fResponse.getStatus())) {</span>
+<span class="nc" id="L701">			responseReasons.add(FundsOutReasonCode.FRAUGSTER_SERVICE_FAIL);</span>
+<span class="nc" id="L702">			shortResponseReasons.add(FundsOutShortReasonCode.FRAUGSTER_SERVICE_FAIL);</span>
+		}
+<span class="nc" id="L704">		return responseReasons;</span>
+	}
+
+	/**
+	 * Gets the custom checks status.
+	 *
+	 * @param cResponse
+	 *            the c response
+	 * @return the custom checks status
+	 */
+	private List&lt;FundsOutReasonCode&gt; getCustomChecksStatus(CustomCheckResponse cResponse, FundsOutRequest fundsOutRequest,
+			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc" id="L716">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;(10);</span>
+<span class="nc bnc" id="L717" title="All 2 branches missed.">		if (!ServiceStatus.SERVICE_FAILURE.name().equals(cResponse.getOverallStatus())</span>
+<span class="nc bnc" id="L718" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(cResponse.getOverallStatus())) {</span>
+<span class="nc" id="L719">			addReasonCodeForVelocityAndBeneficiary(cResponse, responseReasons, shortResponseReasons);</span>
+<span class="nc" id="L720">			addReasonCodeForMismatch(cResponse, responseReasons, shortResponseReasons);</span>
+<span class="nc" id="L721">			addReasonCodeForEuPoiCheck(cResponse, responseReasons, shortResponseReasons);//Add for AT-3349</span>
+			//Add for AT-3161
+<span class="nc bnc" id="L723" title="All 2 branches missed.">			if(CustomerTypeEnum.PFX.name().equals(fundsOutRequest.getTrade().getCustType())) {</span>
+<span class="nc" id="L724">				addReasonCodeForCustomRuleFraudPredict(cResponse, responseReasons, shortResponseReasons);</span>
+			}
+		}
+<span class="nc" id="L727">		checkForServiceFailure(cResponse, responseReasons,shortResponseReasons);</span>
+<span class="nc" id="L728">		return responseReasons;</span>
+	}
+
+	private void addReasonCodeForMismatch(CustomCheckResponse cResponse, List&lt;FundsOutReasonCode&gt; responseReasons,
+			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc bnc" id="L733" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(cResponse.getWhiteListCheck().getReasonOfTransfer())</span>
+<span class="nc bnc" id="L734" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(cResponse.getWhiteListCheck().getReasonOfTransfer())) {</span>
+<span class="nc" id="L735">			responseReasons.add(FundsOutReasonCode.REASON_MISMATCH);</span>
+<span class="nc" id="L736">			shortResponseReasons.add(FundsOutShortReasonCode.REASON_MISMATCH);</span>
+		}
+<span class="nc bnc" id="L738" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(cResponse.getWhiteListCheck().getCurrency()) </span>
+<span class="nc bnc" id="L739" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(cResponse.getWhiteListCheck().getReasonOfTransfer())) {</span>
+<span class="nc" id="L740">			responseReasons.add(FundsOutReasonCode.CURRENCY_MISMATCH);</span>
+<span class="nc" id="L741">			shortResponseReasons.add(FundsOutShortReasonCode.CURRENCY_MISMATCH);</span>
+		}
+<span class="nc bnc" id="L743" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(cResponse.getWhiteListCheck().getAmoutRange())</span>
+<span class="nc bnc" id="L744" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(cResponse.getWhiteListCheck().getReasonOfTransfer())) {</span>
+<span class="nc" id="L745">			responseReasons.add(FundsOutReasonCode.AMT_MISMATCH);</span>
+<span class="nc" id="L746">			shortResponseReasons.add(FundsOutShortReasonCode.AMT_MISMATCH);</span>
+		}
+<span class="nc" id="L748">	}</span>
+
+	private void addReasonCodeForVelocityAndBeneficiary(CustomCheckResponse cResponse,
+			List&lt;FundsOutReasonCode&gt; responseReasons, List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc bnc" id="L752" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(cResponse.getVelocityCheck().getNoOffundsoutTxn())) {</span>
+<span class="nc" id="L753">			responseReasons.add(FundsOutReasonCode.FRQ_VELOCITY);</span>
+<span class="nc" id="L754">			shortResponseReasons.add(FundsOutShortReasonCode.FRQ_VELOCITY);</span>
+		}
+<span class="nc bnc" id="L756" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(cResponse.getVelocityCheck().getPermittedAmoutcheck())) {</span>
+<span class="nc" id="L757">			responseReasons.add(FundsOutReasonCode.AMT_VELOCITY);</span>
+<span class="nc" id="L758">			shortResponseReasons.add(FundsOutShortReasonCode.AMT_VELOCITY);</span>
+		}
+
+<span class="nc bnc" id="L761" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(cResponse.getVelocityCheck().getBeneCheck())) {</span>
+<span class="nc" id="L762">			responseReasons.add(FundsOutReasonCode.DUPLICATE_BENE);</span>
+<span class="nc" id="L763">			shortResponseReasons.add(FundsOutShortReasonCode.DUPLICATE_BENE);</span>
+		}
+<span class="nc" id="L765">	}</span>
+	
+	private void addReasonCodeForCustomRuleFraudPredict(CustomCheckResponse cResponse,
+			List&lt;FundsOutReasonCode&gt; responseReasons, List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc bnc" id="L769" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(cResponse.getFraudPredictStatus())) {</span>
+<span class="nc" id="L770">			responseReasons.add(FundsOutReasonCode.CUSTOM_RULE_FRAUDPREDICT_CHECK);</span>
+<span class="nc" id="L771">			shortResponseReasons.add(FundsOutShortReasonCode.CUSTOM_RULE_FRAUDPREDICT_CHECK);</span>
+		}
+<span class="nc" id="L773">	}</span>
+
+	private void addReasonCodeForEuPoiCheck(CustomCheckResponse cResponse, List&lt;FundsOutReasonCode&gt; responseReasons,
+			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc bnc" id="L777" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(cResponse.getEuPoiCheck().getStatus())</span>
+<span class="nc bnc" id="L778" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(cResponse.getEuPoiCheck().getStatus())) {</span>
+<span class="nc" id="L779">			responseReasons.add(FundsOutReasonCode.CUSTOM_RULE_EU_POI_CHECK_FAIL);</span>
+<span class="nc" id="L780">			shortResponseReasons.add(FundsOutShortReasonCode.CUSTOM_RULE_EU_POI_CHECK_FAIL);</span>
+		}
+<span class="nc" id="L782">	}</span>
+	
+	/**
+	 * Check for service failure.
+	 *
+	 * @param cResponse
+	 *            the c response
+	 * @param responseReasons
+	 *            the response reasons
+	 */
+	private void checkForServiceFailure(CustomCheckResponse cResponse, List&lt;FundsOutReasonCode&gt; responseReasons,
+			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc bnc" id="L794" title="All 2 branches missed.">		if (ServiceStatus.SERVICE_FAILURE.name().equals(cResponse.getOverallStatus())) {</span>
+<span class="nc" id="L795">			responseReasons.add(FundsOutReasonCode.CUSTOMCHECK);</span>
+<span class="nc" id="L796">			shortResponseReasons.add(FundsOutShortReasonCode.CUSTOMCHECK);</span>
+		}
+<span class="nc" id="L798">	}</span>
+
+	/**
+	 * If operation is FUNDS_OUT then get Blacklist, Sanction, Fraugster,
+	 * Customcheck status and if operation is UPDATE_OPI or DELETE_OPI then only
+	 * get Customcheck status .
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param fundsOutResponse
+	 *            the funds out response
+	 * @param operation
+	 *            the operation
+	 */
+	private void setAllCheckResponseStatus(Message&lt;MessageContext&gt; msg, FundsOutResponse fundsOutResponse,
+			OperationEnum operation) {
+<span class="nc bnc" id="L814" title="All 4 branches missed.">			if (operation == OperationEnum.FUNDS_OUT || operation == OperationEnum.RECHECK_FAILURES) {</span>
+				/*
+				 * set blacklist status. iterate EventServiceLog to get
+				 * INTERNAL_RULE_SERVICE blackList response
+				 */
+<span class="nc" id="L819">				getInternalRuleServiceStatus(msg, fundsOutResponse);</span>
+
+				/*
+				 * set sanction service status. iterate EventServiceLog to get
+				 * SANCTION_SERVICE blackList response
+				 */
+<span class="nc" id="L825">				getSanctionStatus(msg, fundsOutResponse);</span>
+
+				/*
+				 * set fraugster service status. iterate EventServiceLog to get
+				 * SANCTION_SERVICE blackList response
+				 */
+<span class="nc" id="L831">				getFraugsterStatus(msg, fundsOutResponse);</span>
+
+				/*
+				 * set custom check service status. iterate EventServiceLog to
+				 * get CUSTOM_CHECKS_SERVICE blackList response
+				 */
+<span class="nc" id="L837">				getCustomCheckStatus(msg, fundsOutResponse);</span>
+				
+<span class="nc" id="L839">				getTransactionMonitoringStatus(msg, fundsOutResponse);</span>
+
+			} else {
+<span class="nc" id="L842">				getCustomCheckStatusForFundsoutUpdateAndtDelete(msg, fundsOutResponse);</span>
+			}
+
+<span class="nc" id="L845">	}</span>
+
+	private void getCustomCheckStatusForFundsoutUpdateAndtDelete(Message&lt;MessageContext&gt; msg,
+			FundsOutResponse fundsOutResponse) {
+
+<span class="nc" id="L850">		MessageExchange exchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+<span class="nc" id="L851">		CustomChecksRequest serviceRequest = exchange.getRequest(CustomChecksRequest.class);</span>
+<span class="nc" id="L852">		FundsOutRequest fReuqest = (FundsOutRequest) serviceRequest.getESDocument();</span>
+<span class="nc" id="L853">		EventServiceLog customCheckEventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE,</span>
+<span class="nc" id="L854">				EntityEnum.BENEFICIARY.name(), fReuqest.getBeneficiary().getBeneficiaryId());</span>
+
+<span class="nc bnc" id="L856" title="All 2 branches missed.">		if (customCheckEventServiceLog.getStatus().equalsIgnoreCase(Constants.NOT_REQUIRED))</span>
+<span class="nc" id="L857">			fundsOutResponse.setCustomCheckStatus(Constants.NOT_REQUIRED);</span>
+
+<span class="nc bnc" id="L859" title="All 2 branches missed.">		else if (customCheckEventServiceLog.getStatus().equalsIgnoreCase(Constants.PASS))</span>
+<span class="nc" id="L860">			fundsOutResponse.setCustomCheckStatus(Constants.PASS);</span>
+
+<span class="nc bnc" id="L862" title="All 2 branches missed.">		else if ((customCheckEventServiceLog.getStatus().equalsIgnoreCase(Constants.FAIL)))</span>
+<span class="nc" id="L863">			fundsOutResponse.setCustomCheckStatus(Constants.FAIL);</span>
+
+		else
+<span class="nc" id="L866">			fundsOutResponse.setCustomCheckStatus(customCheckEventServiceLog.getStatus());</span>
+<span class="nc" id="L867">	}</span>
+
+	/**
+	 * Purpose : In this method, we are setting blacklist status for Fundsout
+	 * and that status will get saved into database. But for this we are
+	 * considering country check status also. Because if country is High
+	 * Risk/Sanctioned then we are setting response to blacklisted customer so
+	 * we need to consider its status also. If for any combination of blacklist
+	 * status or country check status are NOT Required and/or PASS then we set
+	 * blacklist status to PASS otherwise FAIL. And if both the statuses are NOT
+	 * REQUIRED then we set blacklist status to NOT REQUIRED. - Vishal J
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param fundsOutResponse
+	 *            the funds out response
+	 * @return the internal rule service status
+	 */
+	private void getInternalRuleServiceStatus(Message&lt;MessageContext&gt; msg, FundsOutResponse fundsOutResponse) {
+<span class="nc" id="L886">		MessageExchange exchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L887">		InternalServiceResponse internalServiceResponse = (InternalServiceResponse) exchange.getResponse();</span>
+<span class="nc bnc" id="L888" title="All 4 branches missed.">		if (internalServiceResponse != null &amp;&amp; internalServiceResponse.getContacts() != null</span>
+<span class="nc bnc" id="L889" title="All 2 branches missed.">				&amp;&amp; !internalServiceResponse.getContacts().isEmpty()) {</span>
+<span class="nc" id="L890">			ContactResponse contact = internalServiceResponse.getContacts().get(0);</span>
+<span class="nc" id="L891">			fundsOutResponse.setBlacklistCheckStatus(contact.getBlacklist().getStatus());</span>
+<span class="nc" id="L892">			fundsOutResponse.setPaymentReferenceCheckStatus(contact.getBlacklistPayref().getStatus());</span>
+		}
+<span class="nc" id="L894">	}</span>
+
+	/**
+	 * Gets the sanction status.
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param fundsOutResponse
+	 *            the funds out response
+	 * @return the sanction status
+	 */
+	private void getSanctionStatus(Message&lt;MessageContext&gt; msg, FundsOutResponse fundsOutResponse) {
+<span class="nc" id="L906">		MessageExchange sanctionExchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L907">		SanctionResponse sanctionResponse = (SanctionResponse) sanctionExchange.getResponse();</span>
+<span class="nc" id="L908">		List&lt;SanctionContactResponse&gt; contactList = sanctionResponse.getContactResponses();</span>
+<span class="nc" id="L909">		SanctionContactResponse contactResponse = contactList.get(0);</span>
+<span class="nc" id="L910">		SanctionBankResponse bankResponse = sanctionResponse.getBankResponses().get(0);</span>
+<span class="nc" id="L911">		SanctionBeneficiaryResponse beneResponse = sanctionResponse.getBeneficiaryResponses().get(0);</span>
+<span class="nc" id="L912">		EventServiceLog contactServiceLog = sanctionExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L913">				EntityEnum.CONTACT.name(), contactResponse.getContactId());</span>
+<span class="nc" id="L914">		EventServiceLog bankServiceLog = sanctionExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L915">				EntityEnum.BANK.name(), bankResponse.getBankID());</span>
+<span class="nc" id="L916">		EventServiceLog beneServiceLog = sanctionExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L917">				EntityEnum.BENEFICIARY.name(), beneResponse.getBeneficiaryId());</span>
+
+<span class="nc bnc" id="L919" title="All 2 branches missed.">		if (ServiceStatus.PASS.name().equalsIgnoreCase(contactServiceLog.getStatus())</span>
+<span class="nc bnc" id="L920" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.PASS.name().equalsIgnoreCase(bankServiceLog.getStatus())</span>
+<span class="nc bnc" id="L921" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.PASS.name().equalsIgnoreCase(beneServiceLog.getStatus())) {</span>
+<span class="nc" id="L922">			fundsOutResponse.setSanctionCheckStatus(ServiceStatus.PASS.name());</span>
+
+<span class="nc bnc" id="L924" title="All 2 branches missed.">		} else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contactServiceLog.getStatus())</span>
+<span class="nc bnc" id="L925" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(bankServiceLog.getStatus())</span>
+<span class="nc bnc" id="L926" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(beneServiceLog.getStatus())) {</span>
+<span class="nc" id="L927">			fundsOutResponse.setSanctionCheckStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc bnc" id="L928" title="All 2 branches missed.">		} else if (ServiceStatus.SERVICE_FAILURE.name().equalsIgnoreCase(contactServiceLog.getStatus())</span>
+<span class="nc bnc" id="L929" title="All 2 branches missed.">            || ServiceStatus.SERVICE_FAILURE.name().equalsIgnoreCase(bankServiceLog.getStatus())</span>
+<span class="nc bnc" id="L930" title="All 2 branches missed.">            || ServiceStatus.SERVICE_FAILURE.name().equalsIgnoreCase(beneServiceLog.getStatus())) {</span>
+<span class="nc" id="L931">            fundsOutResponse.setSanctionCheckStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+        } else {
+<span class="nc" id="L933">			fundsOutResponse.setSanctionCheckStatus(ServiceStatus.FAIL.name());</span>
+		}
+<span class="nc" id="L935">	}</span>
+
+	/**
+	 * Gets the fraugster status.
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param fundsOutResponse
+	 *            the funds out response
+	 * @return the fraugster status
+	 */
+	private void getFraugsterStatus(Message&lt;MessageContext&gt; msg, FundsOutResponse fundsOutResponse) {
+<span class="nc" id="L947">		MessageExchange fraugsterExchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L948">		FraugsterPaymentsOutResponse fraugsterResponse = (FraugsterPaymentsOutResponse) fraugsterExchange.getResponse();</span>
+<span class="nc bnc" id="L949" title="All 2 branches missed.">		for (FraugsterPaymentsOutContactResponse response : fraugsterResponse.getContactResponses()) {</span>
+<span class="nc" id="L950">			EventServiceLog eventServiceLog = fraugsterExchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L951">					EntityEnum.CONTACT.name(), response.getId());</span>
+<span class="nc" id="L952">			fundsOutResponse.setFraugsterCheckStatus(eventServiceLog.getStatus());</span>
+<span class="nc" id="L953">		}</span>
+<span class="nc" id="L954">	}</span>
+
+	/**
+	 * Gets the custom check status.
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param fundsOutResponse
+	 *            the funds out response
+	 * @return the custom check status
+	 */
+	private void getCustomCheckStatus(Message&lt;MessageContext&gt; msg, FundsOutResponse fundsOutResponse) {
+<span class="nc" id="L966">		MessageExchange exchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+<span class="nc" id="L967">		CustomChecksRequest serviceRequest = exchange.getRequest(CustomChecksRequest.class);</span>
+<span class="nc" id="L968">		FundsOutRequest fReuqest = (FundsOutRequest) serviceRequest.getESDocument();</span>
+<span class="nc" id="L969">		EventServiceLog customCheckEventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE,</span>
+<span class="nc" id="L970">				EntityEnum.BENEFICIARY.name(), fReuqest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L971">		InternalServiceResponse internalServiceResponse = (InternalServiceResponse) msg.getPayload()</span>
+<span class="nc" id="L972">				.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE).getResponse();</span>
+<span class="nc bnc" id="L973" title="All 4 branches missed.">		if (internalServiceResponse != null &amp;&amp; internalServiceResponse.getContacts() != null</span>
+<span class="nc bnc" id="L974" title="All 2 branches missed.">				&amp;&amp; !internalServiceResponse.getContacts().isEmpty()) {</span>
+<span class="nc" id="L975">			ContactResponse contact = internalServiceResponse.getContacts().get(0);</span>
+<span class="nc" id="L976">			String countryCheckStatus = contact.getCountryCheck().getStatus();</span>
+<span class="nc" id="L977">			String customCheckStatus = customCheckEventServiceLog.getStatus();</span>
+			
+			// If either Custom or Country chec SERVICE failed, mark it SERVICE_FAILURE
+			// if both NOT_REQUIRED, then NOT_REQUIRED
+			// if one is PASS and other is NOT_REQUIRED, PASS
+			// else FAIL
+<span class="nc" id="L983">			fundsOutResponse.setCustomCheckStatus(</span>
+<span class="nc" id="L984">					determineCustomCheckColumnStatus(countryCheckStatus, customCheckStatus).name());</span>
+<span class="nc" id="L985">		} else {</span>
+<span class="nc" id="L986">			fundsOutResponse.setCustomCheckStatus(customCheckEventServiceLog.getStatus());</span>
+		}
+<span class="nc" id="L988">	}</span>
+	
+	private ServiceStatus determineCustomCheckColumnStatus(
+			String poCountryCheck, String poCustomCheck) {
+		ServiceStatus result;
+<span class="nc bnc" id="L993" title="All 2 branches missed.">		if(ServiceStatus.SERVICE_FAILURE.name().equals(poCustomCheck)</span>
+<span class="nc bnc" id="L994" title="All 2 branches missed.">		    || ServiceStatus.SERVICE_FAILURE.name().equals(poCountryCheck) ){</span>
+<span class="nc" id="L995">		  result = ServiceStatus.SERVICE_FAILURE;</span>
+<span class="nc bnc" id="L996" title="All 2 branches missed.">		}else if(ServiceStatus.NOT_REQUIRED.name().equals(poCustomCheck)</span>
+<span class="nc bnc" id="L997" title="All 2 branches missed.">		    &amp;&amp; ServiceStatus.NOT_REQUIRED.name().equals(poCountryCheck) ){</span>
+<span class="nc" id="L998">			result = ServiceStatus.NOT_REQUIRED;</span>
+<span class="nc bnc" id="L999" title="All 2 branches missed.">		}else if( (ServiceStatus.PASS.name().equals(poCustomCheck)</span>
+<span class="nc bnc" id="L1000" title="All 2 branches missed.">		      &amp;&amp; ServiceStatus.NOT_REQUIRED.name().equals(poCountryCheck))</span>
+<span class="nc bnc" id="L1001" title="All 2 branches missed.">		    ||(ServiceStatus.NOT_REQUIRED.name().equals(poCustomCheck)</span>
+<span class="nc bnc" id="L1002" title="All 2 branches missed.">		      &amp;&amp; ServiceStatus.PASS.name().equals(poCountryCheck))</span>
+		    ){
+<span class="nc" id="L1004">			result = ServiceStatus.PASS;</span>
+<span class="nc bnc" id="L1005" title="All 2 branches missed.">		}else if(ServiceStatus.PASS.name().equals(poCustomCheck) </span>
+<span class="nc bnc" id="L1006" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.PASS.name().equals(poCountryCheck)){</span>
+<span class="nc" id="L1007">			result = ServiceStatus.PASS;</span>
+		}
+		else{
+<span class="nc" id="L1010">			result = ServiceStatus.FAIL;</span>
+		}
+		
+<span class="nc" id="L1013">		return result;</span>
+	}
+	
+	private void getTransactionMonitoringStatus(Message&lt;MessageContext&gt; message, FundsOutResponse fundsOutResponse) {
+<span class="nc" id="L1017">		MessageExchange tmExchange = message.getPayload().getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+
+<span class="nc" id="L1019">		TransactionMonitoringPaymentsOutRequest request = tmExchange.getRequest(TransactionMonitoringPaymentsOutRequest.class);</span>
+<span class="nc" id="L1020">		TransactionMonitoringPaymentOutResponse tmPaymentsOutResponse = (TransactionMonitoringPaymentOutResponse) tmExchange</span>
+<span class="nc" id="L1021">				.getResponse();</span>
+<span class="nc bnc" id="L1022" title="All 2 branches missed.">		if (tmPaymentsOutResponse != null) {</span>
+<span class="nc" id="L1023">			EventServiceLog eventServiceLog = tmExchange.getEventServiceLog(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE,</span>
+<span class="nc" id="L1024">					EntityEnum.ACCOUNT.name(), request.getFundsOutId());</span>
+<span class="nc" id="L1025">			fundsOutResponse.setIntuitionCheckStatus(eventServiceLog.getStatus());</span>
+		}
+<span class="nc" id="L1027">	}</span>
+
+	/**
+	 * Checks if is customer inactive.
+	 *
+	 * @param request
+	 *            the request
+	 * @return true, if is customer inactive
+	 */
+	/*
+	 * This check for sending response inactive customer if customer is
+	 * inActive. To check this we enrich data in DataEnricher of account and
+	 * contact.
+	 */
+	private boolean isCustomerInactive(ServiceMessage request) {
+<span class="nc" id="L1042">		Boolean isActive = (Boolean) request.getAdditionalAttribute(Constants.PERFORM_CHECKS);</span>
+<span class="nc bnc" id="L1043" title="All 4 branches missed.">		return !(isActive != null &amp;&amp; isActive);</span>
+	}
+	
+	/**
+	 * Add for AT-4752
+	 * 
+	 * Creates the short response code.
+	 *
+	 * @param msg the msg
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; createShortResponseCode(Message&lt;MessageContext&gt; msg) {
+<span class="nc" id="L1055">		MessageExchange exchange = msg.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1056">		FundsOutResponse fundsOutResponse = (FundsOutResponse) exchange.getResponse();</span>
+<span class="nc bnc" id="L1057" title="All 2 branches missed.">		if (fundsOutResponse == null) {</span>
+<span class="nc" id="L1058">			fundsOutResponse = new FundsOutResponse();</span>
+		}
+<span class="nc" id="L1060">		FundsOutRequest fundsOutRequest = (FundsOutRequest) msg.getPayload().getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L1061">		fundsOutResponse.setShortResponseCode(FundsOutShortReasonCode.PASS.getFundsOutReasonShort());</span>
+<span class="nc" id="L1062">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1063">		List&lt;FundsOutShortReasonCode&gt; shortResponseReasons = new ArrayList&lt;&gt;();</span>
+		
+		
+<span class="nc bnc" id="L1066" title="All 2 branches missed.">		if (isCustomerInactive(fundsOutRequest)) {</span>
+<span class="nc" id="L1067">			shortResponseReasons.add(FundsOutShortReasonCode.INACTIVE_CUSTOMER);</span>
+		}
+		try {
+<span class="nc" id="L1070">			CustomCheckResponse cResponse = (CustomCheckResponse) msg.getPayload()</span>
+<span class="nc" id="L1071">					.getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE).getResponse();</span>
+
+<span class="nc" id="L1073">			InternalServiceResponse internalServiceResponse = (InternalServiceResponse) msg.getPayload()</span>
+<span class="nc" id="L1074">					.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE).getResponse();</span>
+
+<span class="nc" id="L1076">			responseReasons.addAll(getBlacklistStatus(internalServiceResponse, shortResponseReasons));</span>
+<span class="nc" id="L1077">			responseReasons.addAll(getCountryCheckStatus(internalServiceResponse, cResponse, shortResponseReasons, fundsOutRequest));</span>
+<span class="nc" id="L1078">			responseReasons.addAll(getBlacklistPayRefStatus(internalServiceResponse, shortResponseReasons));</span>
+
+<span class="nc" id="L1080">			SanctionResponse sanctionResponse = (SanctionResponse) msg.getPayload()</span>
+<span class="nc" id="L1081">					.getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE).getResponse();</span>
+<span class="nc" id="L1082">			responseReasons.addAll(getSanctionStatus(sanctionResponse, shortResponseReasons));</span>
+            
+<span class="nc" id="L1084">            FraugsterPaymentsOutResponse fResponse = (FraugsterPaymentsOutResponse) msg.getPayload()</span>
+<span class="nc" id="L1085">					.getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE).getResponse();</span>
+<span class="nc bnc" id="L1086" title="All 2 branches missed.">            if(!&quot;NOT_REQUIRED&quot;.equals(fResponse.getStatus()) </span>
+<span class="nc bnc" id="L1087" title="All 2 branches missed.">            		&amp;&amp; CustomerTypeEnum.PFX.name().equals(fundsOutRequest.getTrade().getCustType()) ) {</span>
+<span class="nc" id="L1088">				responseReasons.addAll(getFraugsterStatus(fResponse, shortResponseReasons));</span>
+			}
+            
+<span class="nc" id="L1091">			responseReasons.addAll(getCustomChecksStatus(cResponse, fundsOutRequest, shortResponseReasons));//Add for AT-3161</span>
+
+			List&lt;String&gt; usClientListBBeneAccNumber;
+<span class="nc bnc" id="L1094" title="All 2 branches missed.">			if (null != cResponse.getAccountWhiteList()){</span>
+<span class="nc" id="L1095">				usClientListBBeneAccNumber = cResponse.getAccountWhiteList()</span>
+<span class="nc" id="L1096">						.getUsClientListBBeneAccNumber();</span>
+			} else {
+<span class="nc" id="L1098">				usClientListBBeneAccNumber = new ArrayList&lt;&gt;();</span>
+			}
+<span class="nc bnc" id="L1100" title="All 2 branches missed.">			if(fundsOutRequest.getTrade().getCustType().equalsIgnoreCase(&quot;PFX&quot;)){</span>
+<span class="nc" id="L1101">				checkAccNumberAndWatchlistReasonsForPFX(responseReasons, msg, usClientListBBeneAccNumber,fundsOutResponse);</span>
+			}else{
+<span class="nc" id="L1103">				checkAccNumberAndWatchlistReasons(responseReasons, msg, usClientListBBeneAccNumber,fundsOutResponse);</span>
+			}
+			
+<span class="nc" id="L1106">			addNewShortReasonCode(fundsOutResponse, shortResponseReasons);</span>
+
+<span class="nc" id="L1108">		} catch (Exception ex) {</span>
+<span class="nc" id="L1109">			LOG.error(&quot;Error while sting services response in FundsOutRulesService :: createShortResponseCode() ::  &quot;, ex);</span>
+<span class="nc" id="L1110">			msg.getPayload().setFailed(true);</span>
+<span class="nc" id="L1111">		}</span>
+<span class="nc" id="L1112">		return msg;</span>
+	}
+
+	/**
+	 * @param tmResponse
+	 * @param shortResponseReasons
+	 * @return
+	 */
+	//AT-4594
+	private List&lt;FundsOutReasonCode&gt; getTransactionMonitoringStatus(TransactionMonitoringPaymentOutResponse tmResponse,
+			List&lt;FundsOutShortReasonCode&gt; shortResponseReasons) {
+<span class="nc" id="L1123">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+		
+<span class="nc bnc" id="L1125" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(tmResponse.getStatus())</span>
+<span class="nc bnc" id="L1126" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(tmResponse.getStatus())</span>
+<span class="nc bnc" id="L1127" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(tmResponse.getStatus())</span>
+<span class="nc bnc" id="L1128" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_PERFORMED.name().equals(tmResponse.getStatus())) {</span>
+<span class="nc" id="L1129">			responseReasons.add(FundsOutReasonCode.TRANSACTION_MONITORING_CHECK_FAIL);</span>
+<span class="nc" id="L1130">			shortResponseReasons.add(FundsOutShortReasonCode.TRANSACTION_MONITORING_CHECK_FAIL);</span>
+		}
+<span class="nc bnc" id="L1132" title="All 2 branches missed.">		else if (ServiceStatus.SERVICE_FAILURE.name().equals(tmResponse.getStatus()))</span>
+		{
+<span class="nc" id="L1134">			responseReasons.add(FundsOutReasonCode.TRANSACTION_MONITORING_SERVICE_FAIL);</span>
+<span class="nc" id="L1135">			shortResponseReasons.add(FundsOutShortReasonCode.TRANSACTION_MONITORING_SERVICE_FAIL); </span>
+		}	
+		
+<span class="nc" id="L1138">		return responseReasons;</span>
+	}
+	
+	
+	/**
+	 * @param msg
+	 * @param fundsOutResponse
+	 */
+	// AT-4594
+	private void setIntuitionResponse(FundsOutResponse fundsOutResponse) {
+		
+<span class="nc" id="L1149">		String sanctionCheckStatus = fundsOutResponse.getSanctionCheckStatus();</span>
+<span class="nc" id="L1150">		String intuitionStatus = fundsOutResponse.getIntuitionCheckStatus();</span>
+		
+<span class="nc bnc" id="L1152" title="All 4 branches missed.">		if (sanctionCheckStatus != null &amp;&amp; intuitionStatus != null </span>
+<span class="nc bnc" id="L1153" title="All 2 branches missed.">				&amp;&amp; !intuitionStatus.equalsIgnoreCase(ServiceStatus.NOT_REQUIRED.name())) {</span>
+			
+<span class="nc bnc" id="L1155" title="All 2 branches missed.">			    if(sanctionCheckStatus.equalsIgnoreCase(ServiceStatus.FAIL.name()) || </span>
+<span class="nc bnc" id="L1156" title="All 2 branches missed.">						sanctionCheckStatus.equalsIgnoreCase(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L1157">			    	fundsOutResponse.setStatus(FundsOutComplianceStatus.HOLD.name());</span>
+				}
+<span class="nc bnc" id="L1159" title="All 2 branches missed.">				else if(intuitionStatus.equalsIgnoreCase(ServiceStatus.FAIL.name()) || </span>
+<span class="nc bnc" id="L1160" title="All 2 branches missed.">						intuitionStatus.equalsIgnoreCase(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L1161">					fundsOutResponse.setStatus(FundsOutComplianceStatus.HOLD.name());</span>
+				}
+<span class="nc bnc" id="L1163" title="All 2 branches missed.">				else if(sanctionCheckStatus.equalsIgnoreCase(ServiceStatus.NOT_REQUIRED.name()) || </span>
+<span class="nc bnc" id="L1164" title="All 2 branches missed.">						intuitionStatus.equalsIgnoreCase(ServiceStatus.PASS.name())) {</span>
+<span class="nc" id="L1165">					fundsOutResponse.setStatus(FundsOutComplianceStatus.CLEAR.name());</span>
+				}
+<span class="nc bnc" id="L1167" title="All 2 branches missed.">				else if(sanctionCheckStatus.equalsIgnoreCase(ServiceStatus.PASS.name()) &amp;&amp;</span>
+<span class="nc bnc" id="L1168" title="All 2 branches missed.">						intuitionStatus.equalsIgnoreCase(ServiceStatus.PASS.name())) {</span>
+<span class="nc" id="L1169">					fundsOutResponse.setStatus(FundsOutComplianceStatus.CLEAR.name());</span>
+				}
+		}
+<span class="nc" id="L1172">	}</span>
+	
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; processForManualUpdate(Message&lt;MessageContext&gt; message) {
+		MessageExchange messageExchange;
+		TransactionMonitoringPaymentsOutRequest request;
+		TransactionMonitoringPaymentOutResponse response;
+<span class="nc" id="L1179">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L1182">			messageExchange = message.getPayload().getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L1183">			request = (TransactionMonitoringPaymentsOutRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L1184">			response = (TransactionMonitoringPaymentOutResponse) messageExchange.getResponse();</span>
+			
+<span class="nc bnc" id="L1186" title="All 2 branches missed.">			if (request.getUpdateStatus().equalsIgnoreCase(FundsOutComplianceStatus.HOLD.name())) {</span>
+
+<span class="nc" id="L1188">				TransactionMonitoringFundsProviderResponse tmProviderResponse = response</span>
+<span class="nc" id="L1189">						.getTransactionMonitoringFundsProviderResponse();</span>
+
+<span class="nc" id="L1191">				response.setPaymentStatus(FundsInComplianceStatus.CLEAR.name());</span>
+<span class="nc" id="L1192">				response.setResponseCode(FundsInReasonCode.PASS.getReasonCode());</span>
+<span class="nc" id="L1193">				response.setResponseDescription(FundsInReasonCode.PASS.getReasonDescription());</span>
+
+<span class="nc bnc" id="L1195" title="All 2 branches missed.">				if (!ServiceStatus.PASS.name().equals(request.getSanctionContactStatus())</span>
+<span class="nc bnc" id="L1196" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionContactStatus())</span>
+<span class="nc bnc" id="L1197" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(request.getSanctionContactStatus())) {</span>
+<span class="nc" id="L1198">					responseReasons.add(FundsOutReasonCode.CONTACT_SANCTIONED);</span>
+<span class="nc bnc" id="L1199" title="All 2 branches missed.">				} else if (ServiceStatus.NOT_REQUIRED.name().equals(request.getSanctionContactStatus())) {</span>
+<span class="nc" id="L1200">					responseReasons.add(FundsOutReasonCode.INACTIVE_CUSTOMER);</span>
+				}
+
+<span class="nc bnc" id="L1203" title="All 2 branches missed.">				if (!ServiceStatus.NOT_REQUIRED.name().equals(request.getSanctionBankStatus())) {</span>
+<span class="nc bnc" id="L1204" title="All 2 branches missed.">					if (!ServiceStatus.PASS.name().equals(request.getSanctionBankStatus())</span>
+<span class="nc bnc" id="L1205" title="All 2 branches missed.">							&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionBankStatus())) {</span>
+<span class="nc" id="L1206">						responseReasons.add(FundsOutReasonCode.BANK_SANCTIONED);</span>
+					}
+
+<span class="nc bnc" id="L1209" title="All 2 branches missed.">					if (!ServiceStatus.PASS.name().equals(request.getSanctionBeneficiaryStatus())</span>
+<span class="nc bnc" id="L1210" title="All 2 branches missed.">							&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionBeneficiaryStatus())) {</span>
+<span class="nc" id="L1211">						responseReasons.add(FundsOutReasonCode.BENEFICIARY_SANCTIONED);</span>
+					}
+				}
+
+<span class="nc bnc" id="L1215" title="All 2 branches missed.">				if (ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionContactStatus())</span>
+<span class="nc bnc" id="L1216" title="All 2 branches missed.">						|| ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionBankStatus())</span>
+<span class="nc bnc" id="L1217" title="All 2 branches missed.">						|| ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionBeneficiaryStatus())) {</span>
+<span class="nc" id="L1218">					responseReasons.add(FundsOutReasonCode.SANCTION_SERVICE_FAIL);</span>
+				}
+
+<span class="nc bnc" id="L1221" title="All 2 branches missed.">				if (!ServiceStatus.PASS.name().equals(tmProviderResponse.getStatus())</span>
+<span class="nc bnc" id="L1222" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(tmProviderResponse.getStatus())</span>
+<span class="nc bnc" id="L1223" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(tmProviderResponse.getStatus())</span>
+<span class="nc bnc" id="L1224" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.NOT_PERFORMED.name().equals(tmProviderResponse.getStatus())) {</span>
+<span class="nc" id="L1225">					responseReasons.add(FundsOutReasonCode.TRANSACTION_MONITORING_CHECK_FAIL);</span>
+<span class="nc bnc" id="L1226" title="All 2 branches missed.">				} else if (ServiceStatus.SERVICE_FAILURE.name().equals(tmProviderResponse.getStatus())) {</span>
+<span class="nc" id="L1227">					responseReasons.add(FundsOutReasonCode.TRANSACTION_MONITORING_SERVICE_FAIL);</span>
+				}
+
+<span class="nc" id="L1230">				checkResponseReasonSize(response, responseReasons);</span>
+			}
+
+<span class="nc" id="L1233">		} catch (Exception e) {</span>
+<span class="nc" id="L1234">			LOG.error(</span>
+					&quot;Error while sting services response in PaymentOutManualUpdateRuleService :: paymentOutCreateResponse() ::  &quot;,
+					e);
+<span class="nc" id="L1237">		}</span>
+
+<span class="nc" id="L1239">		return message;</span>
+	}
+
+	private void checkResponseReasonSize(TransactionMonitoringPaymentOutResponse response,
+			List&lt;FundsOutReasonCode&gt; responseReasons) {
+<span class="nc bnc" id="L1244" title="All 2 branches missed.">		if (!responseReasons.isEmpty()) {</span>
+<span class="nc" id="L1245">			StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L1246" title="All 2 branches missed.">			for (FundsOutReasonCode field : responseReasons) {</span>
+<span class="nc bnc" id="L1247" title="All 2 branches missed.">				if (!(sb.toString().contains(field.getFundsOutReasonDescription()))) {</span>
+<span class="nc bnc" id="L1248" title="All 2 branches missed.">					if (sb.length() &gt; 0) {</span>
+<span class="nc" id="L1249">						sb.append(&quot;, &quot;);</span>
+					}
+<span class="nc" id="L1251">					sb.append(field.getFundsOutReasonDescription());</span>
+				}
+<span class="nc" id="L1253">				response.setResponseDescription(sb.toString());</span>
+<span class="nc" id="L1254">				response.setPaymentStatus(FundsInComplianceStatus.HOLD.name());</span>
+<span class="nc" id="L1255">			}</span>
+
+		}
+<span class="nc" id="L1258">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

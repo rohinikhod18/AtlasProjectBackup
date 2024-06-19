@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BroadCastQueueDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">BroadCastQueueDBServiceImpl.java</span></div><h1>BroadCastQueueDBServiceImpl.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.BroadCastEntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.IBroadCastQueueDBService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.BroadCastQueueRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.BroadCastStatusEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.BroadcastEventToDB;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.MQProviderResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MQMessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class BroadCastQueueDBServiceImpl.
+ *
+ * @author manish
+ */
+@SuppressWarnings(&quot;squid:S2095&quot;)
+<span class="nc" id="L41">public class BroadCastQueueDBServiceImpl extends AbstractDao implements IBroadCastQueueDBService {</span>
+	
+	/** The Constant LOG. */
+<span class="nc" id="L44">	private static final Logger LOG = LoggerFactory.getLogger(BroadCastQueueDBServiceImpl.class);</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.
+	 * IBroadCastQueueDBService#isMessageForBroadcast()
+	 */
+	@Override
+	public Boolean isMessageForBroadcast() throws ComplianceException {
+<span class="nc" id="L54">		PreparedStatement statement = null;</span>
+<span class="nc" id="L55">		ResultSet rs = null;</span>
+<span class="nc" id="L56">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L58">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L59">			statement = connection.prepareStatement(DBQueryConstant.GET_BROADCAST_MESSAGE_FROM_DB.getQuery());</span>
+
+<span class="nc" id="L61">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L63">				return Boolean.TRUE;</span>
+			}
+
+<span class="nc" id="L66">		} catch (Exception e) {</span>
+<span class="nc" id="L67">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L69">			closeResultset(rs);</span>
+<span class="nc" id="L70">			closePrepareStatement(statement);</span>
+<span class="nc" id="L71">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L73">		return Boolean.FALSE;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.
+	 * IBroadCastQueueDBService#loadMessageFromDB(org.springframework.messaging.
+	 * Message)
+	 */
+	@Override
+	public Message&lt;MQMessageContext&gt; loadMessageFromDB(Message&lt;MQMessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L85">		PreparedStatement statement = null;</span>
+<span class="nc" id="L86">		ResultSet rs = null;</span>
+<span class="nc" id="L87">		Connection connection = null;</span>
+<span class="nc" id="L88">		BroadCastQueueRequest broadCastQueueRequest = new BroadCastQueueRequest();</span>
+		try {
+<span class="nc" id="L90">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L91">			statement = connection.prepareStatement(DBQueryConstant.GET_BROADCAST_MESSAGE_FROM_DB.getQuery());</span>
+
+<span class="nc" id="L93">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L95">				broadCastQueueRequest.setId(rs.getInt(&quot;ID&quot;));</span>
+<span class="nc" id="L96">				broadCastQueueRequest.setOrganizationID(rs.getInt(&quot;OrganizationID&quot;));</span>
+<span class="nc" id="L97">				broadCastQueueRequest</span>
+<span class="nc" id="L98">						.setEntityType(BroadCastEntityTypeEnum.getBraodCastEntityTypeAsString(rs.getInt(&quot;EntityType&quot;)));</span>
+<span class="nc" id="L99">				broadCastQueueRequest.setAccountID(rs.getInt(&quot;AccountID&quot;));</span>
+<span class="nc" id="L100">				broadCastQueueRequest.setContactID(rs.getInt(&quot;ContactID&quot;));</span>
+<span class="nc" id="L101">				broadCastQueueRequest.setPaymentInID(rs.getInt(&quot;PaymentInID&quot;));</span>
+<span class="nc" id="L102">				broadCastQueueRequest.setPaymentOutID(rs.getInt(&quot;PaymentOutID&quot;));</span>
+<span class="nc" id="L103">				broadCastQueueRequest</span>
+<span class="nc" id="L104">						.setStatusJson(JsonConverterUtil.convertToObject(Object.class, rs.getString(&quot;StatusJson&quot;)));</span>
+<span class="nc" id="L105">				broadCastQueueRequest.setTimestamp(rs.getTimestamp(&quot;CreatedOn&quot;));</span>
+<span class="nc" id="L106">				message.getPayload().setRetryCount(rs.getInt(&quot;RetryCount&quot;));</span>
+<span class="nc" id="L107">				message.getPayload().setRequest(broadCastQueueRequest);</span>
+			} else {
+<span class="nc" id="L109">				message.getPayload().setNoMessageLeft(Boolean.TRUE);</span>
+			}
+<span class="nc" id="L111">		} catch (Exception e) {</span>
+<span class="nc" id="L112">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L114">			closeResultset(rs);</span>
+<span class="nc" id="L115">			closePrepareStatement(statement);</span>
+<span class="nc" id="L116">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L118">		return message;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.
+	 * IBroadCastQueueDBService#updateBroadCastStatusToDB(org.springframework.
+	 * messaging.Message)
+	 */
+	@Override
+	public Message&lt;MQMessageContext&gt; updateBroadCastStatusToDB(Message&lt;MQMessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L131">		PreparedStatement statement = null;</span>
+
+<span class="nc" id="L133">		Connection connection = null;</span>
+<span class="nc" id="L134">		BroadCastQueueRequest request = null;</span>
+<span class="nc" id="L135">		MQProviderResponse response = null;</span>
+<span class="nc" id="L136">		Integer retryCount = null;</span>
+		try {
+<span class="nc" id="L138">			retryCount = message.getPayload().getRetryCount();</span>
+<span class="nc" id="L139">			request = (BroadCastQueueRequest) message.getPayload().getRequest();</span>
+<span class="nc" id="L140">			response = message.getPayload().getMqProviderResponse();</span>
+<span class="nc" id="L141">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L142">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_BROADCAST_STATUS_TO_DB.getQuery());</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">			if (Constants.SUCCESS.equalsIgnoreCase(response.getStatus())) {</span>
+<span class="nc" id="L144">				statement.setInt(1,</span>
+<span class="nc" id="L145">						BroadCastStatusEnum.getBraodCastStatusAsInteger(BroadCastStatusEnum.DELIVERED.toString()));</span>
+			} /**
+				 * if enterprise service is down status will be not_found, set
+				 * retry count -1
+				 **/
+<span class="nc bnc" id="L150" title="All 2 branches missed.">			else if (Constants.NOT_FOUND.equalsIgnoreCase(response.getStatus())) {</span>
+<span class="nc" id="L151">				statement.setInt(1,</span>
+<span class="nc" id="L152">						BroadCastStatusEnum.getBraodCastStatusAsInteger(BroadCastStatusEnum.FAILED.toString()));</span>
+<span class="nc" id="L153">				retryCount = -1;</span>
+			} else {
+<span class="nc" id="L155">				statement.setInt(1,</span>
+<span class="nc" id="L156">						BroadCastStatusEnum.getBraodCastStatusAsInteger(BroadCastStatusEnum.FAILED.toString()));</span>
+<span class="nc" id="L157">				retryCount++;</span>
+			}
+
+<span class="nc" id="L160">			statement.setInt(2, retryCount);</span>
+<span class="nc" id="L161">			statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L162">			statement.setInt(4, request.getId());</span>
+<span class="nc" id="L163">			statement.executeUpdate();</span>
+<span class="nc" id="L164">		} catch (Exception e) {</span>
+<span class="nc" id="L165">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L167">			closePrepareStatement(statement);</span>
+<span class="nc" id="L168">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L170">		return message;</span>
+
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.
+	 * IBroadCastQueueDBService#saveIntoBroadcastQueue(org.springframework.
+	 * messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; saveIntoBroadcastQueue(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L183">		PreparedStatement broadcastEventStmt = null;</span>
+<span class="nc" id="L184">		Connection connection = null;</span>
+<span class="nc" id="L185">		BroadcastEventToDB stpBroadcastEvent = null;</span>
+		try {
+<span class="nc" id="L187">			MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L188">					.getMessageExchange(ServiceTypeEnum.SAVE_TO_BROADCAST_SERVICE);</span>
+<span class="nc" id="L189">			stpBroadcastEvent = (BroadcastEventToDB) exchange.getRequest();</span>
+<span class="nc" id="L190">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L191">			broadcastEventStmt = connection.prepareStatement(DBQueryConstant.SAVE_INTO_BROADCAST_QUEUE.getQuery());</span>
+<span class="nc" id="L192">			broadcastEventStmt.setString(1, stpBroadcastEvent.getOrgCode());</span>
+<span class="nc bnc" id="L193" title="All 2 branches missed.">			if (stpBroadcastEvent.getEntityType() != null) { //handle NPE - For AT-4355</span>
+<span class="nc" id="L194">				broadcastEventStmt.setInt(2, BroadCastEntityTypeEnum</span>
+<span class="nc" id="L195">						.getBraodCastEntityTypeAsInteger(stpBroadcastEvent.getEntityType().toString()));</span>
+			} else {
+<span class="nc" id="L197">				broadcastEventStmt.setNull(2, Types.INTEGER);</span>
+			}
+			
+<span class="nc bnc" id="L200" title="All 2 branches missed.">			if (stpBroadcastEvent.getAccountId() != null) {</span>
+<span class="nc" id="L201">				broadcastEventStmt.setInt(3, stpBroadcastEvent.getAccountId());</span>
+			} else {
+<span class="nc" id="L203">				broadcastEventStmt.setNull(3, Types.INTEGER);</span>
+			}
+
+<span class="nc bnc" id="L206" title="All 2 branches missed.">			if (stpBroadcastEvent.getContactId() != null) {</span>
+<span class="nc" id="L207">				broadcastEventStmt.setInt(4, stpBroadcastEvent.getContactId());</span>
+			} else {
+<span class="nc" id="L209">				broadcastEventStmt.setNull(4, Types.INTEGER);</span>
+			}
+<span class="nc bnc" id="L211" title="All 2 branches missed.">			if (stpBroadcastEvent.getPaymentInId() != null) {</span>
+<span class="nc" id="L212">				broadcastEventStmt.setInt(5, stpBroadcastEvent.getPaymentInId());</span>
+			} else {
+<span class="nc" id="L214">				broadcastEventStmt.setNull(5, Types.INTEGER);</span>
+			}
+<span class="nc bnc" id="L216" title="All 2 branches missed.">			if (stpBroadcastEvent.getPaymentOutId() != null) {</span>
+<span class="nc" id="L217">				broadcastEventStmt.setInt(6, stpBroadcastEvent.getPaymentOutId());</span>
+			} else {
+<span class="nc" id="L219">				broadcastEventStmt.setNull(6, Types.INTEGER);</span>
+			}
+<span class="nc" id="L221">			broadcastEventStmt.setString(7, JsonConverterUtil.convertToJsonWithNull(stpBroadcastEvent.getStatusJson()));</span>
+<span class="nc" id="L222">			broadcastEventStmt.setInt(8,</span>
+<span class="nc" id="L223">					BroadCastStatusEnum.getBraodCastStatusAsInteger(stpBroadcastEvent.getDeliveryStatus()));</span>
+<span class="nc" id="L224">			broadcastEventStmt.setTimestamp(9, stpBroadcastEvent.getDeliverOn());</span>
+<span class="nc" id="L225">			broadcastEventStmt.setInt(10, stpBroadcastEvent.getCreatedBy());</span>
+<span class="nc" id="L226">			broadcastEventStmt.setTimestamp(11, stpBroadcastEvent.getCreatedOn());</span>
+<span class="nc" id="L227">			broadcastEventStmt.executeUpdate();</span>
+<span class="nc" id="L228">		} catch (Exception e) {</span>
+<span class="nc" id="L229">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L230">			LOG.error(&quot;Error in BroadCastQueueDBServiceImpl class saveIntoBroadcastQueue method:&quot;, e);</span>
+		} finally {
+<span class="nc" id="L232">			closePrepareStatement(broadcastEventStmt);</span>
+<span class="nc" id="L233">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L235">		return message;</span>
+	}
+
+	/**
+	 * Save into broadcast queue.
+	 *
+	 * @param event
+	 *            the broadcast event to DB
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public void saveIntoBroadcastQueue(BroadcastEventToDB event) throws ComplianceException {
+<span class="nc" id="L247">		PreparedStatement preparedStmt = null;</span>
+<span class="nc" id="L248">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L250">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L251">			preparedStmt = connection.prepareStatement(DBQueryConstant.SAVE_INTO_BROADCAST_QUEUE.getQuery());</span>
+<span class="nc" id="L252">			preparedStmt.setString(1, event.getOrgCode());</span>
+<span class="nc" id="L253">			preparedStmt.setInt(2,</span>
+<span class="nc" id="L254">					BroadCastEntityTypeEnum.getBraodCastEntityTypeAsInteger(event.getEntityType().toString()));</span>
+<span class="nc bnc" id="L255" title="All 2 branches missed.">			if (event.getAccountId() != null) {</span>
+<span class="nc" id="L256">				preparedStmt.setInt(3, event.getAccountId());</span>
+			} else {
+<span class="nc" id="L258">				preparedStmt.setNull(3, Types.INTEGER);</span>
+			}
+
+<span class="nc bnc" id="L261" title="All 2 branches missed.">			if (event.getContactId() != null) {</span>
+<span class="nc" id="L262">				preparedStmt.setInt(4, event.getContactId());</span>
+			} else {
+<span class="nc" id="L264">				preparedStmt.setNull(4, Types.INTEGER);</span>
+			}
+<span class="nc bnc" id="L266" title="All 2 branches missed.">			if (event.getPaymentInId() != null) {</span>
+<span class="nc" id="L267">				preparedStmt.setInt(5, event.getPaymentInId());</span>
+			} else {
+<span class="nc" id="L269">				preparedStmt.setNull(5, Types.INTEGER);</span>
+			}
+<span class="nc bnc" id="L271" title="All 2 branches missed.">			if (event.getPaymentOutId() != null) {</span>
+<span class="nc" id="L272">				preparedStmt.setInt(6, event.getPaymentOutId());</span>
+			} else {
+<span class="nc" id="L274">				preparedStmt.setNull(6, Types.INTEGER);</span>
+			}
+<span class="nc" id="L276">			preparedStmt.setString(7, JsonConverterUtil.convertToJsonWithNull(event.getStatusJson()));</span>
+<span class="nc" id="L277">			preparedStmt.setInt(8, BroadCastStatusEnum.getBraodCastStatusAsInteger(event.getDeliveryStatus()));</span>
+<span class="nc" id="L278">			preparedStmt.setTimestamp(9, event.getDeliverOn());</span>
+<span class="nc" id="L279">			preparedStmt.setInt(10, event.getCreatedBy());</span>
+<span class="nc" id="L280">			preparedStmt.setTimestamp(11, event.getCreatedOn());</span>
+<span class="nc" id="L281">			preparedStmt.executeUpdate();</span>
+<span class="nc" id="L282">		} catch (Exception e) {</span>
+<span class="nc" id="L283">			LOG.error(&quot;Error in BroadCastQueueDBServiceImpl class saveIntoBroadcastQueue method:&quot;, e);</span>
+		} finally {
+<span class="nc" id="L285">			closePrepareStatement(preparedStmt);</span>
+<span class="nc" id="L286">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L288">	}</span>
+	
+	public ComplianceAccount getContactsDetails(String accountSfId)  throws ComplianceException{
+<span class="nc" id="L291">		PreparedStatement preparedStmt = null;</span>
+<span class="nc" id="L292">		Connection connection = null;</span>
+<span class="nc" id="L293">		ResultSet rs = null;</span>
+<span class="nc" id="L294">		ComplianceAccount details = new ComplianceAccount();</span>
+<span class="nc" id="L295">		List&lt;ComplianceContact&gt; contactList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L297">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L298">			preparedStmt = connection.prepareStatement(DBQueryConstant.GET_CONTACT_DETAILS_FOR_STATUSBROADCAST_IN_MQ.getQuery());</span>
+<span class="nc" id="L299">			preparedStmt.setString(1, accountSfId);</span>
+<span class="nc" id="L300">			rs = preparedStmt.executeQuery();</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">			while(rs.next()) {</span>
+<span class="nc" id="L302">				ComplianceContact cc = new ComplianceContact();</span>
+<span class="nc" id="L303">				cc.setContactSFID(rs.getString(&quot;ContactSFID&quot;));</span>
+<span class="nc" id="L304">				cc.setTradeContactID(rs.getInt(&quot;TradeContactID&quot;));</span>
+<span class="nc" id="L305">				contactList.add(cc);</span>
+<span class="nc" id="L306">			}</span>
+<span class="nc" id="L307">			details.setContacts(contactList);</span>
+		}
+<span class="nc" id="L309">		catch(Exception e) {</span>
+<span class="nc" id="L310">			LOG.error(&quot;Error in BroadCastQueueDBServiceImpl class getContactsDetails method:&quot;, e);</span>
+		}
+		finally {
+<span class="nc" id="L313">				closePrepareStatement(preparedStmt);</span>
+<span class="nc" id="L314">				closeConnection(connection);</span>
+<span class="nc" id="L315">				closeResultset(rs);</span>
+		}
+<span class="nc" id="L317">		return details;</span>
+	}
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

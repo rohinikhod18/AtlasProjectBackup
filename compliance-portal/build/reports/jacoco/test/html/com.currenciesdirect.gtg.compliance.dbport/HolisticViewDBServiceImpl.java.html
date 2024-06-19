@@ -1,0 +1,916 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>HolisticViewDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">HolisticViewDBServiceImpl.java</span></div><h1>HolisticViewDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.IDomain;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.Company;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.CorperateCompliance;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.RiskProfile;
+import com.currenciesdirect.gtg.compliance.core.IHolisticViewDBService;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.ContactHistoryResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.DeviceInfoResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.FurtherPaymentDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.FurtherPaymentInDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.FurtherPaymentOutDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.HolisticAccount;
+import com.currenciesdirect.gtg.compliance.core.domain.HolisticContact;
+import com.currenciesdirect.gtg.compliance.core.domain.HolisticViewRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.HolisticViewResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentInSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentOutSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationAccount;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationCompany;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationContact;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationCorperateCompliance;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationRiskProfile;
+import com.currenciesdirect.gtg.compliance.core.domain.docupload.Document;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.docuploadport.UploadDocumentPort;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.DecimalFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.ObjectUtils;
+import com.currenciesdirect.gtg.compliance.util.StringUtils;
+
+@Component(&quot;holisticDBServiceImpl&quot;)
+<span class="fc" id="L50">public class HolisticViewDBServiceImpl  extends AbstractDao implements IHolisticViewDBService {</span>
+	
+	private static final String CONTACTATTRIBUTE = &quot;Contactattribute&quot;;
+<span class="fc" id="L53">	private Logger logg = LoggerFactory.getLogger(HolisticViewDBServiceImpl.class);</span>
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IHolisticViewDBService#getHolisticAccountDetails(com.currenciesdirect.gtg.compliance.core.domain.HolisticViewRequest)
+	 */
+	@Override
+	public HolisticViewResponse getHolisticAccountDetails(HolisticViewRequest holisticViewRequest)throws CompliancePortalException {
+<span class="fc" id="L60">		HolisticViewResponse holisticViewResponse = new HolisticViewResponse();</span>
+<span class="fc" id="L61">		HolisticAccount holisticAccount = new HolisticAccount();</span>
+<span class="fc" id="L62">		HolisticContact contact = new HolisticContact();</span>
+<span class="fc" id="L63">		List&lt;HolisticContact&gt; contactList = null;</span>
+		
+<span class="fc" id="L65">		Connection connection = null;</span>
+<span class="fc" id="L66">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L67">		ResultSet rs = null;</span>
+		try {
+<span class="fc" id="L69">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L70">			preparedStatement = connection.prepareStatement(HolisticViewQueryConstant.HOLISTIC_VIEW.getQuery());</span>
+<span class="fc" id="L71">			preparedStatement.setInt(1, holisticViewRequest.getAccountId());</span>
+<span class="fc" id="L72">			preparedStatement.setInt(2, holisticViewRequest.getContactId());</span>
+<span class="fc" id="L73">			rs = preparedStatement.executeQuery();</span>
+<span class="fc bfc" id="L74" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L75">				RegistrationAccount regCfxAccount = JsonConverterUtil.convertToObject(RegistrationAccount.class, rs.getString(&quot;Accountattribute&quot;));</span>
+<span class="fc" id="L76">				RegistrationContact regContact = JsonConverterUtil.convertToObject(RegistrationContact.class, rs.getString(CONTACTATTRIBUTE));</span>
+<span class="pc bpc" id="L77" title="1 of 2 branches missed.">				if (regCfxAccount != null) {</span>
+<span class="fc" id="L78">					getAccountData(holisticAccount, rs, regCfxAccount);</span>
+<span class="fc" id="L79">					getContactData(holisticViewResponse,rs,contact,regContact);</span>
+<span class="fc" id="L80">					getCompanyData(holisticViewResponse,holisticAccount, regCfxAccount);</span>
+<span class="fc" id="L81">					getRiskProfileData(holisticViewResponse,holisticAccount, regCfxAccount);</span>
+<span class="fc" id="L82">					getCorperateComplianceData(holisticViewResponse,holisticAccount, regCfxAccount);</span>
+				}
+<span class="fc" id="L84">			}</span>
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">			if(&quot;PFX&quot;.equals(holisticViewResponse.getHolisticAccount().getClientType())) {</span>
+<span class="fc" id="L86">				contactList = getOtherContacts(holisticViewRequest.getAccountId(),holisticViewRequest.getContactId(),connection);</span>
+			} else {
+<span class="nc" id="L88">				contactList = getContactsForCFX(holisticViewRequest.getAccountId(),connection);</span>
+			}
+<span class="fc" id="L90">			holisticViewResponse.setHolisticContacts(contactList);</span>
+<span class="fc" id="L91">		} catch (Exception e) {</span>
+<span class="fc" id="L92">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L94">			closeResultset(rs);</span>
+<span class="fc" id="L95">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L96">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L98">		return holisticViewResponse;</span>
+	}
+
+	/**
+	 * @param contact
+	 * @param regContact
+	 */
+	private void getContactData(HolisticViewResponse holisticViewResponse, ResultSet rs,HolisticContact contact, RegistrationContact regContact) {
+<span class="pc bpc" id="L106" title="1 of 2 branches missed.">		if (regContact != null) {</span>
+			try {
+<span class="fc" id="L108">				getContact(contact,regContact,rs);</span>
+<span class="nc" id="L109">			} catch (SQLException e) {</span>
+<span class="nc" id="L110">				logg.debug(&quot;Exception in getContactData() method {1}&quot;, e);</span>
+<span class="fc" id="L111">			}</span>
+		}
+<span class="fc" id="L113">		holisticViewResponse.setHolisticContact(contact);</span>
+<span class="fc" id="L114">	}</span>
+
+	/**
+	 * @param contact
+	 * @param regContact
+	 * @throws SQLException 
+	 */
+	private void getContact(HolisticContact contact, RegistrationContact regContact, ResultSet rs) throws SQLException {
+<span class="fc" id="L122">		contact.setAddress(getCompleteAddress(regContact));</span>
+<span class="fc" id="L123">		contact.setCountryOfResidence(regContact.getCountry());</span>
+<span class="fc" id="L124">		contact.setEmail(regContact.getEmail());</span>
+<span class="fc" id="L125">		contact.setMobile(regContact.getPhoneMobile());</span>
+<span class="fc" id="L126">		contact.setNationality(regContact.getNationality());</span>
+<span class="fc" id="L127">		contact.setOccupation(regContact.getOccupation());</span>
+<span class="fc" id="L128">		contact.setPhone(regContact.getPhoneHome());</span>
+<span class="pc bpc" id="L129" title="2 of 4 branches missed.">		contact.setIsUsClient(regContact.getCountry() != null &amp;&amp; &quot;USA&quot;.equals(regContact.getCountry()));</span>
+<span class="fc" id="L130">		contact.setIpAddress(regContact.getIpAddress());</span>
+<span class="fc" id="L131">		contact.setDateofbirth(DateTimeFormatter.dateFormat(DateTimeFormatter.removeTimeFromDate(regContact.getDob())));</span>
+<span class="fc" id="L132">		contact.setAccountStatus(rs.getString(&quot;AccountStatus&quot;));</span>
+<span class="fc" id="L133">		setWorkphone(contact, regContact);</span>
+		//changes done to show full name on UI
+<span class="fc" id="L135">		setName(contact, regContact);</span>
+		//CFX Contact Extra Fields 
+<span class="fc" id="L137">		contact.setJobTitle(regContact.getJobTitle());</span>
+<span class="fc" id="L138">		contact.setPositionOfSignificance(regContact.getPositionOfSignificance());</span>
+<span class="fc" id="L139">		contact.setAuthorisedSignatory(regContact.getAuthorisedSignatory());</span>
+<span class="fc" id="L140">		contact.setAddressType(regContact.getAddressType());</span>
+<span class="fc" id="L141">		contact.setCrmContactId(regContact.getContactSFID());</span>
+<span class="fc" id="L142">		contact.setTradeContactId(regContact.getTradeContactID().toString());</span>
+<span class="fc" id="L143">		contact.setAreaNumber(regContact.getAreaNumber());</span>
+<span class="fc" id="L144">		contact.setAustraliaRTACardNumber(regContact.getAustraliaRTACardNumber());</span>
+<span class="fc" id="L145">		contact.setAza(regContact.getAza());</span>
+<span class="fc" id="L146">		contact.setBuildingNumber(regContact.getBuildingNumber());</span>
+<span class="fc" id="L147">		contact.setCivicNumber(regContact.getCivicNumber());</span>
+<span class="fc" id="L148">		contact.setCountryOfBirth(regContact.getCountryOfBirth());</span>
+<span class="fc" id="L149">		contact.setDistrict(regContact.getDistrict());</span>
+<span class="fc" id="L150">		contact.setPostCode(regContact.getPostCode());</span>
+<span class="fc" id="L151">		contact.setPrefName(regContact.getPreferredName());</span>
+<span class="fc" id="L152">		contact.setPrefecture(regContact.getPrefecture());</span>
+<span class="fc" id="L153">		contact.setPrimaryPhoneNumber(regContact.getPrimaryPhone());</span>
+<span class="fc" id="L154">		contact.setRegionSuburb(regContact.getRegion());</span>
+<span class="fc" id="L155">		contact.setResidentialStatus(regContact.getResidentialStatus());</span>
+<span class="fc" id="L156">		contact.setSecondEmail(regContact.getSecondEmail());</span>
+<span class="fc" id="L157">		contact.setSecondSurname(regContact.getSecondSurname());</span>
+<span class="fc" id="L158">		contact.setStateOfBirth(regContact.getStateOfBirth());</span>
+<span class="fc" id="L159">		contact.setStateProvinceCounty(regContact.getState());</span>
+<span class="fc" id="L160">		contact.setStreet(regContact.getStreet());</span>
+<span class="fc" id="L161">		contact.setStreetNumber(regContact.getStreetNumber());</span>
+<span class="fc" id="L162">		contact.setStreetType(regContact.getStreetType());</span>
+<span class="fc" id="L163">		contact.setSubBuilding(regContact.getSubBuildingorFlat());</span>
+<span class="fc" id="L164">		contact.setSubCity(regContact.getSubCity());</span>
+<span class="fc" id="L165">		contact.setTitle(regContact.getTitle());</span>
+<span class="fc" id="L166">		contact.setTownCityMuncipalty(regContact.getCity());</span>
+<span class="fc" id="L167">		contact.setUnitNumber(regContact.getUnitNumber());</span>
+<span class="fc" id="L168">		contact.setYearsInAddress(regContact.getYearsInAddress());</span>
+<span class="fc" id="L169">		contact.setDlLicenseNumber(regContact.getDlLicenseNumber());</span>
+<span class="fc" id="L170">		contact.setDlExpiryDate(regContact.getDlExpiryDate());</span>
+<span class="fc" id="L171">		contact.setDlCardNumber(regContact.getDlCardNumber());</span>
+<span class="fc" id="L172">		contact.setDlCountryCode(regContact.getDlCountryCode());</span>
+<span class="fc" id="L173">		contact.setDlStateCode(regContact.getDlStateCode());</span>
+<span class="fc" id="L174">		contact.setDlVersionNumber(regContact.getDlVersionNumber());</span>
+<span class="fc" id="L175">		contact.setFirstName(regContact.getFirstName());</span>
+<span class="fc" id="L176">		contact.setFloorNumber(regContact.getFloorNumber());</span>
+<span class="fc" id="L177">		contact.setGender(regContact.getGender());</span>
+<span class="fc" id="L178">		contact.setPhoneHome(regContact.getPhoneHome());</span>
+<span class="fc" id="L179">		contact.setLastName(regContact.getLastName());</span>
+<span class="fc" id="L180">		contact.setMedicareCardNumber(regContact.getMedicareCardNumber());</span>
+<span class="fc" id="L181">		contact.setMedicareReferenceNumber(regContact.getMedicareReferenceNumber());</span>
+<span class="fc" id="L182">		contact.setMiddleName(regContact.getMiddleName());</span>
+<span class="fc" id="L183">		contact.setMothersSurname(regContact.getMothersSurname());</span>
+<span class="fc" id="L184">		contact.setMunicipalityOfBirth(regContact.getMunicipalityOfBirth());</span>
+<span class="fc" id="L185">		contact.setNationalIdType(regContact.getNationalIdType());</span>
+<span class="fc" id="L186">		contact.setPassportFamilyNameAtBirth(regContact.getPassportFamilyNameAtBirth());</span>
+<span class="fc" id="L187">		contact.setPassportPlaceOfBirth(regContact.getPassportPlaceOfBirth());</span>
+<span class="fc" id="L188">		contact.setPassportCountryCode(regContact.getPassportCountryCode());</span>
+<span class="fc" id="L189">		contact.setPassportExiprydate(regContact.getPassportExiprydate());</span>
+<span class="fc" id="L190">		contact.setPassportFullName(regContact.getPassportFullName());</span>
+<span class="fc" id="L191">		contact.setPassportMRZLine1(regContact.getPassportMRZLine1());</span>
+<span class="fc" id="L192">		contact.setPassportMRZLine2(regContact.getPassportMRZLine2());</span>
+<span class="fc" id="L193">		contact.setPassportNameAtCitizenship(regContact.getPassportNameAtCitizenship());</span>
+<span class="fc" id="L194">		contact.setPassportNumber(regContact.getPassportNumber());</span>
+<span class="fc" id="L195">		contact.setNationalIdNumber(regContact.getNationalIdNumber());</span>
+<span class="fc" id="L196">		contact.setIsAllFieldsEmpty(ObjectUtils.isAllFieldsEmpty(contact));</span>
+<span class="fc" id="L197">		contact.setIsPrimaryContact(regContact.getPrimaryContact());</span>
+<span class="fc" id="L198">		contact.setId(rs.getInt(&quot;ContactID&quot;));</span>
+<span class="fc" id="L199">	}</span>
+	
+	/**
+	 * this function gives complete address as per input fields
+	 * @author abhijeetg
+	 * @param regContact
+	 * @return
+	 */
+	private String getCompleteAddress(RegistrationContact regContact) {
+<span class="fc" id="L208">		List&lt;String&gt; list=new ArrayList&lt;&gt;();</span>
+<span class="pc bpc" id="L209" title="1 of 2 branches missed.">		if(!StringUtils.isNullOrEmpty(regContact.getAddress1())){</span>
+<span class="fc" id="L210">			list.add(regContact.getAddress1());</span>
+		}
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">		if(!StringUtils.isNullOrEmpty(regContact.getUnitNumber())){</span>
+<span class="nc" id="L213">			list.add(regContact.getUnitNumber());</span>
+		}
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">		if(!StringUtils.isNullOrEmpty(regContact.getStreetNumber())){</span>
+<span class="nc" id="L216">			list.add(regContact.getStreetNumber());</span>
+		}
+<span class="pc bpc" id="L218" title="1 of 2 branches missed.">		if(!StringUtils.isNullOrEmpty(regContact.getAreaNumber())){</span>
+<span class="nc" id="L219">			list.add(regContact.getAreaNumber());</span>
+		}
+<span class="pc bpc" id="L221" title="1 of 2 branches missed.">		if(!StringUtils.isNullOrEmpty(regContact.getCivicNumber())){</span>
+<span class="nc" id="L222">			list.add(regContact.getCivicNumber());</span>
+		}
+<span class="pc bpc" id="L224" title="1 of 2 branches missed.">		if(!StringUtils.isNullOrEmpty(regContact.getDistrict())){</span>
+<span class="nc" id="L225">			list.add(regContact.getDistrict());</span>
+		}
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">		if(!StringUtils.isNullOrEmpty(regContact.getState())){</span>
+<span class="nc" id="L228">			list.add(regContact.getState());</span>
+		}
+<span class="pc bpc" id="L230" title="1 of 2 branches missed.">		if(!StringUtils.isNullOrEmpty(regContact.getCity())){</span>
+<span class="fc" id="L231">			list.add(regContact.getCity());	</span>
+		}
+<span class="pc bpc" id="L233" title="1 of 2 branches missed.">		if(!StringUtils.isNullOrEmpty(regContact.getPostCode())){</span>
+<span class="fc" id="L234">			list.add(regContact.getPostCode());</span>
+		}
+<span class="pc bpc" id="L236" title="1 of 2 branches missed.">		if(!StringUtils.isNullOrEmpty(regContact.getCountry())){</span>
+<span class="fc" id="L237">			list.add(regContact.getCountry());</span>
+		}
+<span class="fc" id="L239">		return String.join(&quot;, &quot;, list);</span>
+	}
+
+	/**
+	 * @param account
+	 * @param rs
+	 * @param regCfxAccount
+	 * @throws SQLException
+	 */
+	private void getAccountData(HolisticAccount account, ResultSet rs, RegistrationAccount regCfxAccount) throws SQLException {
+		
+<span class="fc" id="L250">		account.setClientType(regCfxAccount.getCustType());</span>
+<span class="fc" id="L251">		account.setCurrencyPair(regCfxAccount.getSellingCurrency() + &quot;  -  &quot; + regCfxAccount.getBuyingCurrency());</span>
+<span class="fc" id="L252">		account.setEstimTransValue(regCfxAccount.getValueOfTransaction());</span>
+<span class="fc" id="L253">		account.setPurposeOfTran(regCfxAccount.getPurposeOfTran());</span>
+<span class="fc" id="L254">		account.setServiceRequired(regCfxAccount.getServiceRequired());</span>
+<span class="fc" id="L255">		account.setSource(regCfxAccount.getSource());</span>
+<span class="fc" id="L256">		account.setSourceOfFund(regCfxAccount.getSourceOfFund());</span>
+<span class="fc" id="L257">		account.setRefferalText(regCfxAccount.getReferralText());</span>
+<span class="fc" id="L258">		account.setAffiliateName(regCfxAccount.getAffiliateName());</span>
+<span class="fc" id="L259">		account.setRegMode(regCfxAccount.getRegistrationMode());</span>
+<span class="fc" id="L260">		account.setName(regCfxAccount.getAccountName());</span>
+<span class="fc" id="L261">		account.setWebsite(regCfxAccount.getWebsite());</span>
+<span class="fc" id="L262">		account.setSourceLookup(regCfxAccount.getSubSource());</span>
+<span class="pc bpc" id="L263" title="1 of 2 branches missed.">		if(null != regCfxAccount.getAverageTransactionValue()){</span>
+<span class="nc" id="L264">			account.setAvgTransactionValue(StringUtils.getNumberFormat(String.valueOf(regCfxAccount.getAverageTransactionValue())));</span>
+		}
+<span class="fc" id="L266">		account.setCountriesOfOperation(regCfxAccount.getCountriesOfOperation());</span>
+<span class="fc" id="L267">		account.setAnnualFXRequirement(StringUtils.getNumberFormat(regCfxAccount.getTurnover()));</span>
+<span class="fc" id="L268">		account.setTradeAccountNumber(regCfxAccount.getTradeAccountNumber());</span>
+<span class="fc" id="L269">		account.setTradeAccountID(regCfxAccount.getTradeAccountID());</span>
+<span class="fc" id="L270">		account.setAccSFID(regCfxAccount.getAccSFID());</span>
+<span class="fc" id="L271">		account.setAddCampaign(regCfxAccount.getAdCampaign());</span>
+<span class="fc" id="L272">		account.setAffiliateNumber(regCfxAccount.getAffiliateNumber());</span>
+<span class="fc" id="L273">		account.setBranch(regCfxAccount.getBranch());</span>
+<span class="fc" id="L274">		account.setBuyingCurrency(regCfxAccount.getBuyingCurrency());</span>
+<span class="fc" id="L275">		account.setChannel(regCfxAccount.getChannel());</span>
+<span class="fc" id="L276">		account.setExtendedReferral(regCfxAccount.getExtendedReferral());</span>
+<span class="fc" id="L277">		account.setCountryOfInterest(regCfxAccount.getCountryOfInterest());</span>
+<span class="fc" id="L278">		account.setKeywords(regCfxAccount.getKeywords());</span>
+<span class="fc" id="L279">		account.setReferralId(regCfxAccount.getReferral());</span>
+<span class="fc" id="L280">		account.setSearchEngine(regCfxAccount.getSearchEngine());</span>
+<span class="fc" id="L281">		account.setSellingCurrency(regCfxAccount.getSellingCurrency());</span>
+<span class="fc" id="L282">		account.setSubSource(regCfxAccount.getSubSource());</span>
+<span class="fc" id="L283">		account.setTradingName(regCfxAccount.getTradingName());</span>
+<span class="fc" id="L284">		account.setTurnover(StringUtils.getNumberFormat(regCfxAccount.getTurnover()));</span>
+<span class="fc" id="L285">		account.setComplianceDoneOn(DateTimeFormatter.dateTimeFormatter(rs.getTimestamp(&quot;compliancedoneon&quot;)));</span>
+<span class="fc" id="L286">		account.setRegistrationInDate (DateTimeFormatter.dateTimeFormatter(rs.getTimestamp(&quot;RegistrationInDate&quot;)));</span>
+<span class="fc" id="L287">		account.setEstimTransValue(regCfxAccount.getValueOfTransaction());</span>
+<span class="fc" id="L288">		account.setPurposeOfTran(regCfxAccount.getPurposeOfTran());</span>
+<span class="fc" id="L289">		account.setSourceOfFund(regCfxAccount.getSourceOfFund());</span>
+<span class="fc" id="L290">		account.setLegalEntity(regCfxAccount.getLegalEntity());</span>
+<span class="fc" id="L291">		account.setOrgCode(rs.getString(&quot;OrgCode&quot;));</span>
+<span class="fc" id="L292">		account.setId(rs.getInt(&quot;AccountID&quot;));</span>
+<span class="fc" id="L293">	}</span>
+	
+	/**
+	 * @param accountHistoryResponse
+	 * @param regCfxAccount
+	 */
+	private void getCompanyData(HolisticViewResponse holisticViewResponse,HolisticAccount account, RegistrationAccount regCfxAccount) {
+<span class="pc bpc" id="L300" title="1 of 2 branches missed.">		if (null != regCfxAccount.getCompany()) {</span>
+<span class="fc" id="L301">			account.setCompany(getCompany(regCfxAccount.getCompany()));</span>
+		}
+<span class="fc" id="L303">		holisticViewResponse.setHolisticAccount(account);</span>
+<span class="fc" id="L304">	}</span>
+	
+	/**
+	 * @param comanyDetails
+	 * @return
+	 */
+	private Company getCompany(RegistrationCompany comanyDetails) {
+<span class="fc" id="L311">		Company company = new Company();</span>
+
+<span class="fc" id="L313">		company.setBillingAddress(comanyDetails.getBillingAddress());</span>
+<span class="fc" id="L314">		company.setCcj(comanyDetails.getCcj());</span>
+<span class="fc" id="L315">		company.setCompanyPhone(comanyDetails.getCompanyPhone());</span>
+<span class="fc" id="L316">		company.setCorporateType(comanyDetails.getCorporateType());</span>
+<span class="fc" id="L317">		company.setCountryOfEstablishment(comanyDetails.getCountryOfEstablishment());</span>
+<span class="fc" id="L318">		company.setCountryRegion(comanyDetails.getCountryRegion());</span>
+<span class="fc" id="L319">		company.setEstNoTransactionsPcm(comanyDetails.getEstNoTransactionsPcm());</span>
+<span class="fc" id="L320">		company.setEtailer(comanyDetails.getEtailer());</span>
+<span class="fc" id="L321">		company.setIncorporationDate(DateTimeFormatter.dateFormat(comanyDetails.getIncorporationDate()));</span>
+<span class="fc" id="L322">		company.setIndustry(comanyDetails.getIndustry());</span>
+<span class="fc" id="L323">		company.setOngoingDueDiligenceDate(DateTimeFormatter.dateFormat(comanyDetails.getOngoingDueDiligenceDate()));</span>
+<span class="fc" id="L324">		company.setOption(comanyDetails.getOption());</span>
+<span class="fc" id="L325">		company.setRegistrationNo(comanyDetails.getRegistrationNo());</span>
+<span class="fc" id="L326">		company.setShippingAddress(comanyDetails.getShippingAddress());</span>
+<span class="fc" id="L327">		company.settAndcSignedDate(DateTimeFormatter.dateFormat(comanyDetails.gettAndcSignedDate()));</span>
+<span class="fc" id="L328">		company.setTypeOfFinancialAccount(comanyDetails.getTypeOfFinancialAccount());</span>
+<span class="fc" id="L329">		company.setVatNo(comanyDetails.getVatNo());</span>
+
+<span class="fc" id="L331">		return company;</span>
+	}
+	
+	/**
+	 * @param accountHistoryResponse
+	 * @param regCfxAccount
+	 */
+	private void getRiskProfileData(HolisticViewResponse holisticViewResponse,HolisticAccount account,
+			RegistrationAccount regCfxAccount) {
+<span class="pc bpc" id="L340" title="1 of 2 branches missed.">		if (null != regCfxAccount.getRiskProfile()) {</span>
+<span class="fc" id="L341">			account.setRiskProfile(getRiskProfile(regCfxAccount.getRiskProfile()));</span>
+		}
+<span class="fc" id="L343">		holisticViewResponse.setHolisticAccount(account);</span>
+<span class="fc" id="L344">	}</span>
+	
+	private RiskProfile getRiskProfile(RegistrationRiskProfile riskProfileDetails) {
+<span class="fc" id="L347">		RiskProfile riskProfile = new RiskProfile();</span>
+
+<span class="fc" id="L349">		riskProfile.setCountryRiskIndicator(riskProfileDetails.getCountryRiskIndicator());</span>
+<span class="fc" id="L350">		riskProfile.setDelinquencyFailureScore(riskProfileDetails.getDelinquencyFailureScore());</span>
+<span class="fc" id="L351">		riskProfile.setFailureScore(riskProfileDetails.getFailureScore());</span>
+<span class="fc" id="L352">		riskProfile.setRiskDirection(riskProfileDetails.getRiskDirection());</span>
+<span class="fc" id="L353">		riskProfile.setRiskTrend(riskProfileDetails.getRiskTrend());</span>
+<span class="fc" id="L354">		riskProfile.setUpdatedRisk(riskProfileDetails.getUpdatedRisk());</span>
+		//newly added DNB DAta
+<span class="fc" id="L356">		riskProfile.setContinent(riskProfileDetails.getContinent());</span>
+<span class="fc" id="L357">		riskProfile.setCountry(riskProfileDetails.getCountry());</span>
+<span class="fc" id="L358">		riskProfile.setStateCountry(riskProfileDetails.getStateCountry());</span>
+<span class="fc" id="L359">		riskProfile.setDunsNumber(riskProfileDetails.getDunsNumber());</span>
+<span class="fc" id="L360">		riskProfile.setTradingStyles(riskProfileDetails.getTradingStyles());</span>
+<span class="fc" id="L361">		riskProfile.setUs1987PrimarySic4Digit(riskProfileDetails.getUs1987PrimarySic4Digit());</span>
+<span class="fc" id="L362">		riskProfile.setFinancialFiguresMonth(riskProfileDetails.getFinancialFiguresMonth());</span>
+<span class="fc" id="L363">		riskProfile.setFinancialFiguresYear(riskProfileDetails.getFinancialFiguresYear());</span>
+<span class="fc" id="L364">		riskProfile.setFinancialYearEndDate(riskProfileDetails.getFinancialYearEndDate());</span>
+<span class="fc" id="L365">		riskProfile.setAnnualSales(riskProfileDetails.getAnnualSales());</span>
+<span class="fc" id="L366">		riskProfile.setModelledAnnualSales(riskProfileDetails.getModelledAnnualSales());</span>
+<span class="fc" id="L367">		riskProfile.setNetWorthAmount(riskProfileDetails.getNetWorthAmount());</span>
+<span class="fc" id="L368">		riskProfile.setModelledNetWorth(riskProfileDetails.getModelledNetWorth());</span>
+<span class="fc" id="L369">		riskProfile.setLocationType(riskProfileDetails.getLocationType());</span>
+<span class="fc" id="L370">		riskProfile.setImportExportIndicator(riskProfileDetails.getImportExportIndicator());</span>
+<span class="fc" id="L371">		riskProfile.setDomesticUltimateRecord(riskProfileDetails.getDomesticUltimateRecord());</span>
+<span class="fc" id="L372">		riskProfile.setGlobalUltimateRecord(riskProfileDetails.getGlobalUltimateRecord());</span>
+<span class="fc" id="L373">		riskProfile.setGroupStructureNumberOfLevels(riskProfileDetails.getGroupStructureNumberOfLevels());</span>
+<span class="fc" id="L374">		riskProfile.setHeadquarterDetails(riskProfileDetails.getHeadquarterDetails());</span>
+<span class="fc" id="L375">		riskProfile.setImmediateParentDetails(riskProfileDetails.getImmediateParentDetails());</span>
+<span class="fc" id="L376">		riskProfile.setDomesticUltimateParentDetails(riskProfileDetails.getDomesticUltimateParentDetails());</span>
+<span class="fc" id="L377">		riskProfile.setGlobalUltimateParentDetails(riskProfileDetails.getGlobalUltimateParentDetails());</span>
+<span class="fc" id="L378">		riskProfile.setCreditLimit(riskProfileDetails.getCreditLimit());</span>
+<span class="fc" id="L379">		riskProfile.setRiskRating(riskProfileDetails.getRiskRating());</span>
+<span class="fc" id="L380">		riskProfile.setProfitLoss(riskProfileDetails.getProfitLoss());</span>
+		//newly added DNB DAta ends
+		
+<span class="fc" id="L383">		return riskProfile;</span>
+	}
+
+	/**
+	 * @param accountHistoryResponse
+	 * @param regCfxAccount
+	 */
+	private void getCorperateComplianceData(HolisticViewResponse holisticViewResponse,HolisticAccount account,
+			RegistrationAccount regCfxAccount) {
+<span class="pc bpc" id="L392" title="1 of 2 branches missed.">		if (null != regCfxAccount.getRiskProfile()) {</span>
+<span class="fc" id="L393">			account.setCorperateCompliance(getCorporateCompliance(regCfxAccount.getCorperateCompliance()));</span>
+		}
+<span class="fc" id="L395">		holisticViewResponse.setHolisticAccount(account);</span>
+<span class="fc" id="L396">	}</span>
+	
+	/**
+	 * @param corpComplianceDetails
+	 * @return
+	 */
+	private CorperateCompliance getCorporateCompliance(RegistrationCorperateCompliance corpComplianceDetails) {
+<span class="fc" id="L403">		CorperateCompliance corporateCompliance = new CorperateCompliance();</span>
+
+<span class="fc" id="L405">		corporateCompliance.setFixedAssets(corpComplianceDetails.getFixedAssets());</span>
+<span class="fc" id="L406">		corporateCompliance.setForeignOwnedCompany(corpComplianceDetails.getForeignOwnedCompany());</span>
+<span class="fc" id="L407">		corporateCompliance.setFormerName(corpComplianceDetails.getFormerName());</span>
+<span class="fc" id="L408">		corporateCompliance.setLegalForm(corpComplianceDetails.getLegalForm());</span>
+<span class="fc" id="L409">		corporateCompliance.setNetWorth(corpComplianceDetails.getNetWorth());</span>
+<span class="fc" id="L410">		corporateCompliance.setRegistrationNumber(corpComplianceDetails.getRegistrationNumber());</span>
+<span class="fc" id="L411">		corporateCompliance.setSic(corpComplianceDetails.getSic());</span>
+<span class="fc" id="L412">		corporateCompliance.setSicDesc(corpComplianceDetails.getSicDesc());</span>
+<span class="fc" id="L413">		corporateCompliance.setTotalLiabilitiesAndEquities(corpComplianceDetails.getTotalLiabilitiesAndEquities());</span>
+<span class="fc" id="L414">		corporateCompliance.setTotalShareHolders(corpComplianceDetails.getTotalShareHolders());</span>
+<span class="fc" id="L415">		corporateCompliance.setGlobalUltimateDuns(corpComplianceDetails.getGlobalUltimateDuns());</span>
+<span class="fc" id="L416">		corporateCompliance.setGlobalUltimateName(corpComplianceDetails.getGlobalUltimateName());</span>
+<span class="fc" id="L417">		corporateCompliance.setGlobalUltimateCountry(corpComplianceDetails.getGlobalUltimateCountry());</span>
+<span class="fc" id="L418">		corporateCompliance.setRegistrationDate(corpComplianceDetails.getRegistrationDate());</span>
+<span class="fc" id="L419">		corporateCompliance.setMatchName(corpComplianceDetails.getMatchName());</span>
+<span class="fc" id="L420">		corporateCompliance.setIsoCountryCode2Digit(corpComplianceDetails.getIsoCountryCode2Digit());</span>
+<span class="fc" id="L421">		corporateCompliance.setIsoCountryCode3Digit(corpComplianceDetails.getIsoCountryCode2Digit());</span>
+<span class="fc" id="L422">		corporateCompliance.setStatementDate(corpComplianceDetails.getStatementDate());</span>
+<span class="fc" id="L423">		corporateCompliance.setGrossIncome(corpComplianceDetails.getGrossIncome());</span>
+<span class="fc" id="L424">		corporateCompliance.setNetIncome(corpComplianceDetails.getNetIncome());</span>
+<span class="fc" id="L425">		corporateCompliance.setTotalCurrentAssets(corpComplianceDetails.getTotalCurrentAssets());</span>
+<span class="fc" id="L426">		corporateCompliance.setTotalAssets(corpComplianceDetails.getTotalAssets());</span>
+<span class="fc" id="L427">		corporateCompliance.setTotalLongTermLiabilities(corpComplianceDetails.getTotalLongTermLiabilities());</span>
+<span class="fc" id="L428">		corporateCompliance.setTotalCurrentLiabilities(corpComplianceDetails.getTotalCurrentLiabilities());</span>
+<span class="fc" id="L429">		corporateCompliance.setTotalMatchedShareholders(corpComplianceDetails.getTotalMatchedShareholders());</span>
+<span class="fc" id="L430">		corporateCompliance.setFinancialStrength(corpComplianceDetails.getFinancialStrength());</span>
+
+<span class="fc" id="L432">		return corporateCompliance;</span>
+	}
+	
+	/**
+	 * @param contact
+	 * @param regContact
+	 */
+	private void setWorkphone(ContactHistoryResponse contact, RegistrationContact regContact) {
+<span class="pc bpc" id="L440" title="3 of 4 branches missed.">		if((!StringUtils.isNullOrEmpty(regContact.getPhoneWorkExtn())) &amp;&amp; (!StringUtils.isNullOrEmpty(regContact.getPhoneWork())))</span>
+<span class="nc" id="L441">			contact.setWorkphone(regContact.getPhoneWork()+&quot;;&quot;+regContact.getPhoneWorkExtn());</span>
+<span class="pc bpc" id="L442" title="3 of 4 branches missed.">		if((!StringUtils.isNullOrEmpty(regContact.getPhoneWorkExtn())) &amp;&amp; (StringUtils.isNullOrEmpty(regContact.getPhoneWork())))</span>
+<span class="nc" id="L443">			contact.setWorkphone(regContact.getPhoneWorkExtn());</span>
+<span class="pc bpc" id="L444" title="2 of 4 branches missed.">		if((StringUtils.isNullOrEmpty(regContact.getPhoneWorkExtn()))&amp;&amp; (!StringUtils.isNullOrEmpty(regContact.getPhoneWork())))</span>
+<span class="fc" id="L445">			contact.setWorkphone(regContact.getPhoneWork());</span>
+<span class="fc" id="L446">	}</span>
+	
+	/**
+	 * @param contact
+	 * @param regContact
+	 */
+	private void setName(ContactHistoryResponse contact, RegistrationContact regContact) {
+<span class="pc bpc" id="L453" title="2 of 4 branches missed.">		if(regContact.getMiddleName() != null &amp;&amp; !regContact.getMiddleName().trim().isEmpty()){</span>
+<span class="nc" id="L454">			String fullName = new StringBuilder().append(regContact.getFirstName()).append(&quot; &quot;).append(regContact.getMiddleName()).append(&quot; &quot;).append(regContact.getLastName()).toString();</span>
+<span class="nc" id="L455">			contact.setName(fullName);</span>
+<span class="nc" id="L456">		} else{</span>
+<span class="fc" id="L457">			contact.setName(regContact.getFirstName()+ &quot; &quot;+regContact.getLastName());</span>
+		}
+<span class="fc" id="L459">	}</span>
+
+	@Override
+	public HolisticViewResponse getHolisticPaymentDetails(HolisticViewRequest holisticViewRequest,
+			HolisticViewResponse holisticViewResponse) throws CompliancePortalException { 
+		
+<span class="nc" id="L465">		PaymentSummary paymentSummary = new PaymentSummary();</span>
+<span class="nc" id="L466">		Connection connection = null;</span>
+<span class="nc" id="L467">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L468">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L470">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L471">			preparedStatement = connection.prepareStatement(HolisticViewQueryConstant.HOLISTIC_VIEW_PAYMENT_DETAILS.getQuery());</span>
+<span class="nc" id="L472">			preparedStatement.setInt(1, holisticViewRequest.getAccountId());</span>
+<span class="nc" id="L473">			rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L474" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L475">				paymentSummary.setFirstTradeDate(rs.getString(&quot;FirstTradeDate&quot;));</span>
+<span class="nc" id="L476">				paymentSummary.setLastTradeDate(rs.getString(&quot;LastTradeDate&quot;));</span>
+<span class="nc" id="L477">				paymentSummary.setNoOfTrades(rs.getInt(&quot;NumberOfTrades&quot;));</span>
+			}
+<span class="nc" id="L479">			getBaseCurrencyTotalSaleAmount(connection, holisticViewRequest.getAccountId(), paymentSummary);</span>
+<span class="nc" id="L480">			holisticViewResponse.setPaymentSummary(paymentSummary);</span>
+<span class="nc" id="L481">		} catch (Exception e) {</span>
+<span class="nc" id="L482">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L484">			closeResultset(rs);</span>
+<span class="nc" id="L485">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L486">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L488">		return holisticViewResponse;</span>
+	}
+
+	private void getBaseCurrencyTotalSaleAmount(Connection connection, Integer accountId, PaymentSummary paymentSummary)
+			throws CompliancePortalException {
+<span class="nc" id="L493">		PreparedStatement newpreparedStatement = null;</span>
+<span class="nc" id="L494">		ResultSet resultset = null;</span>
+		try {
+<span class="nc" id="L496">			newpreparedStatement = connection.prepareStatement(HolisticViewQueryConstant.HOLISTIC_VIEW_TOTAL_SALE_AMOUNT.getQuery());</span>
+<span class="nc" id="L497">			newpreparedStatement.setInt(1, accountId);</span>
+<span class="nc" id="L498">			resultset = newpreparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L499" title="All 2 branches missed.">			while (resultset.next()) {</span>
+<span class="nc" id="L500">				paymentSummary.setTotalSaleAmount(resultset.getDouble(&quot;TotalSaleAmount&quot;));</span>
+			}
+<span class="nc" id="L502">		} catch(Exception e) {</span>
+<span class="nc" id="L503">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L505">			closeResultset(resultset);</span>
+<span class="nc" id="L506">			closePrepareStatement(newpreparedStatement);</span>
+		}		
+<span class="nc" id="L508">	}</span>
+
+	@Override
+	public HolisticViewResponse getHolisticPaymentInDetails(HolisticViewRequest holisticViewRequest,
+			HolisticViewResponse holisticViewResponse) throws CompliancePortalException {
+		
+<span class="fc" id="L514">		HolisticViewResponse holisticViewPaymentInResponse = new HolisticViewResponse();</span>
+<span class="fc" id="L515">		PaymentInSummary paymentInSummary = new PaymentInSummary();</span>
+<span class="fc" id="L516">		Connection connection = null;</span>
+<span class="fc" id="L517">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L518">		ResultSet rs = null;</span>
+		try {
+<span class="fc" id="L520">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L521">			preparedStatement = connection.prepareStatement(HolisticViewQueryConstant.HOLISTIC_VIEW_PAYMENTIN_DETAILS.getQuery());</span>
+<span class="fc" id="L522">			preparedStatement.setInt(1, holisticViewRequest.getPaymentInId());</span>
+<span class="fc" id="L523">			rs = preparedStatement.executeQuery();</span>
+<span class="fc bfc" id="L524" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L525">				FundsInCreateRequest fundsInRequest = JsonConverterUtil.convertToObject(FundsInCreateRequest.class, rs.getString(&quot;Attributes&quot;));</span>
+<span class="fc" id="L526">				paymentInSummary.setThirdPartyFlag(rs.getBoolean(&quot;vThirdPartyPayment&quot;));</span>
+<span class="fc" id="L527">				paymentInSummary.setCountryOfFund(rs.getString(&quot;vCountryOfPayment&quot;));</span>
+<span class="fc" id="L528">				paymentInSummary.setDebtorName(fundsInRequest.getTrade().getCcFirstName());</span>
+<span class="fc" id="L529">				paymentInSummary.setIsDeleted(rs.getBoolean(&quot;Deleted&quot;));</span>
+<span class="pc bpc" id="L530" title="1 of 2 branches missed.">				if(Boolean.TRUE.equals(paymentInSummary.getIsDeleted())) </span>
+<span class="nc" id="L531">					paymentInSummary.setDeletedDate(rs.getDate(&quot;UpdatedOn&quot;).toString());</span>
+<span class="fc" id="L532">				paymentInSummary.setSellCurrency(rs.getString(&quot;vTransactionCurrency&quot;));</span>
+<span class="fc" id="L533">				paymentInSummary.setDebtorAccountNumber(fundsInRequest.getTrade().getDebtorAccountNumber());</span>
+<span class="fc" id="L534">			}</span>
+<span class="fc" id="L535">			holisticViewPaymentInResponse.setPaymentInSummary(paymentInSummary);</span>
+<span class="fc" id="L536">		} catch (Exception e) {</span>
+<span class="fc" id="L537">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L539">			closeResultset(rs);</span>
+<span class="fc" id="L540">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L541">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L543">		return holisticViewPaymentInResponse;</span>
+	}
+
+	@Override
+	public HolisticViewResponse getHolisticPaymentOutDetails(HolisticViewRequest holisticViewRequest,
+			HolisticViewResponse holisticViewResponse) throws CompliancePortalException {
+
+<span class="fc" id="L550">		HolisticViewResponse holisticViewPaymentOutResponse = new HolisticViewResponse();</span>
+<span class="fc" id="L551">		PaymentOutSummary paymentOutSummary = new PaymentOutSummary();</span>
+<span class="fc" id="L552">		Connection connection = null;</span>
+<span class="fc" id="L553">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L554">		ResultSet rs = null;</span>
+		try {
+<span class="fc" id="L556">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L557">			preparedStatement = connection.prepareStatement(HolisticViewQueryConstant.HOLISTIC_VIEW_PAYMENTOUT_DETAILS.getQuery());</span>
+<span class="fc" id="L558">			preparedStatement.setInt(1, holisticViewRequest.getPaymentOutId());</span>
+<span class="fc" id="L559">			rs = preparedStatement.executeQuery();</span>
+<span class="fc bfc" id="L560" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L561">				FundsOutRequest fundsOutRequest = JsonConverterUtil.convertToObject(FundsOutRequest.class, rs.getString(&quot;Attributes&quot;));</span>
+<span class="fc" id="L562">				paymentOutSummary.setBankName(rs.getString(&quot;vBankName&quot;));</span>
+<span class="fc" id="L563">				paymentOutSummary.setBeneficiaryName(rs.getString(&quot;vBeneficiaryFirstName&quot;) +&quot; &quot;+rs.getString(&quot;vBeneficiaryLastName&quot;));</span>
+<span class="fc" id="L564">				paymentOutSummary.setCountryOfBeneficiary(rs.getString(&quot;vBeneficiaryCountry&quot;));</span>
+<span class="fc" id="L565">				paymentOutSummary.setBeneficiaryAccountNumber(fundsOutRequest.getBeneficiary().getAccountNumber());</span>
+<span class="fc" id="L566">				paymentOutSummary.setBeneficiaryEmail(fundsOutRequest.getBeneficiary().getEmail());</span>
+<span class="fc" id="L567">				paymentOutSummary.setBeneficiaryType(fundsOutRequest.getBeneficiary().getBeneficiaryType());</span>
+<span class="fc" id="L568">				paymentOutSummary.setBuyCurrency(rs.getString(&quot;vBuyingCurrency&quot;));</span>
+<span class="fc" id="L569">				paymentOutSummary.setIsDeleted(rs.getBoolean(&quot;Deleted&quot;));</span>
+<span class="fc" id="L570">				paymentOutSummary.setPaymentReference(fundsOutRequest.getBeneficiary().getPaymentReference());</span>
+<span class="fc" id="L571">				paymentOutSummary.setPhone(fundsOutRequest.getBeneficiary().getPhone());</span>
+<span class="fc" id="L572">			}</span>
+<span class="fc" id="L573">			holisticViewPaymentOutResponse.setPaymentOutSummary(paymentOutSummary);</span>
+<span class="fc" id="L574">		} catch (Exception e) {</span>
+<span class="fc" id="L575">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L577">			closeResultset(rs);</span>
+<span class="fc" id="L578">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L579">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L581">		return holisticViewPaymentOutResponse;</span>
+	}
+	
+	/**
+	 * Gets the other contacts.
+	 *
+	 * @param accountId
+	 *            the account id
+	 * @param contactId
+	 *            the contact id
+	 * @param connection
+	 *            the connection
+	 * @return the other contacts
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	protected List&lt;HolisticContact&gt; getOtherContacts(Integer accountId, Integer contactId, Connection connection)
+			throws CompliancePortalException {
+<span class="fc" id="L599">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L600">		ResultSet rs = null;</span>
+		try {
+<span class="fc" id="L602">			List&lt;HolisticContact&gt; contactList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L603">			preparedStatement = connection.prepareStatement(HolisticViewQueryConstant.GET_OTHER_CONTACT_DETAILS.getQuery());</span>
+<span class="fc" id="L604">			preparedStatement.setInt(1, accountId);</span>
+<span class="fc" id="L605">			preparedStatement.setInt(2, contactId);</span>
+<span class="fc" id="L606">			rs = preparedStatement.executeQuery();</span>
+<span class="fc bfc" id="L607" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L608">				RegistrationContact regContact = JsonConverterUtil.convertToObject(RegistrationContact.class, rs.getString(CONTACTATTRIBUTE));</span>
+<span class="fc" id="L609">				HolisticContact contact = new HolisticContact();</span>
+<span class="fc" id="L610">				contact.setId(rs.getInt(&quot;contactID&quot;));</span>
+<span class="fc" id="L611">				contact.setJobTitle(regContact.getJobTitle());</span>
+<span class="fc" id="L612">				contact.setPositionOfSignificance(regContact.getPositionOfSignificance());</span>
+<span class="fc" id="L613">				contact.setAuthorisedSignatory(regContact.getAuthorisedSignatory());</span>
+<span class="fc" id="L614">				contact.setName(rs.getString(&quot;Name&quot;));</span>
+<span class="fc" id="L615">				contact.setComplianceStatus(rs.getString(&quot;complianceStatus&quot;));</span>
+<span class="fc" id="L616">				contactList.add(contact);</span>
+<span class="fc" id="L617">			}</span>
+<span class="fc" id="L618">			return contactList;</span>
+
+<span class="fc" id="L620">		} catch (Exception e) {</span>
+<span class="fc" id="L621">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L623">			closeResultset(rs);</span>
+<span class="fc" id="L624">			closePrepareStatement(preparedStatement);</span>
+		}
+
+	}
+	
+	
+	/**
+	 * @param accountId
+	 * @return
+	 * @throws CompliancePortalException
+	 */
+	protected List&lt;IDomain&gt; getDeviceInfoByAccountId(Integer accountId)	throws CompliancePortalException {
+<span class="nc" id="L636">		List&lt;IDomain&gt; deviceInfoResponseList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L637">		Connection connection = null;</span>
+<span class="nc" id="L638">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L639">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L641">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L642">			preparedStatement = connection.prepareStatement(HolisticViewQueryConstant.GET_DEVICE_INFO.getQuery());</span>
+<span class="nc" id="L643">			preparedStatement.setInt(1, accountId);</span>
+			
+<span class="nc" id="L645">			rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L646" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L647">				DeviceInfoResponse deviceInfoResponse = new DeviceInfoResponse();</span>
+<span class="nc" id="L648">				deviceInfoResponse.setDeviceType(rs.getString(&quot;DeviceType&quot;));</span>
+<span class="nc" id="L649">				deviceInfoResponse.setDeviceName(rs.getString(&quot;DeviceName&quot;));</span>
+<span class="nc" id="L650">				deviceInfoResponse.setDeviceVersion(rs.getString(&quot;DeviceVersion&quot;));</span>
+<span class="nc" id="L651">				deviceInfoResponse.setDeviceId(rs.getString(&quot;DeviceID&quot;));</span>
+<span class="nc" id="L652">				deviceInfoResponse.setDeviceManufacturer(rs.getString(&quot;DeviceManufacturer&quot;));</span>
+<span class="nc" id="L653">				deviceInfoResponse.setoSType(rs.getString(&quot;OSType&quot;));</span>
+<span class="nc" id="L654">				deviceInfoResponse.setBrowserName(rs.getString(&quot;BrowserName&quot;));</span>
+<span class="nc" id="L655">				deviceInfoResponse.setBrowserVersion(rs.getString(&quot;BrowserVersion&quot;));</span>
+<span class="nc" id="L656">				deviceInfoResponse.setBrowserLanguage(rs.getString(&quot;BrowserLanguage&quot;));</span>
+<span class="nc" id="L657">				deviceInfoResponse.setBrowserOnline(rs.getBoolean(&quot;BrowserOnline&quot;));</span>
+<span class="nc" id="L658">				deviceInfoResponse.setoSTimestamp(rs.getString(&quot;OSTimestamp&quot;));</span>
+<span class="nc" id="L659">				deviceInfoResponse.setCdAppID(rs.getString(&quot;CDAppID&quot;));</span>
+<span class="nc" id="L660">				deviceInfoResponse.setCdAppVersion(rs.getString(&quot;CDAppVersion&quot;));</span>
+<span class="nc" id="L661">				deviceInfoResponseList.add(deviceInfoResponse);</span>
+<span class="nc" id="L662">			}</span>
+			
+<span class="nc" id="L664">		} catch (Exception e) {</span>
+<span class="nc" id="L665">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_GETTING_DEVICE_INFO_DATA, e);</span>
+		} finally {
+<span class="nc" id="L667">			closeResultset(rs);</span>
+<span class="nc" id="L668">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L669">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L671">		return deviceInfoResponseList;</span>
+	}
+	
+	@Override
+	public void addDocuments(HolisticViewResponse holisticViewResponse) throws CompliancePortalException {
+<span class="nc bnc" id="L676" title="All 2 branches missed.">		if(null != holisticViewResponse) {</span>
+<span class="nc bnc" id="L677" title="All 2 branches missed.">			if (&quot;PFX&quot;.equals(holisticViewResponse.getHolisticAccount().getCustType())) {</span>
+<span class="nc" id="L678">				addDocumentsForPfx(holisticViewResponse.getHolisticAccount().getAccSFID(), holisticViewResponse.getHolisticContact().getCrmContactId()</span>
+<span class="nc" id="L679">						, holisticViewResponse.getHolisticAccount().getOrgCode(), holisticViewResponse);</span>
+			} else {
+<span class="nc" id="L681">				addDocumentsForCfx(holisticViewResponse.getHolisticAccount().getAccSFID(), holisticViewResponse.getHolisticContact().getCrmContactId()</span>
+<span class="nc" id="L682">						, holisticViewResponse.getHolisticAccount().getOrgCode(), holisticViewResponse);</span>
+			}
+		}
+<span class="nc" id="L685">	}</span>
+	
+	private void addDocumentsForPfx(String accSFID, String conSFID, String orgCode, HolisticViewResponse holisticViewResponse) {
+		try {
+<span class="nc bnc" id="L689" title="All 4 branches missed.">			if (null != accSFID &amp;&amp; null != conSFID) {</span>
+<span class="nc" id="L690">				List&lt;Document&gt; documents = UploadDocumentPort.getAttachedDocument(accSFID,conSFID, orgCode, Constants.SOURCE_SALESFORCE);</span>
+<span class="nc bnc" id="L691" title="All 2 branches missed.">				if (documents != null) {</span>
+<span class="nc" id="L692">					holisticViewResponse.setDocuments(UploadDocumentPort.updateDocumentDateFormat(documents));</span>
+				} else {
+<span class="nc" id="L694">					holisticViewResponse.setDocuments(new ArrayList&lt;&gt;());</span>
+				}
+			}
+<span class="nc" id="L697">		} catch (Exception e) {</span>
+<span class="nc" id="L698">			logg.debug(&quot;Error : &quot;, e);</span>
+<span class="nc" id="L699">			holisticViewResponse.setDocuments(new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L700">		}</span>
+<span class="nc" id="L701">	}</span>
+	
+	private void addDocumentsForCfx(String accSFID, String conSFID, String orgCode, HolisticViewResponse holisticViewResponse) {
+		try {
+<span class="nc bnc" id="L705" title="All 2 branches missed.">				if (null != conSFID) {</span>
+				/**get list of document uploaded on account,
+				 *  set source as salesforce for cfx to get list documents attached to respective CRMAccountid : Abhijit G*/
+<span class="nc" id="L708">				List&lt;Document&gt; documents = UploadDocumentPort.getAttachedDocument(accSFID, conSFID, orgCode, Constants.SOURCE_SALESFORCE);</span>
+<span class="nc bnc" id="L709" title="All 2 branches missed.">				if (documents != null) {</span>
+<span class="nc" id="L710">					holisticViewResponse.setDocuments(UploadDocumentPort.updateDocumentDateFormat(documents));</span>
+				} else {
+<span class="nc" id="L712">					holisticViewResponse.setDocuments(new ArrayList&lt;&gt;());</span>
+				}
+			}
+				
+<span class="nc" id="L716">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L717">			logg.debug(&quot;Error : &quot;, e);</span>
+<span class="nc" id="L718">			holisticViewResponse.setDocuments(new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L719">		}</span>
+<span class="nc" id="L720">	}</span>
+	
+	
+	protected List&lt;HolisticContact&gt; getContactsForCFX(Integer accountId, Connection connection)
+			throws CompliancePortalException {
+<span class="fc" id="L725">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L726">		ResultSet rs = null;</span>
+		try {
+<span class="fc" id="L728">			List&lt;HolisticContact&gt; contactList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L729">			preparedStatement = connection.prepareStatement(HolisticViewQueryConstant.GET_CONTACT_DETAILS_FOR_CFX.getQuery());</span>
+<span class="fc" id="L730">			preparedStatement.setInt(1, accountId);</span>
+<span class="fc" id="L731">			rs = preparedStatement.executeQuery();</span>
+<span class="fc bfc" id="L732" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L733">				RegistrationContact regContact = JsonConverterUtil.convertToObject(RegistrationContact.class, rs.getString(CONTACTATTRIBUTE));</span>
+<span class="fc" id="L734">				HolisticContact contact = new HolisticContact();</span>
+<span class="fc" id="L735">				contact.setId(rs.getInt(&quot;contactID&quot;));</span>
+<span class="fc" id="L736">				contact.setJobTitle(regContact.getJobTitle());</span>
+<span class="fc" id="L737">				contact.setPositionOfSignificance(regContact.getPositionOfSignificance());</span>
+<span class="fc" id="L738">				contact.setAuthorisedSignatory(regContact.getAuthorisedSignatory());</span>
+<span class="fc" id="L739">				contact.setName(rs.getString(&quot;Name&quot;));</span>
+<span class="fc" id="L740">				contact.setComplianceStatus(rs.getString(&quot;complianceStatus&quot;));</span>
+<span class="fc" id="L741">				contactList.add(contact);</span>
+<span class="fc" id="L742">			}</span>
+<span class="fc" id="L743">			return contactList;</span>
+
+<span class="fc" id="L745">		} catch (Exception e) {</span>
+<span class="fc" id="L746">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L748">			closeResultset(rs);</span>
+<span class="fc" id="L749">			closePrepareStatement(preparedStatement);</span>
+		}
+
+	}
+	
+	@Override
+	public void getFurtherPaymentDetailsList(HolisticViewResponse holisticViewResponse)
+			throws CompliancePortalException {
+<span class="nc" id="L757">		FurtherPaymentDetails paymentDetails = new FurtherPaymentDetails();</span>
+<span class="nc" id="L758">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L760">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L761">			setFurtherPaymentInDetailList(holisticViewResponse.getHolisticAccount().getId(), paymentDetails, connection);</span>
+<span class="nc" id="L762">			setFurtherPaymentOutDetailList(holisticViewResponse.getHolisticAccount().getId(), paymentDetails, connection);</span>
+<span class="nc" id="L763">		} catch (Exception e) {</span>
+<span class="nc" id="L764">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+		finally {
+<span class="nc" id="L767">			closeConnection(connection);</span>
+		}
+		
+<span class="nc" id="L770">		holisticViewResponse.setFurtherPaymentDetails(paymentDetails);</span>
+<span class="nc" id="L771">	}</span>
+	
+	protected List&lt;FurtherPaymentInDetails&gt; setFurtherPaymentInDetailList(Integer accountId,
+			FurtherPaymentDetails paymentDetails, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L775">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L776">		ResultSet resultSet = null;</span>
+<span class="nc" id="L777">		List&lt;FurtherPaymentInDetails&gt; paymentInDetailsList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L779">			preparedStatement = connection</span>
+<span class="nc" id="L780">					.prepareStatement(RegistrationQueryConstant.GET_PAYMENTINFO_FOR_ACCOUNT_SELECT.getQuery());</span>
+<span class="nc" id="L781">			preparedStatement.setInt(1, accountId);</span>
+<span class="nc" id="L782">			preparedStatement.setInt(2, 0);// Minrecord</span>
+<span class="nc" id="L783">			preparedStatement.setInt(3, 10);// MaxRecord</span>
+<span class="nc" id="L784">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc" id="L785">			Integer totalRecords = 0;</span>
+<span class="nc bnc" id="L786" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L787">				FurtherPaymentInDetails paymentInDetails = new FurtherPaymentInDetails();</span>
+				/**
+				 * We are setting account name and number according to payment
+				 * method 1) If payment method is 'SWITCH/DEBIT' then we will
+				 * show Card holder name and card number on UI else account name
+				 * and account number. 2)If account number is not received then
+				 * we will show '-' for that.
+				 */
+<span class="nc" id="L795">				paymentInDetails.setPaymentId(resultSet.getInt(&quot;poid&quot;));</span>
+<span class="nc bnc" id="L796" title="All 2 branches missed.">				if (&quot;SWITCH/DEBIT&quot;.equalsIgnoreCase(resultSet.getString(Constants.PAYMENT_METHOD_IN))) {</span>
+<span class="nc" id="L797">					paymentInDetails.setAccountName(resultSet.getString(&quot;Ccfirstname&quot;));</span>
+				} else {
+<span class="nc" id="L799">					setDebtorName(paymentInDetails, resultSet.getString(&quot;DebtorName&quot;));</span>
+				}
+<span class="nc" id="L801">				String debtorAccountNumber = resultSet.getString(&quot;DebtorAccountNumber&quot;);</span>
+<span class="nc bnc" id="L802" title="All 4 branches missed.">				if (null != debtorAccountNumber &amp;&amp; !debtorAccountNumber.isEmpty())</span>
+<span class="nc" id="L803">					paymentInDetails.setAccount(debtorAccountNumber);</span>
+				else
+<span class="nc" id="L805">					paymentInDetails.setAccount(&quot;-&quot;);</span>
+				/** Method created to set risk guardian score on UI */
+<span class="nc" id="L807">				setRiskGuardianScore(paymentInDetails, resultSet.getString(&quot;RiskScore&quot;), resultSet.getString(&quot;TScore&quot;));</span>
+<span class="nc" id="L808">				paymentInDetails.setAmount(StringUtils</span>
+<span class="nc" id="L809">						.getNumberFormat(DecimalFormatter.convertToFourDigit(resultSet.getString(Constants.AMOUNT))));</span>
+<span class="nc" id="L810">				paymentInDetails.setDateOfPayment(</span>
+<span class="nc" id="L811">						DateTimeFormatter.removeTimeFromDate(resultSet.getTimestamp(Constants.DATE_OF_PAYMENT)));</span>
+<span class="nc" id="L812">				paymentInDetails.setMethod(resultSet.getString(&quot;PaymentMethodin&quot;));</span>
+<span class="nc" id="L813">				paymentInDetails.setSellCurrency(resultSet.getString(&quot;SellCurrency&quot;));</span>
+<span class="nc" id="L814">				paymentInDetails.setTradeContractNumber(resultSet.getString(Constants.TRADE_CONTRACT_NUMBER));</span>
+				//AT-1731 - SnehaZagade
+<span class="nc" id="L816">				paymentInDetails.setBankName(resultSet.getString(&quot;BankName&quot;));</span>
+<span class="nc" id="L817">				totalRecords = resultSet.getInt(&quot;TotalRows&quot;);</span>
+<span class="nc" id="L818">				paymentInDetailsList.add(paymentInDetails);</span>
+<span class="nc" id="L819">			}</span>
+<span class="nc" id="L820">			paymentDetails.setPayInDetailsTotalRecords(totalRecords);</span>
+<span class="nc" id="L821">			paymentDetails.setFurtherPaymentInDetails(paymentInDetailsList);</span>
+<span class="nc" id="L822">		} catch (Exception e) {</span>
+<span class="nc" id="L823">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L825">			closeResultset(resultSet);</span>
+<span class="nc" id="L826">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L828">		return paymentInDetailsList;</span>
+	}
+	
+	protected List&lt;FurtherPaymentOutDetails&gt; setFurtherPaymentOutDetailList(Integer accountId,
+			FurtherPaymentDetails paymentDetails, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L833">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L834">		ResultSet resultSet = null;</span>
+<span class="nc" id="L835">		List&lt;FurtherPaymentOutDetails&gt; paymentOutDetailsList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L837">			preparedStatement = connection</span>
+<span class="nc" id="L838">					.prepareStatement(RegistrationQueryConstant.GET_PAYMENTOUTINFO_FOR_ACCOUNT_SELECT.getQuery());</span>
+<span class="nc" id="L839">			preparedStatement.setInt(1, accountId);</span>
+<span class="nc" id="L840">			preparedStatement.setInt(2, 0);// Minrecord</span>
+<span class="nc" id="L841">			preparedStatement.setInt(3, 10);// MaxRecord</span>
+<span class="nc" id="L842">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc" id="L843">			Integer totalRecords = 0;</span>
+<span class="nc bnc" id="L844" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L845">				FurtherPaymentOutDetails paymentOutDetails = new FurtherPaymentOutDetails();</span>
+				// change done to fetch attributes json into POJO - Vishal J
+<span class="nc" id="L847">				paymentOutDetails.setPaymentId(resultSet.getInt(&quot;poid&quot;));</span>
+<span class="nc bnc" id="L848" title="All 2 branches missed.">				if (null != resultSet.getString(Constants.BENEFICIARY_LAST_NAME)</span>
+<span class="nc bnc" id="L849" title="All 2 branches missed.">						&amp;&amp; !resultSet.getString(Constants.BENEFICIARY_LAST_NAME).isEmpty()) {</span>
+<span class="nc" id="L850">					String beneficiaryName = new StringBuilder()</span>
+<span class="nc" id="L851">							.append(resultSet.getString(Constants.BENEFICIARY_FIRST_NAME)).append(&quot; &quot;)</span>
+<span class="nc" id="L852">							.append(resultSet.getString(Constants.BENEFICIARY_LAST_NAME)).toString();</span>
+<span class="nc" id="L853">					paymentOutDetails.setAccountName(beneficiaryName);</span>
+
+<span class="nc" id="L855">				} else {</span>
+<span class="nc" id="L856">					paymentOutDetails.setAccountName(resultSet.getString(Constants.BENEFICIARY_FIRST_NAME));</span>
+				}
+<span class="nc" id="L858">				String accountNumber = resultSet.getString(&quot;AccountNumber&quot;);</span>
+<span class="nc" id="L859">				setAccountNumber(paymentOutDetails, accountNumber);</span>
+<span class="nc" id="L860">				paymentOutDetails.setAmount(StringUtils</span>
+<span class="nc" id="L861">						.getNumberFormat(DecimalFormatter.convertToFourDigit(resultSet.getString(Constants.AMOUNT))));</span>
+<span class="nc" id="L862">				paymentOutDetails.setBuyCurrency(resultSet.getString(&quot;BuyCurrency&quot;));</span>
+<span class="nc bnc" id="L863" title="All 2 branches missed.">				if (null != resultSet.getTimestamp(Constants.DATE_OF_PAYMENT)) {</span>
+<span class="nc" id="L864">					paymentOutDetails.setDateOfPayment(</span>
+<span class="nc" id="L865">							DateTimeFormatter.removeTimeFromDate(resultSet.getTimestamp(Constants.DATE_OF_PAYMENT)));</span>
+				} else {
+<span class="nc" id="L867">					paymentOutDetails.setDateOfPayment(Constants.DASH_DETAILS_PAGE);</span>
+				}
+				// added by neelesh pant
+<span class="nc" id="L870">				paymentOutDetails.setValuedate(DateTimeFormatter.dateFormat(resultSet.getString(&quot;MaturityDate&quot;)));</span>
+<span class="nc" id="L871">				totalRecords = resultSet.getInt(&quot;TotalRows&quot;);</span>
+<span class="nc" id="L872">				paymentOutDetails.setTradeContractNumber(resultSet.getString(Constants.TRADE_CONTRACT_NUMBER));</span>
+<span class="nc bnc" id="L873" title="All 2 branches missed.">				if (null != resultSet.getString(Constants.PAYMENT_REFERENCE)</span>
+<span class="nc bnc" id="L874" title="All 2 branches missed.">						&amp;&amp; !resultSet.getString(Constants.PAYMENT_REFERENCE).isEmpty()) {</span>
+<span class="nc" id="L875">					paymentOutDetails.setPaymentReference(resultSet.getString(Constants.PAYMENT_REFERENCE));</span>
+				}
+				//AT-1731 - SnehaZagade
+<span class="nc" id="L878">				paymentOutDetails.setBankName(resultSet.getString(&quot;BankName&quot;));</span>
+<span class="nc" id="L879">				paymentOutDetailsList.add(paymentOutDetails);</span>
+<span class="nc" id="L880">			}</span>
+<span class="nc" id="L881">			paymentDetails.setPayOutDetailsTotalRecords(totalRecords);</span>
+<span class="nc" id="L882">			paymentDetails.setFurtherPaymentOutDetails(paymentOutDetailsList);</span>
+<span class="nc" id="L883">		} catch (Exception e) {</span>
+<span class="nc" id="L884">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L886">			closeResultset(resultSet);</span>
+<span class="nc" id="L887">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L889">		return paymentOutDetailsList;</span>
+	}
+
+	private void setAccountNumber(FurtherPaymentOutDetails paymentOutDetails, String accountNumber) {
+<span class="nc bnc" id="L893" title="All 4 branches missed.">		if (null != accountNumber &amp;&amp; !accountNumber.isEmpty()) {</span>
+<span class="nc" id="L894">			paymentOutDetails.setAccount(accountNumber);</span>
+		}
+<span class="nc" id="L896">	}</span>
+	
+	protected void setRiskGuardianScore(FurtherPaymentInDetails paymentInDetails, String riskScore, String tScore) {
+<span class="nc bnc" id="L899" title="All 2 branches missed.">		if (riskScore != null) {</span>
+<span class="nc bnc" id="L900" title="All 4 branches missed.">			if (tScore == null || tScore.isEmpty())</span>
+<span class="nc" id="L901">				paymentInDetails.setRiskGuardianScore(&quot;-&quot;);</span>
+			else
+<span class="nc" id="L903">				paymentInDetails.setRiskGuardianScore(tScore);</span>
+		} else {
+<span class="nc" id="L905">			paymentInDetails.setRiskGuardianScore(&quot;-&quot;);</span>
+		}
+<span class="nc" id="L907">	}</span>
+	
+	protected void setDebtorName(FurtherPaymentInDetails paymentInDetails, String debtorName) {
+<span class="nc bnc" id="L910" title="All 4 branches missed.">		if (null != debtorName &amp;&amp; !debtorName.isEmpty())</span>
+<span class="nc" id="L911">			paymentInDetails.setAccountName(debtorName);</span>
+		else
+<span class="nc" id="L913">			paymentInDetails.setAccountName(&quot;-&quot;);</span>
+<span class="nc" id="L914">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

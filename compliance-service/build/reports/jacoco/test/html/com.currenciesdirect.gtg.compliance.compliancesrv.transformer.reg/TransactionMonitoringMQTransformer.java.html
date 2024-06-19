@@ -1,0 +1,1212 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TransactionMonitoringMQTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg</a> &gt; <span class="el_source">TransactionMonitoringMQTransformer.java</span></div><h1>TransactionMonitoringMQTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg;
+
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.CardDetails;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.Company;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.ConversionPrediction;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.CorperateCompliance;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IPAddressDetails;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.RiskProfile;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringContactSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringFundsProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentInResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsInRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsInDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionAccountMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionCFXLegalEntityMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionCardMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionContactMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionIPDeviceMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionPaymentINMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionPaymentOUTMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionSignupMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.TransactionMonitoringMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class TransactionMonitoringMQTransformer.
+ */
+<span class="nc" id="L63">public class TransactionMonitoringMQTransformer extends AbstractTransformer {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L66">	private static final Logger LOG = LoggerFactory.getLogger(TransactionMonitoringMQTransformer.class);</span>
+	
+	/** The Constant ERROR. */
+	private static final String ERROR = &quot;Error in reading TM Account response&quot;;
+	private static final String TIME_STRING = &quot; 00:00:00&quot;;
+
+	
+	
+	/** The funds in DB service impl. */
+	@Autowired
+	protected FundsOutDBServiceImpl fundsOutDBServiceImpl;
+	
+	/** The funds in DB service impl. */
+	@Autowired
+	protected FundsInDBServiceImpl fundsInDBServiceImpl;
+
+	/**
+	 * Transform request.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+
+<span class="nc" id="L91">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L92">		TransactionMonitoringMQRequest transactionMonitoringMQRequest = (TransactionMonitoringMQRequest) messageExchange</span>
+<span class="nc" id="L93">				.getRequest();</span>
+		String jsonCxExchangeRequest;
+
+		try {
+<span class="nc" id="L97">			MessageExchange ccExchange = new MessageExchange();</span>
+			
+<span class="nc" id="L99">			String json = JsonConverterUtil</span>
+<span class="nc" id="L100">					.convertToJsonWithoutNull(transactionMonitoringMQRequest.getRequestJson());</span>
+
+<span class="nc bnc" id="L102" title="All 2 branches missed.">			if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.SIGN_UP)</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">					|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.UPDATE)</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">					|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.ADD_CONTACT)) {</span>
+		
+<span class="nc" id="L106">				IntuitionSignupMQRequest intuitionSignupMQRequest = JsonConverterUtil	</span>
+<span class="nc" id="L107">						.convertToObject(IntuitionSignupMQRequest.class, json);	</span>
+<span class="nc" id="L108">				ccExchange = createAccountExchange(message, intuitionSignupMQRequest, transactionMonitoringMQRequest);	</span>
+	
+<span class="nc bnc" id="L110" title="All 2 branches missed.">			} else if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_in&quot;)</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">						|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_in_update&quot;)) {</span>
+				
+<span class="nc" id="L113">				IntuitionPaymentINMQRequest intuitionPaymentINMQRequest = JsonConverterUtil</span>
+<span class="nc" id="L114">						.convertToObject(IntuitionPaymentINMQRequest.class, json);</span>
+
+<span class="nc" id="L116">				ccExchange = createPaymentInExchange(message, intuitionPaymentINMQRequest, transactionMonitoringMQRequest);</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">			} else if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_out&quot;)</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">						|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_out_update&quot;)) {</span>
+				
+<span class="nc" id="L120">				IntuitionPaymentOUTMQRequest intuitionPaymentOUTMQRequest = JsonConverterUtil</span>
+<span class="nc" id="L121">						.convertToObject(IntuitionPaymentOUTMQRequest.class, json);</span>
+
+<span class="nc" id="L123">				ccExchange = createPaymentOutExchange(message, intuitionPaymentOUTMQRequest, transactionMonitoringMQRequest);</span>
+			}
+
+<span class="nc" id="L126">			jsonCxExchangeRequest = JsonConverterUtil.convertToJsonWithoutNull(ccExchange.getRequest());</span>
+<span class="nc" id="L127">			LOG.debug(&quot;::::::::::::::: TransactionMonitoringMQTransformer : {}&quot;, jsonCxExchangeRequest);</span>
+
+<span class="nc" id="L129">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L130">		} catch (Exception e) {</span>
+<span class="nc" id="L131">			LOG.error(&quot;Error in TransactionMonitoringMQTransformer class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L132">			message.getPayload().setFailed(true);</span>
+
+<span class="nc" id="L134">		}</span>
+
+<span class="nc" id="L136">		return message;</span>
+	}
+
+	/**
+	 * Creates the account exchange.
+	 *
+	 * @param message the message
+	 * @param accRequest the acc request
+	 * @param transactionMonitoringMQRequest the transaction monitoring MQ request
+	 * @return the message exchange
+	 * @throws ComplianceException the compliance exception
+	 */
+	private MessageExchange createAccountExchange(Message&lt;MessageContext&gt; message, IntuitionSignupMQRequest signupRequest,
+			TransactionMonitoringMQRequest transactionMonitoringMQRequest) {
+<span class="nc" id="L150">		Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L151">				.getAdditionalAttribute(&quot;eventId&quot;);</span>
+<span class="nc" id="L152">		MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L153">		TransactionMonitoringMQServiceRequest mqRequest = new TransactionMonitoringMQServiceRequest();</span>
+<span class="nc" id="L154">		TransactionMonitoringMQServiceResponse mqResponse = new TransactionMonitoringMQServiceResponse();</span>
+<span class="nc" id="L155">		TransactionMonitoringSignupRequest request = new TransactionMonitoringSignupRequest();</span>
+<span class="nc" id="L156">		TransactionMonitoringSignupResponse tmSignUpResponse = new TransactionMonitoringSignupResponse();</span>
+<span class="nc" id="L157">		TransactionMonitoringAccountRequest tmSingUpAccountRequests = new TransactionMonitoringAccountRequest();</span>
+<span class="nc" id="L158">		TransactionMonitoringAccountSignupResponse tmSingUpAccountResponse = new TransactionMonitoringAccountSignupResponse();</span>
+
+<span class="nc" id="L160">		List&lt;TransactionMonitoringContactRequest&gt; tmSingUpContactRequestsList = new ArrayList&lt;&gt;();</span>
+		
+		try {
+
+<span class="nc" id="L164">			tmSingUpAccountRequests.setId(transactionMonitoringMQRequest.getAccountID());</span>
+<span class="nc" id="L165">			transformAccountRequest(tmSingUpAccountRequests, signupRequest);</span>
+<span class="nc" id="L166">			request.setTransactionMonitoringAccountRequest(tmSingUpAccountRequests);</span>
+			
+<span class="nc" id="L168">			request.setRequestType(transactionMonitoringMQRequest.getRequestType());</span>
+<span class="nc" id="L169">			request.setOrgCode(transactionMonitoringMQRequest.getOrgCode());</span>
+<span class="nc" id="L170">			request.setCreatedBy(transactionMonitoringMQRequest.getCreatedBy());</span>
+<span class="nc" id="L171">			request.setIsPresent(transactionMonitoringMQRequest.getIsPresent());</span>
+<span class="nc" id="L172">			request.setAccountTMFlag(1);</span>
+<span class="nc" id="L173">			request.setIsCardApply(signupRequest.getIsCardApply()); //card field</span>
+<span class="nc" id="L174">			request.setRegistrationLoadCriteria(signupRequest.getRegistrationLoadCriteria()); //AT-5127</span>
+			
+			
+<span class="nc" id="L177">			tmSingUpAccountResponse.setAccountId(transactionMonitoringMQRequest.getAccountID());</span>
+<span class="nc" id="L178">			tmSingUpAccountResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+
+<span class="nc" id="L180">			TransactionMonitoringAccountSummary accSummary = new TransactionMonitoringAccountSummary();</span>
+<span class="nc" id="L181">			accSummary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+			
+<span class="nc bnc" id="L183" title="All 2 branches missed.">			for (IntuitionContactMQRequest contact : signupRequest.getContacts() ){</span>
+<span class="nc" id="L184">				TransactionMonitoringContactRequest tmSingupContact = new TransactionMonitoringContactRequest();</span>
+<span class="nc" id="L185">				transformContactRequest(tmSingupContact, contact);</span>
+				
+				
+<span class="nc" id="L188">				tmSingUpContactRequestsList.add(tmSingupContact);</span>
+<span class="nc" id="L189">			}</span>
+			
+<span class="nc" id="L191">			request.setTransactionMonitoringContactRequests(tmSingUpContactRequestsList);</span>
+
+<span class="nc" id="L193">			ccExchange.addEventServiceLog(</span>
+<span class="nc" id="L194">					createEventServiceLogEntry(eventId, ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND,</span>
+							ServiceProviderEnum.TRANSACTION_MONITORING_SIGN_UP_ACCOUNT,
+<span class="nc" id="L196">							transactionMonitoringMQRequest.getAccountID(), 1, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L197">							transactionMonitoringMQRequest.getCreatedBy(), tmSingUpAccountResponse, accSummary));</span>
+
+<span class="nc" id="L199">			mqRequest.setTransactionMonitoringSignupRequest(request);</span>
+<span class="nc" id="L200">			mqRequest.setRequestType(transactionMonitoringMQRequest.getRequestType());</span>
+<span class="nc" id="L201">			mqRequest.setOrgCode(transactionMonitoringMQRequest.getOrgCode());</span>
+<span class="nc" id="L202">			mqRequest.setCreatedBy(transactionMonitoringMQRequest.getCreatedBy());</span>
+<span class="nc" id="L203">			ccExchange.setRequest(mqRequest);</span>
+<span class="nc" id="L204">			tmSignUpResponse.setTransactionMonitoringAccountSignupResponse(tmSingUpAccountResponse);</span>
+<span class="nc" id="L205">			mqResponse.setTransactionMonitoringSignupResponse(tmSignUpResponse);</span>
+<span class="nc" id="L206">			ccExchange.setResponse(mqResponse);</span>
+<span class="nc" id="L207">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND);</span>
+
+<span class="nc" id="L209">		} catch (Exception e) {</span>
+<span class="nc" id="L210">			LOG.error(&quot;{1}&quot;, e);</span>
+<span class="nc" id="L211">		}</span>
+
+<span class="nc" id="L213">		return ccExchange;</span>
+	}
+
+	/**
+	 * Transform account request.
+	 *
+	 * @param requestData the request data
+	 * @param account the account
+	 */
+	private void transformAccountRequest(TransactionMonitoringAccountRequest requestData,
+			IntuitionSignupMQRequest signupRequest) {
+
+<span class="nc" id="L225">		requestData.setTradeAccountNumber(signupRequest.getTradeAccNumber());</span>
+<span class="nc" id="L226">		requestData.setRegistrationDateTime(signupRequest.getRegDateTime());</span>
+<span class="nc" id="L227">		requestData.setChannel(signupRequest.getChannel());</span>
+<span class="nc" id="L228">		requestData.setAccountName(signupRequest.getActName());</span>
+<span class="nc" id="L229">		requestData.setCountryOfInterest(signupRequest.getCountryInterest());</span>
+<span class="nc" id="L230">		requestData.setTradingName(signupRequest.getTradeName());</span>
+<span class="nc" id="L231">		requestData.setPurposeOfTran(signupRequest.getTrasactionPurpose());</span>
+<span class="nc" id="L232">		requestData.setCountriesOfOperation(signupRequest.getOpCountry());</span>
+<span class="nc" id="L233">		requestData.setServiceRequired(signupRequest.getServiceReq());</span>
+<span class="nc" id="L234">		requestData.setValueOfTransaction(signupRequest.getTxnValue());</span>
+<span class="nc" id="L235">		requestData.setSourceOfFund(signupRequest.getSourceOfFund());</span>
+<span class="nc" id="L236">		requestData.setSource(signupRequest.getSource());</span>
+<span class="nc" id="L237">		requestData.setSubSource(signupRequest.getSubSource());</span>
+<span class="nc" id="L238">		requestData.setReferral(signupRequest.getReferral());</span>
+<span class="nc" id="L239">		requestData.setReferralText(signupRequest.getReferralText());</span>
+<span class="nc" id="L240">		requestData.setExtendedReferral(signupRequest.getExtendedReferral());</span>
+<span class="nc" id="L241">		requestData.setAdCampaign(signupRequest.getAdCampaign());</span>
+<span class="nc" id="L242">		requestData.setKeywords(signupRequest.getKeywords());</span>
+<span class="nc" id="L243">		requestData.setSearchEngine(signupRequest.getSearchEngine());</span>
+<span class="nc" id="L244">		requestData.setAffiliateName(signupRequest.getAffiliateName());</span>
+<span class="nc" id="L245">		requestData.setRegistrationMode(signupRequest.getRegMode());</span>
+<span class="nc" id="L246">		requestData.setCustLegalEntity(signupRequest.getOrganizationLegalEntity());</span>
+<span class="nc" id="L247">		requestData.setCustType(signupRequest.getCustType());</span>
+<span class="nc" id="L248">		requestData.setBuyingCurrency(signupRequest.getBuyingCurrency());</span>
+<span class="nc" id="L249">		requestData.setSellingCurrency(signupRequest.getSellingCurrency());</span>
+<span class="nc" id="L250">		requestData.setComplianceLog(signupRequest.getComplianceLog());</span>
+		
+		
+<span class="nc" id="L253">		IntuitionAccountMQRequest account = signupRequest.getAccount().get(0);</span>
+<span class="nc" id="L254">		IntuitionCFXLegalEntityMQRequest cfxLegal = signupRequest.getCfxLegalEntity().get(0);</span>
+<span class="nc" id="L255">		IntuitionIPDeviceMQRequest ipDevice = null;</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">		if(signupRequest.getIpDevice() != null) {</span>
+<span class="nc" id="L257">			 ipDevice = signupRequest.getIpDevice().get(0);</span>
+		}
+<span class="nc" id="L259">		IntuitionCardMQRequest cardInfo = null;</span>
+<span class="nc bnc" id="L260" title="All 2 branches missed.">		if(signupRequest.getCard() != null) {</span>
+<span class="nc" id="L261">			 cardInfo = signupRequest.getCard().get(0);</span>
+		}
+		
+<span class="nc" id="L264">		requestData.setAccSFID(account.getAccSfId());</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">		if(account.getAccountId() != null) {</span>
+<span class="nc" id="L266">			requestData.setTradeAccountID(Integer.parseInt(account.getAccountId()));</span>
+		}
+<span class="nc" id="L268">		requestData.setBranch(account.getBranch());</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">		if (cfxLegal.getTurnover() != null) {</span>
+<span class="nc" id="L270">			requestData.setTurnover(cfxLegal.getTurnover());</span>
+		}
+<span class="nc" id="L272">		requestData.setAffiliateNumber(account.getAffiliateNumber());</span>
+<span class="nc" id="L273">		requestData.setCardDeliveryToSecondaryAddress(account.getCardDeliveryToSecondaryAddress()); // card fields</span>
+<span class="nc" id="L274">		requestData.setSecondaryAddressPresent(account.getSecondaryAddressPresent()); // card fields</span>
+		//Add for AT-5318
+<span class="nc" id="L276">		requestData.setParentType(account.getParentType()); </span>
+<span class="nc" id="L277">		requestData.setParentTitanAccNum(account.getParentID()); </span>
+<span class="nc" id="L278">		requestData.setMetInPerson(account.getMetInPerson()); </span>
+<span class="nc" id="L279">		requestData.setSelfieOnFile(account.getSelfieOnFile()); </span>
+<span class="nc" id="L280">		requestData.setVulnerabilityCharacteristic(account.getVulnerabilityCharacteristic()); </span>
+		//Add for AT-5376
+<span class="nc bnc" id="L282" title="All 2 branches missed.">		if(account.getNoOfChild()!=null)</span>
+<span class="nc" id="L283">			requestData.setNumberOfChilds(String.valueOf(account.getNoOfChild()));</span>
+		
+<span class="nc" id="L285">		requestData.setLegacyTradeAccountNumber(account.getLegacyAccountAuroraTitanCustomerNo());//Add for AT-5393</span>
+		
+		// Added for AT-5529 
+<span class="nc bnc" id="L288" title="All 4 branches missed.">		if (requestData.getCustType().equalsIgnoreCase(&quot;CFX&quot;) || requestData.getCustType().equalsIgnoreCase(Constants.CFXETAILER)) {</span>
+<span class="nc" id="L289">			requestData.setBlacklist(account.getBlacklist());</span>
+<span class="nc" id="L290">			requestData.setSanctionResult(account.getSanctionResult());</span>
+		}
+<span class="nc" id="L292">		Company company = new Company();</span>
+<span class="nc" id="L293">			company.setCountryOfEstablishment(cfxLegal.getCountryOfEstablishment());</span>
+<span class="nc" id="L294">			company.setCorporateType(cfxLegal.getCorporateType());</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">			if (cfxLegal.getIncorporationDate() != null) {</span>
+<span class="nc" id="L296">				company.setIncorporationDate(cfxLegal.getIncorporationDate());</span>
+			}
+<span class="nc" id="L298">			company.setIndustry(cfxLegal.getIndustry());</span>
+<span class="nc" id="L299">			company.setEtailer(signupRequest.getEtailer());</span>
+<span class="nc" id="L300">			company.setRegistrationNo(cfxLegal.getRegistrationNo());</span>
+<span class="nc" id="L301">			requestData.setWebsite(cfxLegal.getWebsite());</span>
+			
+<span class="nc" id="L303">			company.setBillingAddress(cfxLegal.getCompanyBillingAddress());</span>
+<span class="nc" id="L304">			company.setCompanyPhone(cfxLegal.getCompanyPhone());</span>
+<span class="nc" id="L305">			company.setShippingAddress(cfxLegal.getShippingAddress());</span>
+<span class="nc" id="L306">			company.setCountryRegion(cfxLegal.getCountryRegion());</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">			if (cfxLegal.getTcSignedDate() != null) {</span>
+<span class="nc" id="L308">				company.settAndcSignedDate(cfxLegal.getTcSignedDate());</span>
+			}
+<span class="nc" id="L310">			company.setVatNo(cfxLegal.getVatNo());</span>
+<span class="nc" id="L311">			company.setOption(cfxLegal.getOption());</span>
+<span class="nc" id="L312">			company.setTypeOfFinancialAccount(cfxLegal.getTypeOfFinancialAccount());</span>
+<span class="nc" id="L313">			company.setEstNoTransactionsPcm(cfxLegal.getEstNoTransactionsPcm());</span>
+			//Add for AT-5393
+<span class="nc bnc" id="L315" title="All 2 branches missed.">			if (cfxLegal.getOngoingDueDiligenceDate() != null) {</span>
+<span class="nc" id="L316">				company.setOngoingDueDiligenceDate(cfxLegal.getOngoingDueDiligenceDate());</span>
+			}
+			
+<span class="nc" id="L319">		requestData.setCompany(company);</span>
+		
+<span class="nc" id="L321">		CorperateCompliance corperateCompliance = transformCorperateComplianceData(cfxLegal);</span>
+<span class="nc" id="L322">		corperateCompliance.setRegistrationNumber(cfxLegal.getRegistrationNo());</span>
+<span class="nc" id="L323">		requestData.setCorperateCompliance(corperateCompliance);</span>
+		
+<span class="nc" id="L325">		RiskProfile riskProfile = transformRiskProfileData(cfxLegal);</span>
+<span class="nc" id="L326">		requestData.setRiskProfile(riskProfile);</span>
+		
+<span class="nc" id="L328">		IPAddressDetails ipAddress = null;</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">		if (ipDevice != null) {</span>
+<span class="nc" id="L330">			ipAddress = transformIpAddressDetail(ipDevice);</span>
+		}
+<span class="nc" id="L332">		requestData.setiPAddressDetails(ipAddress);</span>
+		
+<span class="nc" id="L334">		CardDetails card = null;</span>
+<span class="nc bnc" id="L335" title="All 2 branches missed.">		if(cardInfo != null) {</span>
+<span class="nc" id="L336">			card = transformCardDetail(cardInfo);</span>
+		}
+<span class="nc" id="L338">		requestData.setCardDetails(card);</span>
+		
+<span class="nc" id="L340">		ConversionPrediction conversionPrediction = new ConversionPrediction();</span>
+<span class="nc" id="L341">		conversionPrediction.setAccountId(account.getAccountId());</span>
+<span class="nc" id="L342">		conversionPrediction.setConversionFlag(signupRequest.getConversionFlag());</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">		if(signupRequest.getConversionProbability() != null) {</span>
+<span class="nc" id="L344">			BigDecimal conPro = new BigDecimal(signupRequest.getConversionProbability());</span>
+<span class="nc" id="L345">			conversionPrediction.setConversionProbability(conPro);</span>
+		}
+<span class="nc" id="L347">		conversionPrediction.seteTVBand(signupRequest.getEtvBand());</span>
+<span class="nc" id="L348">		requestData.setConversionPrediction(conversionPrediction);</span>
+		
+<span class="nc" id="L350">		requestData.setCurrencyPair(null);</span>
+<span class="nc" id="L351">		requestData.setClientType(null);</span>
+<span class="nc" id="L352">		requestData.setPhoneReg(null);</span>
+<span class="nc" id="L353">		requestData.setEnquiryDate(null);</span>
+<span class="nc" id="L354">		requestData.setAccountStatus(signupRequest.getAccountStatus());</span>
+<span class="nc" id="L355">	}</span>
+
+	/**
+	 * Transform ip address detail.
+	 *
+	 * @param ipDevice the ip device
+	 * @return the IP address details
+	 */
+	private IPAddressDetails transformIpAddressDetail(IntuitionIPDeviceMQRequest ipDevice) {
+<span class="nc" id="L364">		IPAddressDetails ipAddress = new IPAddressDetails();</span>
+<span class="nc" id="L365">		ipAddress.setContinent(ipDevice.getContinent());</span>
+<span class="nc" id="L366">		ipAddress.setLongitude(ipDevice.getLongitude());</span>
+<span class="nc" id="L367">		ipAddress.setLatitiude(ipDevice.getLatitiude());</span>
+<span class="nc" id="L368">		ipAddress.setRegion(ipDevice.getRegion());</span>
+<span class="nc" id="L369">		ipAddress.setCity(ipDevice.getCity());</span>
+<span class="nc" id="L370">		ipAddress.setTimezone(ipDevice.getTimezone());</span>
+<span class="nc" id="L371">		ipAddress.setOrganization(ipDevice.getOrganization());</span>
+<span class="nc" id="L372">		ipAddress.setCarrier(ipDevice.getCarrier());</span>
+<span class="nc" id="L373">		ipAddress.setConnectionType(ipDevice.getConnectionType());</span>
+<span class="nc" id="L374">		ipAddress.setLineSpeed(ipDevice.getLineSpeed());</span>
+<span class="nc" id="L375">		ipAddress.setIpRoutingType(ipDevice.getIpRoutingType());</span>
+<span class="nc" id="L376">		ipAddress.setCountryName(ipDevice.getCountryName());</span>
+<span class="nc" id="L377">		ipAddress.setCountryCode(ipDevice.getCountryCode());</span>
+<span class="nc" id="L378">		ipAddress.setStateName(ipDevice.getStateName());</span>
+<span class="nc" id="L379">		ipAddress.setStateCode(ipDevice.getStateCode());</span>
+<span class="nc" id="L380">		ipAddress.setPostalCode(ipDevice.getPostalCode());</span>
+<span class="nc" id="L381">		ipAddress.setAreaCode(ipDevice.getAreaCode());</span>
+<span class="nc" id="L382">		ipAddress.setAnonymizerStatus(ipDevice.getAnonymizerStatus());</span>
+<span class="nc" id="L383">		ipAddress.setIpAddress(ipDevice.getIpAddress());</span>
+<span class="nc" id="L384">		ipAddress.setContactIp(Optional.ofNullable(ipDevice.getContactIp()).map(Object::toString)</span>
+<span class="nc" id="L385">				.orElse(null));</span>
+<span class="nc" id="L386">		return ipAddress;</span>
+	}
+	
+	/**
+	 * Transform card detail.
+	 *
+	 * @param card the card
+	 * @return the card details
+	 */
+	private CardDetails transformCardDetail(IntuitionCardMQRequest card) {
+<span class="nc" id="L396">		CardDetails cardDetails = new CardDetails();</span>
+<span class="nc" id="L397">		cardDetails.setCardID(card.getCardID());</span>
+<span class="nc" id="L398">		cardDetails.setCardStatusFlag(card.getCardStatusFlag());</span>
+<span class="nc" id="L399">		cardDetails.setDateCardDispatched(card.getDateCardDispatched());</span>
+<span class="nc" id="L400">		cardDetails.setDateCardActivated(card.getDateCardActivated());</span>
+<span class="nc" id="L401">		cardDetails.setDateCardFrozen(card.getDateCardFrozen());</span>
+<span class="nc" id="L402">		cardDetails.setFreezeReason(card.getFreezeReason());</span>
+<span class="nc" id="L403">		cardDetails.setDateCardUnfrozen(card.getDateCardUnfrozen());</span>
+<span class="nc" id="L404">		cardDetails.setDateCardBlocked(card.getDateCardBlocked());</span>
+<span class="nc" id="L405">		cardDetails.setReasonForBlock(card.getReasonForBlock());</span>
+<span class="nc" id="L406">		cardDetails.setDateCardUnblocked(card.getDateCardUnblocked());</span>
+<span class="nc" id="L407">		cardDetails.setDateLastCardPinView(card.getDateLastCardPinView());</span>
+<span class="nc" id="L408">		cardDetails.setDateLastCardPanView(card.getDateLastCardPanView());</span>
+<span class="nc" id="L409">		return cardDetails;</span>
+	}
+
+	/**
+	 * Transform corperate compliance data.
+	 *
+	 * @param account the account
+	 * @return the corperate compliance
+	 */
+	private CorperateCompliance transformCorperateComplianceData(IntuitionCFXLegalEntityMQRequest cfxLegal) {
+		
+<span class="nc" id="L420">		CorperateCompliance corperateCompliance = new CorperateCompliance();</span>
+<span class="nc" id="L421">		corperateCompliance.setFinancialStrength(cfxLegal.getFinancialStrength());</span>
+<span class="nc" id="L422">		corperateCompliance.setFixedAssets(cfxLegal.getFixedAssets());</span>
+<span class="nc" id="L423">		corperateCompliance.setForeignOwnedCompany(cfxLegal.getForeignOwnedCompany());</span>
+<span class="nc" id="L424">		corperateCompliance.setFormerName(cfxLegal.getFormerName());</span>
+<span class="nc" id="L425">		corperateCompliance.setGrossIncome(cfxLegal.getGrossIncome());</span>
+<span class="nc" id="L426">		corperateCompliance.setIsoCountryCode2Digit(cfxLegal.getIsoCountryCode2Digit());</span>
+<span class="nc" id="L427">		corperateCompliance.setLegalForm(cfxLegal.getLegalForm());</span>
+<span class="nc" id="L428">		corperateCompliance.setMatchName(cfxLegal.getMatchName());</span>
+<span class="nc" id="L429">		corperateCompliance.setNetIncome(cfxLegal.getNetIncome());</span>
+<span class="nc" id="L430">		corperateCompliance.setNetWorth(cfxLegal.getNetWorth());</span>
+<span class="nc bnc" id="L431" title="All 2 branches missed.">		if (null != cfxLegal.getRegistrationDate()) {</span>
+<span class="nc" id="L432">			corperateCompliance.setRegistrationDate(cfxLegal.getRegistrationDate());</span>
+		}
+<span class="nc" id="L434">		corperateCompliance.setSic(cfxLegal.getSic());</span>
+<span class="nc" id="L435">		corperateCompliance.setTotalLiabilitiesAndEquities(cfxLegal.getTotalLiabilitiesAndEquities());</span>
+<span class="nc" id="L436">		corperateCompliance.setTotalMatchedShareholders(cfxLegal.getTotalMatchedShareholders());</span>
+<span class="nc" id="L437">		corperateCompliance.setTotalShareHolders(cfxLegal.getTotalShareHolders());</span>
+<span class="nc" id="L438">		return corperateCompliance;</span>
+	}
+
+	/**
+	 * Transform risk profile data.
+	 *
+	 * @param account the account
+	 * @return the risk profile
+	 */
+	private RiskProfile transformRiskProfileData(IntuitionCFXLegalEntityMQRequest cfxLegal) {
+<span class="nc" id="L448">		RiskProfile riskProfile = new RiskProfile();</span>
+<span class="nc" id="L449">		riskProfile.setAnnualSales(cfxLegal.getAnnualSales());</span>
+<span class="nc" id="L450">		riskProfile.setCountryRiskIndicator(cfxLegal.getCountryRiskIndicator());</span>
+<span class="nc" id="L451">		riskProfile.setCreditLimit(cfxLegal.getCreditLimit());</span>
+<span class="nc" id="L452">		riskProfile.setDomesticUltimateParentDetails(cfxLegal.getDomesticUltimateParentDetails());</span>
+<span class="nc" id="L453">		riskProfile.setDunsNumber(cfxLegal.getDunsNumber());</span>
+<span class="nc" id="L454">		riskProfile.setGlobalUltimateParentDetails(cfxLegal.getGlobalUltimateParentDetails());</span>
+<span class="nc" id="L455">		riskProfile.setGroupStructureNumberOfLevels(cfxLegal.getGroupStructureNumberOfLevels());</span>
+<span class="nc" id="L456">		riskProfile.setHeadquarterDetails(cfxLegal.getHeadquarterDetails());</span>
+<span class="nc" id="L457">		riskProfile.setImmediateParentDetails(cfxLegal.getImmediateParentDetails());</span>
+<span class="nc" id="L458">		riskProfile.setModelledAnnualSales(cfxLegal.getModelledAnnualSales());</span>
+<span class="nc" id="L459">		riskProfile.setModelledNetWorth(cfxLegal.getModelledNetWorth());</span>
+<span class="nc" id="L460">		riskProfile.setNetWorthAmount(cfxLegal.getNetWorthAmount());</span>
+<span class="nc" id="L461">		riskProfile.setRiskDirection(cfxLegal.getRiskDirection());</span>
+<span class="nc" id="L462">		riskProfile.setRiskRating(cfxLegal.getRiskRating());</span>
+<span class="nc" id="L463">		riskProfile.setRiskTrend(cfxLegal.getRiskTrend());</span>
+<span class="nc" id="L464">		riskProfile.setUpdatedRisk(cfxLegal.getUpdatedRisk());</span>
+<span class="nc" id="L465">		return riskProfile;</span>
+	}
+
+	/**
+	 * Transform contact request.
+	 *
+	 * @param requestData the request data
+	 * @param contact the contact
+	 */
+	private void transformContactRequest(TransactionMonitoringContactRequest requestData,
+			IntuitionContactMQRequest contact) {
+
+<span class="nc" id="L477">		requestData.setTradeAccNumber(contact.getTradeAccNumber());</span>
+<span class="nc" id="L478">		requestData.setContactSFID(contact.getContactSfId());</span>
+<span class="nc" id="L479">		requestData.setTradeContactID(Integer.parseInt(contact.getTradeContactId()));</span>
+<span class="nc" id="L480">		requestData.setTitle(contact.getTitle());</span>
+<span class="nc" id="L481">		requestData.setPreferredName(contact.getPrefName());</span>
+<span class="nc" id="L482">		requestData.setFirstName(contact.getFirstName());</span>
+<span class="nc" id="L483">		requestData.setLastName(contact.getLastName());</span>
+<span class="nc" id="L484">		requestData.setDob(contact.getDob());</span>
+<span class="nc" id="L485">		requestData.setAuthorisedSignatory(contact.getAuthorisedSignatory());</span>
+<span class="nc" id="L486">		requestData.setAddressType(contact.getAddressType());</span>
+<span class="nc" id="L487">		requestData.setStreet(contact.getStreet());</span>
+<span class="nc" id="L488">		requestData.setStreetNumber(contact.getStreetNumber());</span>
+<span class="nc" id="L489">		requestData.setStreetType(contact.getStreetType());</span>
+<span class="nc" id="L490">		requestData.setCity(contact.getTownCityMuncipalty());</span>
+<span class="nc" id="L491">		requestData.setAddress1(contact.getAddress1());</span>
+
+<span class="nc" id="L493">		requestData.setPostCode(contact.getPostCode());</span>
+<span class="nc" id="L494">		requestData.setBuildingName(contact.getBuildingName());</span>
+<span class="nc" id="L495">		requestData.setSubBuildingorFlat(contact.getSubBuilding());</span>
+<span class="nc" id="L496">		requestData.setUnitNumber(contact.getUnitNumber());</span>
+<span class="nc" id="L497">		requestData.setSubCity(contact.getSubCity());</span>
+<span class="nc" id="L498">		requestData.setState(contact.getStateProvinceCounty());</span>
+
+<span class="nc" id="L500">		requestData.setPhoneWork(contact.getWorkPhone());</span>
+<span class="nc" id="L501">		requestData.setPhoneHome(contact.getHomePhone());</span>
+<span class="nc" id="L502">		requestData.setPhoneMobile(contact.getMobilePhone());</span>
+<span class="nc" id="L503">		requestData.setEmail(contact.getEmail());</span>
+<span class="nc" id="L504">		requestData.setPrimaryContact(Boolean.parseBoolean(contact.getIsPrimaryContact()));</span>
+<span class="nc" id="L505">		requestData.setPrimaryPhone(contact.getPrimaryPhone());</span>
+		
+<span class="nc" id="L507">		requestData.setGender(contact.getGender());</span>
+<span class="nc" id="L508">		requestData.setNationality(contact.getCountryOfNationality());</span>
+<span class="nc" id="L509">		requestData.setCountry(contact.getCountryOfResidence());</span>
+<span class="nc" id="L510">		requestData.setPositionOfSignificance(contact.getPositionOfSignificance());</span>
+
+<span class="nc bnc" id="L512" title="All 2 branches missed.">		if(null != contact.getYearsInAddress()) {</span>
+<span class="nc" id="L513">			requestData.setYearsInAddress(contact.getYearsInAddress().toString());</span>
+		}
+<span class="nc" id="L515">		requestData.setOccupation(contact.getOccupation());</span>
+<span class="nc" id="L516">		requestData.setJobTitle(contact.getJobTitle());</span>
+<span class="nc" id="L517">		requestData.setDesignation(contact.getDesignation());</span>
+
+<span class="nc bnc" id="L519" title="All 2 branches missed.">		if (null != contact.getPassportCountryCode()) {</span>
+<span class="nc" id="L520">			requestData.setPassportCountryCode(contact.getPassportCountryCode());</span>
+		}
+<span class="nc" id="L522">		requestData.setPassportFamilyNameAtBirth(contact.getPassportBirthFamilyName());</span>
+<span class="nc" id="L523">		requestData.setPassportNameAtCitizenship(contact.getPassportNameAtCitizen());</span>
+<span class="nc" id="L524">		requestData.setPassportNumber(contact.getPassportNumber());</span>
+<span class="nc" id="L525">		requestData.setPassportPlaceOfBirth(contact.getPassportBirthPlace());</span>
+
+<span class="nc bnc" id="L527" title="All 2 branches missed.">		if (null != contact.getPassportExipryDate()) {</span>
+<span class="nc" id="L528">			requestData.setPassportExiprydate(contact.getPassportExipryDate());</span>
+		}
+
+<span class="nc" id="L531">		requestData.setPassportFullName(contact.getPassportFullName());</span>
+<span class="nc" id="L532">		requestData.setPassportMRZLine1(contact.getPassportMrzLine1());</span>
+<span class="nc" id="L533">		requestData.setPassportMRZLine2(contact.getPassportMrzLine2());</span>
+
+<span class="nc" id="L535">		requestData.setDlCardNumber(contact.getDrivingLicenseCardNumber());</span>
+
+<span class="nc bnc" id="L537" title="All 2 branches missed.">		if (null != contact.getDrivingLicenseCountry()) {</span>
+<span class="nc" id="L538">			requestData.setDlCountryCode(contact.getDrivingLicenseCountry());</span>
+		}
+
+<span class="nc bnc" id="L541" title="All 2 branches missed.">		if (null != contact.getDrivingExpiry()) {</span>
+<span class="nc" id="L542">			requestData.setDlExpiryDate(contact.getDrivingExpiry());</span>
+		}
+
+<span class="nc" id="L545">		requestData.setDlLicenseNumber(contact.getDrivingLicenseCardNumber());</span>
+<span class="nc" id="L546">		requestData.setDlStateCode(contact.getDrivingStateCode());</span>
+<span class="nc" id="L547">		requestData.setDlVersionNumber(contact.getDrivingVersionNumber());</span>
+
+<span class="nc" id="L549">		requestData.setMedicareCardNumber(contact.getMedicareCardNumber());</span>
+<span class="nc" id="L550">		requestData.setMedicareReferenceNumber(contact.getMedicareRefNumber());</span>
+<span class="nc" id="L551">		requestData.setMunicipalityOfBirth(contact.getMunicipalityOfBirth());</span>
+<span class="nc" id="L552">		requestData.setIpAddress(contact.getIpAddress());</span>
+<span class="nc" id="L553">		requestData.setAustraliaRTACardNumber(contact.getAustraliaRtaCardNumber());</span>
+
+<span class="nc" id="L555">		requestData.setMiddleName(contact.getMiddleName());</span>
+<span class="nc" id="L556">		requestData.setCountryOfBirth(contact.getCountryOfBirth());</span>
+<span class="nc" id="L557">		requestData.setPrefecture(contact.getPrefecture());</span>
+<span class="nc" id="L558">		requestData.setAza(contact.getAza());</span>
+<span class="nc" id="L559">		requestData.setResidentialStatus(contact.getResidentialStatus());</span>
+
+<span class="nc" id="L561">		requestData.setAddressType(contact.getAddressType());</span>
+
+<span class="nc" id="L563">		requestData.setBlacklist(contact.getBlacklist());</span>
+<span class="nc" id="L564">		requestData.setCustomCheck(contact.getCustomCheck());//Add for AT-5393</span>
+<span class="nc" id="L565">		requestData.setSanctionResult(contact.getSanctionResult());</span>
+<span class="nc" id="L566">		requestData.setFraudPredictScore(contact.getFraudPredictScore());</span>
+<span class="nc" id="L567">		requestData.setFraudPredictDate(contact.getFraudPredictDate());</span>
+<span class="nc" id="L568">		requestData.seteIDVStatus(contact.getEIDVStatus());</span>
+<span class="nc bnc" id="L569" title="All 2 branches missed.">		if(null != contact.getWatchlist()) {</span>
+<span class="nc" id="L570">			String ab = contact.getWatchlist().replace(&quot;[&quot;, &quot;&quot;);</span>
+<span class="nc" id="L571">			String bc = ab.replace(&quot;]&quot;, &quot;&quot;);</span>
+<span class="nc" id="L572">			List&lt;String&gt; wl = new ArrayList&lt;&gt;(Arrays.asList(bc.split(&quot;,&quot;)));</span>
+<span class="nc" id="L573">			requestData.setWatchlist(wl);</span>
+		}
+		//requestData.setRegDateTime(contact.getRegDateTime());
+		
+<span class="nc" id="L577">		requestData.setContactStatus(contact.getContactStatus());</span>
+<span class="nc" id="L578">		requestData.setUpdateStatus(contact.getUpdateStatus());</span>
+<span class="nc bnc" id="L579" title="All 2 branches missed.">		if(null != contact.getStatusUpdateReason()) {</span>
+<span class="nc" id="L580">			String ab = contact.getStatusUpdateReason().replace(&quot;[&quot;, &quot;&quot;);</span>
+<span class="nc" id="L581">			String bc = ab.replace(&quot;]&quot;, &quot;&quot;);</span>
+<span class="nc" id="L582">			List&lt;String&gt; reason = new ArrayList&lt;&gt;(Arrays.asList(bc.split(&quot;,&quot;)));</span>
+<span class="nc" id="L583">			requestData.setStatusUpdateReason(reason);</span>
+		}
+		
+		//AT-4744	
+<span class="nc" id="L587">		requestData.setOnfido(contact.getOnfido());	</span>
+<span class="nc" id="L588">		requestData.setFraudPredictScore(contact.getFraudPredictScore());	</span>
+<span class="nc" id="L589">		requestData.setFraudPredictDate(contact.getFraudPredictDate());	</span>
+<span class="nc" id="L590">		requestData.setHouseBuildingNumber(contact.getHouseBuildingNumber());	</span>
+<span class="nc" id="L591">		requestData.setFloorNumber(contact.getFloorNumber());	</span>
+<span class="nc" id="L592">		requestData.setDistrict(contact.getDistrict());	</span>
+<span class="nc" id="L593">		requestData.setAreaNumber(contact.getAreaNumber());	</span>
+<span class="nc" id="L594">		requestData.setPhoneWorkExtn(contact.getWorkPhoneExt());	</span>
+<span class="nc" id="L595">		requestData.setSecondSurname(contact.getSecondSurname());	</span>
+<span class="nc" id="L596">		requestData.setMothersSurname(contact.getMothersSurname());	</span>
+<span class="nc" id="L597">		requestData.setSecondEmail(contact.getSecondEmail());	</span>
+<span class="nc" id="L598">		requestData.setNationalIdType(contact.getNationalIdType());	</span>
+<span class="nc" id="L599">		requestData.setNationalIdNumber(contact.getNationalIdNumber());	</span>
+<span class="nc" id="L600">		requestData.setStateOfBirth(contact.getStateOfBirth());	</span>
+<span class="nc" id="L601">		requestData.setCivicNumber(contact.getCivicNumber());	</span>
+<span class="nc" id="L602">		requestData.setVersion(contact.getVersion());	</span>
+		
+<span class="nc" id="L604">		requestData.setLastPasswordChangeDate(contact.getLastPasswordChangeDate());</span>
+<span class="nc" id="L605">		requestData.setAppInstallDate(contact.getAppInstallDate());</span>
+<span class="nc" id="L606">		requestData.setDeviceId(contact.getDeviceId());</span>
+<span class="nc" id="L607">	}</span>
+	
+	private MessageExchange createPaymentInExchange(Message&lt;MessageContext&gt; message, IntuitionPaymentINMQRequest fundsInRequest,
+			TransactionMonitoringMQRequest transactionMonitoringMQRequest) {
+		
+<span class="nc" id="L612">		Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L613">				.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+<span class="nc" id="L614">		MessageExchange ccExchange = new MessageExchange();</span>
+		
+<span class="nc" id="L616">		TransactionMonitoringMQServiceRequest mqRequest = new TransactionMonitoringMQServiceRequest();</span>
+<span class="nc" id="L617">		TransactionMonitoringMQServiceResponse mqResponse = new TransactionMonitoringMQServiceResponse();</span>
+		
+		try {		
+			
+<span class="nc" id="L621">			TransactionMonitoringPaymentsInRequest transactionMonitoringPaymentsInRequest = createServiceRequestPayIn(fundsInRequest);</span>
+<span class="nc" id="L622">			transactionMonitoringPaymentsInRequest.setAccountId(transactionMonitoringMQRequest.getAccountID());</span>
+<span class="nc" id="L623">			transactionMonitoringPaymentsInRequest.setCreatedBy(transactionMonitoringMQRequest.getCreatedBy());</span>
+<span class="nc" id="L624">			transactionMonitoringPaymentsInRequest.setFundsInId(transactionMonitoringMQRequest.getPaymentInID());</span>
+<span class="nc" id="L625">			transactionMonitoringPaymentsInRequest.setIsPresent(transactionMonitoringMQRequest.getIsPresent());</span>
+<span class="nc" id="L626">			transactionMonitoringPaymentsInRequest.setAccountTMFlag(1);</span>
+			
+<span class="nc" id="L628">			transactionMonitoringPaymentsInRequest.addAttribute(&quot;oldPaymentStatus&quot;, fundsInDBServiceImpl.getPaymentComplianceStatus(transactionMonitoringMQRequest.getPaymentInID()));</span>
+						
+<span class="nc" id="L630">			TransactionMonitoringPaymentInResponse transactionMonitoringPaymentInResponse = new TransactionMonitoringPaymentInResponse();</span>
+<span class="nc" id="L631">			transactionMonitoringPaymentInResponse.setId(transactionMonitoringMQRequest.getPaymentInID());</span>
+<span class="nc" id="L632">			transactionMonitoringPaymentInResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+			
+<span class="nc" id="L634">			TransactionMonitoringPaymentsSummary transactionMonitoringPaymentsSummary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L635">			transactionMonitoringPaymentsSummary.setStatus(transactionMonitoringPaymentInResponse.getStatus());</span>
+			
+<span class="nc" id="L637">			mqRequest.setTransactionMonitoringPaymentsInRequest(transactionMonitoringPaymentsInRequest);</span>
+<span class="nc" id="L638">			mqRequest.setRequestType(transactionMonitoringMQRequest.getRequestType());</span>
+<span class="nc" id="L639">			mqRequest.setOrgCode(transactionMonitoringMQRequest.getOrgCode());</span>
+<span class="nc" id="L640">			mqRequest.setCreatedBy(transactionMonitoringMQRequest.getCreatedBy());</span>
+<span class="nc" id="L641">			mqResponse.setTransactionMonitoringPaymentInResponse(transactionMonitoringPaymentInResponse);</span>
+
+<span class="nc" id="L643">			 ccExchange = createMessageExchange(mqRequest, mqResponse,</span>
+					ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND);
+<span class="nc" id="L645">			ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId,</span>
+<span class="nc" id="L646">					ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, ServiceProviderEnum.TRANSACTION_MONITORING_FUNDSIN, transactionMonitoringMQRequest.getPaymentInID(),</span>
+<span class="nc" id="L647">					1, EntityEnum.ACCOUNT.name(), transactionMonitoringMQRequest.getCreatedBy(), transactionMonitoringPaymentInResponse,</span>
+					transactionMonitoringPaymentsSummary));
+
+<span class="nc" id="L650">		} catch (Exception e) {</span>
+<span class="nc" id="L651">			LOG.error(&quot;Error in Transaction Monitoring MQ transformer class : createPaymentInExchange -&quot;, e);</span>
+<span class="nc" id="L652">		}</span>
+		
+<span class="nc" id="L654">		return ccExchange;</span>
+	}
+
+	private TransactionMonitoringPaymentsInRequest createServiceRequestPayIn(IntuitionPaymentINMQRequest fundsInRequest) {
+<span class="nc" id="L658">		TransactionMonitoringPaymentsInRequest request = new TransactionMonitoringPaymentsInRequest();</span>
+		
+<span class="nc" id="L660">		request.setAccountNumber(fundsInRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L661">		request.setContractNumber(fundsInRequest.getTradeContractNumber());</span>
+<span class="nc" id="L662">		request.setTransactionId(Integer.parseInt(fundsInRequest.getTradePaymentID()));</span>
+<span class="nc" id="L663">		request.setTimeStamp(fundsInRequest.getTimestamp());</span>
+<span class="nc" id="L664">		request.setTradeAccountNumber(fundsInRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L665">		request.setCustType(fundsInRequest.getCustType());</span>
+<span class="nc" id="L666">		request.setPurposeOfTrade(fundsInRequest.getPurposeOfTrade());</span>
+<span class="nc" id="L667">		request.setSellingAmount(fundsInRequest.getSellingAmount()); </span>
+<span class="nc" id="L668">		request.setTransactionCurrency(fundsInRequest.getTransactionCurrency());</span>
+<span class="nc" id="L669">		request.setPaymentMethod(fundsInRequest.getPaymentMethod());</span>
+<span class="nc" id="L670">		request.setBillAddressLine(fundsInRequest.getBillAddressLine());</span>
+<span class="nc" id="L671">		request.setDebtorName(fundsInRequest.getDebtorName());</span>
+<span class="nc" id="L672">		request.setDebatorAccountNumber(fundsInRequest.getDebtorAccountNumber());</span>
+<span class="nc" id="L673">		request.setCountryOfFund(fundsInRequest.getCountryOfFund());</span>
+<span class="nc" id="L674">		request.setCustomerLegalEntity(fundsInRequest.getCustomerLegalEntity());</span>
+<span class="nc" id="L675">		request.setType(&quot;FUNDSIN&quot;);</span>
+		
+<span class="nc bnc" id="L677" title="All 2 branches missed.">		if(fundsInRequest.getTransactional() != null) {</span>
+<span class="nc" id="L678">			request.setTransactionType(fundsInRequest.getTransactional().get(0).getTrxType());</span>
+<span class="nc" id="L679">			request.setTradeContactId(Integer.parseInt(fundsInRequest.getTransactional().get(0).getTradeContactId()));</span>
+<span class="nc" id="L680">			request.setSellingAmountBaseValue(fundsInRequest.getTransactional().get(0).getSellingAmountBaseValue());</span>
+<span class="nc" id="L681">			request.setThirdPartyPayment(Boolean.parseBoolean(fundsInRequest.getTransactional().get(0).getThirdPartyPayment()));</span>
+			//AT-5337
+<span class="nc" id="L683">			request.setInitiatingParentContact(fundsInRequest.getTransactional().get(0).getInitiatingParentContact());</span>
+		}
+		
+<span class="nc bnc" id="L686" title="All 2 branches missed.">		if(fundsInRequest.getDebitCard() != null) {</span>
+<span class="nc" id="L687">			request.setCcFirstName(fundsInRequest.getDebitCard().get(0).getCcFirstName());</span>
+<span class="nc" id="L688">			request.setAvsResult(fundsInRequest.getDebitCard().get(0).getAvsResult());</span>
+<span class="nc" id="L689">			request.setIsThreeds(fundsInRequest.getDebitCard().get(0).getIsThreeds());</span>
+<span class="nc" id="L690">			request.setDebitCardAddedDate(fundsInRequest.getDebitCard().get(0).getDebitCardAddedDate());</span>
+<span class="nc" id="L691">			request.setBillAdZip(fundsInRequest.getDebitCard().get(0).getBillAdZip());</span>
+<span class="nc" id="L692">			request.setMessage(fundsInRequest.getDebitCard().get(0).getMessage());</span>
+<span class="nc" id="L693">			request.setRGID(fundsInRequest.getDebitCard().get(0).getRGID());</span>
+<span class="nc" id="L694">			request.settScore(Double.parseDouble(fundsInRequest.getDebitCard().get(0).getTScore()));</span>
+<span class="nc" id="L695">			request.settRisk(Double.parseDouble(fundsInRequest.getDebitCard().get(0).getTRisk()));</span>
+<span class="nc" id="L696">			request.setFraudsightReason(fundsInRequest.getDebitCard().get(0).getFraudsightReason());</span>
+<span class="nc" id="L697">			request.setFraudsightRiskLevel(fundsInRequest.getDebitCard().get(0).getFraudsightRiskLevel());</span>
+		}
+		
+<span class="nc bnc" id="L700" title="All 2 branches missed.">		if(fundsInRequest.getDeviceAndIP() != null) {</span>
+<span class="nc" id="L701">			request.setScreenResolution(fundsInRequest.getDeviceAndIP().get(0).getScreenResolution());</span>
+<span class="nc" id="L702">			request.setBrowserType(fundsInRequest.getDeviceAndIP().get(0).getBrwsrType());</span>
+<span class="nc" id="L703">			request.setBrowserVersion(fundsInRequest.getDeviceAndIP().get(0).getBrwsrVersion());</span>
+<span class="nc" id="L704">			request.setDeviceType(fundsInRequest.getDeviceAndIP().get(0).getDeviceType());</span>
+<span class="nc" id="L705">			request.setDeviceName(fundsInRequest.getDeviceAndIP().get(0).getDeviceName());</span>
+<span class="nc" id="L706">			request.setDeviceVersion(fundsInRequest.getDeviceAndIP().get(0).getDeviceVersion());</span>
+<span class="nc" id="L707">			request.setDeviceId(fundsInRequest.getDeviceAndIP().get(0).getDeviceId());</span>
+<span class="nc" id="L708">			request.setDeviceManufacturer(fundsInRequest.getDeviceAndIP().get(0).getDeviceManufacturer());</span>
+<span class="nc" id="L709">			request.setOsType(fundsInRequest.getDeviceAndIP().get(0).getOsType());</span>
+<span class="nc" id="L710">			request.setBrowserLanguage(fundsInRequest.getDeviceAndIP().get(0).getBrwsrLang());</span>
+<span class="nc" id="L711">			request.setBrowserOnline(fundsInRequest.getDeviceAndIP().get(0).getBrowserOnline());</span>
+		}
+		
+<span class="nc bnc" id="L714" title="All 2 branches missed.">		if (fundsInRequest.getAtlasFlags() != null) {</span>
+<span class="nc" id="L715">			request.setBlacklistStatus(fundsInRequest.getAtlasFlags().get(0).getBlacklist());</span>
+<span class="nc" id="L716">			request.setCountryCheckStatus(fundsInRequest.getAtlasFlags().get(0).getCountryCheck());</span>
+<span class="nc" id="L717">			request.setSanctionContactStatus(fundsInRequest.getAtlasFlags().get(0).getSanctionsContact());</span>
+<span class="nc" id="L718">			request.setFraudPredictStatus(fundsInRequest.getAtlasFlags().get(0).getFraudPredict());</span>
+<span class="nc" id="L719">			request.setCustomCheckStatus(fundsInRequest.getAtlasFlags().get(0).getCustomCheck());</span>
+<span class="nc" id="L720">			request.setAtlasSTPFlag(fundsInRequest.getAtlasFlags().get(0).getStpCodes());</span>
+<span class="nc" id="L721">			request.setUpdateStatus(fundsInRequest.getAtlasFlags().get(0).getUpdateStatus());</span>
+		}
+		
+<span class="nc bnc" id="L724" title="All 2 branches missed.">		if(fundsInRequest.getCalculations() != null) {</span>
+<span class="nc bnc" id="L725" title="All 2 branches missed.">			request.setTurnover(fundsInRequest.getCalculations().get(0).getTurnover() != null? </span>
+<span class="nc" id="L726">					fundsInRequest.getCalculations().get(0).getTurnover().toString() : null);</span>
+
+		}
+				
+<span class="nc" id="L730">		String ab = fundsInRequest.getWatchlist().replace(&quot;[&quot;, &quot;&quot;);</span>
+<span class="nc" id="L731">		String bc = ab.replace(&quot;]&quot;, &quot;&quot;);</span>
+<span class="nc" id="L732">		List&lt;String&gt; wl = new ArrayList&lt;&gt;(Arrays.asList(bc.split(&quot;,&quot;)));</span>
+<span class="nc" id="L733">		request.setWatchlist(wl);</span>
+		
+		//AT-4627
+<span class="nc" id="L736">		request.setCreditorAccountName(fundsInRequest.getCollectionBankAccountName());</span>
+<span class="nc" id="L737">		request.setCreditorBankAccountNumber(fundsInRequest.getCollectionBankAccountNumber());</span>
+<span class="nc" id="L738">		request.setCreditorBankName(fundsInRequest.getCollectionBankName());</span>
+<span class="nc" id="L739">		request.setCreditorState(fundsInRequest.getFundsInState());</span>
+<span class="nc" id="L740">		request.setComplianceLog(fundsInRequest.getComplianceLog());//AT-5578</span>
+		
+<span class="nc" id="L742">		return request;</span>
+	}
+	
+	private MessageExchange createPaymentOutExchange(Message&lt;MessageContext&gt; message, IntuitionPaymentOUTMQRequest fundsOutRequest,
+			TransactionMonitoringMQRequest transactionMonitoringMQRequest) {
+		
+<span class="nc" id="L748">		MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L749">		TransactionMonitoringMQServiceRequest mqRequest = new TransactionMonitoringMQServiceRequest();</span>
+<span class="nc" id="L750">		TransactionMonitoringMQServiceResponse mqResponse = new TransactionMonitoringMQServiceResponse();</span>
+		
+<span class="nc" id="L752">		Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L753">				.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+		try {			
+<span class="nc" id="L755">			TransactionMonitoringPaymentsOutRequest transactionMonitoringPaymentsOutRequest = createServiceRequest(fundsOutRequest);</span>
+<span class="nc" id="L756">			transactionMonitoringPaymentsOutRequest.setAccountId(transactionMonitoringMQRequest.getAccountID());</span>
+<span class="nc" id="L757">			transactionMonitoringPaymentsOutRequest.setCreatedBy(transactionMonitoringMQRequest.getCreatedBy());</span>
+<span class="nc" id="L758">			transactionMonitoringPaymentsOutRequest.setFundsOutId(transactionMonitoringMQRequest.getPaymentOutID());</span>
+<span class="nc" id="L759">			transactionMonitoringPaymentsOutRequest.setIsPresent(transactionMonitoringMQRequest.getIsPresent());</span>
+<span class="nc" id="L760">			transactionMonitoringPaymentsOutRequest.setAccountTMFlag(1);</span>
+			
+<span class="nc" id="L762">			transactionMonitoringPaymentsOutRequest.addAttribute(&quot;oldPaymentStatus&quot;, fundsOutDBServiceImpl.getPaymentComplianceStatus(transactionMonitoringMQRequest.getPaymentOutID()));</span>
+						
+<span class="nc" id="L764">			TransactionMonitoringPaymentOutResponse transactionMonitoringPaymentOutResponse = new TransactionMonitoringPaymentOutResponse();</span>
+<span class="nc" id="L765">			transactionMonitoringPaymentOutResponse.setId(transactionMonitoringMQRequest.getPaymentOutID());</span>
+<span class="nc" id="L766">			transactionMonitoringPaymentOutResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+			
+<span class="nc" id="L768">			TransactionMonitoringContactSummary transactionMonitoringContactSummary = new TransactionMonitoringContactSummary();</span>
+<span class="nc" id="L769">			transactionMonitoringContactSummary.setStatus(transactionMonitoringPaymentOutResponse.getStatus());</span>
+			
+<span class="nc" id="L771">			mqRequest.setRequestType(transactionMonitoringMQRequest.getRequestType());</span>
+<span class="nc" id="L772">			mqRequest.setOrgCode(transactionMonitoringMQRequest.getOrgCode());</span>
+<span class="nc" id="L773">			mqRequest.setCreatedBy(transactionMonitoringMQRequest.getCreatedBy());</span>
+<span class="nc" id="L774">			mqRequest.setTransactionMonitoringPaymentsOutRequest(transactionMonitoringPaymentsOutRequest);</span>
+			
+<span class="nc" id="L776">			mqResponse.setTransactionMonitoringPaymentOutResponse(transactionMonitoringPaymentOutResponse);</span>
+			
+
+<span class="nc" id="L779">			 ccExchange = createMessageExchange(mqRequest, mqResponse,</span>
+					ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND);
+<span class="nc" id="L781">			ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId,</span>
+<span class="nc" id="L782">					ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, ServiceProviderEnum.TRANSACTION_MONITORING_FUNDSOUT, transactionMonitoringMQRequest.getPaymentOutID(),</span>
+<span class="nc" id="L783">					1, EntityEnum.ACCOUNT.name(), transactionMonitoringMQRequest.getCreatedBy(), transactionMonitoringPaymentOutResponse,</span>
+					transactionMonitoringContactSummary));
+			
+			
+<span class="nc" id="L787">		} catch (Exception e) {</span>
+<span class="nc" id="L788">			LOG.error(&quot;Error in Transaction Monitoring MQ transformer class : createPaymentOutExchange -&quot;, e);</span>
+<span class="nc" id="L789">		}</span>
+		
+<span class="nc" id="L791">		return ccExchange;</span>
+	}
+	
+	private TransactionMonitoringPaymentsOutRequest createServiceRequest(IntuitionPaymentOUTMQRequest fundsOutRequest) {
+<span class="nc" id="L795">		TransactionMonitoringPaymentsOutRequest request = new TransactionMonitoringPaymentsOutRequest();</span>
+		
+<span class="nc" id="L797">		request.setAccountNumber(fundsOutRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L798">		request.setTransactionId(Integer.parseInt(fundsOutRequest.getTradePaymentID()));</span>
+<span class="nc" id="L799">		request.setContractNumber(fundsOutRequest.getTradeContractNumber());</span>
+<span class="nc" id="L800">		request.setTimeStamp(fundsOutRequest.getTimestamp());</span>
+<span class="nc" id="L801">		request.setTradeAccountNumber(fundsOutRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L802">		request.setCustType(fundsOutRequest.getCustType());</span>
+<span class="nc" id="L803">		request.setPurposeOfTrade(fundsOutRequest.getPurposeOfTrade());</span>
+<span class="nc" id="L804">		request.setSellingAmount(fundsOutRequest.getSellingAmount());</span>
+<span class="nc" id="L805">		request.setBuyingAmount(fundsOutRequest.getBuyingAmount());</span>
+<span class="nc" id="L806">		request.setSellingAmountBaseValue(null);</span>
+<span class="nc" id="L807">		request.setTransactionCurrency(null);</span>
+<span class="nc" id="L808">		request.setCustomerLegalEntity(fundsOutRequest.getCustomerLegalEntity());</span>
+		//AT-5435
+<span class="nc" id="L810">		request.setCreditFrom(fundsOutRequest.getCreditFrom());</span>
+		
+<span class="nc bnc" id="L812" title="All 2 branches missed.">		if(fundsOutRequest.getMaturityDate().contains(TIME_STRING))</span>
+<span class="nc" id="L813">			request.setMaturityDate(fundsOutRequest.getMaturityDate().replace(TIME_STRING, &quot;&quot;));</span>
+		else 
+<span class="nc" id="L815">			request.setMaturityDate(fundsOutRequest.getMaturityDate());</span>
+		
+<span class="nc bnc" id="L817" title="All 2 branches missed.">		if(fundsOutRequest.getDealDate().contains(TIME_STRING))</span>
+<span class="nc" id="L818">			request.setDealDate(fundsOutRequest.getDealDate().replace(TIME_STRING, &quot;&quot;));</span>
+		else
+<span class="nc" id="L820">			request.setDealDate(fundsOutRequest.getDealDate());</span>
+		
+<span class="nc" id="L822">		request.setBuyingAmount(fundsOutRequest.getBuyingAmount());</span>
+<span class="nc" id="L823">		request.setMaturityDate(fundsOutRequest.getMaturityDate());</span>
+<span class="nc" id="L824">		request.setBuyCurrency(fundsOutRequest.getBuyCurrency());</span>
+<span class="nc" id="L825">		request.setSellCurrency(fundsOutRequest.getSellCurrency());</span>
+<span class="nc" id="L826">		request.setPhone(fundsOutRequest.getPhone());</span>
+<span class="nc" id="L827">		request.setFirstName(fundsOutRequest.getFirstName());</span>
+<span class="nc" id="L828">		request.setLastName(fundsOutRequest.getLastName());</span>
+<span class="nc" id="L829">		request.setEmail(fundsOutRequest.getEmail());</span>
+<span class="nc" id="L830">		request.setCountry(fundsOutRequest.getCountry());</span>
+<span class="nc" id="L831">		request.setAccountNumber(fundsOutRequest.getAccountNumber());</span>
+<span class="nc" id="L832">		request.setCurrencyCode(fundsOutRequest.getCurrencyCode());</span>
+<span class="nc" id="L833">		request.setPaymentReference(fundsOutRequest.getPaymentReference());</span>
+<span class="nc" id="L834">		request.setAmount(fundsOutRequest.getAmount());</span>
+<span class="nc" id="L835">		request.setBeneficiaryBankAddress(fundsOutRequest.getBeneficaryBankAddress());</span>
+<span class="nc" id="L836">		request.setBeneficiaryBankId(fundsOutRequest.getBeneficiaryBankId());</span>
+<span class="nc" id="L837">		request.setBeneficiaryBankName(fundsOutRequest.getBeneficaryBankName());</span>
+<span class="nc" id="L838">		request.setBeneficiaryId(fundsOutRequest.getBeneficiaryId());</span>
+<span class="nc" id="L839">		request.setType(&quot;FUNDSOUT&quot;);</span>
+<span class="nc" id="L840">		request.setComplianceLog(fundsOutRequest.getComplianceLog());//AT-5578</span>
+		
+<span class="nc bnc" id="L842" title="All 2 branches missed.">		if(fundsOutRequest.getTransactional() != null) {</span>
+<span class="nc" id="L843">			request.setValueDate(fundsOutRequest.getTransactional().get(0).getValueDate());</span>
+<span class="nc" id="L844">			request.setBuyingAmountBaseValue(fundsOutRequest.getTransactional().get(0).getBuyingAmountBaseValue());</span>
+<span class="nc" id="L845">			request.setContractNumber(fundsOutRequest.getTransactional().get(0).getContractNumber());</span>
+<span class="nc" id="L846">			request.setThirdPartyPayment(Boolean.parseBoolean(fundsOutRequest.getTransactional().get(0).getThirdPartyPayment()));</span>
+<span class="nc" id="L847">			request.setTradeContactId(Integer.parseInt(fundsOutRequest.getTransactional().get(0).getTradeContactId()));</span>
+<span class="nc" id="L848">			request.setOpiCreatedDate(fundsOutRequest.getTransactional().get(0).getOpiCreatedDate());</span>
+			//AT-5337
+<span class="nc" id="L850">			request.setInitiatingParentContact(fundsOutRequest.getTransactional().get(0).getInitiatingParentContact());</span>
+		}
+		
+<span class="nc bnc" id="L853" title="All 2 branches missed.">		if(fundsOutRequest.getDeviceAndIP() != null) {</span>
+<span class="nc" id="L854">			request.setScreenResolution(fundsOutRequest.getDeviceAndIP().get(0).getScreenResolution());</span>
+<span class="nc" id="L855">			request.setBrowserType(fundsOutRequest.getDeviceAndIP().get(0).getBrwsrType());</span>
+<span class="nc" id="L856">			request.setBrowserVersion(fundsOutRequest.getDeviceAndIP().get(0).getBrwsrVersion());</span>
+<span class="nc" id="L857">			request.setDeviceType(fundsOutRequest.getDeviceAndIP().get(0).getDeviceType());</span>
+<span class="nc" id="L858">			request.setDeviceName(fundsOutRequest.getDeviceAndIP().get(0).getDeviceName());</span>
+<span class="nc" id="L859">			request.setDeviceVersion(fundsOutRequest.getDeviceAndIP().get(0).getDeviceVersion());</span>
+<span class="nc" id="L860">			request.setDeviceId(fundsOutRequest.getDeviceAndIP().get(0).getDeviceId());</span>
+<span class="nc" id="L861">			request.setDeviceManufacturer(fundsOutRequest.getDeviceAndIP().get(0).getDeviceManufacturer());</span>
+<span class="nc" id="L862">			request.setOsType(fundsOutRequest.getDeviceAndIP().get(0).getOsType());</span>
+<span class="nc" id="L863">			request.setBrowserLanguage(fundsOutRequest.getDeviceAndIP().get(0).getBrwsrLang());</span>
+<span class="nc" id="L864">			request.setVersion(Integer.parseInt(fundsOutRequest.getDeviceAndIP().get(0).getVersion()));</span>
+<span class="nc" id="L865">			request.setStatusUpdateReason(fundsOutRequest.getDeviceAndIP().get(0).getStatusUpdateReason());</span>
+		}
+		
+<span class="nc bnc" id="L868" title="All 2 branches missed.">		if (fundsOutRequest.getAtlasFlags() != null) {</span>
+<span class="nc" id="L869">			request.setBlacklistStatus(fundsOutRequest.getAtlasFlags().get(0).getBlacklist());</span>
+<span class="nc" id="L870">			request.setCountryCheckStatus(fundsOutRequest.getAtlasFlags().get(0).getCountryCheck());</span>
+<span class="nc" id="L871">			request.setSanctionContactStatus(fundsOutRequest.getAtlasFlags().get(0).getSanctionsContact());</span>
+<span class="nc" id="L872">			request.setSanctionBeneficiaryStatus(fundsOutRequest.getAtlasFlags().get(0).getSanctionsBeneficiary());</span>
+<span class="nc" id="L873">			request.setSanctionBankStatus(fundsOutRequest.getAtlasFlags().get(0).getSanctionsBank());</span>
+<span class="nc" id="L874">			request.setFraudPredictStatus(fundsOutRequest.getAtlasFlags().get(0).getFraudPredict());</span>
+<span class="nc" id="L875">			request.setCustomCheckStatus(fundsOutRequest.getAtlasFlags().get(0).getCustomCheck());</span>
+<span class="nc" id="L876">			request.setPaymentReferenceCheck(fundsOutRequest.getAtlasFlags().get(0).getPaymentReferenceCheck());</span>
+<span class="nc" id="L877">			request.setUpdateStatus(fundsOutRequest.getAtlasFlags().get(0).getUpdateStatus());</span>
+<span class="nc" id="L878">			request.setAtlasSTPFlag(fundsOutRequest.getAtlasFlags().get(0).getStpCodes());</span>
+		}
+		
+<span class="nc" id="L881">		String ab = fundsOutRequest.getWatchlist().replace(&quot;[&quot;, &quot;&quot;);</span>
+<span class="nc" id="L882">		String bc = ab.replace(&quot;]&quot;, &quot;&quot;);</span>
+<span class="nc" id="L883">		List&lt;String&gt; wl = new ArrayList&lt;&gt;(Arrays.asList(bc.split(&quot;,&quot;)));</span>
+<span class="nc" id="L884">		request.setWatchlist(wl);</span>
+		
+<span class="nc" id="L886">		return request;</span>
+	}
+	
+	/**
+	 * Transform response.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+
+<span class="nc" id="L898">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L899">		TransactionMonitoringMQRequest transactionMonitoringMQRequest = (TransactionMonitoringMQRequest) messageExchange</span>
+<span class="nc" id="L900">				.getRequest();</span>
+
+<span class="nc" id="L902">		MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L903">				.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND);</span>
+
+		try {
+
+<span class="nc bnc" id="L907" title="All 2 branches missed.">			if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.SIGN_UP)</span>
+<span class="nc bnc" id="L908" title="All 2 branches missed.">					|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.UPDATE)</span>
+<span class="nc bnc" id="L909" title="All 2 branches missed.">					|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.ADD_CONTACT)) {</span>
+<span class="nc" id="L910">				transformSignUpAccountResponse(exchange);</span>
+<span class="nc bnc" id="L911" title="All 2 branches missed.">			} else if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_in&quot;) </span>
+<span class="nc bnc" id="L912" title="All 2 branches missed.">						|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_in_update&quot;)) {</span>
+<span class="nc" id="L913">				transformPaymentInResponse(exchange);</span>
+<span class="nc bnc" id="L914" title="All 2 branches missed.">			} else if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_out&quot;) </span>
+<span class="nc bnc" id="L915" title="All 2 branches missed.">						|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_out_update&quot;)) {</span>
+<span class="nc" id="L916">				transformPaymentOutResponse(exchange);</span>
+			}
+
+<span class="nc" id="L919">		} catch (Exception e) {</span>
+<span class="nc" id="L920">			LOG.error(&quot;Error&quot;, e);</span>
+<span class="nc" id="L921">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L922">		}</span>
+
+<span class="nc" id="L924">		return message;</span>
+	}
+
+	/**
+	 * Transform sign up account response.
+	 *
+	 * @param exchange the exchange
+	 */
+	private void transformSignUpAccountResponse(MessageExchange exchange) {
+<span class="nc" id="L933">		TransactionMonitoringMQServiceResponse response = (TransactionMonitoringMQServiceResponse) exchange</span>
+<span class="nc" id="L934">				.getResponse();</span>
+<span class="nc" id="L935">		TransactionMonitoringMQServiceRequest request = (TransactionMonitoringMQServiceRequest) exchange.getRequest();</span>
+<span class="nc" id="L936">		TransactionMonitoringAccountSignupResponse tmSingUpAccountResponse = new TransactionMonitoringAccountSignupResponse();</span>
+<span class="nc" id="L937">		TransactionMonitoringAccountProviderResponse tmAccountProviderResponse = new TransactionMonitoringAccountProviderResponse();</span>
+
+		try {
+
+<span class="nc bnc" id="L941" title="All 2 branches missed.">			if(response.getTransactionMonitoringSignupResponse() != null) {</span>
+<span class="nc" id="L942">				tmSingUpAccountResponse = response.getTransactionMonitoringSignupResponse().getTransactionMonitoringAccountSignupResponse();</span>
+<span class="nc bnc" id="L943" title="All 2 branches missed.">				if (response != null &amp;&amp; !response.getTransactionMonitoringSignupResponse()</span>
+<span class="nc bnc" id="L944" title="All 2 branches missed.">						.getTransactionMonitoringAccountSignupResponse().getStatus().equalsIgnoreCase(Constants.SERVICE_FAILURE)) {</span>
+	
+<span class="nc" id="L946">					tmSingUpAccountResponse = response.getTransactionMonitoringSignupResponse()</span>
+<span class="nc" id="L947">							.getTransactionMonitoringAccountSignupResponse();</span>
+	
+<span class="nc" id="L949">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L950">							ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L951">							tmSingUpAccountResponse.getAccountId());</span>
+	
+<span class="nc" id="L953">					TransactionMonitoringAccountSummary accSummary = JsonConverterUtil</span>
+<span class="nc" id="L954">							.convertToObject(TransactionMonitoringAccountSummary.class, eventServiceLog.getSummary());</span>
+	
+<span class="nc" id="L956">					setAccountSignUpResponse(tmSingUpAccountResponse, eventServiceLog, accSummary);</span>
+	
+<span class="nc" id="L958">					response.getTransactionMonitoringSignupResponse()</span>
+<span class="nc" id="L959">							.setTransactionMonitoringAccountSignupResponse(tmSingUpAccountResponse);</span>
+	
+<span class="nc" id="L961">				} else {</span>
+<span class="nc" id="L962">					TransactionMonitoringSignupRequest signupRequest = request.getTransactionMonitoringSignupRequest();</span>
+<span class="nc" id="L963">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L964">							ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L965">							signupRequest.getTransactionMonitoringAccountRequest().getId());</span>
+	
+<span class="nc" id="L967">					TransactionMonitoringAccountSummary accSummary = JsonConverterUtil</span>
+<span class="nc" id="L968">							.convertToObject(TransactionMonitoringAccountSummary.class, eventServiceLog.getSummary());</span>
+	
+<span class="nc" id="L970">					tmSingUpAccountResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L971">					accSummary.setAccountId(tmSingUpAccountResponse.getAccountId());	</span>
+<span class="nc" id="L972">					accSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L973">					accSummary.setHttpStatus(tmSingUpAccountResponse.getHttpStatus());	</span>
+	
+<span class="nc" id="L975">					tmAccountProviderResponse.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L976">					eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmAccountProviderResponse));</span>
+<span class="nc" id="L977">					eventServiceLog.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L978">					eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(accSummary));</span>
+<span class="nc" id="L979">					eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+	
+<span class="nc" id="L981">					TransactionMonitoringMQServiceResponse failureResponse = new TransactionMonitoringMQServiceResponse();</span>
+<span class="nc" id="L982">					TransactionMonitoringSignupResponse responseServiceFailure = new TransactionMonitoringSignupResponse();</span>
+<span class="nc" id="L983">					responseServiceFailure.setTransactionMonitoringAccountSignupResponse(tmSingUpAccountResponse);</span>
+<span class="nc" id="L984">					failureResponse.setTransactionMonitoringSignupResponse(responseServiceFailure);</span>
+<span class="nc" id="L985">					exchange.setResponse(failureResponse);</span>
+				}
+			}
+<span class="nc" id="L988">		} catch (Exception e) {</span>
+<span class="nc" id="L989">			LOG.error(ERROR, e);</span>
+<span class="nc" id="L990">		}</span>
+<span class="nc" id="L991">	}</span>
+	/**
+	 * Sets the account sign up response.
+	 *
+	 * @param tmSingUpAccountResponse the tm sing up account response
+	 * @param eventServiceLog the event service log
+	 * @param accSummary the acc summary
+	 */
+	private void setAccountSignUpResponse(TransactionMonitoringAccountSignupResponse tmSingUpAccountResponse,
+			EventServiceLog eventServiceLog, TransactionMonitoringAccountSummary accSummary) {
+<span class="nc" id="L1001">		TransactionMonitoringAccountProviderResponse tmAccountProviderResponse = tmSingUpAccountResponse.getTransactionMonitoringAccountProviderResponse();</span>
+		
+		try {
+
+<span class="nc" id="L1005">			accSummary.setStatus(tmSingUpAccountResponse.getStatus());	</span>
+<span class="nc" id="L1006">			accSummary.setCorrelationId(tmAccountProviderResponse.getCorrelationId());	</span>
+<span class="nc" id="L1007">			accSummary.setProfileScore(tmAccountProviderResponse.getProfileScore());	</span>
+<span class="nc" id="L1008">			accSummary.setRuleScore(tmAccountProviderResponse.getRuleScore());	</span>
+<span class="nc" id="L1009">			accSummary.setRulesTriggered(tmAccountProviderResponse.getRulesTriggered());</span>
+<span class="nc" id="L1010">			accSummary.setRiskLevel(tmAccountProviderResponse.getRiskLevel());</span>
+<span class="nc" id="L1011">			accSummary.setAccountId(tmSingUpAccountResponse.getAccountId());	</span>
+<span class="nc" id="L1012">			accSummary.setHttpStatus(tmSingUpAccountResponse.getHttpStatus());	</span>
+				
+<span class="nc" id="L1014">			eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithNull(tmAccountProviderResponse));	</span>
+<span class="nc" id="L1015">			eventServiceLog.setStatus(tmSingUpAccountResponse.getStatus());	</span>
+<span class="nc" id="L1016">			eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithNull(accSummary));	</span>
+<span class="nc" id="L1017">			eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L1019">		} catch (Exception e) {</span>
+<span class="nc" id="L1020">			LOG.error(ERROR, e);</span>
+<span class="nc" id="L1021">			tmSingUpAccountResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1022">			accSummary.setAccountId(tmSingUpAccountResponse.getAccountId());	</span>
+<span class="nc" id="L1023">			accSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1024">			accSummary.setHttpStatus(tmSingUpAccountResponse.getHttpStatus());	</span>
+			
+<span class="nc" id="L1026">			tmAccountProviderResponse.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L1027">			eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmAccountProviderResponse));</span>
+<span class="nc" id="L1028">			eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1029">			eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(accSummary));</span>
+<span class="nc" id="L1030">			eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1031">		}</span>
+
+<span class="nc" id="L1033">	}</span>
+
+	
+	/**
+	 * Transform payment in response.
+	 *
+	 * @param exchange the exchange
+	 */
+	public void transformPaymentInResponse(MessageExchange exchange) {
+<span class="nc" id="L1042">		TransactionMonitoringMQServiceResponse mqResponse = (TransactionMonitoringMQServiceResponse) exchange</span>
+<span class="nc" id="L1043">				.getResponse();</span>
+		
+		try {
+<span class="nc" id="L1046">			TransactionMonitoringMQServiceRequest mqRequest = (TransactionMonitoringMQServiceRequest) exchange</span>
+<span class="nc" id="L1047">					.getRequest();</span>
+<span class="nc" id="L1048">			TransactionMonitoringPaymentsInRequest request = mqRequest.getTransactionMonitoringPaymentsInRequest();</span>
+<span class="nc" id="L1049">			TransactionMonitoringPaymentInResponse response = mqResponse.getTransactionMonitoringPaymentInResponse();</span>
+
+
+<span class="nc bnc" id="L1052" title="All 4 branches missed.">			if (response != null &amp;&amp; !response.getStatus().equalsIgnoreCase(Constants.NOT_REQUIRED)</span>
+<span class="nc bnc" id="L1053" title="All 2 branches missed.">					&amp;&amp; !response.getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L1054">				TransactionMonitoringFundsProviderResponse tmProviderResponse = response</span>
+<span class="nc" id="L1055">						.getTransactionMonitoringFundsProviderResponse();</span>
+<span class="nc" id="L1056">				TransactionMonitoringPaymentsSummary summary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L1057">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L1058">						ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, EntityEnum.ACCOUNT.name(), request.getFundsInId());</span>
+<span class="nc" id="L1059">				summary.setStatus(tmProviderResponse.getStatus());</span>
+<span class="nc" id="L1060">				summary.setFundsInId(request.getFundsInId());</span>
+<span class="nc" id="L1061">				summary.setRuleScore(tmProviderResponse.getRuleScore());</span>
+<span class="nc" id="L1062">				summary.setRuleRiskLevel(tmProviderResponse.getRuleRiskLevel());</span>
+<span class="nc" id="L1063">				summary.setClientRiskLevel(tmProviderResponse.getClientRiskLevel());</span>
+<span class="nc" id="L1064">				summary.setClientRiskScore(tmProviderResponse.getClientRiskScore());</span>
+<span class="nc" id="L1065">				summary.setCorrelationId(response.getCorrelationId());</span>
+<span class="nc" id="L1066">				summary.setUserId(tmProviderResponse.getUserId());</span>
+<span class="nc" id="L1067">				eventServiceLog.setStatus(ServiceStatus.PASS.name());</span>
+<span class="nc" id="L1068">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L1069">				tmProviderResponse.setCorrelationId(response.getCorrelationId());</span>
+<span class="nc" id="L1070">				eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmProviderResponse));</span>
+<span class="nc" id="L1071">				mqResponse.setTransactionMonitoringPaymentInResponse(response);</span>
+<span class="nc" id="L1072">				exchange.setResponse(mqResponse);</span>
+<span class="nc bnc" id="L1073" title="All 4 branches missed.">			} else if(response != null &amp;&amp; response.getStatus().equalsIgnoreCase(Constants.NOT_REQUIRED)){</span>
+<span class="nc" id="L1074">				TransactionMonitoringFundsProviderResponse tmProviderResponse = new TransactionMonitoringFundsProviderResponse();</span>
+<span class="nc" id="L1075">				TransactionMonitoringPaymentsSummary summary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L1076">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L1077">						ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L1078">						request.getFundsInId());</span>
+<span class="nc" id="L1079">				summary.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L1080">				summary.setFundsOutId(request.getFundsInId());</span>
+<span class="nc" id="L1081">				tmProviderResponse.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L1082">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L1083">				eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmProviderResponse));</span>
+<span class="nc" id="L1084">			}else {</span>
+<span class="nc" id="L1085">				response = createDefaultFailureResponse(exchange, request);</span>
+			}
+
+<span class="nc" id="L1088">		} catch (Exception e) {</span>
+<span class="nc" id="L1089">			LOG.error(&quot;Error in Transaction Monitoring MQ transformer class : transformPaymentInResponse -&quot;, e);</span>
+<span class="nc" id="L1090">		}</span>
+<span class="nc" id="L1091">	}</span>
+	
+	/**
+	 * Creates the default failure response.
+	 *
+	 * @param exchange the exchange
+	 * @param resp the resp
+	 * @return the transaction monitoring payment in response
+	 */
+	private TransactionMonitoringPaymentInResponse createDefaultFailureResponse(MessageExchange exchange,
+			TransactionMonitoringPaymentsInRequest request) {
+<span class="nc" id="L1102">		TransactionMonitoringMQServiceResponse mqResponse = new TransactionMonitoringMQServiceResponse();</span>
+<span class="nc" id="L1103">		TransactionMonitoringPaymentInResponse response = new TransactionMonitoringPaymentInResponse();</span>
+<span class="nc" id="L1104">		TransactionMonitoringPaymentsSummary summary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L1105">		TransactionMonitoringFundsProviderResponse tmProviderResponse = new TransactionMonitoringFundsProviderResponse();</span>
+		
+<span class="nc" id="L1107">		mqResponse = (TransactionMonitoringMQServiceResponse) exchange.getResponse();</span>
+<span class="nc" id="L1108">		response = mqResponse.getTransactionMonitoringPaymentInResponse();</span>
+		
+<span class="nc" id="L1110">		EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND,</span>
+<span class="nc" id="L1111">				EntityEnum.ACCOUNT.name(), request.getFundsInId());</span>
+<span class="nc" id="L1112">		response.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1113">		summary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1114">		tmProviderResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1115">		eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1116">		eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L1117">		eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmProviderResponse));</span>
+<span class="nc" id="L1118">		response.setTransactionMonitoringFundsProviderResponse(tmProviderResponse);</span>
+<span class="nc" id="L1119">		mqResponse.setTransactionMonitoringPaymentInResponse(response);</span>
+<span class="nc" id="L1120">		exchange.setResponse(mqResponse);</span>
+<span class="nc" id="L1121">		return response;</span>
+	}
+	
+	/**
+	 * Transform payment out response.
+	 *
+	 * @param exchange the exchange
+	 */
+	public void transformPaymentOutResponse(MessageExchange exchange) {
+<span class="nc" id="L1130">		TransactionMonitoringMQServiceResponse mqResponse = (TransactionMonitoringMQServiceResponse) exchange</span>
+<span class="nc" id="L1131">				.getResponse();</span>
+		
+		try {
+<span class="nc" id="L1134">			TransactionMonitoringMQServiceRequest mqRequest = (TransactionMonitoringMQServiceRequest) exchange</span>
+<span class="nc" id="L1135">					.getRequest();</span>
+<span class="nc" id="L1136">			TransactionMonitoringPaymentsOutRequest request = mqRequest.getTransactionMonitoringPaymentsOutRequest();</span>
+<span class="nc" id="L1137">			TransactionMonitoringPaymentOutResponse response = mqResponse.getTransactionMonitoringPaymentOutResponse();</span>
+				
+				
+<span class="nc bnc" id="L1140" title="All 4 branches missed.">				if (response != null &amp;&amp; !response.getStatus().equalsIgnoreCase(Constants.NOT_REQUIRED)</span>
+<span class="nc bnc" id="L1141" title="All 2 branches missed.">						&amp;&amp; !response.getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L1142">					TransactionMonitoringFundsProviderResponse tmProviderResponse = response</span>
+<span class="nc" id="L1143">							.getTransactionMonitoringFundsProviderResponse();</span>
+<span class="nc" id="L1144">					TransactionMonitoringPaymentsSummary summary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L1145">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L1146">							ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, EntityEnum.ACCOUNT.name(), request.getFundsOutId());</span>
+<span class="nc" id="L1147">					summary.setStatus(tmProviderResponse.getStatus());</span>
+<span class="nc" id="L1148">					summary.setFundsOutId(request.getFundsOutId());</span>
+<span class="nc" id="L1149">					summary.setRuleScore(tmProviderResponse.getRuleScore());</span>
+<span class="nc" id="L1150">					summary.setRuleRiskLevel(tmProviderResponse.getRuleRiskLevel());</span>
+<span class="nc" id="L1151">					summary.setClientRiskLevel(tmProviderResponse.getClientRiskLevel());</span>
+<span class="nc" id="L1152">					summary.setClientRiskScore(tmProviderResponse.getClientRiskScore());</span>
+<span class="nc" id="L1153">					summary.setCorrelationId(response.getCorrelationId());</span>
+<span class="nc" id="L1154">					summary.setUserId(tmProviderResponse.getUserId());</span>
+<span class="nc" id="L1155">					eventServiceLog.setStatus(ServiceStatus.PASS.name());</span>
+<span class="nc" id="L1156">					eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L1157">					tmProviderResponse.setCorrelationId(response.getCorrelationId());</span>
+<span class="nc" id="L1158">					eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmProviderResponse));</span>
+<span class="nc" id="L1159">					mqResponse.setTransactionMonitoringPaymentOutResponse(response);</span>
+<span class="nc" id="L1160">					exchange.setResponse(mqResponse);</span>
+<span class="nc bnc" id="L1161" title="All 4 branches missed.">				} else if(response != null &amp;&amp; response.getStatus().equalsIgnoreCase(Constants.NOT_REQUIRED)) {</span>
+<span class="nc" id="L1162">					TransactionMonitoringFundsProviderResponse tmProviderResponse = new TransactionMonitoringFundsProviderResponse();</span>
+<span class="nc" id="L1163">					TransactionMonitoringPaymentsSummary summary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L1164">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L1165">							ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L1166">							request.getFundsOutId());</span>
+<span class="nc" id="L1167">					summary.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L1168">					summary.setFundsOutId(request.getFundsOutId());</span>
+<span class="nc" id="L1169">					tmProviderResponse.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L1170">					eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L1171">					eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmProviderResponse));</span>
+<span class="nc" id="L1172">				}else {</span>
+<span class="nc" id="L1173">					response = createDefaultFailureResponse(exchange, request);</span>
+				}
+		
+<span class="nc" id="L1176">		} catch (Exception e) {</span>
+<span class="nc" id="L1177">			LOG.error(&quot;Error in Transaction Monitoring MQ transformer class : transformPaymentOutResponse -&quot;, e);</span>
+<span class="nc" id="L1178">		}</span>
+<span class="nc" id="L1179">	}</span>
+	
+	/**
+	 * Creates the default failure response.
+	 *
+	 * @param exchange the exchange
+	 * @param resp the resp
+	 * @return the transaction monitoring payment out response
+	 */
+	private TransactionMonitoringPaymentOutResponse createDefaultFailureResponse(MessageExchange exchange, TransactionMonitoringPaymentsOutRequest request) {
+<span class="nc" id="L1189">		TransactionMonitoringMQServiceResponse mqResponse = new TransactionMonitoringMQServiceResponse();</span>
+<span class="nc" id="L1190">		TransactionMonitoringPaymentOutResponse response = new TransactionMonitoringPaymentOutResponse();</span>
+<span class="nc" id="L1191">		TransactionMonitoringContactSummary summary = new TransactionMonitoringContactSummary();</span>
+<span class="nc" id="L1192">		TransactionMonitoringFundsProviderResponse tmProviderResponse = new TransactionMonitoringFundsProviderResponse();</span>
+		
+<span class="nc" id="L1194">		mqResponse = (TransactionMonitoringMQServiceResponse) exchange.getResponse();</span>
+<span class="nc" id="L1195">		response = mqResponse.getTransactionMonitoringPaymentOutResponse();</span>
+		
+<span class="nc" id="L1197">		EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND,</span>
+<span class="nc" id="L1198">				EntityEnum.ACCOUNT.name(), request.getFundsOutId());</span>
+<span class="nc" id="L1199">		response.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1200">		summary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1201">		tmProviderResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1202">		eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1203">		eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L1204">		eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmProviderResponse));</span>
+<span class="nc" id="L1205">		response.setTransactionMonitoringFundsProviderResponse(tmProviderResponse);</span>
+<span class="nc" id="L1206">		mqResponse.setTransactionMonitoringPaymentOutResponse(response);</span>
+<span class="nc" id="L1207">		exchange.setResponse(mqResponse);</span>
+<span class="nc" id="L1208">		return response;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

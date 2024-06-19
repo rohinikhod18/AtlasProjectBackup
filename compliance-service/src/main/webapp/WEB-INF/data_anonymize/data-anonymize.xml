@@ -1,0 +1,140 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+	http://www.springframework.org/schema/beans/spring-beans.xsd 
+	http://www.springframework.org/schema/integration 
+	http://www.springframework.org/schema/integration/spring-integration.xsd 
+	http://www.springframework.org/schema/task 
+	http://www.springframework.org/schema/task/spring-task.xsd 
+	http://www.springframework.org/schema/context 
+	http://www.springframework.org/schema/context/spring-context.xsd 
+	http://www.springframework.org/schema/integration/http
+	http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+	http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan	base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	
+	<int:channel id="PROFILE.DATA_ANONYMIZE.in.channel" />
+	<int:channel id="DATA_ANONYMIZE.QUEUE_VALIDATION.in.channel" />
+	<int:channel id="DATA_ANONYMIZE.VALIDATION.in.channel" />
+	<int:channel id="DATA_ANONYMIZE.PERSISTANCE.in.channel" />
+	<int:channel id="DATA_ANONYMIZE.PROCESS.in.channel" />
+	<int:channel id="DATA_ANONYMIZE.out.channel" />
+	
+	<int:chain
+		id="dataAnon.initChain"
+		input-channel="PROFILE.DATA_ANONYMIZE.in.channel">
+		<int:header-enricher>
+			<int:header name="correlationID" expression="T(java.util.UUID).randomUUID()" />
+			<int:header name="username" expression="headers['username']" />
+		</int:header-enricher>
+		<int:service-activator id="DataAnon.MesgValidator" ref="dataAnonMessageValidator" method="process"/>
+		<int:router
+			id="dataAnon.postValidation1"
+			expression="payload.getValidationResult()"
+			default-output-channel="DATA_ANONYMIZE.QUEUE_VALIDATION.in.channel">
+			<int:mapping
+				value="FAIL"
+				channel="DATA_ANONYMIZE.out.channel" />
+			<int:mapping
+				value="SUCCESS"
+				channel="DATA_ANONYMIZE.QUEUE_VALIDATION.in.channel" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain
+		id="dataAnon.QueueValidation"
+		input-channel="DATA_ANONYMIZE.QUEUE_VALIDATION.in.channel">
+		<int:header-enricher>
+			<int:header name="correlationID" expression="T(java.util.UUID).randomUUID()" />
+			<int:header name="username" expression="headers['username']" />
+		</int:header-enricher>
+		<int:service-activator id="DataAnon.QueueValidation" ref="dataAnonQueueValidation" method="queueValidator"/>
+		<int:router
+			id="dataAnon.postValidation2"
+			expression="payload.getValidationResult()"
+			default-output-channel="DATA_ANONYMIZE.VALIDATION.in.channel">
+			<int:mapping
+				value="FAIL"
+				channel="DATA_ANONYMIZE.out.channel" />
+			<int:mapping
+				value="SUCCESS"
+				channel="DATA_ANONYMIZE.VALIDATION.in.channel" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain
+		id="dataAnon.Validation"
+		input-channel="DATA_ANONYMIZE.VALIDATION.in.channel">
+		<int:service-activator id="DataAnon.DataEnricher1" ref="dataAnonDataEnricher" method="dataEnricher"/>
+		<int:service-activator id="DataAnon.DataValidator" ref="dataAnonDataValidator" method="dataValidator"/>
+		<int:router
+			id="dataAnon.postValidation3"
+			expression="payload.getValidationResult()"
+			default-output-channel="DATA_ANONYMIZE.PERSISTANCE.in.channel">
+			<int:mapping
+				value="FAIL"
+				channel="DATA_ANONYMIZE.out.channel" />
+			<int:mapping
+				value="SUCCESS"
+				channel="DATA_ANONYMIZE.PERSISTANCE.in.channel" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain
+		id="dataAnon.persistence"
+		input-channel="DATA_ANONYMIZE.PERSISTANCE.in.channel"
+		output-channel="DATA_ANONYMIZE.PROCESS.in.channel">
+		<int:service-activator id="DataAnon.Save" ref="dataAnonSave" method="saveDataAnonRequest"/>
+	</int:chain>
+	
+	<int:chain
+		id="dataAnon.UpdateDb"
+		input-channel="DATA_ANONYMIZE.PROCESS.in.channel"
+		output-channel="DATA_ANONYMIZE.out.channel">
+		<int:service-activator id="DataAnon.Process" ref="dataAnonProcess" method="processDataAnonymization"/>
+	</int:chain>
+	
+	<int:chain
+		id="dataAnon.ReplyHandlerChain"
+		input-channel="DATA_ANONYMIZE.out.channel"
+		output-channel="nullChannel">
+		<int:service-activator	id="DataAnon.Reply" ref="dataAnonReplyHandler" method="process"/>
+	</int:chain>
+	
+	<!--Bean Definations start -->
+	<bean
+		id="dataAnonMessageValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization.DataAnonMessageValidator" />
+		
+	<bean
+		id="dataAnonQueueValidation"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization.DataAnonValidator" />
+		
+	<bean
+		id="dataAnonDataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization.DataAnonDataEnricher" />
+	
+	<bean
+		id="dataAnonDataValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization.DataAnonValidator" />
+	
+	<bean
+		id="dataAnonSave"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization.DataAnonServiceImpl" />
+	
+	<bean
+		id="dataAnonProcess"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization.DataAnonServiceImpl" />
+	
+	<bean
+		id="dataAnonReplyHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization.DataAnonReplyHandler" />
+</beans>

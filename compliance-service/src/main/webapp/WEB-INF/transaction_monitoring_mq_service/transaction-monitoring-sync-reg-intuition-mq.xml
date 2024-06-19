@@ -1,0 +1,56 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+
+
+	<int:channel id="INTUITION.UPDATE_OPI.in.channel" />
+
+	<int:chain id="tmmq.account.initChain"
+		input-channel="INTUITION.UPDATE_OPI.in.channel"
+		output-channel="INTUITION.UPDATE_OPI.ERROR.HANDLER">
+		
+		<int:service-activator
+			ref="TransactionMonitoringMQDBServiceImpl" 
+			method="checkAccountIsPresentOrNot" />
+			
+		<int:filter discard-channel="INTUITION.UPDATE_OPI.ERROR.HANDLER" expression="!payload.isFailed()" />
+			
+		<int:transformer
+			ref="regSynTransactionMonitoringTransformer"
+			method="transformRequest" />
+			
+		<int:service-activator
+			ref="TransactionMonitoringMQDBServiceImpl" 
+			method="saveIntuitionRegSyncToMQ" />
+
+	</int:chain>
+	
+	<int:chain
+		input-channel="INTUITION.UPDATE_OPI.ERROR.HANDLER" output-channel="nullChannel">
+		<int:service-activator
+			ref="transactionMonitoringMqService" method="handleResponse" />
+	</int:chain>
+	
+	
+	<bean 
+		id="regSynTransactionMonitoringTransformer" 
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.TransactionMonitoringRegSyncTransformer"/>
+	
+</beans>

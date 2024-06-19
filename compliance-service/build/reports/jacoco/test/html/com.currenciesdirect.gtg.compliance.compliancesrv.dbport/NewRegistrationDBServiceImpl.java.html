@@ -1,0 +1,1328 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>NewRegistrationDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">NewRegistrationDBServiceImpl.java</span></div><h1>NewRegistrationDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSummary;
+import com.currenciesdirect.gtg.compliance.commons.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.commons.enums.LegalEntityEnum;
+import com.currenciesdirect.gtg.compliance.commons.enums.TransactionTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ContactComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.INewRegistrationDBService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.WatchListDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.delete.contact.DeleteContactRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.ObjectCloner;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class NewRegistrationDBServiceImpl.
+ */
+@SuppressWarnings(&quot;squid:S2095&quot;)
+<span class="fc" id="L53">public class NewRegistrationDBServiceImpl extends AbstractRegistrationDBService implements INewRegistrationDBService {</span>
+	
+	/** The Constant LOG. */
+<span class="fc" id="L56">	private static final Logger LOG = LoggerFactory.getLogger(NewRegistrationDBServiceImpl.class);</span>
+
+	/** The Constant ENTITY_TYPE. */
+	private static final String ENTITY_TYPE = &quot;EntityType&quot;;
+
+	/** The Constant CONTACTID. */
+	private static final String CONTACTID = &quot;contactid&quot;;
+
+	/** The Constant ACCOUNT. */
+	private static final String ACCOUNT = &quot;oldAccount&quot;;
+	
+	/** The Constant ACCOUNT_TMFLAG. */
+	private static final String ACCOUNT_TMFLAG = &quot;AccountTMFlag&quot;;
+	
+	/** The Constant CONTACT_COMPLIANCE_STATUS. */
+	private static final String CONTACT_COMPLIANCE_STATUS = &quot;ContactComplianceStatus&quot;;
+	
+	/** The Constant VERSION. */
+	private static final String VERSION = &quot;Version&quot;;
+	
+	/** The Constant CONTACT_ID. */
+	private static final String CONTACT_ID = &quot;ContactID&quot;;
+	
+	/**
+	 * The Constant
+	 * ERROR_WHILE_UPDATING_COMPLIANCE_STATUS_UPDATE_COMPLIANCE_STATUS.
+	 */
+	private static final String ERROR_WHILE_UPDATING_COMPLIANCE_STATUS_UPDATE_COMPLIANCE_STATUS = &quot;Error while updating compliance status updateComplianceStatus() &quot;;
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.
+	 * IRegistrationDBService#saveNewRegistration(org.springframework.
+	 * messaging.Message)
+	 */
+	public Message&lt;MessageContext&gt; saveNewRegistration(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="fc" id="L94">			RegistrationServiceRequest request = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="fc" id="L95">					.getGatewayMessageExchange().getRequest();</span>
+<span class="fc" id="L96">			OperationEnum registrationOperation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+
+<span class="fc" id="L98">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="pc bpc" id="L99" title="2 of 3 branches missed.">			switch (registrationOperation) {</span>
+			case NEW_REGISTRATION:
+<span class="fc" id="L101">				saveNewRegisration(request, token.getUserID());</span>
+<span class="fc" id="L102">				break;</span>
+			case ADD_CONTACT:
+<span class="nc" id="L104">				addContact(request, token.getUserID());</span>
+<span class="nc" id="L105">				break;</span>
+			default:
+				break;
+			}
+<span class="nc" id="L109">		} catch (Exception e) {</span>
+<span class="nc" id="L110">			LOG.error(&quot;Error in AbstractRegistrationDBService saveOrUpdateRegistration()&quot;, e);</span>
+<span class="nc" id="L111">			message.getPayload().setFailed(true);</span>
+<span class="fc" id="L112">		}</span>
+<span class="fc" id="L113">		return message;</span>
+
+	}
+
+	/**
+	 * Adds the contact.
+	 *
+	 * @param request
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return true, if successful
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private boolean addContact(RegistrationServiceRequest request, Integer user) throws ComplianceException {
+<span class="nc" id="L129">		Connection connection = getConnection(Boolean.FALSE);</span>
+		try {
+<span class="nc" id="L131">			beginTransaction(connection);</span>
+<span class="nc" id="L132">			Integer accountId = getAccountIdByCrmAccountId(request.getAccount().getAccSFID());</span>
+<span class="nc" id="L133">			request.getAccount().setId(accountId);</span>
+<span class="nc" id="L134">			saveIntoContact(connection, request.getAccount().getContacts(), accountId, request.getOrgCode(), user);</span>
+<span class="nc" id="L135">			saveIntoContactAttribute(connection, request.getAccount().getContacts(), user);</span>
+<span class="nc" id="L136">			commitTransaction(connection);</span>
+<span class="nc" id="L137">			return true;</span>
+<span class="nc" id="L138">		} catch (Exception e) {</span>
+<span class="nc" id="L139">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L141">			closeConnection(connection);</span>
+		}
+	}
+
+	/**
+	 * Save into contact attribute.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param contacts
+	 *            the contacts
+	 * @param user
+	 *            the user
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void saveIntoContactAttribute(Connection connection, List&lt;Contact&gt; contacts, Integer user)
+			throws ComplianceException {
+<span class="fc bfc" id="L159" title="All 2 branches covered.">		for (Contact contact : contacts) {</span>
+<span class="fc" id="L160">			String contactJson = JsonConverterUtil.convertToJsonWithoutNull(contact);</span>
+<span class="fc" id="L161">			PreparedStatement statement = null;</span>
+			try {
+<span class="fc" id="L163">				statement = connection.prepareStatement(DBQueryConstant.INSERT_INTO_CONTACT_ATTRIBUTE.getQuery());</span>
+<span class="fc" id="L164">				statement.setInt(1, contact.getId());</span>
+<span class="fc" id="L165">				statement.setString(2, contactJson);</span>
+<span class="fc" id="L166">				statement.setInt(3, user);</span>
+<span class="fc" id="L167">				statement.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L168">				statement.setInt(5, user);</span>
+<span class="fc" id="L169">				statement.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L170">				statement.setInt(7, contact.getVersion());</span>
+<span class="fc" id="L171">				statement.executeUpdate();</span>
+<span class="nc" id="L172">			} catch (Exception e) {</span>
+<span class="nc" id="L173">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+			} finally {
+<span class="fc" id="L175">				closePrepareStatement(statement);</span>
+			}
+<span class="fc" id="L177">		}</span>
+<span class="fc" id="L178">	}</span>
+
+	/**
+	 * Save new regisration.
+	 *
+	 * @param request
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return true, if successful
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	/*
+	 * Get Account/contact (contacts can be multiple) from registration or input
+	 * method parameter save into contact attribute (in json format) save into
+	 * Account attribute(in json format) save into accounts table save into
+	 * contact save all generated keys into MessageContext do all in one
+	 * transaction
+	 */
+	private boolean saveNewRegisration(RegistrationServiceRequest request, Integer user) throws ComplianceException {
+<span class="fc" id="L199">		Connection connection = getConnection(Boolean.FALSE);</span>
+
+		try {
+<span class="fc" id="L202">			beginTransaction(connection);</span>
+<span class="fc" id="L203">			Integer accountId = saveIntoAccount(connection, request.getAccount(), request.getOrgCode(), user);</span>
+<span class="fc" id="L204">			saveIntoAccountAttribute(connection, request.getAccount(), accountId, user);</span>
+<span class="fc" id="L205">			saveIntoContact(connection, request.getAccount().getContacts(), accountId, request.getOrgCode(), user);</span>
+<span class="fc" id="L206">			saveIntoContactAttribute(connection, request.getAccount().getContacts(), user);</span>
+<span class="fc" id="L207">			commitTransaction(connection);</span>
+
+<span class="fc" id="L209">			return true;</span>
+<span class="nc" id="L210">		} catch (Exception e) {</span>
+<span class="nc" id="L211">			transactionRolledBack(connection);</span>
+<span class="nc" id="L212">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L214">			closeConnection(connection);</span>
+		}
+	}
+
+	/**
+	 * Save into contact.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param contacts
+	 *            the contacts
+	 * @param accountId
+	 *            the account id
+	 * @param orgCode
+	 *            the org code
+	 * @param user
+	 *            the user
+	 * @return true, if successful
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private boolean saveIntoContact(Connection connection, List&lt;Contact&gt; contacts, int accountId, String orgCode,
+			Integer user) throws ComplianceException {
+<span class="pc bpc" id="L237" title="2 of 4 branches missed.">		if (contacts != null &amp;&amp; !contacts.isEmpty()) {</span>
+<span class="fc" id="L238">			PreparedStatement statement = null;</span>
+<span class="fc" id="L239">			ResultSet rs = null;</span>
+			try {
+<span class="fc" id="L241">				statement = connection.prepareStatement(DBQueryConstant.INSERT_INTO_CONTACT.getQuery(),</span>
+						Statement.RETURN_GENERATED_KEYS);
+<span class="fc bfc" id="L243" title="All 2 branches covered.">				for (Contact contact : contacts) {</span>
+
+<span class="fc" id="L245">					rs = setValueToContact(accountId, orgCode, user, statement, contact);</span>
+<span class="fc" id="L246">				}</span>
+<span class="fc" id="L247">				return true;</span>
+<span class="nc" id="L248">			} catch (Exception e) {</span>
+<span class="nc" id="L249">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+			} finally {
+<span class="fc" id="L251">				closeResultset(rs);</span>
+<span class="fc" id="L252">				closePrepareStatement(statement);</span>
+
+			}
+		}
+
+<span class="nc" id="L257">		return false;</span>
+	}
+
+	/**
+	 * Sets the value to contact.
+	 *
+	 * @param accountId
+	 *            the account id
+	 * @param orgCode
+	 *            the org code
+	 * @param user
+	 *            the user
+	 * @param statement
+	 *            the statement
+	 * @param contact
+	 *            the contact
+	 * @return the result set
+	 * @throws SQLException
+	 *             the SQL exception
+	 */
+	private ResultSet setValueToContact(int accountId, String orgCode, Integer user, PreparedStatement statement,
+			Contact contact) throws SQLException {
+		ResultSet rs;
+<span class="fc" id="L280">		statement.setString(1, orgCode);</span>
+<span class="fc" id="L281">		statement.setInt(2, accountId);</span>
+<span class="fc" id="L282">		statement.setString(3, contact.getFirstName() + &quot; &quot; + contact.getLastName());</span>
+<span class="fc" id="L283">		statement.setString(4, contact.getContactSFID());</span>
+<span class="fc" id="L284">		statement.setInt(5, contact.getTradeContactID());</span>
+<span class="fc" id="L285">		statement.setBoolean(6, contact.getPrimaryContact());</span>
+<span class="fc" id="L286">		statement.setString(7, ContactComplianceStatus.NOT_PERFORMED.name());</span>
+<span class="fc" id="L287">		statement.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L288">		Calendar c = Calendar.getInstance();</span>
+<span class="fc" id="L289">		c.setTime(new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L290">		c.add(Calendar.YEAR, 3);</span>
+<span class="fc" id="L291">		statement.setTimestamp(9, new Timestamp(c.getTimeInMillis()));</span>
+<span class="fc" id="L292">		statement.setInt(10, user);</span>
+<span class="fc" id="L293">		statement.setTimestamp(11, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L294">		statement.setInt(12, user);</span>
+<span class="fc" id="L295">		statement.setTimestamp(13, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L296">		statement.setInt(14, contact.getVersion());</span>
+<span class="fc" id="L297">		statement.setString(15, contact.getCountry());</span>
+<span class="fc" id="L298">		statement.setInt(16, ServiceStatus.getStatusAsInteger(contact.getPreviousKycStatus()));</span>
+<span class="fc" id="L299">		statement.setInt(17, ServiceStatus.getStatusAsInteger(contact.getPreviousFraugsterStatus()));</span>
+<span class="fc" id="L300">		statement.setInt(18, ServiceStatus.getStatusAsInteger(contact.getPreviousSanctionStatus()));</span>
+<span class="fc" id="L301">		statement.setInt(19, ServiceStatus.getStatusAsInteger(contact.getPreviousBlacklistStatus()));</span>
+<span class="fc" id="L302">		statement.setInt(20, ServiceStatus.getStatusAsInteger(contact.getPreviousCountryGlobalCheckStatus()));</span>
+<span class="fc" id="L303">		statement.setInt(21, ServiceStatus.getStatusAsInteger(contact.getPreviousPaymentinWatchlistStatus()));//Added for AT-2986</span>
+<span class="fc" id="L304">		statement.setInt(22, ServiceStatus.getStatusAsInteger(contact.getPreviousPaymentoutWatchlistStatus()));//Added for AT-2986</span>
+<span class="fc" id="L305">		statement.setBoolean(23, false);</span>
+		// set STP Flag
+<span class="fc" id="L307">		statement.setBoolean(24, false);</span>
+<span class="fc" id="L308">		statement.executeUpdate();</span>
+<span class="fc" id="L309">		rs = statement.getGeneratedKeys();</span>
+
+<span class="pc bpc" id="L311" title="1 of 2 branches missed.">		if (rs.next()) {</span>
+<span class="fc" id="L312">			contact.setId(rs.getInt(1));</span>
+		}
+<span class="fc" id="L314">		return rs;</span>
+	}
+
+	/**
+	 * Save into account attribute.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param account
+	 *            the account
+	 * @param accountId
+	 *            the account id
+	 * @param user
+	 *            the user
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer saveIntoAccountAttribute(Connection connection, Account account, Integer accountId, Integer user)
+			throws ComplianceException {
+<span class="fc" id="L334">		List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="fc" id="L335">		account.setContacts(null);</span>
+<span class="fc" id="L336">		String accountJson = JsonConverterUtil.convertToJsonWithoutNull(account);</span>
+<span class="fc" id="L337">		account.setContacts(contacts);</span>
+<span class="fc" id="L338">		PreparedStatement statement = null;</span>
+<span class="fc" id="L339">		ResultSet rs = null;</span>
+		try {
+<span class="fc" id="L341">			statement = connection.prepareStatement(DBQueryConstant.INSERT_INTO_ACCOUNT_ATTRIBUTE.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="fc" id="L343">			statement.setInt(1, accountId);</span>
+<span class="fc" id="L344">			statement.setString(2, accountJson);</span>
+<span class="fc" id="L345">			statement.setInt(3, user);</span>
+<span class="fc" id="L346">			statement.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L347">			statement.setInt(5, user);</span>
+<span class="fc" id="L348">			statement.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L349">			statement.setInt(7, account.getVersion());</span>
+<span class="fc" id="L350">			statement.executeUpdate();</span>
+<span class="fc" id="L351">			rs = statement.getGeneratedKeys();</span>
+<span class="pc bpc" id="L352" title="1 of 2 branches missed.">			if (rs.next()) {</span>
+<span class="fc" id="L353">				return rs.getInt(1);</span>
+			}
+<span class="nc" id="L355">		} catch (Exception e) {</span>
+<span class="nc" id="L356">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L358">			closeResultset(rs);</span>
+<span class="fc" id="L359">			closePrepareStatement(statement);</span>
+
+		}
+<span class="nc" id="L362">		return null;</span>
+
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.
+	 * IRegistrationDBService#updateComplianceStatus(org.springframework.
+	 * messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; updateComplianceStatus(Message&lt;MessageContext&gt; signUpMessage) {
+<span class="fc" id="L375">		Connection signUpConnection = null;</span>
+		try {
+<span class="fc" id="L377">			RegistrationResponse signUpResponse = (RegistrationResponse) signUpMessage.getPayload()</span>
+<span class="fc" id="L378">					.getGatewayMessageExchange().getResponse();</span>
+
+<span class="fc" id="L380">			RegistrationServiceRequest signUpRequest = (RegistrationServiceRequest) signUpMessage.getPayload()</span>
+<span class="fc" id="L381">					.getGatewayMessageExchange().getRequest();</span>
+<span class="fc" id="L382">			signUpRequest.getAccount().setAccountStatus(signUpResponse.getAccount().getAcs().name());</span>
+
+<span class="fc" id="L384">			Integer accountId = signUpRequest.getAccount().getId();</span>
+
+<span class="fc" id="L386">			UserProfile token = (UserProfile) signUpMessage.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="fc" id="L387">			signUpConnection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L388">			Boolean isContactModified = (Boolean) signUpRequest.getAdditionalAttribute(&quot;isContactModified&quot;);</span>
+<span class="pc bpc" id="L389" title="1 of 2 branches missed.">			isContactModified = isContactModified == null ? Boolean.FALSE : isContactModified;</span>
+
+<span class="fc" id="L391">			beginTransaction(signUpConnection);</span>
+<span class="fc" id="L392">			OperationEnum registrationOperation = signUpMessage.getPayload().getGatewayMessageExchange().getOperation();</span>
+<span class="fc" id="L393">			updateAccountComplianceStatus(signUpConnection, signUpResponse, token.getUserID(),</span>
+<span class="fc" id="L394">					signUpRequest.getAccount().getCustType(), registrationOperation);</span>
+
+<span class="fc" id="L396">			Account signUpAccount = null;</span>
+<span class="pc bpc" id="L397" title="1 of 2 branches missed.">			if (registrationOperation == OperationEnum.ADD_CONTACT) {</span>
+<span class="nc" id="L398">				signUpAccount = getAccountFromAccountAttribute(signUpRequest.getAccount().getId());</span>
+			} else {
+<span class="fc" id="L400">				signUpAccount = (Account) ObjectCloner.deepCopy(signUpRequest.getAccount());</span>
+			}
+<span class="fc" id="L402">			signUpAccount.setAccountStatus(signUpResponse.getAccount().getAcs().name());</span>
+<span class="fc" id="L403">			signUpAccount.setId(accountId);</span>
+<span class="pc bpc" id="L404" title="1 of 2 branches missed.">			if (Boolean.TRUE.equals(isContactModified)) {</span>
+<span class="nc" id="L405">				List&lt;Contact&gt; contactList = updateContactAttributesFields(signUpRequest, signUpResponse);</span>
+<span class="nc" id="L406">				updateContactAttributes(contactList);</span>
+				// Clone request object, remove contacts so that does not get
+				// serialized to DB
+				// also update Account status, so next update will have it
+				// readily
+				// available
+<span class="nc" id="L412">				updateContactComplianceStatus(signUpConnection, signUpResponse, token.getUserID(), signUpRequest,</span>
+<span class="nc" id="L413">						signUpRequest.getAccount().getCustType());</span>
+<span class="nc" id="L414">				saveIntoContactComplianceHistory(signUpConnection, signUpResponse, token.getUserID());</span>
+<span class="nc" id="L415">				saveIntoProfileStatusReason(signUpConnection, signUpResponse, signUpAccount.getId(),</span>
+<span class="nc" id="L416">						signUpRequest.getOrgCode(), token.getUserID());</span>
+			}
+<span class="fc" id="L418">			signUpAccount.getContacts().clear();</span>
+<span class="fc" id="L419">			updateIntoAccountAttributeStatus(signUpConnection, signUpAccount, token.getUserID());</span>
+<span class="fc" id="L420">			saveIntoAccountComplianceHistory(signUpConnection, signUpResponse, token.getUserID());</span>
+
+<span class="fc" id="L422">			commitTransaction(signUpConnection);</span>
+<span class="nc" id="L423">		} catch (Exception e) {</span>
+<span class="nc" id="L424">			signUpMessage.getPayload().setFailed(true);</span>
+<span class="nc" id="L425">			LOG.error(ERROR_WHILE_UPDATING_COMPLIANCE_STATUS_UPDATE_COMPLIANCE_STATUS, e);</span>
+		} finally {
+			try {
+<span class="fc" id="L428">				closeConnection(signUpConnection);</span>
+<span class="nc" id="L429">			} catch (ComplianceException e) {</span>
+<span class="nc" id="L430">				signUpMessage.getPayload().setFailed(true);</span>
+<span class="nc" id="L431">				LOG.error(ERROR_WHILE_UPDATING_COMPLIANCE_STATUS_UPDATE_COMPLIANCE_STATUS, e);</span>
+<span class="fc" id="L432">			}</span>
+		}
+<span class="fc" id="L434">		return signUpMessage;</span>
+	}
+
+	/**
+	 * Update contact attributes fields.
+	 *
+	 * @param request
+	 *            the request
+	 * @param response
+	 *            the response
+	 * @return the list
+	 */
+	private List&lt;Contact&gt; updateContactAttributesFields(RegistrationServiceRequest request,
+			RegistrationResponse response) {
+<span class="nc" id="L448">		List&lt;Contact&gt; contactList = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L449" title="All 2 branches missed.">		if (response.getAccount().getContacts() != null) {</span>
+<span class="nc bnc" id="L450" title="All 2 branches missed.">			for (ComplianceContact contactResponse : response.getAccount().getContacts()) {</span>
+<span class="nc bnc" id="L451" title="All 2 branches missed.">				for (Contact req : request.getAccount().getContacts()) {</span>
+<span class="nc" id="L452">					setContactStatusToRequest(contactList, contactResponse, req);</span>
+<span class="nc" id="L453">				}</span>
+<span class="nc" id="L454">			}</span>
+		}
+<span class="nc" id="L456">		return contactList;</span>
+	}
+
+	/**
+	 * Update contact compliance status.
+	 *
+	 * @param conactConn
+	 *            the conact conn
+	 * @param response
+	 *            the response
+	 * @param user
+	 *            the user
+	 * @param custType
+	 *            the cust type
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void updateContactComplianceStatus(Connection conactConn, RegistrationResponse response, Integer user, RegistrationServiceRequest signUpRequest,
+			String custType) throws ComplianceException {
+<span class="nc" id="L475">		PreparedStatement contactStatement = null;</span>
+<span class="nc" id="L476">		Boolean isOnQueue = Boolean.FALSE;</span>
+<span class="nc" id="L477">		String legalEntity = signUpRequest.getAccount().getCustLegalEntity();</span>
+		
+<span class="nc bnc" id="L479" title="All 2 branches missed.">		for (ComplianceContact contact : response.getAccount().getContacts()) {</span>
+			
+			try {
+<span class="nc" id="L482">				Boolean kycReason = getKYCReasonCodeStatus(contact);</span>
+				
+<span class="nc bnc" id="L484" title="All 2 branches missed.">				if (custType.equalsIgnoreCase(CustomerTypeEnum.PFX.name())</span>
+<span class="nc bnc" id="L485" title="All 2 branches missed.">						&amp;&amp; contact.getCcs().name().equals(ContactComplianceStatus.INACTIVE.name())</span>
+<span class="nc bnc" id="L486" title="All 2 branches missed.">						&amp;&amp; Boolean.FALSE.equals(kycReason)) {</span>
+<span class="nc" id="L487">					isOnQueue = Boolean.TRUE;</span>
+				}
+				//Add for AT-3398(Sub task AT-3491)
+<span class="nc bnc" id="L490" title="All 4 branches missed.">				if(LegalEntityEnum.isEULegalEntity(legalEntity) &amp;&amp; contact.getBlacklistStatus().equalsIgnoreCase(&quot;FAIL&quot;)){</span>
+<span class="nc" id="L491">					isOnQueue = Boolean.TRUE;</span>
+				}
+				
+<span class="nc" id="L494">				contactStatement = conactConn</span>
+<span class="nc" id="L495">						.prepareStatement(DBQueryConstant.UPDATE_CONTACT_COMPLIANCE_STATUS_STP.getQuery());</span>
+<span class="nc" id="L496">				contactStatement.setString(1, contact.getCcs().name());</span>
+<span class="nc" id="L497">				contactStatement.setInt(2, user);</span>
+<span class="nc" id="L498">				contactStatement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L499">				contactStatement.setInt(4, ServiceStatus.getStatusAsInteger(contact.getKycStatus()));</span>
+<span class="nc" id="L500">				contactStatement.setInt(5, ServiceStatus.getStatusAsInteger(contact.getFraugsterStatus()));</span>
+<span class="nc" id="L501">				contactStatement.setInt(6, ServiceStatus.getStatusAsInteger(contact.getSanctionStatus()));</span>
+<span class="nc" id="L502">				contactStatement.setInt(7, ServiceStatus.getStatusAsInteger(contact.getBlacklistStatus()));</span>
+<span class="nc" id="L503">				contactStatement.setInt(8, ServiceStatus.getStatusAsInteger(contact.getCustomCheckStatus()));</span>
+<span class="nc" id="L504">				contactStatement.setBoolean(9, isOnQueue);</span>
+				// set STP Flag
+<span class="nc" id="L506">				contactStatement.setBoolean(10, contact.getSTPFlag());</span>
+				// AT-1549
+				// set POI Needed flag, which would be used for 
+				// Onfido updates
+<span class="nc bnc" id="L510" title="All 2 branches missed.">				Boolean poiNeeded = (ComplianceReasonCode.KYC_POI==contact.getCrc());</span>
+<span class="nc" id="L511">				contactStatement.setBoolean(11, poiNeeded);</span>
+				//changes for AT-2986
+<span class="nc bnc" id="L513" title="All 2 branches missed.">				if (custType.equalsIgnoreCase(CustomerTypeEnum.PFX.name())){</span>
+<span class="nc" id="L514">						WatchListDetails watchlistdet = getPaymentWatchListReasons(contact);</span>
+<span class="nc" id="L515">						processWatchList(contact, watchlistdet);</span>
+				}
+<span class="nc" id="L517">				contactStatement.setInt(12, ServiceStatus.getStatusAsInteger(contact.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L518">				contactStatement.setInt(13, ServiceStatus.getStatusAsInteger(contact.getPaymentoutWatchlistStatus()));</span>
+<span class="nc" id="L519">				contactStatement.setInt(14, contact.getId());</span>
+<span class="nc" id="L520">				contactStatement.executeUpdate();</span>
+<span class="nc" id="L521">			} catch (Exception e) {</span>
+<span class="nc" id="L522">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+			} finally {
+<span class="nc" id="L524">				closePrepareStatement(contactStatement);</span>
+			}
+<span class="nc" id="L526">		}</span>
+<span class="nc" id="L527">	}</span>
+
+	private WatchListDetails getPaymentWatchListReasons(ComplianceContact contact)
+			throws ComplianceException {
+<span class="nc" id="L531">		Connection readOnlyConn = null;</span>
+<span class="nc" id="L532">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L533">		ResultSet resultSet = null;</span>
+<span class="nc" id="L534">		WatchListDetails watchlist = new WatchListDetails();</span>
+		
+		
+<span class="nc" id="L537">		String query = DBQueryConstant.GET_WATCHLIST_REASON_LIST_FOR_PAYMENTOUT_AND_PAYMENTIN_WITH_CON.getQuery();</span>
+		try {
+<span class="nc" id="L539">			readOnlyConn = getConnection(Boolean.TRUE);</span>
+
+			// the query check for new reasons added as well as old contacts on
+			// watchlist
+			// and inclusive of all watchlist reason, if anything stops payment
+			// In and Out
+			// also highet risk category
+<span class="nc" id="L546">			preparedStatement = readOnlyConn.prepareStatement(query);</span>
+<span class="nc" id="L547">			preparedStatement.setInt(1, contact.getId());</span>
+<span class="nc" id="L548">			resultSet = preparedStatement.executeQuery();</span>
+
+<span class="nc bnc" id="L550" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L551">				watchlist.setStopPaymentIn(resultSet.getBoolean(&quot;StopPaymentIn&quot;));</span>
+<span class="nc" id="L552">				watchlist.setStopPaymentOut(resultSet.getBoolean(&quot;StopPaymentOut&quot;));</span>
+<span class="nc" id="L553">				watchlist.setCategory(resultSet.getInt(&quot;Category&quot;));</span>
+			}
+
+<span class="nc" id="L556">		} catch (Exception e) {</span>
+<span class="nc" id="L557">			throw new ComplianceException(InternalProcessingCode.SERVICE_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L559">			closeResultset(resultSet);</span>
+<span class="nc" id="L560">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L561">			closeConnection(readOnlyConn);</span>
+		}
+<span class="nc" id="L563">		return watchlist;</span>
+	}
+	
+	private void processWatchList(ComplianceContact contact, WatchListDetails watchDetails) {
+<span class="nc" id="L567">		String paymentInwatchlistStatus = ServiceStatus.PASS.name();</span>
+<span class="nc" id="L568">		String paymentOutwatchlistStatus = ServiceStatus.PASS.name();</span>
+
+<span class="nc bnc" id="L570" title="All 4 branches missed.">		if (watchDetails.isStopPaymentIn() &amp;&amp; watchDetails.getCategory().equals(1))</span>
+<span class="nc" id="L571">			paymentInwatchlistStatus = ServiceStatus.FAIL.name();</span>
+<span class="nc bnc" id="L572" title="All 4 branches missed.">		if (watchDetails.isStopPaymentIn() &amp;&amp; watchDetails.getCategory().equals(2))</span>
+<span class="nc" id="L573">			paymentInwatchlistStatus = ServiceStatus.WATCH_LIST.name();</span>
+
+<span class="nc bnc" id="L575" title="All 4 branches missed.">		if (watchDetails.isStopPaymentOut() &amp;&amp; watchDetails.getCategory().equals(1))</span>
+<span class="nc" id="L576">			paymentOutwatchlistStatus = ServiceStatus.FAIL.name();</span>
+<span class="nc bnc" id="L577" title="All 4 branches missed.">		if (watchDetails.isStopPaymentOut() &amp;&amp; watchDetails.getCategory().equals(2))</span>
+<span class="nc" id="L578">			paymentOutwatchlistStatus = ServiceStatus.WATCH_LIST.name();</span>
+
+<span class="nc" id="L580">		contact.setPaymentinWatchlistStatus(paymentInwatchlistStatus);</span>
+<span class="nc" id="L581">		contact.setPaymentoutWatchlistStatus(paymentOutwatchlistStatus);</span>
+<span class="nc" id="L582">	}</span>
+	
+	private Boolean getKYCReasonCodeStatus(ComplianceContact contact) {
+<span class="nc bnc" id="L585" title="All 4 branches missed.">		return null != contact.getCrc() &amp;&amp; (contact.getCrc()==ComplianceReasonCode.KYC</span>
+<span class="nc bnc" id="L586" title="All 2 branches missed.">				|| contact.getCrc()==ComplianceReasonCode.KYC_NA </span>
+<span class="nc bnc" id="L587" title="All 2 branches missed.">				|| contact.getCrc()==ComplianceReasonCode.KYC_POA</span>
+<span class="nc bnc" id="L588" title="All 2 branches missed.">				|| contact.getCrc()==ComplianceReasonCode.KYC_POI);</span>
+	}
+
+	private Boolean setstatus(Boolean accountStatusInActive, String customerType)
+	{
+		  Boolean status;
+<span class="pc bpc" id="L594" title="3 of 4 branches missed.">		if (Boolean.TRUE.equals(accountStatusInActive) &amp;&amp; customerType.equalsIgnoreCase(CustomerTypeEnum.CFX.name())) {</span>
+<span class="nc" id="L595">			status=Boolean.TRUE;</span>
+<span class="nc" id="L596">			return status;</span>
+		} else {
+<span class="fc" id="L598">			status= Boolean.FALSE;</span>
+<span class="fc" id="L599">			return status;</span>
+	    }	
+	}
+	
+	/**
+	 * Update account compliance status.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param signUpResponse
+	 *            the response
+	 * @param user
+	 *            the user
+	 * @param customerType
+	 *            the customer type
+	 * @param registrationOperation
+	 *            the registration operation
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void updateAccountComplianceStatus(Connection connection, RegistrationResponse signUpResponse, Integer user,
+			String customerType, OperationEnum registrationOperation) throws ComplianceException {
+<span class="fc" id="L621">		PreparedStatement signUpStmt = null;</span>
+<span class="fc" id="L622">		Boolean accountStatusInActive = Boolean.FALSE;</span>
+
+		try {
+<span class="fc" id="L625">			ComplianceAccount signUpAccount = signUpResponse.getAccount();</span>
+<span class="fc" id="L626">			accountStatusInActive = signUpAccount.getAcs().name().equals(ContactComplianceStatus.INACTIVE.name());</span>
+<span class="pc bpc" id="L627" title="1 of 2 branches missed.">			if (registrationOperation==OperationEnum.ADD_CONTACT)</span>
+<span class="nc" id="L628">				signUpStmt = connection.prepareStatement(DBQueryConstant.UPDATE_ACCOUNT_COMPLIANCE_STATUS.getQuery());</span>
+			else
+<span class="fc" id="L630">				signUpStmt = connection</span>
+<span class="fc" id="L631">						.prepareStatement(DBQueryConstant.UPDATE_ACCOUNT_COMPLIANCE_STATUS_STP.getQuery());</span>
+
+<span class="fc" id="L633">			signUpStmt.setString(1, signUpAccount.getAcs().name());</span>
+<span class="fc" id="L634">			signUpStmt.setString(2, signUpAccount.getAcs().name());</span>
+<span class="fc" id="L635">			signUpStmt.setInt(3, user);</span>
+<span class="fc" id="L636">			signUpStmt.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L637">			signUpStmt.setInt(5, ServiceStatus.getStatusAsInteger(signUpAccount.getFraugsterStatus()));</span>
+<span class="fc" id="L638">			signUpStmt.setInt(6, ServiceStatus.getStatusAsInteger(signUpAccount.getBlacklistStatus()));</span>
+<span class="fc" id="L639">			signUpStmt.setInt(7, ServiceStatus.getStatusAsInteger(signUpAccount.getPaymentinWatchlistStatus()));</span>
+<span class="fc" id="L640">			signUpStmt.setInt(8, ServiceStatus.getStatusAsInteger(signUpAccount.getPaymentoutWatchlistStatus()));</span>
+
+<span class="pc bpc" id="L642" title="1 of 2 branches missed.">			if (null != signUpAccount.getRegisteredDate()) {</span>
+<span class="nc" id="L643">				signUpStmt.setTimestamp(9, signUpAccount.getRegisteredDate());</span>
+<span class="nc" id="L644">				signUpStmt.setTimestamp(10, signUpAccount.getExpiryDate());</span>
+			} else {
+<span class="fc" id="L646">				signUpStmt.setNull(9, Types.TIMESTAMP);</span>
+<span class="fc" id="L647">				signUpStmt.setNull(10, Types.TIMESTAMP);</span>
+			}
+
+			/**
+			 * Added new column(osOnQueue) to show inactive CFX account on Reg
+			 * queue - By Abhijit G.
+			 */
+			
+<span class="fc" id="L655">			signUpStmt.setBoolean(11, setstatus(accountStatusInActive, customerType));</span>
+			
+<span class="fc" id="L657">			signUpStmt.setInt(12, ServiceStatus.getStatusAsInteger(signUpAccount.getKycStatus()));</span>
+<span class="fc" id="L658">			signUpStmt.setInt(13, ServiceStatus.getStatusAsInteger(signUpAccount.getSanctionStatus()));</span>
+
+			// STP Flag is set if request is Signup
+<span class="pc bpc" id="L661" title="1 of 2 branches missed.">			if (registrationOperation==OperationEnum.NEW_REGISTRATION) {</span>
+<span class="fc" id="L662">				signUpStmt.setBoolean(14, signUpAccount.getSTPFlag());</span>
+<span class="fc" id="L663">				signUpStmt.setInt(15, signUpResponse.getAccount().getId());</span>
+					 
+			} else {
+<span class="nc" id="L666">				signUpStmt.setInt(14, signUpResponse.getAccount().getId());</span>
+			}
+
+<span class="fc" id="L669">			signUpStmt.executeUpdate();</span>
+
+<span class="nc" id="L671">		} catch (Exception e) {</span>
+<span class="nc" id="L672">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L674">			closePrepareStatement(signUpStmt);</span>
+		}
+<span class="fc" id="L676">	}</span>
+
+	/**
+	 * Save into account.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param account
+	 *            the account
+	 * @param orgCode
+	 *            the org code
+	 * @param user
+	 *            the user
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer saveIntoAccount(Connection connection, Account account, String orgCode, Integer user)
+			throws ComplianceException {
+<span class="fc" id="L695">		PreparedStatement statement = null;</span>
+<span class="fc" id="L696">		ResultSet rs = null;</span>
+		try {
+			// CFX and CFX (Etailer) are treated as CFX
+			// while saving in account table, Cust Type should be saved as
+			// 1:CFX, 2:PFX, 3:CFX(Etailer)
+<span class="fc" id="L701">			Integer custType = getCustomerType(account);</span>
+<span class="fc" id="L702">			statement = connection.prepareStatement(DBQueryConstant.INSERT_INTO_ACCOUNT.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="fc" id="L704">			statement.setString(1, orgCode);</span>
+<span class="fc" id="L705">			statement.setString(2, account.getAccountName());</span>
+<span class="fc" id="L706">			statement.setString(3, account.getAccSFID());</span>
+<span class="fc" id="L707">			statement.setInt(4, account.getTradeAccountID());// TradeAccountId</span>
+<span class="fc" id="L708">			statement.setString(5, account.getTradeAccountNumber());// TradeAccountNumber</span>
+<span class="fc" id="L709">			statement.setInt(6, custType);</span>
+<span class="fc" id="L710">			statement.setString(7, ContactComplianceStatus.IN_QUEUE.name());</span>
+<span class="fc" id="L711">			statement.setInt(8, 1);</span>
+<span class="fc" id="L712">			statement.setNull(9, Types.TIMESTAMP);</span>
+<span class="fc" id="L713">			statement.setNull(10, Types.TIMESTAMP);</span>
+<span class="fc" id="L714">			statement.setInt(11, user);</span>
+
+<span class="fc" id="L716">			statement.setTimestamp(12, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L717">			statement.setInt(13, user);</span>
+<span class="fc" id="L718">			statement.setTimestamp(14, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L719">			statement.setInt(15, account.getVersion());</span>
+<span class="fc" id="L720">			statement.setInt(16, ServiceStatus.getStatusAsInteger(account.getPreviousKycStatus()));</span>
+<span class="fc" id="L721">			statement.setInt(17, ServiceStatus.getStatusAsInteger(account.getPreviousFraugsterStatus()));</span>
+<span class="fc" id="L722">			statement.setInt(18, ServiceStatus.getStatusAsInteger(account.getPreviousSanctionStatus()));</span>
+<span class="fc" id="L723">			statement.setInt(19, ServiceStatus.getStatusAsInteger(account.getPreviousBlacklistStatus()));</span>
+<span class="fc" id="L724">			statement.setInt(20, ServiceStatus.getStatusAsInteger(account.getPreviousPaymentinWatchlistStatus()));</span>
+<span class="fc" id="L725">			statement.setInt(21, ServiceStatus.getStatusAsInteger(account.getPreviousPaymentoutWatchlistStatus()));</span>
+<span class="pc bpc" id="L726" title="1 of 2 branches missed.">			if (StringUtils.isNullOrEmpty(account.getCustLegalEntity())) {</span>
+<span class="nc" id="L727">				statement.setNull(22, Types.NVARCHAR);</span>
+			} else {
+<span class="fc" id="L729">				statement.setString(22, account.getCustLegalEntity());</span>
+			}
+<span class="fc" id="L731">			statement.setBoolean(23, false);</span>
+<span class="fc" id="L732">			statement.setInt(24, 0);</span>
+<span class="fc" id="L733">			statement.setString(25, account.getCustLegalEntity());</span>
+<span class="fc" id="L734">			statement.setInt(26, 5);</span>
+<span class="fc" id="L735">			statement.executeUpdate();</span>
+<span class="fc" id="L736">			rs = statement.getGeneratedKeys();</span>
+<span class="pc bpc" id="L737" title="1 of 2 branches missed.">			if (rs.next()) {</span>
+<span class="fc" id="L738">				account.setId(rs.getInt(1));</span>
+<span class="fc" id="L739">				return rs.getInt(1);</span>
+			}
+<span class="nc" id="L741">		} catch (Exception e) {</span>
+<span class="nc" id="L742">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L744">			closeResultset(rs);</span>
+<span class="fc" id="L745">			closePrepareStatement(statement);</span>
+
+		}
+
+<span class="nc" id="L749">		return null;</span>
+	}
+
+	/**
+	 * Gets the first fraugster summary.
+	 *
+	 * @param entityId
+	 *            the entity id
+	 * @param entityType
+	 *            the entity type
+	 * @return the first fraugster summary
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public FraugsterSummary getFirstFraugsterSummary(Integer entityId, String entityType) throws ComplianceException {
+<span class="nc" id="L764">		Connection fraugsterSummaryConn = null;</span>
+<span class="nc" id="L765">		PreparedStatement fraugsterSummaryStatment = null;</span>
+<span class="nc" id="L766">		ResultSet fraugsterSummaryRS = null;</span>
+<span class="nc" id="L767">		FraugsterSummary fraugsterSummary = null;</span>
+		try {
+<span class="nc" id="L769">			fraugsterSummaryConn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L770">			fraugsterSummaryStatment = fraugsterSummaryConn</span>
+<span class="nc" id="L771">					.prepareStatement(DBQueryConstant.GET_FRAUGSTER_FIRST_SUMMARY.getQuery());</span>
+<span class="nc" id="L772">			fraugsterSummaryStatment.setInt(1, EntityEnum.getEntityTypeAsInteger(entityType));</span>
+<span class="nc" id="L773">			fraugsterSummaryStatment.setString(2, &quot;&quot; + entityId);</span>
+<span class="nc" id="L774">			fraugsterSummaryRS = fraugsterSummaryStatment.executeQuery();</span>
+<span class="nc bnc" id="L775" title="All 2 branches missed.">			if (fraugsterSummaryRS.next()) {</span>
+<span class="nc" id="L776">				fraugsterSummary = JsonConverterUtil.convertToObject(FraugsterSummary.class,</span>
+<span class="nc" id="L777">						fraugsterSummaryRS.getString(&quot;Summary&quot;));</span>
+			}
+<span class="nc" id="L779">		} catch (Exception e) {</span>
+<span class="nc" id="L780">			LOG.error(&quot;&quot;, e);</span>
+		} finally {
+<span class="nc" id="L782">			closeResultset(fraugsterSummaryRS);</span>
+<span class="nc" id="L783">			closePrepareStatement(fraugsterSummaryStatment);</span>
+<span class="nc" id="L784">			closeConnection(fraugsterSummaryConn);</span>
+		}
+<span class="nc" id="L786">		return fraugsterSummary;</span>
+	}
+
+	/**
+	 * Gets the service failed registration details.
+	 *
+	 * @param accountId
+	 *            the account id
+	 * @param customerType
+	 *            the customer type
+	 * @return the service failed registration details
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public RegistrationServiceRequest getServiceFailedRegistrationDetails(Integer accountId, String customerType, Integer contactId)
+			throws ComplianceException { // Add contact id in parameter for AT-4289
+<span class="nc" id="L802">		Connection connection = null;</span>
+<span class="nc" id="L803">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L804">		ResultSet resultSet = null;</span>
+<span class="nc" id="L805">		Account account = new Account();</span>
+<span class="nc" id="L806">		List&lt;Contact&gt; contact = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L807">		RegistrationServiceRequest registrationDetails = new RegistrationServiceRequest();</span>
+		try {
+<span class="nc" id="L809">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc bnc" id="L810" title="All 2 branches missed.">			if (CustomerTypeEnum.PFX.name().equals(customerType)) {</span>
+<span class="nc" id="L811">				preparedStatement = connection</span>
+<span class="nc" id="L812">						.prepareStatement(DBQueryConstant.GET_DETAILS_FOR_SERVICE_FAILED_REG_PFX.getQuery());</span>
+<span class="nc" id="L813">				preparedStatement.setInt(1, accountId);</span>
+<span class="nc" id="L814">				preparedStatement.setInt(2, contactId); // AT-4289</span>
+			} else {
+<span class="nc" id="L816">				preparedStatement = connection</span>
+<span class="nc" id="L817">						.prepareStatement(DBQueryConstant.GET_DETAILS_FOR_SERVICE_FAILED_REG_CFX.getQuery());</span>
+<span class="nc" id="L818">				preparedStatement.setInt(1, accountId);</span>
+<span class="nc" id="L819">				preparedStatement.setInt(2, accountId);</span>
+			}
+			
+<span class="nc" id="L822">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L823" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L824">				String accountJson = resultSet.getString(&quot;AccountAttrib&quot;);</span>
+<span class="nc bnc" id="L825" title="All 2 branches missed.">				if (null != accountJson) {</span>
+<span class="nc" id="L826">					account = JsonConverterUtil.convertToObject(Account.class, resultSet.getString(&quot;AccountAttrib&quot;));</span>
+				}
+<span class="nc" id="L828">				Contact con = JsonConverterUtil.convertToObject(Contact.class, resultSet.getString(&quot;ContactAttrib&quot;));</span>
+<span class="nc" id="L829">				con.setId(resultSet.getInt(CONTACTID));</span>
+<span class="nc" id="L830">				con.setContactStatus(resultSet.getString((CONTACT_COMPLIANCE_STATUS)));</span>
+<span class="nc bnc" id="L831" title="All 2 branches missed.">				if (!CustomerTypeEnum.PFX.name().equals(customerType)) { // AT-5487</span>
+<span class="nc" id="L832">					con.setPreviousFraugsterStatus(ServiceStatus.getStatusAsString(resultSet.getInt(&quot;ContactFraugsterStatus&quot;)));</span>
+<span class="nc" id="L833">					con.setPreviousBlacklistStatus(ServiceStatus.getStatusAsString(resultSet.getInt(&quot;ContactBlacklistStatus&quot;)));</span>
+				}
+<span class="nc" id="L835">				contact.add(con);</span>
+<span class="nc" id="L836">				account.setId(resultSet.getInt(&quot;accountId&quot;));</span>
+<span class="nc" id="L837">				account.setTradeAccountNumber(resultSet.getString(&quot;TradeAccNo&quot;));</span>
+<span class="nc" id="L838">				account.setAccountStatus(resultSet.getString(&quot;AccountComplianceStatus&quot;));</span>
+<span class="nc" id="L839">				account.setContacts(contact);</span>
+<span class="nc" id="L840">				registrationDetails.setOrgCode(resultSet.getString(&quot;OrgCode&quot;));</span>
+<span class="nc" id="L841">				registrationDetails.setOrgId(resultSet.getInt(&quot;OrgId&quot;));</span>
+<span class="nc" id="L842">				registrationDetails.addAttribute(ACCOUNT, account);</span>
+<span class="nc" id="L843">				registrationDetails.addAttribute(&quot;contact&quot;, con);</span>
+<span class="nc" id="L844">				registrationDetails.setAccount(account);</span>
+<span class="nc" id="L845">				registrationDetails.addAttribute(Constants.FRAUGSTER_STATUS,</span>
+<span class="nc" id="L846">						ServiceStatus.getStatusAsString(resultSet.getInt(&quot;FraugsterStatus&quot;)));</span>
+<span class="nc bnc" id="L847" title="All 2 branches missed.">				if (!CustomerTypeEnum.PFX.name().equals(customerType)) {</span>
+<span class="nc" id="L848">					registrationDetails.addAttribute(&quot;FRAUGSTER_STATUS_CONTACT&quot;,</span>
+<span class="nc" id="L849">							ServiceStatus.getStatusAsString(resultSet.getInt(&quot;ContactFraugsterStatus&quot;)));</span>
+<span class="nc" id="L850">					registrationDetails.addAttribute(&quot;BLACKLIST_STATUS_CONTACT&quot;,</span>
+<span class="nc" id="L851">							ServiceStatus.getStatusAsString(resultSet.getInt(&quot;ContactBlacklistStatus&quot;)));</span>
+				}
+<span class="nc" id="L853">				registrationDetails.addAttribute(Constants.BLACKLIST_STATUS,</span>
+<span class="nc" id="L854">						ServiceStatus.getStatusAsString(resultSet.getInt(&quot;BlacklistStatus&quot;)));</span>
+<span class="nc" id="L855">				registrationDetails.addAttribute(Constants.SANCTION_STATUS,</span>
+<span class="nc" id="L856">						ServiceStatus.getStatusAsString(resultSet.getInt(&quot;SanctionStatus&quot;)));</span>
+<span class="nc" id="L857">				registrationDetails.addAttribute(Constants.EID_STATUS,</span>
+<span class="nc" id="L858">						ServiceStatus.getStatusAsString(resultSet.getInt(&quot;EIDStatus&quot;)));</span>
+<span class="nc" id="L859">				registrationDetails.addAttribute(Constants.PAYMENTIN_WATCHLIST_STATUS,</span>
+<span class="nc" id="L860">						ServiceStatus.getStatusAsString(resultSet.getInt(&quot;PayInWatchListStatus&quot;)));</span>
+<span class="nc" id="L861">				registrationDetails.addAttribute(Constants.PAYMENTOUT_WATCHLIST_STATUS,</span>
+<span class="nc" id="L862">						ServiceStatus.getStatusAsString(resultSet.getInt(&quot;PayOutWatchListStatus&quot;)));</span>
+<span class="nc" id="L863">				registrationDetails.addAttribute(&quot;EventID&quot;, resultSet.getInt(&quot;EventID&quot;));</span>
+<span class="nc" id="L864">				registrationDetails.addAttribute(ACCOUNT_TMFLAG, resultSet.getInt(ACCOUNT_TMFLAG)); //AT-4288</span>
+<span class="nc" id="L865">				registrationDetails.addAttribute(&quot;OldContactStatus&quot;, resultSet.getString(CONTACT_COMPLIANCE_STATUS)); //AT-5396</span>
+<span class="nc" id="L866">				registrationDetails.addAttribute(&quot;ContactIdForCFX&quot;, contactId); // AT-5487</span>
+<span class="nc" id="L867">			}</span>
+
+<span class="nc" id="L869">		} catch (Exception e) {</span>
+<span class="nc" id="L870">			LOG.error(&quot;Error while fetching service failed reg details :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L872">			closeResultset(resultSet);</span>
+<span class="nc" id="L873">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L874">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L876">		return registrationDetails;</span>
+
+	}
+
+	/**
+	 * Gets the service failed registration ESL details.
+	 *
+	 * @param eventId
+	 *            the event id
+	 * @param accId
+	 *            the acc id
+	 * @param serviceType
+	 *            the service type
+	 * @param registrationDetails
+	 *            the registration details
+	 * @param entityType
+	 *            the entity type
+	 * @return the service failed registration ESL details
+	 * @throws SQLException 
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private EventServiceLog getEslForServiceFailureOfContact(Integer eventId, Integer accId,
+			ServiceTypeEnum serviceType, RegistrationServiceRequest registrationDetails,Connection conn) throws SQLException
+	{
+<span class="nc" id="L901">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L902">		ResultSet rs = null;</span>
+<span class="nc" id="L903">		EventServiceLog eventServiceLog = new EventServiceLog();</span>
+<span class="nc bnc" id="L904" title="All 2 branches missed.">		for (Contact con : registrationDetails.getAccount().getContacts()) {</span>
+
+<span class="nc" id="L906">			String query = &quot;&quot;;</span>
+<span class="nc" id="L907">			query = DBQueryConstant.GET_ESL_FOR_SERVICE_FAILURE_OF_CONTACT.getQuery();</span>
+
+<span class="nc" id="L909">			preparedStatment = conn.prepareStatement(query);</span>
+<span class="nc" id="L910">			preparedStatment.setString(1, serviceType.getShortName());</span>
+			//preparedStatment.setInt(2, eventId); // remove eventId - AT-4289
+<span class="nc" id="L912">			preparedStatment.setInt(2, accId);</span>
+<span class="nc" id="L913">			preparedStatment.setInt(3, con.getId());</span>
+<span class="nc" id="L914">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L915" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L916">				eventServiceLog.setEntityType(EntityEnum.getEntityTypeAsString(rs.getInt(ENTITY_TYPE)));</span>
+<span class="nc" id="L917">				eventServiceLog.setServiceType(rs.getInt(&quot;ServiceType&quot;));</span>
+<span class="nc" id="L918">				eventServiceLog.setProviderResponse(rs.getString(&quot;ProviderResponse&quot;));</span>
+<span class="nc" id="L919">				eventServiceLog.setStatus(ServiceStatus.getStatusAsString(rs.getInt(&quot;Status&quot;)));</span>
+<span class="nc" id="L920">				eventServiceLog.setSummary(rs.getString(&quot;summary&quot;));</span>
+<span class="nc" id="L921">				eventServiceLog.setEntityId(rs.getInt(&quot;EntityID&quot;));</span>
+<span class="nc" id="L922">				eventServiceLog.setEntityVersion(rs.getInt(&quot;EntityVersion&quot;));</span>
+<span class="nc" id="L923">				eventServiceLog.setEventId(rs.getInt(&quot;eventID&quot;));</span>
+			}
+
+<span class="nc" id="L926">		}</span>
+<span class="nc" id="L927">		return eventServiceLog;</span>
+	}
+	private EventServiceLog getEslServiceFailureContactAccount(Integer eventId, Integer accId,
+			ServiceTypeEnum serviceType, RegistrationServiceRequest registrationDetails, Integer entityType,Connection conn) throws SQLException 
+	{
+<span class="nc" id="L932">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L933">		ResultSet rs = null;</span>
+<span class="nc" id="L934">		EventServiceLog eventServiceLog = new EventServiceLog();</span>
+<span class="nc" id="L935">		Integer contactId = (Integer) registrationDetails.getAdditionalAttribute(&quot;contactId&quot;);</span>
+<span class="nc" id="L936">		String query = &quot;&quot;;</span>
+<span class="nc bnc" id="L937" title="All 2 branches missed.">		if (EntityEnum.CONTACT.getEntityTypeAsInteger().equals(entityType)) {</span>
+<span class="nc" id="L938">			query = DBQueryConstant.GET_ESL_FOR_SERVICE_FAILURE_OF_CONTACT.getQuery();</span>
+		} else {
+<span class="nc" id="L940">			query = DBQueryConstant.GET_ESL_FOR_SERVICE_FAILURE_OF_ACCOUNT.getQuery();</span>
+		}
+
+<span class="nc" id="L943">		preparedStatment = conn.prepareStatement(query);</span>
+<span class="nc" id="L944">		preparedStatment.setString(1, serviceType.getShortName());</span>
+		//preparedStatment.setInt(2, eventId); // remove eventId - AT-4289
+<span class="nc" id="L946">		preparedStatment.setInt(2, accId);</span>
+<span class="nc bnc" id="L947" title="All 2 branches missed.">		if (EntityEnum.CONTACT.getEntityTypeAsInteger().equals(entityType))</span>
+<span class="nc" id="L948">			preparedStatment.setInt(3, contactId);</span>
+<span class="nc" id="L949">		rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L950" title="All 2 branches missed.">		while (rs.next()) {</span>
+<span class="nc" id="L951">			eventServiceLog.setEntityType(EntityEnum.getEntityTypeAsString(rs.getInt(ENTITY_TYPE)));</span>
+<span class="nc" id="L952">			eventServiceLog.setServiceType(rs.getInt(&quot;ServiceType&quot;));</span>
+<span class="nc" id="L953">			eventServiceLog.setProviderResponse(rs.getString(&quot;ProviderResponse&quot;));</span>
+<span class="nc" id="L954">			eventServiceLog.setStatus(ServiceStatus.getStatusAsString(rs.getInt(&quot;Status&quot;)));</span>
+<span class="nc" id="L955">			eventServiceLog.setSummary(rs.getString(&quot;summary&quot;));</span>
+<span class="nc" id="L956">			eventServiceLog.setEntityId(rs.getInt(&quot;EntityID&quot;));</span>
+<span class="nc" id="L957">			eventServiceLog.setEntityVersion(rs.getInt(&quot;EntityVersion&quot;));</span>
+<span class="nc" id="L958">			eventServiceLog.setEventId(rs.getInt(&quot;eventID&quot;));</span>
+		}
+<span class="nc" id="L960">		return eventServiceLog;</span>
+	}
+	
+	public EventServiceLog getServiceFailedRegistrationESLDetails(Integer eventId, Integer accId,
+			ServiceTypeEnum serviceType, RegistrationServiceRequest registrationDetails, Integer entityType)
+			throws ComplianceException {
+<span class="nc" id="L966">		Connection conn = null;</span>
+<span class="nc" id="L967">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L968">		ResultSet rs = null;</span>
+<span class="nc" id="L969">		EventServiceLog eventServiceLog = new EventServiceLog();</span>
+<span class="nc" id="L970">		Integer contactId = (Integer) registrationDetails.getAdditionalAttribute(&quot;contactId&quot;);</span>
+		try {
+<span class="nc" id="L972">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc bnc" id="L973" title="All 4 branches missed.">			if (EntityEnum.CONTACT.getEntityTypeAsInteger().equals(entityType) &amp;&amp; null == contactId) {</span>
+<span class="nc" id="L974">				eventServiceLog=getEslForServiceFailureOfContact(eventId, accId, serviceType, registrationDetails, conn);</span>
+			} else {
+<span class="nc" id="L976">				eventServiceLog=getEslServiceFailureContactAccount(eventId, accId, serviceType, registrationDetails, entityType, conn);</span>
+			}
+<span class="nc" id="L978">		} catch (Exception e) {</span>
+<span class="nc" id="L979">			LOG.error(&quot;Error while fetching eventservicelog details :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L981">			closeResultset(rs);</span>
+<span class="nc" id="L982">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L983">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L985">		return eventServiceLog;</span>
+
+	}
+	/**
+	 * Gets the account details for service failed registration details.
+	 *
+	 * @param transId
+	 *            the trans id
+	 * @param string
+	 *            the string
+	 * @return the account details for service failed registration details
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public RegistrationServiceRequest getAccountDetailsForServiceFailedRegistrationDetails(Integer transId,
+			String string) throws ComplianceException {
+<span class="nc" id="L1001">		Connection conn = null;</span>
+<span class="nc" id="L1002">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1003">		ResultSet rs = null;</span>
+<span class="nc" id="L1004">		RegistrationServiceRequest registrationDetails = new RegistrationServiceRequest();</span>
+<span class="nc" id="L1005">		Account acc = new Account();</span>
+		try {
+<span class="nc" id="L1007">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1008">			String query = &quot;&quot;;</span>
+<span class="nc bnc" id="L1009" title="All 2 branches missed.">			if (string.equals(TransactionTypeEnum.ACCOUNT.getTransactionTypeAsString()))</span>
+<span class="nc" id="L1010">				query = DBQueryConstant.GET_ACCOUNT_DETAILS_FROM_ACCOUNTID.getQuery();</span>
+			else
+<span class="nc" id="L1012">				query = DBQueryConstant.GET_ACCOUNT_DETAILS_FROM_CONTACTID.getQuery();</span>
+
+<span class="nc" id="L1014">			preparedStatment = conn.prepareStatement(query);</span>
+<span class="nc" id="L1015">			preparedStatment.setInt(1, transId);</span>
+<span class="nc" id="L1016">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1017" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L1018">				acc.setId(rs.getInt(&quot;AccountId&quot;));</span>
+<span class="nc" id="L1019">				acc.setCustType(CustomerTypeEnum.getCustumerTypeAsString(rs.getInt(&quot;type&quot;)));</span>
+<span class="nc" id="L1020">				registrationDetails.setAccount(acc);</span>
+			}
+<span class="nc" id="L1022">		} catch (Exception e) {</span>
+<span class="nc" id="L1023">			LOG.error(&quot;Error while fetching Account details : {1}&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1025">			closeResultset(rs);</span>
+<span class="nc" id="L1026">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1027">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1029">		return registrationDetails;</span>
+
+	}
+	
+	/**
+	 * Gets the account contact details for status update.
+	 *
+	 * @param crmAccountId the crm account id
+	 * @return the account contact details for status update
+	 */
+	public RegistrationServiceRequest getAccountDetailsForStatusUpdate(String crmAccountId) throws ComplianceException{
+<span class="nc" id="L1040">		RegistrationServiceRequest registrationServiceRequest = new RegistrationServiceRequest();</span>
+<span class="nc" id="L1041">		Account acc = new Account();</span>
+<span class="nc" id="L1042">		Connection conn = null;</span>
+<span class="nc" id="L1043">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1044">		ResultSet rs = null;</span>
+		
+		try {
+<span class="nc" id="L1047">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1048">			String query = DBQueryConstant.GET_ACCOUNT_DETAILS_BY_ACC_SF_ID.getQuery();</span>
+<span class="nc" id="L1049">			preparedStatment = conn.prepareStatement(query);</span>
+<span class="nc" id="L1050">			preparedStatment.setString(1, crmAccountId);</span>
+<span class="nc" id="L1051">			rs = preparedStatment.executeQuery();</span>
+<span class="nc" id="L1052">			List&lt;Contact&gt; contacts = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1053">			int count=0;</span>
+<span class="nc bnc" id="L1054" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L1055" title="All 2 branches missed.">				if(count==0) {</span>
+<span class="nc" id="L1056">					acc.setId(rs.getInt(&quot;AccountId&quot;));</span>
+<span class="nc" id="L1057">					acc.setAccountName(rs.getString(&quot;AccountName&quot;));</span>
+<span class="nc" id="L1058">					acc.setAccSFID(rs.getString(&quot;AccountSFId&quot;));</span>
+<span class="nc" id="L1059">					acc.setCustType(rs.getString(&quot;CustType&quot;));</span>
+<span class="nc" id="L1060">					acc.setTradeAccountID(rs.getInt(&quot;TradeAccountId&quot;));</span>
+<span class="nc" id="L1061">					acc.setAccountStatus(ContactComplianceStatus.getComplianceAsString(rs.getInt(&quot;AccountComplianceStatus&quot;)));</span>
+<span class="nc" id="L1062">					acc.setVersion(rs.getInt(VERSION));</span>
+<span class="nc" id="L1063">					registrationServiceRequest.addAttribute(&quot;OrganizationId&quot;, rs.getInt(&quot;OrgID&quot;));</span>
+<span class="nc" id="L1064">					registrationServiceRequest.addAttribute(&quot;AccountRegisteredDate&quot;, rs.getTimestamp(&quot;ARegisteredDate&quot;));</span>
+<span class="nc" id="L1065">					registrationServiceRequest.addAttribute(&quot;AccountRegistrationInDate&quot;, rs.getTimestamp(&quot;ARegistrationInDate&quot;));</span>
+<span class="nc" id="L1066">					registrationServiceRequest.addAttribute(&quot;AccountExpiryDate&quot;, rs.getTimestamp(&quot;AComplianceExpiry&quot;));</span>
+				}
+<span class="nc" id="L1068">				Contact contact = new Contact();</span>
+<span class="nc" id="L1069">				contact = JsonConverterUtil.convertToObject(Contact.class, rs.getString(&quot;ContactAttributes&quot;));</span>
+<span class="nc" id="L1070">				contact.setId(rs.getInt(CONTACT_ID));</span>
+<span class="nc" id="L1071">				contact.setContactSFID(rs.getString(&quot;ContactSFID&quot;));</span>
+<span class="nc" id="L1072">				contact.setContactStatus(ContactComplianceStatus.getComplianceAsString(rs.getInt(CONTACT_COMPLIANCE_STATUS)));</span>
+<span class="nc" id="L1073">				contact.setPreviousKycStatus(ServiceStatus.getStatusAsString(rs.getInt(&quot;EIDSTATUS&quot;)));</span>
+<span class="nc" id="L1074">				contact.setPreviousSanctionStatus(ServiceStatus.getStatusAsString(rs.getInt(&quot;SanctionStatus&quot;)));</span>
+<span class="nc" id="L1075">				contact.setPreviousFraugsterStatus(ServiceStatus.getStatusAsString(rs.getInt(&quot;FraugsterStatus&quot;)));</span>
+<span class="nc" id="L1076">				contact.setPreviousBlacklistStatus(ServiceStatus.getStatusAsString(rs.getInt(&quot;BlacklistStatus&quot;)));</span>
+<span class="nc" id="L1077">				contact.setPreviousCountryGlobalCheckStatus(ServiceStatus.getStatusAsString(rs.getInt(&quot;CustomCheckStatus&quot;)));</span>
+<span class="nc" id="L1078">				contact.setPoiNeeded(rs.getBoolean(&quot;POI_NEEDED&quot;));</span>
+<span class="nc" id="L1079">				registrationServiceRequest.addAttribute(&quot;ContactRegisteredDate&quot;, rs.getTimestamp(&quot;CRegisteredDate&quot;));</span>
+<span class="nc" id="L1080">				registrationServiceRequest.addAttribute(&quot;ContactRegistrationInDate&quot;, rs.getTimestamp(&quot;CRegistrationInDate&quot;));</span>
+<span class="nc" id="L1081">				registrationServiceRequest.addAttribute(&quot;ContactExpiryDate&quot;, rs.getTimestamp(&quot;CComplianceExpiry&quot;));</span>
+<span class="nc" id="L1082">				contacts.add(contact);</span>
+<span class="nc" id="L1083">				count++;</span>
+<span class="nc" id="L1084">			}</span>
+<span class="nc" id="L1085">			acc.setContacts(contacts);</span>
+<span class="nc" id="L1086">			registrationServiceRequest.setAccount(acc);</span>
+<span class="nc" id="L1087">		} catch (Exception e) {</span>
+<span class="nc" id="L1088">			LOG.error(&quot;Error while fetching Account details in getAccountDetailsForStatusUpdate():&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1090">			closeResultset(rs);</span>
+<span class="nc" id="L1091">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1092">			closeConnection(conn);</span>
+		}		
+<span class="nc" id="L1094">		return registrationServiceRequest;</span>
+	}
+
+	public RegistrationServiceRequest getContatDetailsForDelete(DeleteContactRequest request) throws ComplianceException{
+<span class="nc" id="L1098">		RegistrationServiceRequest registrationServiceRequest = new RegistrationServiceRequest();</span>
+<span class="nc" id="L1099">		Account acc = new Account();</span>
+<span class="nc" id="L1100">		Connection conn = null;</span>
+<span class="nc" id="L1101">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1102">		ResultSet rs = null;</span>
+<span class="nc" id="L1103">		List&lt;Contact&gt; contacts = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1104">		Integer paymentInId = 0;</span>
+<span class="nc" id="L1105">		Integer paymentOutId = 0;</span>
+		try {
+<span class="nc" id="L1107">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1108">			String query = DBQueryConstant.GET_CONTACT_DETAILS_FOR_DELETE.getQuery();</span>
+<span class="nc" id="L1109">			preparedStatment = conn.prepareStatement(query);</span>
+<span class="nc" id="L1110">			preparedStatment.setString(1, request.getOrgCode());</span>
+<span class="nc" id="L1111">			preparedStatment.setString(2, request.getContactSfId());</span>
+<span class="nc" id="L1112">			preparedStatment.setInt(3, request.getTradeContactId());</span>
+<span class="nc" id="L1113">			preparedStatment.setString(4, request.getAccountSfId());</span>
+<span class="nc" id="L1114">			preparedStatment.setInt(5, request.getTradeAccountId());</span>
+<span class="nc" id="L1115">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1116" title="All 2 branches missed.">			if(rs.next()){</span>
+<span class="nc" id="L1117">				Contact contact = new Contact();</span>
+<span class="nc" id="L1118">				contact = JsonConverterUtil.convertToObject(Contact.class, rs.getString(&quot;ConAttrib&quot;));</span>
+<span class="nc" id="L1119">				contact.setId(rs.getInt(CONTACT_ID));</span>
+<span class="nc" id="L1120">				contact.setContactSFID(rs.getString(&quot;CRMContactID&quot;));</span>
+<span class="nc" id="L1121">				contact.setTradeContactID(rs.getInt(&quot;TradeContactID&quot;));</span>
+<span class="nc" id="L1122">				acc.setAccSFID(rs.getString(&quot;CrmAccountID&quot;));</span>
+<span class="nc" id="L1123">				acc.setTradeAccountID(rs.getInt(&quot;TradeAccountID&quot;));</span>
+<span class="nc" id="L1124">				acc.setId(rs.getInt(&quot;AccountID&quot;));</span>
+<span class="nc" id="L1125">				acc.setVersion(rs.getInt(VERSION));</span>
+<span class="nc" id="L1126">				acc.setCustType(CustomerTypeEnum.getCustumerTypeAsString(rs.getInt(&quot;custType&quot;)));</span>
+<span class="nc" id="L1127">				paymentInId = rs.getInt(&quot;PaymentInId&quot;);</span>
+<span class="nc" id="L1128">				paymentOutId = rs.getInt(&quot;PaymentOutId&quot;);</span>
+<span class="nc" id="L1129">				contacts.add(contact);</span>
+<span class="nc" id="L1130">				acc.setContacts(contacts);</span>
+<span class="nc" id="L1131">				request.setOrgId(rs.getInt(&quot;OrgID&quot;));</span>
+<span class="nc" id="L1132">				request.addAttribute(&quot;contactID&quot;, acc.getContacts().get(0).getId());</span>
+			}
+<span class="nc" id="L1134">			registrationServiceRequest.setAccount(acc);</span>
+<span class="nc bnc" id="L1135" title="All 4 branches missed.">			if(paymentInId == 0 &amp;&amp; paymentOutId == 0) {</span>
+<span class="nc" id="L1136">				registrationServiceRequest.addAttribute(&quot;PaymentInitiated&quot;, Boolean.FALSE);</span>
+			} else {
+<span class="nc" id="L1138">				registrationServiceRequest.addAttribute(&quot;PaymentInitiated&quot;, Boolean.TRUE);</span>
+			}
+			
+			
+<span class="nc" id="L1142">		} catch (Exception e) {</span>
+<span class="nc" id="L1143">			LOG.error(&quot;Error while fetching Account details in getContatDetailsForDelete():&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1145">			closeResultset(rs);</span>
+<span class="nc" id="L1146">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1147">			closeConnection(conn);</span>
+		}	
+<span class="nc" id="L1149">		return registrationServiceRequest;</span>
+	}
+	
+	/**
+	 * Save funds out delete request.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; saveContactDeleteRequest(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L1163">		Connection conn = null;</span>
+		try {
+<span class="nc" id="L1165">			DeleteContactRequest deleteContactRequest = (DeleteContactRequest) message.getPayload()</span>
+<span class="nc" id="L1166">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L1167">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L1168">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1169">			deleteContact(conn, deleteContactRequest, token.getUserID());</span>
+<span class="nc" id="L1170">		} catch (Exception e) {</span>
+<span class="nc" id="L1171">			LOG.error(&quot;&quot;, e);</span>
+<span class="nc" id="L1172">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L1174">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1176">		return message;</span>
+	}
+	
+	/**
+	 * Delete contact.
+	 *
+	 * @param conn the conn
+	 * @param cDeleteRequest the c delete request
+	 * @param userID the user ID
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void deleteContact(Connection conn, DeleteContactRequest cDeleteRequest, Integer userID)
+			throws ComplianceException {
+<span class="nc" id="L1189">		PreparedStatement preparedStatment = null;</span>
+		try {
+<span class="nc" id="L1191">			preparedStatment = conn.prepareStatement(DBQueryConstant.DELETE_CONTACT.getQuery());</span>
+<span class="nc" id="L1192">			preparedStatment.setInt(1, userID);</span>
+<span class="nc" id="L1193">			preparedStatment.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1194">			preparedStatment.setInt(3, (Integer)cDeleteRequest.getAdditionalAttribute(&quot;contactID&quot;));</span>
+<span class="nc" id="L1195">			boolean deleted = preparedStatment.execute();</span>
+<span class="nc" id="L1196">			cDeleteRequest.addAttribute(&quot;deletedSuccessfully&quot;, deleted);</span>
+<span class="nc" id="L1197">		} catch (Exception e) {</span>
+<span class="nc" id="L1198">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1200">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1202">	}</span>
+
+	public RegistrationServiceRequest getAccountDetailsForIntuitionRegUpdateStatus(Integer accountId, Integer contactId, String custType) throws ComplianceException{
+<span class="nc" id="L1205">		RegistrationServiceRequest registrationServiceRequest = new RegistrationServiceRequest();</span>
+<span class="nc" id="L1206">		Account acc = new Account();</span>
+<span class="nc" id="L1207">		Connection conn = null;</span>
+<span class="nc" id="L1208">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1209">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L1211">			conn = getConnection(Boolean.TRUE);</span>
+			String query;
+<span class="nc bnc" id="L1213" title="All 2 branches missed.">			if(custType.equalsIgnoreCase(&quot;PFX&quot;))</span>
+<span class="nc" id="L1214">				 query = DBQueryConstant.UPDATE_INTUITION_STATUS_PFX.getQuery();</span>
+			else
+<span class="nc" id="L1216">				 query = DBQueryConstant.UPDATE_INTUITION_STATUS_CFX.getQuery();</span>
+			
+<span class="nc" id="L1218">			preparedStatment = conn.prepareStatement(query);</span>
+			
+<span class="nc bnc" id="L1220" title="All 2 branches missed.">			if(custType.equalsIgnoreCase(&quot;PFX&quot;))</span>
+<span class="nc" id="L1221">				preparedStatment.setInt(1, contactId);</span>
+			else
+<span class="nc" id="L1223">				preparedStatment.setInt(1, accountId);</span>
+			
+<span class="nc" id="L1225">			rs = preparedStatment.executeQuery();</span>
+<span class="nc" id="L1226">			List&lt;Contact&gt; contacts = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1227">			int count=0;</span>
+<span class="nc bnc" id="L1228" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L1229" title="All 2 branches missed.">				if(count==0) {</span>
+<span class="nc" id="L1230">					acc.setId(rs.getInt(&quot;ID&quot;));</span>
+<span class="nc" id="L1231">					acc.setTradeAccountID(rs.getInt(&quot;TradeAccountId&quot;));</span>
+<span class="nc" id="L1232">					acc.setTradeAccountNumber(rs.getString(&quot;TradeAccountNumber&quot;));</span>
+<span class="nc" id="L1233">					acc.setAccSFID(rs.getString(&quot;CRMAccountID&quot;));</span>
+<span class="nc" id="L1234">					acc.setRegistrationDateTime(rs.getString(&quot;ComplianceDoneOn&quot;));   </span>
+<span class="nc" id="L1235">					acc.setAccountStatus(rs.getString(&quot;AccountStatus&quot;));</span>
+<span class="nc" id="L1236">					acc.setVersion(rs.getInt(VERSION));</span>
+<span class="nc" id="L1237">					registrationServiceRequest.addAttribute(ACCOUNT_TMFLAG, rs.getInt(ACCOUNT_TMFLAG));</span>
+<span class="nc" id="L1238">					registrationServiceRequest.addAttribute(&quot;AccountRegisteredDate&quot;, rs.getString(&quot;regDateTime&quot;));</span>
+<span class="nc" id="L1239">					registrationServiceRequest.addAttribute(&quot;IntuitionRiskLevel&quot;, rs.getString(&quot;IntuitionRiskLevel&quot;));</span>
+				}
+<span class="nc" id="L1241">				Contact contact = new Contact();</span>
+<span class="nc" id="L1242">				contact.setId(rs.getInt(CONTACT_ID));</span>
+<span class="nc" id="L1243">				contact.setContactSFID(rs.getString(&quot;CRMContactID&quot;)); </span>
+<span class="nc" id="L1244">				contact.setTradeContactID(rs.getInt(&quot;TradeContactID&quot;));</span>
+<span class="nc" id="L1245">				contact.setContactStatus(ContactComplianceStatus.getComplianceAsString(rs.getInt(&quot;ComplianceStatus&quot;)));</span>
+<span class="nc" id="L1246">				contacts.add(contact);</span>
+<span class="nc" id="L1247">				count++;</span>
+<span class="nc" id="L1248">			}</span>
+<span class="nc" id="L1249">			acc.setContacts(contacts);</span>
+<span class="nc" id="L1250">			registrationServiceRequest.setAccount(acc);</span>
+<span class="nc" id="L1251">		} catch (Exception e) {</span>
+<span class="nc" id="L1252">			LOG.error(&quot;Error while fetching Account details getAccountDetailsForIntuitionRegUpdateStatus():&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1254">			closeResultset(rs);</span>
+<span class="nc" id="L1255">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1256">			closeConnection(conn);</span>
+		}		
+<span class="nc" id="L1258">		return registrationServiceRequest;</span>
+	}
+	
+	/**
+	 * Update account TM flag.
+	 *
+	 * @param signUpMessage the sign up message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; updateAccountTMFlag(Message&lt;MessageContext&gt; signUpMessage) throws ComplianceException {
+<span class="nc" id="L1269">		PreparedStatement signUpStmt = null;</span>
+<span class="nc" id="L1270">		Connection connection = null;</span>
+<span class="nc" id="L1271">		String accTMFlag = &quot;&quot;;</span>
+
+		try {
+<span class="nc" id="L1274">			UserProfile token = (UserProfile) signUpMessage.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L1275">			RegistrationResponse signUpResponse = (RegistrationResponse) signUpMessage.getPayload()</span>
+<span class="nc" id="L1276">					.getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L1277">			OperationEnum registrationOperation = signUpMessage.getPayload().getGatewayMessageExchange().getOperation();</span>
+			
+<span class="nc bnc" id="L1279" title="All 2 branches missed.">			if (registrationOperation==OperationEnum.NEW_REGISTRATION &amp;&amp; </span>
+<span class="nc bnc" id="L1280" title="All 2 branches missed.">					signUpResponse.getAccount().getTransactionMonitoringStatus().equalsIgnoreCase(&quot;PASS&quot;)) {</span>
+<span class="nc" id="L1281">					accTMFlag = &quot;AccountTMFlag = 1,&quot;;</span>
+				}				
+
+<span class="nc" id="L1284">				connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1285">				signUpStmt = connection</span>
+<span class="nc" id="L1286">						.prepareStatement(DBQueryConstant.UPDATE_ACC_TM_FLAG.getQuery().replace(&quot;#&quot;, accTMFlag));</span>
+<span class="nc" id="L1287">				signUpStmt.setString(1, signUpResponse.getAccount().getIntuitionRiskLevel());</span>
+<span class="nc" id="L1288">				signUpStmt.setInt(2, token.getUserID());	</span>
+<span class="nc" id="L1289">				signUpStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1290">				signUpStmt.setInt(4, signUpResponse.getAccount().getId());</span>
+<span class="nc" id="L1291">				signUpStmt.executeUpdate();</span>
+			
+				
+<span class="nc" id="L1294">		} catch (Exception e) {</span>
+<span class="nc" id="L1295">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1297">			closePrepareStatement(signUpStmt);</span>
+<span class="nc" id="L1298">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L1300">		return signUpMessage;</span>
+	}
+	
+	public Integer getUserFromSSOUserID(String ssoUserID) throws ComplianceException {
+<span class="nc" id="L1304">		Connection conn = null;</span>
+<span class="nc" id="L1305">		PreparedStatement userStatment = null;</span>
+<span class="nc" id="L1306">		ResultSet resultSet = null;</span>
+<span class="nc" id="L1307">		Integer userID = 1;</span>
+		try {
+<span class="nc" id="L1309">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1310">			userStatment = conn.prepareStatement(DBQueryConstant.GET_USER_ID_BY_SSOUSERID.getQuery());</span>
+<span class="nc" id="L1311">			userStatment.setString(1, ssoUserID);</span>
+<span class="nc" id="L1312">			resultSet = userStatment.executeQuery();</span>
+<span class="nc bnc" id="L1313" title="All 2 branches missed.">			if (resultSet.next()) {</span>
+<span class="nc" id="L1314">				userID = resultSet.getInt(1);</span>
+			}
+<span class="nc" id="L1316">			return userID;</span>
+<span class="nc" id="L1317">		} catch (Exception e) {</span>
+<span class="nc" id="L1318">			LOG.error(Constants.ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1320">			closeResultset(resultSet);</span>
+<span class="nc" id="L1321">			closePrepareStatement(userStatment);</span>
+<span class="nc" id="L1322">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1324">		return userID;</span>
+	}
+	
+ }
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IpPort.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">internalrule-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.ipport</a> &gt; <span class="el_source">IpPort.java</span></div><h1>IpPort.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.ipport;
+
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.Invocation.Builder;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
+import org.jboss.resteasy.client.jaxrs.ResteasyClient;
+import org.jboss.resteasy.client.jaxrs.ResteasyWebTarget;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.IpContactResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.IpServiceResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.ip.IpDetailsRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ip.IpDetailsResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.ip.IpProviderProperty;
+import com.currenciesdirect.gtg.compliance.core.domain.ip.IpServiceRequest;
+import com.currenciesdirect.gtg.compliance.core.ip.IpProviderService;
+import com.currenciesdirect.gtg.compliance.exception.ip.IpErrors;
+import com.currenciesdirect.gtg.compliance.exception.ip.IpException;
+import com.currenciesdirect.gtg.compliance.util.Constants;
+import com.currenciesdirect.gtg.compliance.util.ExternalErrorCodeEnum;
+
+
+/**
+ * The Class IpPort.
+ *
+ * @author manish
+ */
+public class IpPort implements IpProviderService {
+	
+	/** The Constant LOG. */
+<span class="nc" id="L35">	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(IpPort.class);</span>
+	
+	/** The ip provider service. */
+<span class="nc" id="L38">	private static IpProviderService ipProviderService = null;</span>
+	
+	/** The resteasy client handler. */
+<span class="nc" id="L41">	private ResteasyClientHandler resteasyClientHandler = ResteasyClientHandler.getInstance();</span>
+	
+	/**
+	 * Instantiates a new ip port.
+	 */
+<span class="nc" id="L46">	private IpPort(){</span>
+		
+<span class="nc" id="L48">	}</span>
+	
+	/**
+	 * Gets the single instance of IpPort.
+	 *
+	 * @return single instance of IpPort
+	 */
+	public static IpProviderService getInstance(){
+<span class="nc bnc" id="L56" title="All 2 branches missed.">		if(ipProviderService==null){</span>
+<span class="nc" id="L57">			ipProviderService = new IpPort();</span>
+		}
+<span class="nc" id="L59">		return ipProviderService;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.ip.IpProviderService#checkIpPostCodeDistance(com.currenciesdirect.gtg.compliance.core.domain.ip.IpServiceRequest, com.currenciesdirect.gtg.compliance.core.domain.ip.IpProviderProperty)
+	 */
+	@Override
+	public IpContactResponse checkIpPostCodeDistance(IpServiceRequest ipRequest, IpProviderProperty ipProviderProperty)
+			throws IpException {
+<span class="nc" id="L68">		Response response = null;</span>
+<span class="nc" id="L69">		ResteasyClient client = null;</span>
+<span class="nc" id="L70">		IpServiceResponse ipServiceResponse = new IpServiceResponse();</span>
+<span class="nc" id="L71">		IpContactResponse contactResponse = new IpContactResponse();</span>
+		try {
+<span class="nc" id="L73">			client = resteasyClientHandler.getPostCodeRestEasyClient();</span>
+			
+<span class="nc" id="L75">			ResteasyWebTarget target1 = client.target(ipProviderProperty.getEndPointUrl());		</span>
+<span class="nc" id="L76">			Builder clientrequest = target1.request();		</span>
+			
+<span class="nc" id="L78">			response = clientrequest.post(Entity.entity(ipRequest, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L79">			ipServiceResponse = response.readEntity(IpServiceResponse.class);		</span>
+			
+<span class="nc" id="L81">			contactResponse = transformProviderResponse(ipServiceResponse, ipRequest);</span>
+<span class="nc" id="L82">		} catch(IpException e){</span>
+<span class="nc" id="L83">			throw e;</span>
+<span class="nc" id="L84">		}catch (Exception e) {</span>
+<span class="nc" id="L85">			throw new IpException(IpErrors.ERROR_WHILE_CALLING_IP_PROVIDER, e);</span>
+		} finally {
+<span class="nc bnc" id="L87" title="All 2 branches missed.">			if(response != null){</span>
+<span class="nc" id="L88">				response.close();</span>
+			}
+		}
+<span class="nc" id="L91">		return contactResponse;</span>
+	}
+	
+	/**
+	 * Transform provider response.
+	 *
+	 * @param ipServiceResponse the ip service response
+	 * @param ipServiceRequest the ip service request
+	 * @return the ip contact response
+	 * @throws IpException the ip exception
+	 */
+	private IpContactResponse transformProviderResponse(IpServiceResponse ipServiceResponse,
+			IpServiceRequest ipServiceRequest) throws IpException {
+<span class="nc" id="L104">		IpContactResponse contactResponse = new IpContactResponse();</span>
+		try {
+
+<span class="nc" id="L107">			contactResponse.setErrorCode(ipServiceResponse.getErrorCode());</span>
+<span class="nc" id="L108">			contactResponse.setErrorDescription(ipServiceResponse.getErrorDescription());</span>
+<span class="nc" id="L109">			contactResponse.setGeoDifference(ipServiceResponse.getDistance());</span>
+<span class="nc" id="L110">			contactResponse.setUnit(ipServiceResponse.getUnits());</span>
+<span class="nc" id="L111">			contactResponse.setRegCountry(ipServiceRequest.getCountry());</span>
+<span class="nc" id="L112">			contactResponse.setIpCountry(ipServiceResponse.getIpCountry());</span>
+<span class="nc" id="L113">			contactResponse.setIpRountingType(ipServiceResponse.getIpRountingType());</span>
+<span class="nc" id="L114">			contactResponse.setIpLatitude(ipServiceResponse.getIpLatitude());</span>
+<span class="nc" id="L115">			contactResponse.setIpLongitude(ipServiceResponse.getIpLongitude());</span>
+<span class="nc" id="L116">			contactResponse.setPostCodeLatitude(ipServiceResponse.getPostCodeLatitude());</span>
+<span class="nc" id="L117">			contactResponse.setPostCodeLongitude(ipServiceResponse.getPostCodeLongitude());</span>
+<span class="nc" id="L118">			contactResponse.setPostcode(ipServiceRequest.getPostalCode());</span>
+<span class="nc" id="L119">			contactResponse.setIpAddress(ipServiceRequest.getIpAddress());</span>
+<span class="nc" id="L120">			contactResponse.setAnonymizerStatus(ipServiceResponse.getAnonymizerStatus());</span>
+<span class="nc" id="L121">		} catch (Exception e) {</span>
+<span class="nc" id="L122">			throw new IpException(IpErrors.ERROR_WHILE_TRANSFORMING_IP_PROVIDER_RESPONSE);</span>
+<span class="nc" id="L123">		}</span>
+<span class="nc" id="L124">		return contactResponse;</span>
+	}
+
+	/**
+	 * Transform provider response.
+	 *
+	 * @param ipServiceResponse the ip service response
+	 * @param ipServiceRequest the ip service request
+	 * @return the ip contact response
+	 * @throws IpException the ip exception
+	 */
+	private IpContactResponse transformIpDetialsFromProviderResponse(IpDetailsResponse detailsResponse,
+			IpServiceRequest ipServiceRequest) throws IpException {
+<span class="nc" id="L137">		IpContactResponse contactResponse = new IpContactResponse();</span>
+		try {
+
+<span class="nc" id="L140">			contactResponse.setErrorCode(detailsResponse.getErrorCode());</span>
+<span class="nc" id="L141">			contactResponse.setErrorDescription(detailsResponse.getErrorDescription());</span>
+<span class="nc" id="L142">			contactResponse.setIpLatitude(detailsResponse.getLatitiude());</span>
+<span class="nc" id="L143">			contactResponse.setIpLongitude(detailsResponse.getLongitude());</span>
+<span class="nc" id="L144">			contactResponse.setPostcode(ipServiceRequest.getPostalCode());</span>
+<span class="nc" id="L145">			contactResponse.setIpAddress(ipServiceRequest.getIpAddress());</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">			if (detailsResponse.getErrorCode() != null &amp;&amp; ExternalErrorCodeEnum.IP_SERVICE_GENERIC_EXCEPTION.toString()</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">					.equals(detailsResponse.getErrorCode())) {</span>
+<span class="nc" id="L148">				contactResponse.setStatus(Constants.SERVICE_FAILURE);</span>
+			} else {
+<span class="nc" id="L150">				contactResponse.setStatus(Constants.NOT_REQUIRED);</span>
+			}
+<span class="nc" id="L152">			contactResponse.setAnonymizerStatus(detailsResponse.getAnonymizerStatus());</span>
+<span class="nc" id="L153">		} catch (Exception e) {</span>
+<span class="nc" id="L154">			contactResponse.setStatus(Constants.NOT_PERFORMED);</span>
+<span class="nc" id="L155">			LOG.error(&quot;Error in IpPort:checkIpPostCodeDistance()&quot;, e);</span>
+<span class="nc" id="L156">			throw new IpException(IpErrors.ERROR_WHILE_TRANSFORMING_IP_PROVIDER_RESPONSE);</span>
+<span class="nc" id="L157">		}</span>
+<span class="nc" id="L158">		return contactResponse;</span>
+	}
+	@Override
+	public IpContactResponse getIpDetails(IpServiceRequest ipRequest, IpProviderProperty ipProviderProperty)
+			throws IpException {
+<span class="nc" id="L163">		Response response = null;</span>
+<span class="nc" id="L164">		ResteasyClient client = null;</span>
+<span class="nc" id="L165">		IpDetailsRequest detailsRequest = new IpDetailsRequest();</span>
+<span class="nc" id="L166">		IpDetailsResponse detailsResponse = new IpDetailsResponse();</span>
+<span class="nc" id="L167">		IpContactResponse contactResponse = new IpContactResponse();</span>
+		try {
+<span class="nc" id="L169">			detailsRequest.setIpAddress(ipRequest.getIpAddress());</span>
+			
+<span class="nc" id="L171">			client = resteasyClientHandler.getIpRestEasyClient();</span>
+<span class="nc" id="L172">			ResteasyWebTarget target1 = client.target(ipProviderProperty.getEndPointUrl());</span>
+			
+<span class="nc" id="L174">			Builder clientrequest = target1.request();</span>
+<span class="nc" id="L175">			response = clientrequest.post(Entity.entity(detailsRequest, MediaType.APPLICATION_JSON));</span>
+			
+<span class="nc" id="L177">			detailsResponse = response.readEntity(IpDetailsResponse.class);		</span>
+			
+<span class="nc" id="L179">			contactResponse = transformIpDetialsFromProviderResponse(detailsResponse, ipRequest);</span>
+<span class="nc" id="L180">		} catch(IpException e){</span>
+<span class="nc" id="L181">			throw e;</span>
+<span class="nc" id="L182">		}catch (Exception e) {</span>
+<span class="nc" id="L183">			contactResponse.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L184">			throw new IpException(IpErrors.ERROR_WHILE_CALLING_IP_PROVIDER, e);</span>
+		} finally {
+<span class="nc bnc" id="L186" title="All 2 branches missed.">			if(response != null){</span>
+<span class="nc" id="L187">				response.close();</span>
+			}
+		}
+<span class="nc" id="L190">		return contactResponse;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

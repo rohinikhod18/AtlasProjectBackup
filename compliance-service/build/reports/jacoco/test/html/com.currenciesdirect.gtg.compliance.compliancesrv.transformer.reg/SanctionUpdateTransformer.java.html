@@ -1,0 +1,472 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SanctionUpdateTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg</a> &gt; <span class="el_source">SanctionUpdateTransformer.java</span></div><h1>SanctionUpdateTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogData;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityTemplateEnum;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ProfileActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateData;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.EntityDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class SanctionUpdateTransformer.
+ */
+<span class="nc" id="L44">public class SanctionUpdateTransformer implements ITransfomer {</span>
+
+	public static final String ENTITY_NAME = &quot;{ENTITY_NAME}&quot;;
+
+	public static final String VALUE = &quot;{VALUE}&quot;;
+
+	public static final String PRE_STATUS = &quot;{PRE_STATUS}&quot;;
+
+	public static final String FIELD = &quot;{FIELD}&quot;;
+
+<span class="nc" id="L54">	private static final Logger LOGGER = LoggerFactory.getLogger(SanctionUpdateTransformer.class);</span>
+	
+	private static final String OFACLIST = &quot;ofaclist&quot;;
+
+	private static final String WORLDCHECK = &quot;worldcheck&quot;;
+	
+	public static final String ENTITY_TYPE = &quot;{ENTITY_TYPE}&quot;;
+
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L64">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L65">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L66">		SanctionUpdateRequest sanctionUpdateReq = messageExchange.getRequest(SanctionUpdateRequest.class);</span>
+<span class="nc" id="L67">		EntityDetails entityDetails = (EntityDetails) messageExchange.getRequest().getAdditionalAttribute(Constants.FIELD_ENTITY_DETAILS);</span>
+		try {
+<span class="nc bnc" id="L69" title="All 2 branches missed.">			for (SanctionUpdateData data : sanctionUpdateReq.getSanctions()) {</span>
+<span class="nc" id="L70">				updateEventServiceLogFields(</span>
+<span class="nc" id="L71">						messageExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L72">								EntityEnum.valueOf(data.getEntityType()).name(), data.getEntityId()),</span>
+						data, token, entityDetails);
+<span class="nc" id="L74">			}</span>
+<span class="nc" id="L75">		} catch (Exception e) {</span>
+<span class="nc" id="L76">			LOGGER.error(&quot;Error&quot;, e);</span>
+<span class="nc" id="L77">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L78">		}</span>
+
+<span class="nc" id="L80">		return message;</span>
+	}
+
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L85">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L86">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L87">		SanctionUpdateRequest request = messageExchange.getRequest(SanctionUpdateRequest.class);</span>
+<span class="nc" id="L88">		SanctionUpdateResponse response = messageExchange.getResponse(SanctionUpdateResponse.class);</span>
+		
+<span class="nc" id="L90">		EntityDetails entityDetails = (EntityDetails) messageExchange.getRequest().getAdditionalAttribute(Constants.FIELD_ENTITY_DETAILS);</span>
+<span class="nc" id="L91">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L92">		List&lt;ActivityLogData&gt; activityData = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L94">		SanctionUpdateData data = request.getSanctions().get(0);</span>
+<span class="nc" id="L95">		EventServiceLog eventServiceLog = messageExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L96">				EntityEnum.valueOf(data.getEntityType()).name(), data.getEntityId());</span>
+		try {
+<span class="nc" id="L98">			ActivityLogData activity = new ActivityLogData();</span>
+			
+<span class="nc bnc" id="L100" title="All 2 branches missed.">			 	if((data.getEntityType()).equals(EntityEnum.ACCOUNT.name())){</span>
+<span class="nc" id="L101">				activity.setActivity(</span>
+<span class="nc" id="L102">						ActivityTemplateEnum.UPDATE_SANCTION.getTemplate()</span>
+<span class="nc" id="L103">						.replace(FIELD, data.getField())</span>
+<span class="nc" id="L104">						.replace(PRE_STATUS, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L105">						.replace(VALUE, data.getValue())</span>
+<span class="nc" id="L106">						.replace(ENTITY_TYPE, data.getEntityType())</span>
+<span class="nc" id="L107">						.replace(ENTITY_NAME, entityDetails.getAccountName()));</span>
+<span class="nc bnc" id="L108" title="All 4 branches missed.">			}else if ((data.getEntityType()).equals(EntityEnum.CONTACT.name()) || (data.getEntityType()).equals(EntityEnum.DEBTOR.name())){</span>
+<span class="nc" id="L109">				activity.setActivity(</span>
+<span class="nc" id="L110">						ActivityTemplateEnum.UPDATE_SANCTION.getTemplate()</span>
+<span class="nc" id="L111">						.replace(FIELD, data.getField())</span>
+<span class="nc" id="L112">						.replace(PRE_STATUS, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L113">						.replace(VALUE, data.getValue())</span>
+<span class="nc" id="L114">						.replace(ENTITY_TYPE, data.getEntityType())</span>
+<span class="nc" id="L115">						.replace(ENTITY_NAME, entityDetails.getContactName()));</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">			}else if ((data.getEntityType()).equals(EntityEnum.BANK.name())){</span>
+<span class="nc" id="L117">				activity.setActivity(</span>
+<span class="nc" id="L118">						ActivityTemplateEnum.UPDATE_SANCTION.getTemplate()</span>
+<span class="nc" id="L119">						.replace(FIELD, data.getField())</span>
+<span class="nc" id="L120">						.replace(PRE_STATUS, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L121">						.replace(VALUE, data.getValue())</span>
+<span class="nc" id="L122">						.replace(ENTITY_TYPE, data.getEntityType())</span>
+<span class="nc" id="L123">						.replace(ENTITY_NAME, entityDetails.getBankName()));  </span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">			}else if ((data.getEntityType()).equals(EntityEnum.BENEFICIARY.name())){</span>
+<span class="nc" id="L125">				activity.setActivity(</span>
+<span class="nc" id="L126">						ActivityTemplateEnum.UPDATE_SANCTION.getTemplate()</span>
+<span class="nc" id="L127">						.replace(FIELD, data.getField())</span>
+<span class="nc" id="L128">						.replace(PRE_STATUS, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L129">						.replace(VALUE, data.getValue())</span>
+<span class="nc" id="L130">						.replace(ENTITY_TYPE, data.getEntityType())</span>
+<span class="nc" id="L131">						.replace(ENTITY_NAME, entityDetails.getBeneficiaryName())); </span>
+			}
+<span class="nc" id="L133">			activity.setCreatedBy(token.getPreferredUserName());</span>
+<span class="nc" id="L134">			activity.setCreatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L135">			activityData.add(activity);</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">			if (&quot;profile&quot;.equalsIgnoreCase(request.getResourceType())) {</span>
+<span class="nc" id="L137">				activity.setActivityType(ActivityType.PROFILE_SANCTION_UPDATE.getModule() + &quot; &quot;</span>
+<span class="nc" id="L138">						+ ActivityType.PROFILE_SANCTION_UPDATE.getType());</span>
+<span class="nc" id="L139">				List&lt;ProfileActivityLogDto&gt; profileActivityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L140">				response.setStatus(eventServiceLog.getStatus());</span>
+<span class="nc" id="L141">				profileActivityLogDtos.add(getProfileActivityLog(activity, request, token, data.getEntityType()));</span>
+<span class="nc" id="L142">				response.addAttribute(&quot;profileActivities&quot;, profileActivityLogDtos);</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">			} else if (&quot;fundsout&quot;.equalsIgnoreCase(request.getResourceType())) {</span>
+<span class="nc" id="L144">				activity.setActivityType(ActivityType.PAYMENT_OUT_SANCTION_UPDATE.getModule() + &quot; &quot;</span>
+<span class="nc" id="L145">						+ ActivityType.PAYMENT_OUT_SANCTION_UPDATE.getType());</span>
+<span class="nc" id="L146">				List&lt;PaymentOutActivityLogDto&gt; paymentOutActivityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L147">				paymentOutActivityLogDtos.add(getPaymentOutActivityLog(activity, request, token));</span>
+<span class="nc" id="L148">				response.setStatus(eventServiceLog.getStatus());</span>
+<span class="nc" id="L149">				response.addAttribute(&quot;paymentOutActivities&quot;, paymentOutActivityLogDtos);</span>
+				/** update sanction status in paymentOut table  if operation is 
+				 *  SANCTION_UPDATE then update payment out table for sanction status*/
+<span class="nc" id="L152">				String status = determineSanctionStatus(messageExchange,response.getStatus());</span>
+<span class="nc" id="L153">				response.addAttribute(Constants.SANCTION_OVERALLSTATUS, status);</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">			} else if (&quot;fundsin&quot;.equalsIgnoreCase(request.getResourceType())) {</span>
+<span class="nc" id="L155">				activity.setActivityType(ActivityType.PAYMENT_IN_SANCTION_UPDATE.getModule() + &quot; &quot;</span>
+<span class="nc" id="L156">						+ ActivityType.PAYMENT_IN_SANCTION_UPDATE.getType());</span>
+<span class="nc" id="L157">				List&lt;PaymentInActivityLogDto&gt; paymentOutActivityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L158">				paymentOutActivityLogDtos.add(getPaymentInActivityLog(activity, request, token));</span>
+<span class="nc" id="L159">				response.setStatus(eventServiceLog.getStatus());</span>
+<span class="nc" id="L160">				response.addAttribute(&quot;paymentInActivities&quot;, paymentOutActivityLogDtos);</span>
+			}
+<span class="nc" id="L162">			activityLogs.setActivityLogData(activityData);</span>
+<span class="nc" id="L163">			response.setActivityLogs(activityLogs);</span>
+<span class="nc" id="L164">			response.setEventServiceLogId(data.getEventServiceLogId());</span>
+<span class="nc" id="L165">			response.setStatus(eventServiceLog.getStatus());</span>
+<span class="nc" id="L166">		} catch (Exception e) {</span>
+<span class="nc" id="L167">			LOGGER.error(&quot;Exception in SanctionUpdateTransformer transformResponse() &quot;, e);</span>
+<span class="nc" id="L168">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L169">		}</span>
+<span class="nc" id="L170">		return message;</span>
+	}
+
+	private void updateEventServiceLogFields(EventServiceLog eventServiceLog, SanctionUpdateData data,
+			UserProfile user,EntityDetails entityDetails) {
+<span class="nc" id="L175">		eventServiceLog.setUpdatedBy(user.getUserID());</span>
+<span class="nc" id="L176">		eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L177">		updateSummary(eventServiceLog, data,entityDetails);</span>
+<span class="nc" id="L178">	}</span>
+
+	private ProfileActivityLogDto getProfileActivityLog(ActivityLogData data, SanctionUpdateRequest request,
+			UserProfile user, String entityType) {
+<span class="nc" id="L182">		ProfileActivityLogDto activityLogDto = new ProfileActivityLogDto();</span>
+<span class="nc" id="L183">		SanctionUpdateData sanctionData = request.getSanctions().get(0);</span>
+		try {
+<span class="nc" id="L185">			activityLogDto.setAccountId(request.getAccountId());</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">			if ((EntityEnum.CONTACT.name()).equalsIgnoreCase(entityType)) {</span>
+<span class="nc" id="L187">				activityLogDto.setContactId(sanctionData.getEntityId());</span>
+			}
+<span class="nc" id="L189">			activityLogDto.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L190">			activityLogDto.setActivityBy(user.getPreferredUserName());</span>
+<span class="nc" id="L191">			activityLogDto.setCreatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L192">			activityLogDto.setUpdatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L193">			activityLogDto.setCreatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L194">			activityLogDto.setTimeStatmp(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L195">			activityLogDto.setUpdatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L196">			ActivityLogDetailDto activityLogDetailDto = new ActivityLogDetailDto();</span>
+<span class="nc" id="L197">			activityLogDto.setActivityLogDetailDto(activityLogDetailDto);</span>
+<span class="nc" id="L198">			activityLogDetailDto.setActivityType(ActivityType.PROFILE_SANCTION_UPDATE);</span>
+<span class="nc" id="L199">			activityLogDetailDto.setLog(data.getActivity());</span>
+<span class="nc" id="L200">			activityLogDetailDto.setCreatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L201">			activityLogDetailDto.setUpdatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L202">			activityLogDetailDto.setCreatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L203">			activityLogDetailDto.setUpdatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+		
+<span class="nc" id="L205">		} catch (Exception e) {</span>
+<span class="nc" id="L206">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L207">		}</span>
+<span class="nc" id="L208">		return activityLogDto;</span>
+	}
+
+	private PaymentOutActivityLogDto getPaymentOutActivityLog(ActivityLogData data, SanctionUpdateRequest request,
+			UserProfile user) {
+<span class="nc" id="L213">		PaymentOutActivityLogDto activityLogDto = new PaymentOutActivityLogDto();</span>
+		try {
+<span class="nc" id="L215">			activityLogDto.setAccountId(request.getAccountId());</span>
+<span class="nc" id="L216">			activityLogDto.setPaymentOutId(request.getResourceId());</span>
+<span class="nc" id="L217">			activityLogDto.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L218">			activityLogDto.setActivityBy(user.getPreferredUserName());</span>
+<span class="nc" id="L219">			activityLogDto.setCreatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L220">			activityLogDto.setUpdatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L221">			activityLogDto.setCreatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L222">			activityLogDto.setTimeStatmp(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L223">			activityLogDto.setUpdatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L224">			PaymentOutActivityLogDetailDto activityLogDetailDto = new PaymentOutActivityLogDetailDto();</span>
+<span class="nc" id="L225">			activityLogDto.setActivityLogDetailDto(activityLogDetailDto);</span>
+<span class="nc" id="L226">			activityLogDetailDto.setActivityType(ActivityType.PAYMENT_OUT_SANCTION_UPDATE);</span>
+<span class="nc" id="L227">			activityLogDetailDto.setLog(data.getActivity());</span>
+<span class="nc" id="L228">			activityLogDetailDto.setCreatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L229">			activityLogDetailDto.setUpdatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L230">			activityLogDetailDto.setCreatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L231">			activityLogDetailDto.setUpdatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L232">		} catch (Exception e) {</span>
+<span class="nc" id="L233">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L234">		}</span>
+<span class="nc" id="L235">		return activityLogDto;</span>
+	}
+
+	private PaymentInActivityLogDto getPaymentInActivityLog(ActivityLogData data, SanctionUpdateRequest request,
+			UserProfile user) {
+<span class="nc" id="L240">		PaymentInActivityLogDto activityLogDto = new PaymentInActivityLogDto();</span>
+		try {
+<span class="nc" id="L242">			activityLogDto.setAccountId(request.getAccountId());</span>
+<span class="nc" id="L243">			activityLogDto.setPaymentInId(request.getResourceId());</span>
+<span class="nc" id="L244">			activityLogDto.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L245">			activityLogDto.setActivityBy(user.getPreferredUserName());</span>
+<span class="nc" id="L246">			activityLogDto.setCreatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L247">			activityLogDto.setUpdatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L248">			activityLogDto.setCreatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L249">			activityLogDto.setTimeStatmp(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L250">			activityLogDto.setUpdatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L251">			PaymentInActivityLogDetailDto activityLogDetailDto = new PaymentInActivityLogDetailDto();</span>
+<span class="nc" id="L252">			activityLogDto.setActivityLogDetailDto(activityLogDetailDto);</span>
+<span class="nc" id="L253">			activityLogDetailDto.setActivityType(ActivityType.PAYMENT_IN_SANCTION_UPDATE);</span>
+<span class="nc" id="L254">			activityLogDetailDto.setLog(data.getActivity());</span>
+<span class="nc" id="L255">			activityLogDetailDto.setCreatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L256">			activityLogDetailDto.setUpdatedBy(user.getPreferredUserName());</span>
+<span class="nc" id="L257">			activityLogDetailDto.setCreatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L258">			activityLogDetailDto.setUpdatedOn(Timestamp.valueOf(data.getCreatedOn()));</span>
+<span class="nc" id="L259">		} catch (Exception e) {</span>
+<span class="nc" id="L260">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L261">		}</span>
+<span class="nc" id="L262">		return activityLogDto;</span>
+	}
+
+	void updateContactResponse(EventServiceLog eventServiceLog, SanctionUpdateData data) {
+<span class="nc" id="L266">		SanctionContactResponse response = JsonConverterUtil.convertToObject(SanctionContactResponse.class,</span>
+<span class="nc" id="L267">				eventServiceLog.getProviderResponse());</span>
+<span class="nc bnc" id="L268" title="All 2 branches missed.">		if (response == null) {</span>
+<span class="nc" id="L269">			response = new SanctionContactResponse();</span>
+		}
+
+<span class="nc bnc" id="L272" title="All 2 branches missed.">		if (OFACLIST.equalsIgnoreCase(data.getField())) {</span>
+<span class="nc" id="L273">			response.setOfacList(data.getValue());</span>
+<span class="nc" id="L274">			response.setStatus(getSanctonStatus(response.getOfacList(), response.getWorldCheck()));</span>
+		}
+
+<span class="nc bnc" id="L277" title="All 2 branches missed.">		if (WORLDCHECK.equalsIgnoreCase(data.getField())) {</span>
+<span class="nc" id="L278">			response.setWorldCheck(data.getValue());</span>
+<span class="nc" id="L279">			response.setStatus(getSanctonStatus(response.getOfacList(), response.getWorldCheck()));</span>
+		}
+<span class="nc" id="L281">		eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(response));</span>
+<span class="nc" id="L282">		eventServiceLog.setStatus(getSanctonStatus(response.getOfacList(), response.getWorldCheck()));</span>
+<span class="nc" id="L283">	}</span>
+
+	void updateSummary(EventServiceLog eventServiceLog, SanctionUpdateData data, EntityDetails entityDetails) {
+<span class="nc" id="L286">		SanctionSummary summary = JsonConverterUtil.convertToObject(SanctionSummary.class,</span>
+<span class="nc" id="L287">				eventServiceLog.getSummary());</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">		if (summary == null) {</span>
+<span class="nc" id="L289">			return;</span>
+		}		
+<span class="nc" id="L291">		updateWCAndOfacValues(summary);</span>
+		
+<span class="nc bnc" id="L293" title="All 2 branches missed.">		if (OFACLIST.equalsIgnoreCase(data.getField())) {</span>
+<span class="nc" id="L294">			entityDetails.setPrevStatus(summary.getOfacList());</span>
+<span class="nc" id="L295">			summary.setOfacList(data.getValue());</span>
+<span class="nc" id="L296">			summary.setStatus(getSanctonStatus(summary.getOfacList(), summary.getWorldCheck()));</span>
+		}
+
+<span class="nc bnc" id="L299" title="All 2 branches missed.">		if (WORLDCHECK.equalsIgnoreCase(data.getField())) {</span>
+<span class="nc" id="L300">			entityDetails.setPrevStatus(summary.getWorldCheck());</span>
+<span class="nc" id="L301">			summary.setWorldCheck(data.getValue());</span>
+<span class="nc" id="L302">			summary.setStatus(getSanctonStatus(summary.getOfacList(), summary.getWorldCheck()));</span>
+		}
+
+<span class="nc" id="L305">		eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L306">		eventServiceLog.setStatus(getSanctonStatus(summary.getOfacList(), summary.getWorldCheck()));</span>
+<span class="nc" id="L307">	}</span>
+
+	private void updateWCAndOfacValues(SanctionSummary summary) {
+<span class="nc bnc" id="L310" title="All 4 branches missed.">		if(summary.getWorldCheck().equalsIgnoreCase(Constants.NO_MATCH_FOUND) || summary.getWorldCheck().equalsIgnoreCase(Constants.NO_MATCH))</span>
+		{
+<span class="nc" id="L312">			summary.setWorldCheck(Constants.SAFE);</span>
+<span class="nc bnc" id="L313" title="All 4 branches missed.">		} else if(summary.getWorldCheck().equalsIgnoreCase(Constants.MATCH_FOUND) || summary.getWorldCheck().equalsIgnoreCase(Constants.HIGH_RISK)) {			</span>
+<span class="nc" id="L314">			summary.setWorldCheck(Constants.CONFIRMED_HIT);</span>
+		}
+		
+<span class="nc bnc" id="L317" title="All 4 branches missed.">		if(summary.getOfacList().equalsIgnoreCase(Constants.NO_MATCH_FOUND) || summary.getOfacList().equalsIgnoreCase(Constants.NO_MATCH))</span>
+		{
+<span class="nc" id="L319">			summary.setOfacList(Constants.SAFE);</span>
+<span class="nc bnc" id="L320" title="All 4 branches missed.">		} else if(summary.getOfacList().equalsIgnoreCase(Constants.MATCH_FOUND) || summary.getOfacList().equalsIgnoreCase(Constants.HIGH_RISK)){			</span>
+<span class="nc" id="L321">			summary.setOfacList(Constants.CONFIRMED_HIT);</span>
+		}
+<span class="nc" id="L323">	}</span>
+
+	void updateBeneficiaryResponse(EventServiceLog eventServiceLog, SanctionUpdateData data) {
+<span class="nc" id="L326">		SanctionBeneficiaryResponse response = JsonConverterUtil.convertToObject(SanctionBeneficiaryResponse.class,</span>
+<span class="nc" id="L327">				eventServiceLog.getProviderResponse());</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">		if (response == null) {</span>
+<span class="nc" id="L329">			return;</span>
+		}
+
+<span class="nc bnc" id="L332" title="All 2 branches missed.">		if (OFACLIST.equalsIgnoreCase(data.getField())) {</span>
+<span class="nc" id="L333">			response.setOfacList(data.getValue());</span>
+		}
+
+<span class="nc bnc" id="L336" title="All 2 branches missed.">		if (WORLDCHECK.equalsIgnoreCase(data.getField())) {</span>
+<span class="nc" id="L337">			response.setWorldCheck(data.getValue());</span>
+		}
+<span class="nc" id="L339">		eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(response));</span>
+<span class="nc" id="L340">		eventServiceLog.setStatus(getSanctonStatus(response.getOfacList(), response.getWorldCheck()));</span>
+<span class="nc" id="L341">	}</span>
+
+	void updateBankResponse(EventServiceLog eventServiceLog, SanctionUpdateData data) {
+<span class="nc" id="L344">		SanctionBankResponse response = JsonConverterUtil.convertToObject(SanctionBankResponse.class,</span>
+<span class="nc" id="L345">				eventServiceLog.getProviderResponse());</span>
+<span class="nc bnc" id="L346" title="All 2 branches missed.">		if (response == null) {</span>
+<span class="nc" id="L347">			return;</span>
+		}
+
+<span class="nc bnc" id="L350" title="All 2 branches missed.">		if (OFACLIST.equalsIgnoreCase(data.getField())) {</span>
+<span class="nc" id="L351">			response.setOfacList(data.getValue());</span>
+		}
+
+<span class="nc bnc" id="L354" title="All 2 branches missed.">		if (WORLDCHECK.equalsIgnoreCase(data.getField())) {</span>
+<span class="nc" id="L355">			response.setWorldCheck(data.getValue());</span>
+		}
+<span class="nc" id="L357">		eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(response));</span>
+<span class="nc" id="L358">		eventServiceLog.setStatus(getSanctonStatus(response.getOfacList(), response.getWorldCheck()));</span>
+<span class="nc" id="L359">	}</span>
+
+	private String getSanctonStatus(String ofacValue, String worldCheck) {
+<span class="nc bnc" id="L362" title="All 4 branches missed.">		if (Constants.SAFE.equalsIgnoreCase(ofacValue) &amp;&amp; Constants.SAFE.equalsIgnoreCase(worldCheck)) {</span>
+<span class="nc" id="L363">			return Constants.PASS;</span>
+		} else {
+<span class="nc" id="L365">			return Constants.FAIL;</span>
+		}
+
+	}
+	
+	/** 
+	 *  Business :
+	 *  To update sanction status column value in payment out table we have compared
+	 *  Contact ,Bank ,Beneficiary Status into one newStatus value and putting it into sanction status column to show it on UI
+	 * 
+	 * Implementation :
+	 * 1)This method sets the sanction status to update sanction status column in payment out table.
+	 * 2)Method used for Sanction Repeat Check and Update.
+	 * 3)NewStatus is based on Contact ,Bank ,Beneficiary Status.
+	 * 4)If Contact ,Bank ,Beneficiary Status is Pass then 'sanction status&quot; is 'PASS'
+	 * 5)Else 'sanction status&quot; is 'FAIL'
+	 * 
+	 * @param messageExchange
+	 * @param currentStatus
+	 * @param operation
+	 * @return
+	 */
+	private String determineSanctionStatus(MessageExchange messageExchange, String currentStatus) {
+		String newStatus;
+<span class="nc" id="L389">		EntityDetails entityDetails = (EntityDetails) messageExchange.getRequest().getAdditionalAttribute(Constants.FIELD_ENTITY_DETAILS);</span>
+<span class="nc" id="L390">		SanctionUpdateRequest sanctionUpdateRequest = messageExchange.getRequest(SanctionUpdateRequest.class);</span>
+
+<span class="nc bnc" id="L392" title="All 2 branches missed.">		if (entityDetails.getEntityType().equalsIgnoreCase(EntityEnum.CONTACT.name())) {</span>
+<span class="nc" id="L393">			newStatus = setSanctionStatus(currentStatus,</span>
+<span class="nc" id="L394">										sanctionUpdateRequest.getSanctions().get(0).getBankStatus(),</span>
+<span class="nc" id="L395">										sanctionUpdateRequest.getSanctions().get(0).getBeneficiaryStatus());</span>
+			
+<span class="nc bnc" id="L397" title="All 2 branches missed.">		} else if (entityDetails.getEntityType().equalsIgnoreCase(EntityEnum.BENEFICIARY.name())) {</span>
+<span class="nc" id="L398">			newStatus = setSanctionStatus(sanctionUpdateRequest.getSanctions().get(0).getContactStatus(), </span>
+<span class="nc" id="L399">										  sanctionUpdateRequest.getSanctions().get(0).getBankStatus(),</span>
+										  currentStatus);
+		} else {
+<span class="nc" id="L402">			newStatus = setSanctionStatus(sanctionUpdateRequest.getSanctions().get(0).getContactStatus(),</span>
+										  currentStatus,
+<span class="nc" id="L404">										  sanctionUpdateRequest.getSanctions().get(0).getBeneficiaryStatus());</span>
+		}
+<span class="nc" id="L406">		return newStatus;</span>
+	}
+	
+	/** Check Contact ,Bank ,Beneficiary Status : If 'PASS' for all three status then SET 'PASS' else SET 'FAIL' */
+	private String setSanctionStatus(String sanctionContactStatus, String sanctionBankStatus,
+			String sanctionBeneficiaryStatus) {
+<span class="nc" id="L412">		String newStatus = null;</span>
+		try {
+<span class="nc bnc" id="L414" title="All 2 branches missed.">			Boolean onlyContactSanctionPass = ServiceStatus.PASS.name().equalsIgnoreCase(sanctionContactStatus)</span>
+<span class="nc bnc" id="L415" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBankStatus) </span>
+<span class="nc bnc" id="L416" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBeneficiaryStatus);</span>
+<span class="nc bnc" id="L417" title="All 2 branches missed.">			Boolean onlyBankSanctionPass = ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionContactStatus) </span>
+<span class="nc bnc" id="L418" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.PASS.name().equalsIgnoreCase(sanctionBankStatus) </span>
+<span class="nc bnc" id="L419" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBeneficiaryStatus);</span>
+<span class="nc bnc" id="L420" title="All 2 branches missed.">			Boolean onlyBeneSanctionPass = ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionContactStatus) </span>
+<span class="nc bnc" id="L421" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBankStatus)</span>
+<span class="nc bnc" id="L422" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.PASS.name().equalsIgnoreCase(sanctionBeneficiaryStatus);</span>
+<span class="nc bnc" id="L423" title="All 2 branches missed.">			Boolean allSanctionPass = ServiceStatus.PASS.name().equalsIgnoreCase(sanctionContactStatus)</span>
+<span class="nc bnc" id="L424" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.PASS.name().equalsIgnoreCase(sanctionBankStatus)</span>
+<span class="nc bnc" id="L425" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.PASS.name().equalsIgnoreCase(sanctionBeneficiaryStatus);</span>
+			
+<span class="nc" id="L427">			newStatus = setNewSanctionStatus(sanctionContactStatus, sanctionBankStatus, sanctionBeneficiaryStatus,</span>
+					onlyContactSanctionPass, onlyBankSanctionPass, onlyBeneSanctionPass, allSanctionPass);
+<span class="nc" id="L429">		} catch (Exception e) {</span>
+<span class="nc" id="L430">			LOGGER.error(&quot;Error while setting sanction status for repeat check :: setSanctionStatus() :: &quot;, e);</span>
+
+<span class="nc" id="L432">		}</span>
+
+<span class="nc" id="L434">		return newStatus;</span>
+	}
+
+	/**
+	 * Sets the new sanction status.
+	 *
+	 * @param sanctionContactStatus the sanction contact status
+	 * @param sanctionBankStatus the sanction bank status
+	 * @param sanctionBeneficiaryStatus the sanction beneficiary status
+	 * @param onlyContactSanctionPass the only contact sanction pass
+	 * @param onlyBankSanctionPass the only bank sanction pass
+	 * @param onlyBeneSanctionPass the only bene sanction pass
+	 * @param allSanctionPass the all sanction pass
+	 * @return the string
+	 */
+	private String setNewSanctionStatus(String sanctionContactStatus, String sanctionBankStatus,
+			String sanctionBeneficiaryStatus, Boolean onlyContactSanctionPass, Boolean onlyBankSanctionPass,
+			Boolean onlyBeneSanctionPass, Boolean allSanctionPass) {
+		String newStatus;
+<span class="nc bnc" id="L453" title="All 2 branches missed.">		if (Boolean.TRUE.equals(allSanctionPass) </span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">				|| (Boolean.TRUE.equals(onlyContactSanctionPass) </span>
+<span class="nc bnc" id="L455" title="All 2 branches missed.">						|| Boolean.TRUE.equals(onlyBankSanctionPass) </span>
+<span class="nc bnc" id="L456" title="All 2 branches missed.">						|| Boolean.TRUE.equals(onlyBeneSanctionPass))) {</span>
+			
+<span class="nc" id="L458">			newStatus = ServiceStatus.PASS.name();</span>
+
+<span class="nc bnc" id="L460" title="All 2 branches missed.">		} else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionContactStatus)</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBankStatus)</span>
+<span class="nc bnc" id="L462" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBeneficiaryStatus)) {</span>
+			
+<span class="nc" id="L464">			newStatus = ServiceStatus.NOT_REQUIRED.name();</span>
+			
+		}else {
+<span class="nc" id="L467">			newStatus = ServiceStatus.FAIL.name();</span>
+		}
+<span class="nc" id="L469">		return newStatus;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

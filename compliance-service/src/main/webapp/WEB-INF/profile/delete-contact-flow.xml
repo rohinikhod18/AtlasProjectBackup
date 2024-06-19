@@ -1,0 +1,127 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+	
+	<context:component-scan base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<int:channel id="PROFILE.DELETE_CONTACT.in.channel" />
+	<int:channel id="PROFILE.DELETE_CONTACT.DATA_ENRICHMENT" />
+	<int:channel id="CONTACT.DELETE.DELETE_REQUEST" />
+	<int:channel id="CONTACT.DELETE.ACTIVITY.LOG" />
+	<int:channel id="DELETE_CONTACT.RESPONSE" />
+
+	<int:chain
+		id="contact.del.initChain"
+		input-channel="PROFILE.DELETE_CONTACT.in.channel">
+		<int:header-enricher id="contact.del.HeaderEnricher">
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+		</int:header-enricher>
+		<int:service-activator
+			id="contact.del.Validator"
+			ref="deleteContactMessageValidator"
+			method="process" />
+		<int:router
+			id="contact.del.postValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="DELETE_CONTACT.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="PROFILE.DELETE_CONTACT.DATA_ENRICHMENT" />
+		</int:router>
+	</int:chain>
+
+
+	<int:chain
+		id="contact.del.dataEnrichChain"
+		input-channel="PROFILE.DELETE_CONTACT.DATA_ENRICHMENT">
+		<int:service-activator
+			id="contact.del.dataEnrich"
+			ref="delete.contact.dataEnricher"
+			method="process" />
+		<int:service-activator
+			id="contact.del.DataValidation"
+			ref="contact.DataValidator"
+			method="process" />	
+		<int:router
+			id="contact.del.postDataValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="CONTACT.DELETE.DELETE_REQUEST">
+			<int:mapping
+				value="FAIL"
+				channel="DELETE_CONTACT.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="CONTACT.DELETE.DELETE_REQUEST" />
+		</int:router>
+	</int:chain>
+
+	<int:chain
+		id="contact.del.dbChain"
+		input-channel="CONTACT.DELETE.DELETE_REQUEST"
+		output-channel="CONTACT.DELETE.ACTIVITY.LOG">
+		<int:service-activator
+			id="contact.del.deleteRequest"
+			ref="newRegistrationDBServiceImpl"
+			method="saveContactDeleteRequest" />
+		<int:service-activator
+			id="contact.del.createEvent"
+			ref="eventDBServiceImpl"
+			method="createEvent" />
+		<int:service-activator
+			id="deleteContact.response"
+			ref="delete.contact.ruleService"
+			method="process"/>
+			<int:filter  discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain
+		id="contact.del.ActivityLogChain"
+		input-channel="CONTACT.DELETE.ACTIVITY.LOG"
+		output-channel="DELETE_CONTACT.RESPONSE">
+		<int:service-activator
+			id="deleteContact.createactivitylog"
+			ref="createActivityLogs"
+			method="addContactDeleteLogs"/>
+		<int:service-activator
+			id="deleteContact.activitylog"
+			ref="activityDBServiceImpl"
+			method="createSTPDeleteContactActivity"/>
+		<int:filter  discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain id="deleteContact.response" input-channel="DELETE_CONTACT.RESPONSE"
+		output-channel="nullChannel">
+		<int:service-activator ref="messageReplyHandler" />
+	</int:chain>
+	
+	<bean id="deleteContactMessageValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.delete.contact.MessageValidator"/>
+	<bean id="messageReplyHandler" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.reg.ReplyHandler" />
+	<bean id="delete.contact.dataEnricher" class="com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.delete.contact.DataEnricher"/>
+	<bean id="contact.DataValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.delete.contact.DataValidator"/>
+	<bean id="delete.contact.ruleService" class="com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.delete.contact.DeleteContactRuleService"/>
+	<!-- <bean id="delete.newRegistrationDBService" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl"/> -->
+	<!-- <bean id="createActivityLogs" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.CreateActivityLogs"/> -->
+	
+	
+</beans>

@@ -1,0 +1,1448 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PaymentInDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">PaymentInDBServiceImpl.java</span></div><h1>PaymentInDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.IDomain;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.Contact;
+import com.currenciesdirect.gtg.compliance.core.IPaymentInDBService;
+import com.currenciesdirect.gtg.compliance.core.ITransform;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogDataWrapper;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.core.domain.BroadcastEventToDB;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.EventDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.Page;
+import com.currenciesdirect.gtg.compliance.core.domain.PaginationDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentInViewMoreRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.Sort;
+import com.currenciesdirect.gtg.compliance.core.domain.SourceEnum;
+import com.currenciesdirect.gtg.compliance.core.domain.Status;
+import com.currenciesdirect.gtg.compliance.core.domain.StatusData;
+import com.currenciesdirect.gtg.compliance.core.domain.StatusReason;
+import com.currenciesdirect.gtg.compliance.core.domain.StatusReasonData;
+import com.currenciesdirect.gtg.compliance.core.domain.TransactionValuesEnum;
+import com.currenciesdirect.gtg.compliance.core.domain.ViewMoreResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInQueueData;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInRecheckFailureDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInUpdateDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.ProfileActivityLogDto;
+import com.currenciesdirect.gtg.compliance.core.domain.savedsearch.SavedSearch;
+import com.currenciesdirect.gtg.compliance.dbport.cfx.RegistrationCfxDBQueryConstant;
+import com.currenciesdirect.gtg.compliance.dbport.enums.BroadCastEntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.BroadCastStatusEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.EntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.PaymentComplianceStatus;
+import com.currenciesdirect.gtg.compliance.dbport.enums.PaymentMethodEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.ServiceStatusEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.WatchListCategoryEnum;
+import com.currenciesdirect.gtg.compliance.dbport.report.PayInReportQueueDBColumns;
+import com.currenciesdirect.gtg.compliance.dbport.report.PaymentInReportQueryConstant;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+import com.currenciesdirect.gtg.compliance.util.StringUtils;
+
+/**
+ * The Class PaymentInDBServiceImpl.
+ */
+@Component(&quot;payInDBServiceImpl&quot;)
+<span class="fc" id="L75">public class PaymentInDBServiceImpl extends AbstractDBServicePaymentIn implements IPaymentInDBService {</span>
+
+	@Autowired
+	@Qualifier(&quot;paymentInDetailsTransformer&quot;)
+	private ITransform&lt;PaymentInDetailsDto, PaymentInDBDto&gt; itransform;
+
+	@Autowired
+	@Qualifier(&quot;paymentInActivityLogTransformer&quot;)
+	private ITransform&lt;ActivityLogs, PaymentInUpdateDBDto&gt; paymentInActivityLogTransformer;
+	
+	/** The Constant WHERE. */
+	private static final String WHERE = &quot;WHERE&quot;;
+
+	private PaymentInQueueDto getPaymentInData(Connection connection, int offSet, int rowsToFetch, String query,
+			String countQuery) throws CompliancePortalException {
+<span class="fc" id="L90">		PaymentInQueueDto paymentInQueueDto = new PaymentInQueueDto();</span>
+<span class="fc" id="L91">		List&lt;PaymentInQueueData&gt; paymentInQueueDataList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L92">		PreparedStatement statement = null;</span>
+<span class="fc" id="L93">		PreparedStatement countStatement = null;</span>
+<span class="fc" id="L94">		ResultSet rs = null;</span>
+<span class="fc" id="L95">		ResultSet countRs = null;</span>
+<span class="fc" id="L96">		Integer totalRecords = 0;</span>
+		try {
+<span class="fc" id="L98">			statement = connection.prepareStatement(query);</span>
+<span class="fc" id="L99">			statement.setInt(1, offSet);</span>
+<span class="fc" id="L100">			statement.setInt(2, rowsToFetch);</span>
+<span class="fc" id="L101">			rs = statement.executeQuery();</span>
+<span class="fc bfc" id="L102" title="All 2 branches covered.">			while (rs.next()) {</span>
+<span class="fc" id="L103">				setPaymentInDataQueueList(paymentInQueueDataList, rs);</span>
+			}
+<span class="fc" id="L105">			countStatement = connection.prepareStatement(countQuery);</span>
+<span class="fc" id="L106">			countRs = countStatement.executeQuery();</span>
+<span class="pc bpc" id="L107" title="1 of 2 branches missed.">			if (countRs.next()) {</span>
+<span class="fc" id="L108">				totalRecords = countRs.getInt(RegQueDBColumns.TOTALROWS.getName());</span>
+			}
+<span class="fc" id="L110">			List&lt;String&gt; owner = null;</span>
+<span class="fc" id="L111">			owner = getLockedUserName(connection);</span>
+<span class="fc" id="L112">			paymentInQueueDto.setOwner(owner);</span>
+<span class="fc" id="L113">			paymentInQueueDto.setPaymentInQueue(paymentInQueueDataList);</span>
+<span class="fc" id="L114">			paymentInQueueDto.setTotalRecords(totalRecords);</span>
+<span class="nc" id="L115">		} catch (Exception e) {</span>
+<span class="nc" id="L116">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L118">			closeResultset(rs);</span>
+<span class="fc" id="L119">			closePrepareStatement(statement);</span>
+<span class="fc" id="L120">			closeResultset(countRs);</span>
+<span class="fc" id="L121">			closePrepareStatement(countStatement);</span>
+		}
+<span class="fc" id="L123">		return paymentInQueueDto;</span>
+	}
+
+	private void setPaymentInDataQueueList(List&lt;PaymentInQueueData&gt; paymentInQueueDataList, ResultSet rs)
+			throws SQLException {
+<span class="fc" id="L128">		PaymentInQueueData paymentInQueueData = new PaymentInQueueData();</span>
+<span class="fc" id="L129">		paymentInQueueData.setTransactionId(rs.getString(PayInQueDBColumns.TRANSACTIONID.getName()));</span>
+<span class="fc" id="L130">		paymentInQueueData.setClientId(rs.getString(PayInQueDBColumns.TRADEACCOUNTNUM.getName()));</span>
+<span class="fc" id="L131">		paymentInQueueData.setAccountId(rs.getInt(PayInQueDBColumns.ACCOUNTID.getName()));</span>
+<span class="fc" id="L132">		paymentInQueueData.setContactId(rs.getInt(PayInQueDBColumns.CONTACTID.getName()));</span>
+
+<span class="pc bpc" id="L134" title="1 of 2 branches missed.">		if (null != rs.getTimestamp(PayInQueDBColumns.DATE.getName())) {</span>
+<span class="fc" id="L135">			paymentInQueueData.setDate(</span>
+<span class="fc" id="L136">					DateTimeFormatter.dateTimeFormatter(rs.getTimestamp(PayInReportQueueDBColumns.DATE.getName())));</span>
+		}
+
+<span class="fc" id="L139">		paymentInQueueData.setContactName(rs.getString(PayInQueDBColumns.CLIENTNAME.getName()));</span>
+<span class="fc" id="L140">		paymentInQueueData</span>
+<span class="fc" id="L141">				.setType(CustomerTypeEnum.getUiStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.TYPE.getName())));</span>
+<span class="fc" id="L142">		paymentInQueueData.setSellCurrency(rs.getString(PayInQueDBColumns.SELLCURRENCY.getName()));</span>
+		/** Code changed to show amount upto 2 decimal places on queue */
+<span class="fc" id="L144">		String amount = rs.getString(PayInQueDBColumns.AMOUNT.getName());</span>
+<span class="pc bpc" id="L145" title="2 of 4 branches missed.">		if (amount != null &amp;&amp; amount.contains(&quot;.&quot;)) {</span>
+<span class="fc" id="L146">			amount = amount.substring(0, amount.indexOf('.') + 3);</span>
+<span class="fc" id="L147">			paymentInQueueData.setAmount(StringUtils.getNumberFormat(amount));</span>
+		} else {
+<span class="nc" id="L149">			paymentInQueueData.setAmount(StringUtils.getNumberFormat(amount));</span>
+		}
+<span class="fc" id="L151">		paymentInQueueData.setMethod(rs.getString(PayInQueDBColumns.METHOD.getName()));</span>
+<span class="fc" id="L152">		paymentInQueueData.setCountry(rs.getString(PayInQueDBColumns.COUNTRY.getName()));</span>
+<span class="fc" id="L153">		String countryFullName = rs.getString(PayInQueDBColumns.COUNTRY_DISPLAY_NAME.getName());</span>
+<span class="pc bpc" id="L154" title="1 of 2 branches missed.">		if (null != countryFullName) {</span>
+<span class="nc" id="L155">			paymentInQueueData.setCountryFullName(countryFullName);</span>
+		} else {
+<span class="fc" id="L157">			paymentInQueueData.setCountryFullName(Constants.DASH_UI);</span>
+		}
+<span class="fc" id="L159">		paymentInQueueData.setOverallStatus(rs.getString(PayInQueDBColumns.OVERALLSTATUS.getName()));</span>
+<span class="fc" id="L160">		paymentInQueueData.setWatchlist(</span>
+<span class="fc" id="L161">				ServiceStatusEnum.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.WATCHLISTSTATUS.getName())));</span>
+<span class="fc" id="L162">		paymentInQueueData.setFraugster(</span>
+<span class="fc" id="L163">				ServiceStatusEnum.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.FRAUGSTERSTATUS.getName())));</span>
+<span class="fc" id="L164">		paymentInQueueData.setSanction(</span>
+<span class="fc" id="L165">				ServiceStatusEnum.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.SANCTIONSTATUS.getName())));</span>
+<span class="fc" id="L166">		paymentInQueueData.setBlacklist(</span>
+<span class="fc" id="L167">				ServiceStatusEnum.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.BLACKLISTSTATUS.getName())));</span>
+<span class="fc" id="L168">		paymentInQueueData.setCustomCheck(ServiceStatusEnum</span>
+<span class="fc" id="L169">				.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.CUSTOMCHECKSTATUS.getName())));</span>
+<span class="fc" id="L170">		paymentInQueueData.setIntuitionStatus(ServiceStatusEnum</span>
+<span class="fc" id="L171">				.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.INTUITIONSTATUS.getName()))); // AT-4607</span>
+
+		// hidden values on UI
+<span class="fc" id="L174">		Integer payInId = rs.getInt(PayInQueDBColumns.PAYMENTINID.getName());</span>
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">		if (payInId != null) {</span>
+<span class="fc" id="L176">			paymentInQueueData.setPaymentInId(payInId.toString());</span>
+		}
+<span class="fc" id="L178">		paymentInQueueData.setOrganization(rs.getString(PayInQueDBColumns.ORGANIZATION.getName()));</span>
+<span class="fc" id="L179">		paymentInQueueData.setLegalEntity(rs.getString(PayInQueDBColumns.LEGALENTITY.getName()));</span>
+<span class="fc" id="L180">		paymentInQueueData.setRiskStatus(ServiceStatusEnum</span>
+<span class="fc" id="L181">				.getStatusFromDatabaseStatus(rs.getInt(PayInQueDBColumns.RISKSTATUS.getName())));</span>
+<span class="fc" id="L182">		String lockedBy = rs.getString(PayInQueDBColumns.LOCKED_BY.getName());</span>
+<span class="pc bpc" id="L183" title="5 of 6 branches missed.">		if (lockedBy != null &amp;&amp; !lockedBy.isEmpty() &amp;&amp; !lockedBy.equalsIgnoreCase(Constants.DUMMY_USER)) {</span>
+<span class="nc" id="L184">			paymentInQueueData.setUserResourceLockId(rs.getInt(PayInQueDBColumns.USER_RESOURCE_LOCK_ID.getName()));</span>
+<span class="nc" id="L185">			paymentInQueueData.setLocked(Boolean.TRUE);</span>
+<span class="nc" id="L186">			paymentInQueueData.setLockedBy(lockedBy);</span>
+		}
+<span class="fc" id="L188">		paymentInQueueDataList.add(paymentInQueueData);</span>
+<span class="fc" id="L189">	}</span>
+
+	@Override
+	public PaymentInQueueDto getPaymentInQueueWithCriteria(PaymentInSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+<span class="fc" id="L194">		int offset = SearchCriteriaUtil.getPageOffsetRows(searchCriteria);</span>
+<span class="fc" id="L195">		int minRowNum = SearchCriteriaUtil.getMinRowNumber(searchCriteria);</span>
+<span class="fc" id="L196">		int rowsToFetch = SearchCriteriaUtil.getPageSize();</span>
+<span class="fc" id="L197">		String paymentInQueue = &quot;PaymentInQueue&quot;;</span>
+		PaymentInQueueDto paymentInQueueDto;
+<span class="fc" id="L199">		Connection connection = null;</span>
+<span class="fc" id="L200">		PaymentInQueueContactFilterQueryBuilder contactFilter = new PaymentInQueueContactFilterQueryBuilder(</span>
+<span class="fc" id="L201">				searchCriteria.getFilter(), PaymentInQueryConstant.PAYMENTIN_QUEUE_CONTACT_ATTRIBUTE_FILTER.getQuery(),</span>
+				true);
+
+<span class="fc" id="L204">		String contactFilterQuery = getPayInContactFilterQuery(contactFilter, searchCriteria);</span>
+
+<span class="fc" id="L206">		String accountFilterQuery = getPayInAccountFilterQuery(searchCriteria);</span>
+<span class="fc" id="L207">		String payInAttributeFilterQuery = getPayInAttributeFilterQuery(searchCriteria);</span>
+<span class="fc" id="L208">		FilterQueryBuilder paymentInFilter = getPayInQueueFilterQuery(searchCriteria);</span>
+
+<span class="fc" id="L210">		String joinContact = getContactFilterJoin(contactFilterQuery);</span>
+<span class="fc" id="L211">		String joinAccount = getAccountFilterJoin(accountFilterQuery);</span>
+<span class="fc" id="L212">		String joinAttribute = getAttributeFilterJoin(payInAttributeFilterQuery);</span>
+<span class="fc" id="L213">		String joinOrg = getOrganizationJoin(searchCriteria);</span>
+<span class="fc" id="L214">		String joinLegalEntity = getLegalEntityJoin(searchCriteria);</span>
+<span class="fc" id="L215">		String joinUser = getUserJoin(searchCriteria);</span>
+<span class="fc" id="L216">		String joinCountry = getCountryJoin(searchCriteria);</span>
+		//line added for RG Filter (At-1646)
+<span class="fc" id="L218">		String joinRG=getRGJoin(searchCriteria);</span>
+<span class="fc" id="L219">		String paymentInFilterQuery = paymentInFilter.getQuery();</span>
+
+<span class="pc bpc" id="L221" title="3 of 4 branches missed.">		if (contactFilter.isFilterAppliedForAccountAndContact() &amp;&amp; joinAccount.length() &gt; 1) {</span>
+<span class="nc" id="L222">			paymentInFilterQuery = getAccountContactJoin(paymentInFilterQuery);</span>
+		} else {
+<span class="fc" id="L224">			joinContact = joinContact.replace(&quot;LEFT&quot;, &quot;&quot;);</span>
+<span class="fc" id="L225">			joinAccount = joinAccount.replace(&quot;LEFT&quot;, &quot;&quot;);</span>
+		}
+
+<span class="fc" id="L228">		payInAttributeFilterQuery = payInAttributeFilterQuery.replace(&quot;{COUNTRY_JOIN}&quot;, joinCountry);</span>
+<span class="fc" id="L229">		paymentInFilterQuery = paymentInFilterQuery.replace(&quot;{CONTACT_FILTER_JOIN}&quot;, joinContact)</span>
+<span class="fc" id="L230">				.replace(&quot;{ACCOUNT_FILTER_JOIN}&quot;, joinAccount).replace(&quot;{ATTRIBUTE_FILTER_JOIN}&quot;, joinAttribute)</span>
+<span class="fc" id="L231">				.replace(&quot;{ORG_TABLE_JOIN}&quot;, joinOrg).replace(&quot;{LEGAL_ENTITY_TABLE_JOIN}&quot;,joinLegalEntity)</span>
+<span class="fc" id="L232">				.replace(&quot;{RG_FILTER_JOIN}&quot;,joinRG).replace(&quot;{USER_JOIN}&quot;, joinUser);</span>
+
+<span class="fc" id="L234">		String paymentInReportQuery = PaymentInQueryConstant.GET_PAYMENTIN_QUEUE.getQuery()</span>
+<span class="fc" id="L235">				.replace(&quot;{PAYMENTIN_REPORT_CONTACT_FILTER}&quot;, contactFilterQuery)</span>
+<span class="fc" id="L236">				.replace(&quot;{PAYMENTIN_REPORT_ACCOUNT_FILTER}&quot;, accountFilterQuery)</span>
+<span class="fc" id="L237">				.replace(&quot;{PAYMENTIN_ATTRIBUTE_FILTER}&quot;, payInAttributeFilterQuery)</span>
+<span class="fc" id="L238">				.replace(&quot;{PAYMENTIN_REPORT_FILTER}&quot;, paymentInFilterQuery);</span>
+
+<span class="fc" id="L240">		paymentInReportQuery = executeSort(searchCriteria.getFilter().getSort(), paymentInReportQuery);</span>
+
+<span class="fc" id="L242">		String countQuery = PaymentInQueryConstant.PAYMENTIN_QUEUE_COUNT.getQuery()</span>
+<span class="fc" id="L243">				.replace(&quot;{PAYMENTIN_REPORT_CONTACT_FILTER}&quot;, contactFilterQuery)</span>
+<span class="fc" id="L244">				.replace(&quot;{PAYMENTIN_REPORT_ACCOUNT_FILTER}&quot;, accountFilterQuery)</span>
+<span class="fc" id="L245">				.replace(&quot;{PAYMENTIN_ATTRIBUTE_FILTER} &quot;, payInAttributeFilterQuery)</span>
+<span class="fc" id="L246">				.replace(&quot;{PAYMENTIN_REPORT_FILTER} &quot;, paymentInFilterQuery);</span>
+
+		try {
+<span class="fc" id="L249">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L250">			paymentInQueueDto = getPaymentInData(connection, offset, rowsToFetch, paymentInReportQuery, countQuery);</span>
+<span class="fc" id="L251">			Integer totalRecords = paymentInQueueDto.getTotalRecords();</span>
+<span class="fc" id="L252">			Integer pageSize = SearchCriteriaUtil.getPageSize();</span>
+<span class="pc bpc" id="L253" title="1 of 2 branches missed.">			if (totalRecords != null) {</span>
+<span class="fc" id="L254">				getPageAndOtherDetails(searchCriteria, minRowNum, paymentInQueueDto, connection, totalRecords,</span>
+						pageSize);
+			}
+<span class="fc" id="L257">			SavedSearch savedSearch = null;</span>
+<span class="fc" id="L258">			savedSearch = getSaveSearches(searchCriteria.getFilter().getUserProfile().getId(),paymentInQueue,connection);</span>
+<span class="fc" id="L259">			paymentInQueueDto.setSavedSearch(savedSearch);</span>
+			
+<span class="nc" id="L261">		} catch (Exception e) {</span>
+<span class="nc" id="L262">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L264">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L266">		return paymentInQueueDto;</span>
+	}
+
+	private String getWatchListCategoryFilter(PaymentInSearchCriteria searchCriteria) {
+<span class="fc" id="L270">		String result = null;</span>
+<span class="fc" id="L271">		boolean hasAllPermission = false;</span>
+<span class="pc bpc" id="L272" title="1 of 2 branches missed.">		if (searchCriteria.getFilter().getUserProfile().getPermissions().getCanManageWatchListCategory1()) {</span>
+<span class="fc" id="L273">			result = WatchListCategoryEnum.CATEGORY_1.getCategoryDbStatus().toString();</span>
+		}
+<span class="pc bpc" id="L275" title="1 of 2 branches missed.">		if (searchCriteria.getFilter().getUserProfile().getPermissions().getCanManageWatchListCategory2()) {</span>
+<span class="pc bpc" id="L276" title="1 of 2 branches missed.">			if (null != result)</span>
+<span class="fc" id="L277">				hasAllPermission = true;</span>
+			else
+<span class="nc" id="L279">				result = WatchListCategoryEnum.CATEGORY_2.getCategoryDbStatus().toString();</span>
+
+		}
+<span class="pc bpc" id="L282" title="1 of 2 branches missed.">		if (hasAllPermission)</span>
+<span class="fc" id="L283">			result = null;</span>
+		else {
+<span class="nc bnc" id="L285" title="All 2 branches missed.">			if (null != result)</span>
+<span class="nc" id="L286">				result = PaymentInQueryConstant.WATCHLIST_CATEGORY_FILTER.getQuery().replace(&quot;?&quot;, result);</span>
+		}
+
+<span class="fc" id="L289">		return result;</span>
+	}
+
+	private String executeSort(Sort sortDate, String query) {
+<span class="fc" id="L293">		String clmnName = &quot;TransactionDate&quot;;</span>
+<span class="fc" id="L294">		boolean isAscending = false;</span>
+<span class="pc bpc" id="L295" title="3 of 4 branches missed.">		if (sortDate != null &amp;&amp; sortDate.getIsAscend() != null) {</span>
+<span class="nc" id="L296">			isAscending = sortDate.getIsAscend();</span>
+		}
+
+<span class="pc bpc" id="L299" title="5 of 6 branches missed.">		if (sortDate != null &amp;&amp; sortDate.getFieldName() != null &amp;&amp; !sortDate.getFieldName().isEmpty()) {</span>
+<span class="nc" id="L300">			clmnName = sortDate.getFieldName();</span>
+		}
+
+<span class="fc" id="L303">		String queryColumnName = &quot;payin.TransactionDate&quot;;</span>
+<span class="pc bpc" id="L304" title="1 of 2 branches missed.">		if (&quot;TransactionDate&quot;.equalsIgnoreCase(clmnName)) {</span>
+<span class="fc" id="L305">			queryColumnName = &quot;payin.TransactionDate&quot;;</span>
+<span class="nc bnc" id="L306" title="All 2 branches missed.">		} else if (&quot;tradeaccountnumber&quot;.equalsIgnoreCase(clmnName)) {</span>
+<span class="nc" id="L307">			queryColumnName = &quot;acc.tradeaccountnumber&quot;;</span>
+<span class="nc bnc" id="L308" title="All 2 branches missed.">		} else if (&quot;type&quot;.equalsIgnoreCase(clmnName)) {</span>
+<span class="nc" id="L309">			queryColumnName = &quot;acc.type&quot;;</span>
+		}
+
+<span class="fc" id="L312">		return addSort(queryColumnName, isAscending, query);</span>
+
+	}
+
+	private void getPageAndOtherDetails(PaymentInSearchCriteria searchCriteria, int minRowNum,
+			PaymentInQueueDto paymentInQueueDto, Connection connection, Integer totalRecords, Integer pageSize)
+			throws CompliancePortalException {
+		Integer totalPages;
+<span class="fc" id="L320">		totalPages = totalRecords / pageSize;</span>
+<span class="pc bpc" id="L321" title="1 of 2 branches missed.">		if (totalRecords % pageSize != 0) {</span>
+<span class="fc" id="L322">			totalPages += 1;</span>
+		}
+<span class="fc" id="L324">		Page page = new Page();</span>
+<span class="fc" id="L325">		page.setMinRecord(minRowNum);</span>
+<span class="fc" id="L326">		page.setMaxRecord(minRowNum + paymentInQueueDto.getPaymentInQueue().size() - 1);</span>
+<span class="fc" id="L327">		page.setTotalPages(totalPages);</span>
+<span class="fc" id="L328">		page.setTotalRecords(totalRecords);</span>
+<span class="pc bpc" id="L329" title="1 of 2 branches missed.">		if (page.getTotalRecords() == 0) {</span>
+<span class="nc" id="L330">			page.setMinRecord(0);</span>
+		}
+		// added by neelesh pant
+<span class="fc" id="L333">		page.setCurrentPage(SearchCriteriaUtil.getCurrentPage(searchCriteria));</span>
+<span class="fc" id="L334">		paymentInQueueDto.setPage(page);</span>
+		List&lt;String&gt; organization;
+<span class="fc" id="L336">		organization = getOrganization(connection);</span>
+<span class="fc" id="L337">		paymentInQueueDto.setOrganization(organization);</span>
+		List&lt;String&gt; currency;
+<span class="fc" id="L339">		currency = getCurrency(connection);</span>
+<span class="fc" id="L340">		paymentInQueueDto.setCurrency(currency);</span>
+		List&lt;String&gt; countryofFund;
+<span class="fc" id="L342">		countryofFund = getAllCountries(connection);</span>
+<span class="fc" id="L343">		paymentInQueueDto.setCountry(countryofFund);</span>
+<span class="fc" id="L344">		paymentInQueueDto.setSource(SourceEnum.getSourceValues());</span>
+<span class="fc" id="L345">		paymentInQueueDto.setTransValue(TransactionValuesEnum.getTransactionValues());</span>
+<span class="fc" id="L346">		paymentInQueueDto.setPaymentMethod(PaymentMethodEnum.getPaymentMethodValues());</span>
+<span class="fc" id="L347">		List&lt;String&gt; legalEntity = getLegalEntity(connection);</span>
+<span class="fc" id="L348">		paymentInQueueDto.setLegalEntity(legalEntity);</span>
+<span class="fc" id="L349">		searchCriteria.setPage(page);</span>
+<span class="fc" id="L350">		paymentInQueueDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteria));</span>
+<span class="fc" id="L351">	}</span>
+
+	@Override
+	public ActivityLogs getActivityLogs(ActivityLogRequest actvityRequest) throws CompliancePortalException {
+<span class="nc" id="L355">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L356">		List&lt;ActivityLogDataWrapper&gt; activityLogDataList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L357">		activityLogs.setActivityLogData(activityLogDataList);</span>
+<span class="nc" id="L358">		PreparedStatement prepareStmt = null;</span>
+<span class="nc" id="L359">		Connection connection = null;</span>
+<span class="nc" id="L360">		ResultSet resultSet = null;</span>
+		try {
+<span class="nc" id="L362">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L363">			prepareStmt = connection</span>
+<span class="nc" id="L364">					.prepareStatement(PaymentInQueryConstant.GET_PAYMENTIN_ACTIVITY_LOGS_BY_ROWS.getQuery());</span>
+<span class="nc" id="L365">			prepareStmt.setInt(1, actvityRequest.getEntityId());</span>
+<span class="nc" id="L366">			prepareStmt.setInt(2, actvityRequest.getMinRecord() - 1);</span>
+<span class="nc" id="L367">			prepareStmt.setInt(3, actvityRequest.getRowToFetch());</span>
+<span class="nc" id="L368">			resultSet = prepareStmt.executeQuery();</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L370">				ActivityLogDataWrapper activityLogData = new ActivityLogDataWrapper();</span>
+<span class="nc" id="L371">				activityLogData.setActivity(resultSet.getString(&quot;Activity&quot;));</span>
+<span class="nc" id="L372">				activityLogData</span>
+<span class="nc" id="L373">						.setActivityType(ActivityType.getActivityLogDisplay(resultSet.getString(&quot;ActivityType&quot;)));</span>
+<span class="nc" id="L374">				activityLogData.setCreatedBy(resultSet.getString(&quot;User&quot;));</span>
+<span class="nc" id="L375">				Timestamp createdOn = resultSet.getTimestamp(&quot;CreatedOn&quot;);</span>
+<span class="nc bnc" id="L376" title="All 2 branches missed.">				activityLogData.setCreatedOn(createdOn != null ? DateTimeFormatter.dateTimeFormatter(createdOn) : null);</span>
+<span class="nc" id="L377">				activityLogData.setComment(resultSet.getString(&quot;Comment&quot;));</span>
+<span class="nc" id="L378">				activityLogDataList.add(activityLogData);</span>
+<span class="nc" id="L379">			}</span>
+
+<span class="nc" id="L381">		} catch (Exception e) {</span>
+<span class="nc" id="L382">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+
+<span class="nc" id="L385">			closeResultset(resultSet);</span>
+<span class="nc" id="L386">			closePrepareStatement(prepareStmt);</span>
+<span class="nc" id="L387">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L389">		return activityLogs;</span>
+	}
+
+	@Override
+	public PaymentInDetailsDto getPaymentInDetails(Integer paymentInId, String custType,
+			PaymentInSearchCriteria searchCriteria) throws CompliancePortalException {
+<span class="nc" id="L395">		Connection connection = null;</span>
+<span class="nc" id="L396">		PreparedStatement statement = null;</span>
+<span class="nc" id="L397">		ResultSet rs = null;</span>
+<span class="nc" id="L398">		PaymentInDBDto paymentInDBDto = new PaymentInDBDto();</span>
+<span class="nc" id="L399">		Integer accountId = null;</span>
+
+		try {
+<span class="nc" id="L402">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L403">			statement = connection.prepareStatement(PaymentInQueryConstant.GET_PAYMENT_IN_DETAILS.getQuery());</span>
+<span class="nc" id="L404">			statement.setInt(1, paymentInId);</span>
+<span class="nc" id="L405">			rs = statement.executeQuery();</span>
+<span class="nc" id="L406">			paymentInDBDto.setEventDBDtos(new HashMap&lt;String, List&lt;EventDBDto&gt;&gt;());</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L408">				paymentInDBDto.setAccAttrib(rs.getString(&quot;AccountAttrib&quot;));</span>
+<span class="nc" id="L409">				paymentInDBDto.setAccountId(rs.getInt(&quot;Accountid&quot;));</span>
+<span class="nc" id="L410">				paymentInDBDto.setAccComplianceStatus(rs.getString(&quot;AccComplianceStatus&quot;));</span>
+<span class="nc" id="L411">				paymentInDBDto.setConComplianceStatus(rs.getString(&quot;ContactComplianceStatus&quot;));</span>
+<span class="nc" id="L412">				paymentInDBDto.setContactAttib(rs.getString(&quot;ContactAttrib&quot;));</span>
+<span class="nc" id="L413">				paymentInDBDto.setContactId(rs.getInt(&quot;Contactid&quot;));</span>
+<span class="nc" id="L414">				paymentInDBDto.setContactName(rs.getString(&quot;ContactName&quot;));</span>
+<span class="nc" id="L415">				paymentInDBDto.setContractNumber(rs.getString(&quot;TradeContractNumber&quot;));</span>
+<span class="nc" id="L416">				paymentInDBDto.setCountry(rs.getString(&quot;Country&quot;));</span>
+<span class="nc" id="L417">				paymentInDBDto.setCountryOfFundFullName(rs.getString(&quot;CountryOfFundFullName&quot;));</span>
+<span class="nc" id="L418">				paymentInDBDto.setCrmAccountId(rs.getString(&quot;Crmaccountid&quot;));</span>
+<span class="nc" id="L419">				paymentInDBDto.setCrmContactId(rs.getString(&quot;Crmcontactid&quot;));</span>
+<span class="nc" id="L420">				paymentInDBDto.setDateOfPayment(rs.getTimestamp(&quot;DateOfPayment&quot;).toString());</span>
+<span class="nc" id="L421">				paymentInDBDto.setOrgCode(rs.getString(&quot;Organisation&quot;));</span>
+<span class="nc" id="L422">				paymentInDBDto.setPaymentInId(rs.getInt(&quot;Id&quot;));</span>
+<span class="nc" id="L423">				paymentInDBDto.setPaymentMethod(rs.getString(&quot;vPaymentMethod&quot;));</span>
+<span class="nc" id="L424">				paymentInDBDto.setSellCurrency(rs.getString(&quot;SellCurrency&quot;));</span>
+<span class="nc" id="L425">				paymentInDBDto.setRegComp(rs.getTimestamp(&quot;RegComplete&quot;));</span>
+<span class="nc" id="L426">				paymentInDBDto.setRegIn(rs.getTimestamp(&quot;RegIn&quot;));</span>
+<span class="nc" id="L427">				paymentInDBDto.setTradeAccountNum(rs.getString(&quot;Tradeaccountnumber&quot;));</span>
+<span class="nc" id="L428">				paymentInDBDto.setTradeContactId(rs.getString(&quot;TradeContactId&quot;));</span>
+<span class="nc" id="L429">				paymentInDBDto.setTradePaymentId(rs.getString(&quot;Tradepaymentid&quot;));</span>
+<span class="nc" id="L430">				paymentInDBDto.setUserResourceId(rs.getInt(&quot;UserResourceLockId&quot;));</span>
+<span class="nc" id="L431">				paymentInDBDto.setPaymentInStatus(rs.getString(&quot;PaymentInStaus&quot;));</span>
+<span class="nc" id="L432">				paymentInDBDto.setDebitorName(rs.getString(&quot;vDebitorName&quot;));</span>
+<span class="nc" id="L433">				paymentInDBDto.setPaymentInAttributes(rs.getString(&quot;PaymentInAttributes&quot;));</span>
+<span class="nc" id="L434">				paymentInDBDto.setAmount(rs.getString(&quot;Amount&quot;));</span>
+<span class="nc" id="L435">				paymentInDBDto.setIsOnQueue(rs.getBoolean(&quot;isOnQueue&quot;));</span>
+<span class="nc" id="L436">				paymentInDBDto.setIsDeleted(String.valueOf(rs.getBoolean(&quot;Deleted&quot;)));</span>
+<span class="nc" id="L437">				paymentInDBDto.setPoiExists(rs.getString(&quot;poiExists&quot;)); //AT-3450</span>
+<span class="nc" id="L438">				paymentInDBDto.setInitialStatus(rs.getString(&quot;InitialStatus&quot;));//AT-3471</span>
+<span class="nc" id="L439">	            paymentInDBDto.setIntuitionRiskLevel(rs.getString(&quot;IntuitionRiskLevel&quot;)); // AT-4187</span>
+<span class="nc" id="L440">	            paymentInDBDto.setAccountTMFlag(rs.getInt(&quot;AccountTMFlag&quot;));</span>
+<span class="nc" id="L441">	            paymentInDBDto.setAccountVersion(rs.getInt(&quot;AccountVersion&quot;));</span>
+				
+<span class="nc" id="L443">				paymentInDBDto</span>
+<span class="nc" id="L444">						.setUpdatedOn(DateTimeFormatter.dateTimeFormatter(rs.getTimestamp(&quot;UpdatedOn&quot;)));</span>
+<span class="nc" id="L445">				String lockedBy = rs.getString(&quot;LockedBy&quot;);</span>
+<span class="nc bnc" id="L446" title="All 4 branches missed.">				if (null != lockedBy &amp;&amp; !lockedBy.equalsIgnoreCase(Constants.DUMMY_USER)) {</span>
+<span class="nc" id="L447">					paymentInDBDto.setLockedBy(lockedBy);</span>
+				}
+<span class="nc" id="L449">				String serviceType = rs.getString(&quot;ServiceType&quot;);</span>
+<span class="nc" id="L450">				String entityType = EntityTypeEnum.getUiStatusFromDatabaseStatus(rs.getInt(&quot;EntityType&quot;));</span>
+<span class="nc" id="L451">				entityType = setEntityType(entityType);</span>
+<span class="nc" id="L452">				List&lt;EventDBDto&gt; eventListByEntityTpeService = paymentInDBDto.getEventDBDtos()</span>
+<span class="nc" id="L453">						.get(serviceType + entityType);</span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">				if (eventListByEntityTpeService == null) {</span>
+<span class="nc" id="L455">					paymentInDBDto.getEventDBDtos().put(serviceType + entityType, new ArrayList&lt;EventDBDto&gt;());</span>
+				}
+<span class="nc" id="L457">				paymentInDBDto.setThirdPartyPayment(rs.getBoolean(&quot;IsThirdParty&quot;));</span>
+<span class="nc" id="L458">				paymentInDBDto.setLegalEntity(rs.getString(&quot;LegalEntity&quot;));</span>
+<span class="nc" id="L459">				EventDBDto eventDBDto = new EventDBDto();</span>
+
+<span class="nc" id="L461">				eventDBDto.setEitityType(entityType);</span>
+<span class="nc" id="L462">				eventDBDto.setEntityId(rs.getString(&quot;EntityId&quot;));</span>
+<span class="nc" id="L463">				eventDBDto.setId(rs.getInt(&quot;EventServiceLogId&quot;));</span>
+<span class="nc" id="L464">				eventDBDto.setServiceType(rs.getString(&quot;ServiceType&quot;));</span>
+<span class="nc" id="L465">				eventDBDto.setStatus(ServiceStatusEnum.getStatusFromDatabaseStatus(rs.getInt(&quot;EventServiceStatus&quot;)));</span>
+<span class="nc" id="L466">				eventDBDto.setIntuitionCurrentAction(rs.getString(&quot;intuitionCurrentAction&quot;));</span>
+				
+<span class="nc" id="L468">				eventDBDto.setSummary(rs.getString(&quot;Summary&quot;));</span>
+<span class="nc" id="L469">				eventDBDto.setUpdatedBy(rs.getString(&quot;EventServiceUpdatedBy&quot;));</span>
+<span class="nc" id="L470">				eventDBDto.setUpdatedOn(rs.getTimestamp(&quot;EventServiceUpdatedOn&quot;));</span>
+<span class="nc" id="L471">				paymentInDBDto.getEventDBDtos().get(serviceType + entityType).add(eventDBDto);</span>
+<span class="nc" id="L472">			}</span>
+<span class="nc" id="L473">			accountId = paymentInDBDto.getAccountId();</span>
+<span class="nc" id="L474">			paymentInDBDto.setWatchList(getAccountWatchlistWithSelected(paymentInDBDto.getAccountId(), paymentInDBDto.getContactId(),</span>
+<span class="nc" id="L475">					custType, connection,searchCriteria.getFilter().getUserProfile()));</span>
+<span class="nc" id="L476">			paymentInDBDto.setDocumentList(getUploadDocumentList(connection));</span>
+<span class="nc" id="L477">			paymentInDBDto.setStatus(getPaymentInStatus(paymentInDBDto.getPaymentInId(), connection));</span>
+<span class="nc" id="L478">			paymentInDBDto.setStatusReason(getPaymentInStatusReasons(paymentInDBDto.getPaymentInId(), connection));</span>
+<span class="nc" id="L479">			paymentInDBDto</span>
+<span class="nc" id="L480">					.setFurtherpaymentDetails(getFurtherPaymentDetailsList(paymentInDBDto.getAccountId(), connection));</span>
+
+<span class="nc" id="L482">			paymentInDBDto.setActivityLogs(getActivityLogs(paymentInDBDto.getPaymentInId(), connection));</span>
+            
+<span class="nc bnc" id="L484" title="All 2 branches missed.">            if (Constants.CUST_TYPE_CFX.equalsIgnoreCase(custType)) {</span>
+
+<span class="nc" id="L486">				paymentInDBDto</span>
+<span class="nc bnc" id="L487" title="All 2 branches missed.">						.setPrimaryContactName(getPrimaryContactName(paymentInDBDto.getAccountId(), connection) == null</span>
+<span class="nc" id="L488">								? &quot;&quot; : getPrimaryContactName(paymentInDBDto.getAccountId(), connection));</span>
+			}
+
+<span class="nc bnc" id="L491" title="All 2 branches missed.">			if (null != accountId) {</span>
+<span class="nc" id="L492">				paymentInDBDto.setAlertComplianceLog(getAlertComplianceLog(accountId));</span>
+			}
+
+			// added for AT-898 for Sprint 1
+<span class="nc" id="L496">			paymentInDBDto</span>
+<span class="nc" id="L497">					.setNoOfContactsForAccount(getNoOfContactsForAccount(paymentInDBDto.getAccountId(), connection));</span>
+<span class="nc" id="L498">		} catch (Exception e) {</span>
+<span class="nc" id="L499">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L501">			closeResultset(rs);</span>
+<span class="nc" id="L502">			closePrepareStatement(statement);</span>
+<span class="nc" id="L503">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L506">		return itransform.transform(paymentInDBDto);</span>
+	}
+
+	private String setEntityType(String entityType) {
+<span class="nc bnc" id="L510" title="All 2 branches missed.">		if (entityType != null) {</span>
+<span class="nc" id="L511">			return entityType.toUpperCase();</span>
+		}
+<span class="nc" id="L513">		return entityType;</span>
+	}
+
+	// added for AT-898 for Sprint 1
+	private Integer getNoOfContactsForAccount(Integer accountId, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L519">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L520">		ResultSet resultSet = null;</span>
+<span class="nc" id="L521">		Integer noOfContacts = 0;</span>
+		try {
+<span class="nc" id="L523">			preparedStatement = connection</span>
+<span class="nc" id="L524">					.prepareStatement(PaymentInQueryConstant.GET_NO_OF_CONTACTS_FOR_ACCOUNT.getQuery());</span>
+<span class="nc" id="L525">			preparedStatement.setInt(1, accountId);</span>
+<span class="nc" id="L526">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L527" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L528">				noOfContacts = resultSet.getInt(1);</span>
+			}
+
+<span class="nc" id="L531">		} catch (Exception e) {</span>
+<span class="nc" id="L532">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L534">			closeResultset(resultSet);</span>
+<span class="nc" id="L535">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L537">		return noOfContacts;</span>
+
+	}
+
+	/**
+	 * Gets the pagination details.
+	 *
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @param connection
+	 *            the connection
+	 * @return the pagination details
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	public PaginationDetails getPaginationDetails(PaymentInSearchCriteria searchCriteria, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L555">		PaginationDetails paginationDetails = new PaginationDetails();</span>
+		try {
+<span class="nc bnc" id="L557" title="All 4 branches missed.">			if (searchCriteria.getFilter() != null &amp;&amp; !searchCriteria.getIsRequestFromReportPage()) {</span>
+
+<span class="nc" id="L559">				FilterQueryBuilder queryBuilder = new PaymentInQueueFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="nc" id="L560">						PaymentInQueryConstant.GET_PAYMENTIN_QUEUE_INNER_QUERY.getQuery(), Boolean.TRUE);</span>
+<span class="nc" id="L561">				String query = queryBuilder.getQuery();</span>
+<span class="nc" id="L562">				query = PaymentInQueryConstant.GET_PAYMENTIN_QUEUE_FOR_PAGINATION_FILTER.getQuery()</span>
+<span class="nc" id="L563">						.replace(&quot;{INNER_QUERY}&quot;, query);</span>
+<span class="nc" id="L564">				paginationDetails = getPaginationDetailQuery(connection, searchCriteria, query);</span>
+
+<span class="nc bnc" id="L566" title="All 2 branches missed.">			} else if (Boolean.TRUE.equals(searchCriteria.getIsRequestFromReportPage())) {</span>
+
+<span class="nc" id="L568">				FilterQueryBuilder queryBuilder = new PaymentInQueueFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="nc" id="L569">						PaymentInReportQueryConstant.GET_PAYMENTIN_REPORT_INNER_QUERY.getQuery(), Boolean.TRUE);</span>
+<span class="nc" id="L570">				String query = queryBuilder.getQuery();</span>
+<span class="nc" id="L571">				query = PaymentInQueryConstant.GET_PAYMENTIN_QUEUE_FOR_PAGINATION_FILTER.getQuery()</span>
+<span class="nc" id="L572">						.replace(&quot;{INNER_QUERY}&quot;, query);</span>
+<span class="nc" id="L573">				paginationDetails = getPaginationDetailQuery(connection, searchCriteria, query);</span>
+
+<span class="nc" id="L575">			} else {</span>
+<span class="nc" id="L576">				paginationDetails = getPaginationDetailQuery(connection, searchCriteria,</span>
+<span class="nc" id="L577">						PaymentInQueryConstant.GET_PAGINATION_DETAILS.getQuery());</span>
+			}
+<span class="nc" id="L579">		} catch (Exception e) {</span>
+<span class="nc" id="L580">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+<span class="nc" id="L581">		}</span>
+<span class="nc" id="L582">		return paginationDetails;</span>
+	}
+
+	private PaginationDetails getPaginationDetailQuery(Connection connection, PaymentInSearchCriteria searchCriteria,
+			String query) throws CompliancePortalException {
+
+<span class="nc" id="L588">		PreparedStatement statement = null;</span>
+<span class="nc" id="L589">		ResultSet rs = null;</span>
+<span class="nc" id="L590">		PaginationDetails paginationDetails = new PaginationDetails();</span>
+
+		try {
+<span class="nc" id="L593">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L594">			statement.setInt(1, 1);</span>
+<span class="nc" id="L595">			statement.setInt(2, searchCriteria.getPage().getCurrentRecord() - 1);</span>
+<span class="nc" id="L596">			statement.setInt(3, searchCriteria.getPage().getCurrentRecord() + 1);</span>
+<span class="nc" id="L597">			statement.setInt(4, searchCriteria.getPage().getTotalRecords());</span>
+
+<span class="nc" id="L599">			rs = statement.executeQuery();</span>
+
+<span class="nc bnc" id="L601" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L602" title="All 2 branches missed.">				if (searchCriteria.getPage().getCurrentRecord() - 1 == rs.getInt(Constants.ROWNUM)) {</span>
+<span class="nc" id="L603">					paginationDetails.setPrevRecord(getPaginationData(rs.getString(Constants.DB_ACCOUNT_ID),</span>
+<span class="nc" id="L604">							rs.getString(Constants.DB_TYPE), rs.getString(Constants.DB_PAYMENT_IN_ID)));</span>
+
+				}
+<span class="nc bnc" id="L607" title="All 2 branches missed.">				if (searchCriteria.getPage().getCurrentRecord() + 1 == rs.getInt(Constants.ROWNUM)) {</span>
+<span class="nc" id="L608">					paginationDetails.setNextRecord(getPaginationData(rs.getString(Constants.DB_ACCOUNT_ID),</span>
+<span class="nc" id="L609">							rs.getString(Constants.DB_TYPE), rs.getString(Constants.DB_PAYMENT_IN_ID)));</span>
+
+				}
+<span class="nc bnc" id="L612" title="All 2 branches missed.">				if (searchCriteria.getPage().getTotalRecords() == rs.getInt(Constants.ROWNUM)) {</span>
+<span class="nc" id="L613">					paginationDetails.setTotalRecords(getPaginationData(rs.getString(Constants.DB_ACCOUNT_ID),</span>
+<span class="nc" id="L614">							rs.getString(Constants.DB_TYPE), rs.getString(Constants.DB_PAYMENT_IN_ID)));</span>
+				}
+<span class="nc bnc" id="L616" title="All 2 branches missed.">				if (1 == rs.getInt(Constants.ROWNUM)) {</span>
+<span class="nc" id="L617">					paginationDetails.setFirstRecord(getPaginationData(rs.getString(Constants.DB_ACCOUNT_ID),</span>
+<span class="nc" id="L618">							rs.getString(Constants.DB_TYPE), rs.getString(Constants.DB_PAYMENT_IN_ID)));</span>
+				}
+			}
+<span class="nc" id="L621">		} catch (Exception e) {</span>
+<span class="nc" id="L622">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L624">			closeResultset(rs);</span>
+<span class="nc" id="L625">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L627">		return paginationDetails;</span>
+	}
+
+	/**
+	 * @param paymentInId
+	 * @param connection
+	 * @return ActivityLogs
+	 * @throws CompliancePortalException
+	 */
+	private ActivityLogs getActivityLogs(Integer paymentInId, Connection connection) throws CompliancePortalException {
+
+<span class="nc" id="L638">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L639">		List&lt;ActivityLogDataWrapper&gt; activityLogDataList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L640">		activityLogs.setActivityLogData(activityLogDataList);</span>
+<span class="nc" id="L641">		PreparedStatement statement = null;</span>
+<span class="nc" id="L642">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L644">			statement = connection.prepareStatement(PaymentInQueryConstant.GET_ACTIVITY_LOGS_OF_PAYMENT_IN.getQuery());</span>
+<span class="nc" id="L645">			statement.setInt(1, paymentInId);</span>
+<span class="nc" id="L646">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L647" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L648">				ActivityLogDataWrapper activityLogData = new ActivityLogDataWrapper();</span>
+<span class="nc" id="L649">				activityLogData.setActivity(rs.getString(&quot;Activity&quot;));</span>
+<span class="nc" id="L650">				activityLogData.setActivityType(ActivityType.getActivityLogDisplay(rs.getString(&quot;ActivityType&quot;)));</span>
+<span class="nc" id="L651">				activityLogData.setCreatedBy(rs.getString(&quot;User&quot;));</span>
+<span class="nc" id="L652">				Timestamp createdOn = rs.getTimestamp(&quot;CreatedOn&quot;);</span>
+<span class="nc bnc" id="L653" title="All 2 branches missed.">				activityLogData.setCreatedOn(createdOn != null ? DateTimeFormatter.dateTimeFormatter(createdOn) : null);</span>
+<span class="nc" id="L654">				activityLogData.setComment(rs.getString(&quot;Comment&quot;));</span>
+<span class="nc" id="L655">				activityLogDataList.add(activityLogData);</span>
+<span class="nc" id="L656">			}</span>
+
+<span class="nc" id="L658">		} catch (Exception e) {</span>
+<span class="nc" id="L659">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L661">			closeResultset(rs);</span>
+<span class="nc" id="L662">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L664">		return activityLogs;</span>
+	}
+
+	/**
+	 * @param paymentInId
+	 * @param connection
+	 * @return StatusReason
+	 * @throws CompliancePortalException
+	 */
+	private StatusReason getPaymentInStatusReasons(Integer paymentInId, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L676">		StatusReason paymentInStatusReason = new StatusReason();</span>
+<span class="nc" id="L677">		List&lt;StatusReasonData&gt; paymentInStatusReasonList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L678">		paymentInStatusReason.setStatusReasonData(paymentInStatusReasonList);</span>
+<span class="nc" id="L679">		PreparedStatement statement = null;</span>
+<span class="nc" id="L680">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L682">			statement = connection.prepareStatement(PaymentInQueryConstant.GET_PAYMENTIN_STATUS_REASON.getQuery());</span>
+<span class="nc" id="L683">			statement.setInt(1, paymentInId);</span>
+<span class="nc" id="L684">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L685" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L686">				StatusReasonData paymentInStatusReasonData = new StatusReasonData();</span>
+<span class="nc" id="L687">				paymentInStatusReasonData.setName(rs.getString(&quot;Reason&quot;));</span>
+<span class="nc" id="L688">				Integer paymentInIdDb = rs.getInt(&quot;PaymentinId&quot;);</span>
+<span class="nc bnc" id="L689" title="All 2 branches missed.">				if (paymentInIdDb != -1) {</span>
+<span class="nc" id="L690">					paymentInStatusReasonData.setValue(Boolean.TRUE);</span>
+				} else {
+<span class="nc" id="L692">					paymentInStatusReasonData.setValue(Boolean.FALSE);</span>
+				}
+<span class="nc" id="L694">				paymentInStatusReasonList.add(paymentInStatusReasonData);</span>
+<span class="nc" id="L695">			}</span>
+<span class="nc" id="L696">		} catch (Exception e) {</span>
+<span class="nc" id="L697">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L699">			closeResultset(rs);</span>
+<span class="nc" id="L700">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L702">		return paymentInStatusReason;</span>
+	}
+
+	/**
+	 * @param paymentInId
+	 * @param connection
+	 * @return Status
+	 * @throws CompliancePortalException
+	 */
+	private Status getPaymentInStatus(Integer paymentInId, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L712">		PreparedStatement statement = null;</span>
+<span class="nc" id="L713">		ResultSet rs = null;</span>
+<span class="nc" id="L714">		Status status = new Status();</span>
+<span class="nc" id="L715">		List&lt;StatusData&gt; statusDatas = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L716">		status.setStatuses(statusDatas);</span>
+
+		try {
+<span class="nc" id="L719">			statement = connection</span>
+<span class="nc" id="L720">					.prepareStatement(PaymentInQueryConstant.GET_PAYMENTIN_STATUS_WITH_OHTER_STATUS.getQuery());</span>
+<span class="nc" id="L721">			statement.setInt(1, paymentInId);</span>
+<span class="nc" id="L722">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L723" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L724">				StatusData statusData = new StatusData();</span>
+<span class="nc" id="L725">				statusData.setStatus(rs.getString(&quot;Status&quot;));</span>
+<span class="nc bnc" id="L726" title="All 2 branches missed.">				if (rs.getInt(&quot;Id&quot;) == paymentInId) {</span>
+<span class="nc" id="L727">					statusData.setIsSelected(Boolean.TRUE);</span>
+				} else {
+<span class="nc" id="L729">					statusData.setIsSelected(Boolean.FALSE);</span>
+				}
+
+<span class="nc" id="L732">				statusDatas.add(statusData);</span>
+<span class="nc" id="L733">			}</span>
+<span class="nc" id="L734">			return status;</span>
+<span class="nc" id="L735">		} catch (Exception e) {</span>
+<span class="nc" id="L736">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L738">			closeResultset(rs);</span>
+<span class="nc" id="L739">			closePrepareStatement(statement);</span>
+		}
+	}
+
+	@Override
+	public ActivityLogs updatePaymentIn(PaymentInUpdateDBDto paymentInUpdateDBDto) throws CompliancePortalException {
+
+<span class="nc" id="L746">		Connection connection = null;</span>
+<span class="nc" id="L747">		Connection readOnlyConn = null;</span>
+		try {
+<span class="nc" id="L749">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L750">			readOnlyConn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L751">			beginTransaction(connection);</span>
+
+<span class="nc" id="L753">			paymentInUpdateDBDto.setActivityLog(new ArrayList&lt;ProfileActivityLogDto&gt;());</span>
+<span class="nc" id="L754">			getWatchListStatus(paymentInUpdateDBDto, connection);</span>
+<span class="nc" id="L755">			addWatchlist(paymentInUpdateDBDto, connection);</span>
+<span class="nc" id="L756">			addWatchlistLog(paymentInUpdateDBDto);</span>
+<span class="nc" id="L757">			deleteWatchlist(paymentInUpdateDBDto, connection);</span>
+<span class="nc" id="L758">			updateWatchlistStatus(paymentInUpdateDBDto, connection);</span>
+<span class="nc" id="L759">			addProfileActivityLogs(paymentInUpdateDBDto, connection);</span>
+<span class="nc" id="L760">			deleteReasons(paymentInUpdateDBDto, connection);</span>
+<span class="nc" id="L761">			addReasons(paymentInUpdateDBDto, connection);</span>
+<span class="nc" id="L762">			addPaymentInActivityLogs(paymentInUpdateDBDto, connection);</span>
+
+<span class="nc" id="L764">			String paymentInStatus = paymentInUpdateDBDto.getPaymentInStatus();</span>
+<span class="nc" id="L765">			String paymentInStatusReason = getResponseStatus(paymentInUpdateDBDto);</span>
+
+<span class="nc bnc" id="L767" title="All 4 branches missed.">			if (paymentInStatus != null &amp;&amp; !paymentInStatus.isEmpty()) {</span>
+<span class="nc" id="L768">				updatePaymentInStatus(paymentInStatus, paymentInUpdateDBDto, paymentInUpdateDBDto.getCreatedBy(),</span>
+						connection);
+<span class="nc bnc" id="L770" title="All 2 branches missed.">				if (Constants.CLEAR.equalsIgnoreCase(paymentInStatus)</span>
+<span class="nc bnc" id="L771" title="All 2 branches missed.">						|| Constants.SEIZE.equalsIgnoreCase(paymentInStatus)</span>
+<span class="nc bnc" id="L772" title="All 2 branches missed.">						|| Constants.REJECT.equalsIgnoreCase(paymentInStatus)) {</span>
+<span class="nc" id="L773">					updateWorkFlowTime(paymentInUpdateDBDto.getUserResourceId(), connection);</span>
+				}
+<span class="nc" id="L775">				saveIntoBroadcastQueue(getBroadCastDBObject(paymentInUpdateDBDto.getAccountId(),</span>
+<span class="nc" id="L776">						paymentInUpdateDBDto.getPaymentInId(), paymentInUpdateDBDto.getCreatedBy(),</span>
+<span class="nc" id="L777">						getPaymentInResponse(getPaymentComplianceStatus(paymentInStatus),</span>
+<span class="nc" id="L778">								paymentInUpdateDBDto.getTradeContractnumber(), paymentInUpdateDBDto.getTradePaymentid(),</span>
+<span class="nc" id="L779">								paymentInUpdateDBDto.getOrgCode(), paymentInStatusReason),</span>
+<span class="nc" id="L780">						paymentInUpdateDBDto.getOrgCode(), paymentInUpdateDBDto.getContactId()), connection);</span>
+
+<span class="nc bnc" id="L782" title="All 2 branches missed.">			} else if (Boolean.FALSE.equals(StringUtils.isNullOrEmpty(paymentInUpdateDBDto.getComment()))</span>
+<span class="nc bnc" id="L783" title="All 2 branches missed.">					&amp;&amp; Boolean.TRUE.equals(paymentInUpdateDBDto.getIsRequestFromQueue())) {</span>
+<span class="nc" id="L784">				updatePaymentInIsOnQueueStatus(paymentInUpdateDBDto, connection);</span>
+			}
+<span class="nc" id="L786">			commitTransaction(connection);</span>
+<span class="nc" id="L787">		} catch (Exception e) {</span>
+<span class="nc" id="L788">			transactionRolledBack(connection);</span>
+<span class="nc" id="L789">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L791">			closeConnection(connection);</span>
+<span class="nc" id="L792">			closeConnection(readOnlyConn);</span>
+		}
+<span class="nc" id="L794">		return paymentInActivityLogTransformer.transform(paymentInUpdateDBDto);</span>
+	}
+
+	private void updatePaymentInIsOnQueueStatus(PaymentInUpdateDBDto paymentInUpdateDBDto, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L800">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L802">			preparedStatement = connection</span>
+<span class="nc" id="L803">					.prepareStatement(PaymentInQueryConstant.UPDATE_PAYMENT_IN_IS_ON_QUEUE_STATUS.getQuery());</span>
+<span class="nc" id="L804">			preparedStatement.setString(1, paymentInUpdateDBDto.getCreatedBy());</span>
+<span class="nc" id="L805">			preparedStatement.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L806">			preparedStatement.setBoolean(3, paymentInUpdateDBDto.getIsPaymentOnQueue());</span>
+<span class="nc" id="L807">			preparedStatement.setInt(4, paymentInUpdateDBDto.getPaymentInId());</span>
+<span class="nc" id="L808">			int count = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L809" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L810">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+
+<span class="nc" id="L813">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L814">			throw exception;</span>
+<span class="nc" id="L815">		} catch (Exception e) {</span>
+<span class="nc" id="L816">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L818">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L820">	}</span>
+
+	private void addWatchlist(PaymentInUpdateDBDto paymentInUpdateDBDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L824">		List&lt;String&gt; addWatchlist = paymentInUpdateDBDto.getAddWatchlist();</span>
+<span class="nc bnc" id="L825" title="All 4 branches missed.">		if (addWatchlist != null &amp;&amp; !addWatchlist.isEmpty()) {</span>
+			//changes for AT-2986
+<span class="nc bnc" id="L827" title="All 2 branches missed.">			if(paymentInUpdateDBDto.getCustType().equals(&quot;PFX&quot;)){</span>
+<span class="nc" id="L828">				insertWatchlistOnPFX(paymentInUpdateDBDto, connection);</span>
+			}else{
+<span class="nc" id="L830">				insertWatchlist(paymentInUpdateDBDto, connection);</span>
+			}
+		}
+<span class="nc" id="L833">	}</span>
+
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertWatchlistOnPFX(PaymentInUpdateDBDto paymentInUpdateDBDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L838">		PreparedStatement stmt = null;</span>
+		try {
+<span class="nc" id="L840">			stmt = connection.prepareStatement(RegistrationQueryConstant.INSERT_CONTACT_WATCHLIST.getQuery());</span>
+<span class="nc bnc" id="L841" title="All 2 branches missed.">			for (String addWatchlistStr : paymentInUpdateDBDto.getAddWatchlist()) {</span>
+<span class="nc" id="L842">				stmt.setString(1, addWatchlistStr);</span>
+<span class="nc" id="L843">				stmt.setInt(2, paymentInUpdateDBDto.getContactId());</span>
+<span class="nc" id="L844">				stmt.setString(3, paymentInUpdateDBDto.getCreatedBy());</span>
+<span class="nc" id="L845">				stmt.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L846">			}</span>
+<span class="nc" id="L847">			int count = stmt.executeUpdate();</span>
+		
+<span class="nc bnc" id="L849" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L850">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+
+<span class="nc" id="L853">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L854">			throw exception;</span>
+<span class="nc" id="L855">		} catch (Exception e) {</span>
+<span class="nc" id="L856">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L858">			closePrepareStatement(stmt);</span>
+		}
+<span class="nc" id="L860">	}</span>
+	
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertWatchlist(PaymentInUpdateDBDto paymentInUpdateDBDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L865">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L867">			preparedStatement = connection</span>
+<span class="nc" id="L868">					.prepareStatement(RegistrationCfxDBQueryConstant.INSERT_WATCHLIST_BY_ACCOUNT_ID.getQuery());</span>
+<span class="nc bnc" id="L869" title="All 2 branches missed.">			for (String addWatchlistStr : paymentInUpdateDBDto.getAddWatchlist()) {</span>
+<span class="nc" id="L870">				preparedStatement.setString(1, addWatchlistStr);</span>
+<span class="nc" id="L871">				preparedStatement.setString(2, paymentInUpdateDBDto.getCreatedBy());</span>
+<span class="nc" id="L872">				preparedStatement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L873">				preparedStatement.setInt(4, paymentInUpdateDBDto.getAccountId());</span>
+<span class="nc" id="L874">				preparedStatement.addBatch();</span>
+<span class="nc" id="L875">			}</span>
+<span class="nc" id="L876">			int[] count = preparedStatement.executeBatch();</span>
+<span class="nc bnc" id="L877" title="All 2 branches missed.">			for (int c : count) {</span>
+<span class="nc bnc" id="L878" title="All 2 branches missed.">				if (c == 0) {</span>
+<span class="nc" id="L879">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				}
+			}
+<span class="nc" id="L882">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L883">			throw exception;</span>
+<span class="nc" id="L884">		} catch (Exception e) {</span>
+<span class="nc" id="L885">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L887">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L889">	}</span>
+
+	private BroadcastEventToDB getBroadCastDBObject(Integer accountId, Integer paymentInId, String createdBy,
+			String statusJson, String orgCode, Integer contactId) {
+<span class="nc" id="L893">		BroadcastEventToDB db = new BroadcastEventToDB();</span>
+<span class="nc" id="L894">		db.setAccountId(accountId);</span>
+<span class="nc" id="L895">		db.setContactId(contactId);</span>
+<span class="nc" id="L896">		db.setPaymentInId(paymentInId);</span>
+<span class="nc" id="L897">		db.setCreatedBy(createdBy);</span>
+<span class="nc" id="L898">		db.setCreatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L899">		db.setDeliveredOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L900">		db.setDeliverOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L901">		db.setDeliveryStatus(BroadCastStatusEnum.NEW.getBroadCastStatusAsString());</span>
+<span class="nc" id="L902">		db.setEntityType(BroadCastEntityTypeEnum.PAYMENTIN.getBroadCastEntityTypeAsString());</span>
+<span class="nc" id="L903">		db.setOrgCode(orgCode);</span>
+<span class="nc" id="L904">		db.setStatusJson(statusJson);</span>
+<span class="nc" id="L905">		return db;</span>
+	}
+
+	private String getPaymentInResponse(PaymentComplianceStatus paymentComplianceStatus, String tradeContractnumber,
+			String tradePaymentid, String orgCode, String paymentInStatusReason) {
+
+<span class="nc" id="L911">		PaymentInResponse paymentInResponse = new PaymentInResponse();</span>
+<span class="nc" id="L912">		paymentInResponse.setOsrID(UUID.randomUUID().toString());</span>
+<span class="nc" id="L913">		paymentInResponse.setOrgCode(orgCode);</span>
+<span class="nc" id="L914">		paymentInResponse.setTradeContractNumber(tradeContractnumber);</span>
+<span class="nc" id="L915">		paymentInResponse.setTradePaymentID(Integer.valueOf(tradePaymentid));</span>
+<span class="nc" id="L916">		paymentInResponse.setStatus(paymentComplianceStatus);</span>
+<span class="nc" id="L917">		paymentInResponse.setResponseCode(paymentComplianceStatus.getCode());</span>
+<span class="nc" id="L918">		paymentInResponse.setResponseDescription(paymentInStatusReason);</span>
+<span class="nc" id="L919">		return JsonConverterUtil.convertToJsonWithNull(paymentInResponse);</span>
+
+	}
+
+	/**
+	 * @param paymentInStatus
+	 * @param paymentInUpdateDBDto
+	 * @param user
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	private void updatePaymentInStatus(String paymentInStatus, PaymentInUpdateDBDto paymentInUpdateDBDto, String user,
+			Connection connection) throws CompliancePortalException {
+
+<span class="nc" id="L933">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L935">			preparedStatement = connection.prepareStatement(PaymentInQueryConstant.UPDATE_PAYMENT_IN_STATUS.getQuery());</span>
+<span class="nc" id="L936">			preparedStatement.setString(1, paymentInStatus);</span>
+<span class="nc" id="L937">			preparedStatement.setString(2, user);</span>
+<span class="nc" id="L938">			preparedStatement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L939">			preparedStatement.setBoolean(4, paymentInUpdateDBDto.getIsPaymentOnQueue());</span>
+<span class="nc" id="L940">			preparedStatement.setInt(5, paymentInUpdateDBDto.getPaymentInId());</span>
+<span class="nc" id="L941">			int count = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L942" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L943">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+
+<span class="nc" id="L946">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L947">			throw exception;</span>
+<span class="nc" id="L948">		} catch (Exception e) {</span>
+<span class="nc" id="L949">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L951">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="nc" id="L954">	}</span>
+
+	/**
+	 * @param paymentInUpdateDBDto
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	private void addPaymentInActivityLogs(PaymentInUpdateDBDto paymentInUpdateDBDto, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L964">		List&lt;PaymentInActivityLogDto&gt; activityLogs = paymentInUpdateDBDto.getActivityLogs();</span>
+<span class="nc bnc" id="L965" title="All 4 branches missed.">		if (activityLogs != null &amp;&amp; !activityLogs.isEmpty()) {</span>
+<span class="nc" id="L966">			insertPaymentInActivityLogs(activityLogs, connection);</span>
+<span class="nc" id="L967">			insertPaymentInActivityLogDetail(activityLogs, connection);</span>
+		}
+
+<span class="nc" id="L970">	}</span>
+
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertPaymentInActivityLogDetail(List&lt;PaymentInActivityLogDto&gt; activityLogs, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L976">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L978">			preparedStatement = connection</span>
+<span class="nc" id="L979">					.prepareStatement(PaymentInQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG_DETAIL.getQuery());</span>
+<span class="nc bnc" id="L980" title="All 2 branches missed.">			for (PaymentInActivityLogDto activityLog : activityLogs) {</span>
+<span class="nc" id="L981">				PaymentInActivityLogDetailDto activityLogDetailDto = activityLog.getActivityLogDetailDto();</span>
+<span class="nc" id="L982">				preparedStatement.setInt(1, activityLogDetailDto.getActivityId());</span>
+<span class="nc" id="L983">				preparedStatement.setString(2, activityLogDetailDto.getActivityType().getModule());</span>
+<span class="nc" id="L984">				preparedStatement.setString(3, activityLogDetailDto.getActivityType().getType());</span>
+<span class="nc" id="L985">				preparedStatement.setNString(4, activityLogDetailDto.getLog());</span>
+<span class="nc" id="L986">				preparedStatement.setNString(5, activityLogDetailDto.getCreatedBy());</span>
+<span class="nc" id="L987">				preparedStatement.setTimestamp(6, activityLogDetailDto.getCreatedOn());</span>
+<span class="nc" id="L988">				preparedStatement.addBatch();</span>
+<span class="nc" id="L989">			}</span>
+<span class="nc" id="L990">			int[] count = preparedStatement.executeBatch();</span>
+<span class="nc bnc" id="L991" title="All 2 branches missed.">			for (int c : count) {</span>
+<span class="nc bnc" id="L992" title="All 2 branches missed.">				if (c == 0) {</span>
+<span class="nc" id="L993">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				}
+			}
+
+<span class="nc" id="L997">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L998">			throw e;</span>
+<span class="nc" id="L999">		} catch (Exception e) {</span>
+<span class="nc" id="L1000">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L1002">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L1004">	}</span>
+
+	/**
+	 * @param activityLogs
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertPaymentInActivityLogs(List&lt;PaymentInActivityLogDto&gt; activityLogs, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L1015">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L1016">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L1018">			preparedStatement = connection.prepareStatement(</span>
+<span class="nc" id="L1019">					PaymentInQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc bnc" id="L1021" title="All 2 branches missed.">			for (PaymentInActivityLogDto activityLog : activityLogs) {</span>
+<span class="nc" id="L1022">				preparedStatement.setInt(1, activityLog.getPaymentInId());</span>
+<span class="nc" id="L1023">				preparedStatement.setNString(2, activityLog.getActivityBy());</span>
+<span class="nc" id="L1024">				preparedStatement.setTimestamp(3, activityLog.getTimeStatmp());</span>
+<span class="nc" id="L1025">				preparedStatement.setNString(4, activityLog.getComment());</span>
+<span class="nc" id="L1026">				preparedStatement.setNString(5, activityLog.getCreatedBy());</span>
+<span class="nc" id="L1027">				preparedStatement.setTimestamp(6, activityLog.getCreatedOn());</span>
+<span class="nc" id="L1028">				preparedStatement.setInt(7, activityLog.getPaymentInId());</span>
+<span class="nc" id="L1029">				int updateCount = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L1030" title="All 2 branches missed.">				if (updateCount == 0) {</span>
+<span class="nc" id="L1031">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				}
+<span class="nc" id="L1033">				rs = preparedStatement.getGeneratedKeys();</span>
+<span class="nc bnc" id="L1034" title="All 2 branches missed.">				if (rs.next()) {</span>
+<span class="nc" id="L1035">					activityLog.setId(rs.getInt(1));</span>
+<span class="nc" id="L1036">					activityLog.getActivityLogDetailDto().setActivityId(rs.getInt(1));</span>
+				}
+<span class="nc" id="L1038">			}</span>
+
+<span class="nc" id="L1040">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L1041">			throw e;</span>
+<span class="nc" id="L1042">		} catch (Exception e) {</span>
+<span class="nc" id="L1043">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L1045">			closeResultset(rs);</span>
+<span class="nc" id="L1046">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="nc" id="L1049">	}</span>
+
+	/**
+	 * @param paymentInUpdateDBDto
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	private void addReasons(PaymentInUpdateDBDto paymentInUpdateDBDto, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L1059">		List&lt;String&gt; addReasons = paymentInUpdateDBDto.getAddReasons();</span>
+<span class="nc bnc" id="L1060" title="All 4 branches missed.">		if (addReasons != null &amp;&amp; !addReasons.isEmpty()) {</span>
+<span class="nc" id="L1061">			insertPaymentOutReason(paymentInUpdateDBDto, connection);</span>
+		}
+<span class="nc" id="L1063">	}</span>
+
+	/**
+	 * @param paymentInUpdateDBDto
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertPaymentOutReason(PaymentInUpdateDBDto paymentInUpdateDBDto, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L1074">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L1076">			preparedStatement = connection.prepareStatement(PaymentInQueryConstant.INSERT_PAYMENT_IN_REASON.getQuery());</span>
+<span class="nc bnc" id="L1077" title="All 2 branches missed.">			for (String addReasonsStr : paymentInUpdateDBDto.getAddReasons()) {</span>
+<span class="nc" id="L1078">				preparedStatement.setInt(1, paymentInUpdateDBDto.getPaymentInId());</span>
+<span class="nc" id="L1079">				preparedStatement.setString(2, addReasonsStr);</span>
+<span class="nc" id="L1080">				preparedStatement.setString(3, paymentInUpdateDBDto.getCreatedBy());</span>
+<span class="nc" id="L1081">				preparedStatement.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1082">				preparedStatement.setString(5, paymentInUpdateDBDto.getCreatedBy());</span>
+<span class="nc" id="L1083">				preparedStatement.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1084">				int addRowCnt = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L1085" title="All 2 branches missed.">				if (addRowCnt == 0) {</span>
+<span class="nc" id="L1086">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				}
+<span class="nc" id="L1088">			}</span>
+
+<span class="nc" id="L1090">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L1091">			throw exception;</span>
+<span class="nc" id="L1092">		} catch (Exception e) {</span>
+<span class="nc" id="L1093">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L1095">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="nc" id="L1098">	}</span>
+
+	/**
+	 * @param paymentInUpdateDBDto
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	private void deleteReasons(PaymentInUpdateDBDto paymentInUpdateDBDto, Connection connection)
+			throws CompliancePortalException {
+
+<span class="nc" id="L1108">		Integer paymentInId = paymentInUpdateDBDto.getPaymentInId();</span>
+<span class="nc" id="L1109">		List&lt;String&gt; delReasons = paymentInUpdateDBDto.getDeletedReasons();</span>
+<span class="nc bnc" id="L1110" title="All 4 branches missed.">		if (delReasons != null &amp;&amp; !delReasons.isEmpty()) {</span>
+<span class="nc" id="L1111">			String[] delReasonsArray = delReasons.toArray(new String[delReasons.size()]);</span>
+<span class="nc" id="L1112">			CriteriaBuilder builder = new CriteriaBuilder(RegistrationQueryConstant.GET_STATUS_REASON_ID.getQuery());</span>
+<span class="nc" id="L1113">			String query = builder.addCriteria(&quot;Module&quot;, new String[] { &quot;PAYMENT_IN&quot;, &quot;ALL&quot; }, &quot;AND&quot;, ClauseType.IN)</span>
+<span class="nc" id="L1114">					.addCriteria(&quot;Reason&quot;, delReasonsArray, &quot;AND&quot;, ClauseType.IN).build();</span>
+<span class="nc" id="L1115">			query = &quot;DELETE [PaymentInStatusReason] WHERE PaymentInID=&quot; + paymentInId + &quot; AND StatusUpdateReasonID IN (&quot;</span>
+					+ query + &quot;)&quot;;
+<span class="nc" id="L1117">			deletePaymentReasonOrWatchlist(query, connection);</span>
+		}
+<span class="nc" id="L1119">	}</span>
+
+	private String getPrimaryContactName(Integer accountId, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L1122">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L1123">		ResultSet resultSet = null;</span>
+<span class="nc" id="L1124">		String name = null;</span>
+		try {
+<span class="nc" id="L1126">			preparedStatement = connection.prepareStatement(PaymentInQueryConstant.GET_PRIMARY_CONTACT_NAME.getQuery());</span>
+<span class="nc" id="L1127">			preparedStatement.setInt(1, accountId);</span>
+<span class="nc" id="L1128">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L1129" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1130">				name = resultSet.getString(&quot;name&quot;);</span>
+			}
+
+<span class="nc" id="L1133">		} catch (Exception e) {</span>
+<span class="nc" id="L1134">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L1136">			closeResultset(resultSet);</span>
+<span class="nc" id="L1137">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L1139">		return name;</span>
+	}
+
+	@Override
+	public ViewMoreResponse getMoreFraugsterDetails(PaymentInViewMoreRequest viewMoreRequest)
+			throws CompliancePortalException {
+
+<span class="fc" id="L1146">		ViewMoreResponse viewMoreResponse = new ViewMoreResponse();</span>
+<span class="fc" id="L1147">		Connection connection = null;</span>
+<span class="fc" id="L1148">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L1149">		ResultSet resultSet = null;</span>
+		try {
+<span class="fc" id="L1151">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L1152">			preparedStatement = connection</span>
+<span class="fc" id="L1153">					.prepareStatement(PaymentInQueryConstant.GET_VIEWMORE_PAYMENTIN_DETAILS.getQuery());</span>
+<span class="fc" id="L1154">			preparedStatement.setString(1, viewMoreRequest.getServiceType());</span>
+<span class="fc" id="L1155">			preparedStatement.setInt(2, EntityTypeEnum.getDatabaseStatusFromUiStatus(viewMoreRequest.getEntityType()));</span>
+<span class="fc" id="L1156">			preparedStatement.setInt(3, viewMoreRequest.getPaymentInId());</span>
+<span class="fc" id="L1157">			preparedStatement.setInt(4, viewMoreRequest.getMinViewRecord());</span>
+<span class="fc" id="L1158">			preparedStatement.setInt(5, viewMoreRequest.getMaxViewRecord());</span>
+<span class="fc" id="L1159">			List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L1160">			resultSet = preparedStatement.executeQuery();</span>
+<span class="fc" id="L1161">			domainList = getMoreFraugsterDetails(resultSet);</span>
+<span class="fc" id="L1162">			viewMoreResponse.setServices(domainList);</span>
+
+<span class="fc" id="L1164">			return viewMoreResponse;</span>
+<span class="fc" id="L1165">		} catch (Exception e) {</span>
+<span class="fc" id="L1166">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L1168">			closeResultset(resultSet);</span>
+<span class="fc" id="L1169">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L1170">			closeConnection(connection);</span>
+		}
+	}
+
+	@Override
+	public ViewMoreResponse getMoreSanctionDetails(PaymentInViewMoreRequest viewMoreRequest)
+			throws CompliancePortalException {
+
+<span class="fc" id="L1178">		ViewMoreResponse viewMoreResponse = new ViewMoreResponse();</span>
+<span class="fc" id="L1179">		Connection connection = null;</span>
+<span class="fc" id="L1180">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L1181">		ResultSet resultSet = null;</span>
+		try {
+<span class="fc" id="L1183">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L1184">			preparedStatement = connection</span>
+<span class="fc" id="L1185">					.prepareStatement(PaymentInQueryConstant.GET_VIEWMORE_PAYMENTIN_DETAILS.getQuery());</span>
+<span class="fc" id="L1186">			preparedStatement.setString(1, viewMoreRequest.getServiceType());</span>
+<span class="fc" id="L1187">			preparedStatement.setInt(2, EntityTypeEnum.getDatabaseStatusFromUiStatus(viewMoreRequest.getEntityType()));</span>
+<span class="fc" id="L1188">			preparedStatement.setInt(3, viewMoreRequest.getPaymentInId());</span>
+<span class="fc" id="L1189">			preparedStatement.setInt(4, viewMoreRequest.getMinViewRecord());</span>
+<span class="fc" id="L1190">			preparedStatement.setInt(5, viewMoreRequest.getMaxViewRecord());</span>
+<span class="fc" id="L1191">			List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L1192">			resultSet = preparedStatement.executeQuery();</span>
+<span class="fc" id="L1193">			domainList = getMoreSanctionDetails(resultSet);</span>
+<span class="fc" id="L1194">			viewMoreResponse.setServices(domainList);</span>
+<span class="fc" id="L1195">			return viewMoreResponse;</span>
+<span class="fc" id="L1196">		} catch (Exception e) {</span>
+<span class="fc" id="L1197">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L1199">			closeResultset(resultSet);</span>
+<span class="fc" id="L1200">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L1201">			closeConnection(connection);</span>
+		}
+	}
+
+	@Override
+	public ViewMoreResponse getMoreCustomCheckDetails(PaymentInViewMoreRequest viewMoreRequest)
+			throws CompliancePortalException {
+
+<span class="fc" id="L1209">		ViewMoreResponse viewMoreResponse = new ViewMoreResponse();</span>
+<span class="fc" id="L1210">		Connection connection = null;</span>
+<span class="fc" id="L1211">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L1212">		ResultSet resultSet = null;</span>
+		try {
+<span class="fc" id="L1214">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L1215">			preparedStatement = connection</span>
+<span class="fc" id="L1216">					.prepareStatement(PaymentInQueryConstant.GET_VIEWMORE_PAYMENTIN_DETAILS.getQuery());</span>
+<span class="fc" id="L1217">			preparedStatement.setString(1, viewMoreRequest.getServiceType());</span>
+<span class="fc" id="L1218">			preparedStatement.setInt(2, EntityTypeEnum.getDatabaseStatusFromUiStatus(viewMoreRequest.getEntityType()));</span>
+<span class="fc" id="L1219">			preparedStatement.setInt(3, viewMoreRequest.getPaymentInId());</span>
+<span class="fc" id="L1220">			preparedStatement.setInt(4, viewMoreRequest.getMinViewRecord());</span>
+<span class="fc" id="L1221">			preparedStatement.setInt(5, viewMoreRequest.getMaxViewRecord());</span>
+<span class="fc" id="L1222">			List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L1223">			resultSet = preparedStatement.executeQuery();</span>
+<span class="fc" id="L1224">			domainList = getMoreCustomCheckDetailsForPayment(resultSet);</span>
+<span class="fc" id="L1225">			viewMoreResponse.setServices(domainList);</span>
+<span class="fc" id="L1226">			return viewMoreResponse;</span>
+<span class="nc" id="L1227">		} catch (Exception e) {</span>
+<span class="nc" id="L1228">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L1230">			closeResultset(resultSet);</span>
+<span class="fc" id="L1231">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L1232">			closeConnection(connection);</span>
+		}
+	}
+
+	private String getAccountContactJoin(String payinFilterQuery) {
+		String payInFilterQueryResult;
+<span class="nc bnc" id="L1238" title="All 2 branches missed.">		if (payinFilterQuery.contains(WHERE)) {</span>
+<span class="nc" id="L1239">			payInFilterQueryResult = payinFilterQuery + &quot; AND &quot;</span>
+<span class="nc" id="L1240">					+ PaymentInQueryConstant.QUEUE_FILTER_NULL_CHECK.getQuery();</span>
+		} else {
+<span class="nc" id="L1242">			payInFilterQueryResult = payinFilterQuery + &quot; WHERE &quot;</span>
+<span class="nc" id="L1243">					+ PaymentInQueryConstant.QUEUE_FILTER_NULL_CHECK.getQuery();</span>
+		}
+<span class="nc" id="L1245">		return payInFilterQueryResult;</span>
+	}
+
+	private String getCountryJoin(PaymentInSearchCriteria searchCriteria) {
+<span class="fc" id="L1249">		String countryJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L1250" title="1 of 2 branches missed.">		if (null != searchCriteria.getFilter().getCountryofFund()</span>
+<span class="nc bnc" id="L1251" title="All 2 branches missed.">				&amp;&amp; searchCriteria.getFilter().getCountryofFund().length &gt; 0) {</span>
+<span class="nc" id="L1252">			countryJoin = PaymentInQueryConstant.COUNTRY_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L1254">		return countryJoin;</span>
+	}
+	
+	//changes for AT-1646  RG Filter
+	private String getRGJoin(PaymentInSearchCriteria searchCriteria) {
+<span class="fc" id="L1259">		String rgJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L1260" title="1 of 2 branches missed.">		if (null != searchCriteria.getFilter().getRiskStatus()</span>
+<span class="nc bnc" id="L1261" title="All 2 branches missed.">				&amp;&amp; searchCriteria.getFilter().getRiskStatus().length &gt; 0) {</span>
+<span class="nc" id="L1262">			rgJoin = PaymentInQueryConstant.RG_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L1264">		return rgJoin;</span>
+	}
+	private String getUserJoin(PaymentInSearchCriteria searchCriteria) {
+<span class="fc" id="L1267">		String userJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L1268" title="3 of 4 branches missed.">		if (null != searchCriteria.getFilter().getOwner() &amp;&amp; searchCriteria.getFilter().getOwner().length &gt; 0) {</span>
+<span class="nc" id="L1269">			userJoin = PaymentInQueryConstant.USER_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L1271">		return userJoin;</span>
+	}
+
+	private String getOrganizationJoin(PaymentInSearchCriteria searchCriteria) {
+<span class="fc" id="L1275">		String orgJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L1276" title="1 of 2 branches missed.">		if (null != searchCriteria.getFilter().getOrganization()</span>
+<span class="nc bnc" id="L1277" title="All 2 branches missed.">				&amp;&amp; searchCriteria.getFilter().getOrganization().length &gt; 0) {</span>
+<span class="nc" id="L1278">			orgJoin = PaymentInQueryConstant.ORG_TABLE_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L1280">		return orgJoin;</span>
+	}
+	
+	private String getLegalEntityJoin(PaymentInSearchCriteria searchCriteria) {
+<span class="fc" id="L1284">		String legalEntityJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L1285" title="1 of 2 branches missed.">		if(null != searchCriteria.getFilter().getLegalEntity() &amp;&amp; </span>
+<span class="nc bnc" id="L1286" title="All 2 branches missed.">				searchCriteria.getFilter().getLegalEntity().length&gt;0) {</span>
+<span class="nc" id="L1287">			legalEntityJoin = PaymentInQueryConstant.LEGAL_ENTITY_TABLE_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L1289">		return legalEntityJoin;</span>
+	}
+
+	private String getAttributeFilterJoin(String payInAttributeFilterQuery) {
+<span class="fc" id="L1293">		String attributeJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L1294" title="1 of 2 branches missed.">		if (payInAttributeFilterQuery.contains(WHERE)) {</span>
+<span class="nc" id="L1295">			attributeJoin = PaymentInQueryConstant.PAYMENTIN_QUEUE_ATTRIBUTE_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L1297">		return attributeJoin;</span>
+	}
+
+	private String getAccountFilterJoin(String accountFilterQuery) {
+<span class="fc" id="L1301">		String accountJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L1302" title="1 of 2 branches missed.">		if (accountFilterQuery.contains(WHERE)) {</span>
+<span class="nc" id="L1303">			accountJoin = PaymentInQueryConstant.PAYMENTIN_QUEUE_ACCOUNT_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L1305">		return accountJoin;</span>
+	}
+
+	private String getContactFilterJoin(String contactFilterQuery) {
+<span class="fc" id="L1309">		String contactJoin = &quot;&quot;;</span>
+<span class="pc bpc" id="L1310" title="2 of 4 branches missed.">		if (contactFilterQuery.contains(WHERE) || contactFilterQuery.contains(&quot;category&quot;)) {</span>
+<span class="nc" id="L1311">			contactJoin = PaymentInQueryConstant.PAYMENTIN_QUEUE_CONTACT_FILTER_JOIN.getQuery();</span>
+		}
+<span class="fc" id="L1313">		return contactJoin;</span>
+	}
+
+	private FilterQueryBuilder getPayInQueueFilterQuery(PaymentInSearchCriteria searchCriteria) {
+<span class="fc" id="L1317">		return new PaymentInQueueFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L1318">				PaymentInQueryConstant.PAYMENTIN_QUEUE_FILTER.getQuery(), Boolean.FALSE);</span>
+	}
+
+	private String getPayInAttributeFilterQuery(PaymentInSearchCriteria searchCriteria) {
+<span class="fc" id="L1322">		FilterQueryBuilder payInAttributeFilter = new PaymentInQueueAtttributeFilterQueryBuilder(</span>
+<span class="fc" id="L1323">				searchCriteria.getFilter(), PaymentInQueryConstant.PAYMENTIN_QUEUE_ATTRIBUTE_FILTER.getQuery(), Boolean.TRUE);</span>
+<span class="fc" id="L1324">		return payInAttributeFilter.getQuery();</span>
+	}
+
+	private String getPayInAccountFilterQuery(PaymentInSearchCriteria searchCriteria) {
+<span class="fc" id="L1328">		FilterQueryBuilder accountFilter = new PaymentInQueueAccountFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L1329">				PaymentInQueryConstant.PAYMENTIN_QUEUE_ACCOUNT_ATTRIBUTE_FILTER.getQuery(),true);</span>
+<span class="fc" id="L1330">		return accountFilter.getQuery();</span>
+	}
+
+	private String getPayInContactFilterQuery(PaymentInQueueContactFilterQueryBuilder contactFilter,
+			PaymentInSearchCriteria searchCriteria) {
+<span class="fc" id="L1335">		String countryJoin = &quot;&quot;;</span>
+<span class="fc" id="L1336">		String contactFilterQuery = contactFilter.getQuery();</span>
+
+<span class="fc" id="L1338">		String watchListCategoryFilter = getWatchListCategoryFilter(searchCriteria);</span>
+<span class="pc bpc" id="L1339" title="1 of 2 branches missed.">		if (null != watchListCategoryFilter) {</span>
+<span class="nc" id="L1340">			contactFilterQuery = contactFilterQuery.replace(&quot;{WATCHLIST_CATEGORY_FILTER}&quot;, watchListCategoryFilter);</span>
+		} else {
+<span class="fc" id="L1342">			contactFilterQuery = contactFilterQuery.replace(&quot;{WATCHLIST_CATEGORY_FILTER}&quot;, &quot;&quot;);</span>
+		}
+
+<span class="pc bpc" id="L1345" title="1 of 2 branches missed.">		if (contactFilter.isCountryOfResidenceFilterApplied()) {</span>
+<span class="nc" id="L1346">			countryJoin = PaymentInQueryConstant.PAYMENTIN_QUEUE_COUNTRY_OF_RESIDENCE_FILTER.getQuery();</span>
+		}
+
+<span class="fc" id="L1349">		return contactFilterQuery.replace(&quot;{PAYMENTIN_QUEUE_COUNTRY_OF_RESIDENCE_FILTER}&quot;, countryJoin);</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IPaymentInDBService#
+	 * forceClearPaymentIn(com.currenciesdirect.gtg.compliance.core.domain.
+	 * paymentin.PaymentInRecheckFailureDetails,
+	 * com.currenciesdirect.gtg.compliance.commons.domain.activity.
+	 * PaymentInActivityLogDto,
+	 * com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile)
+	 */
+	@Override
+	public void forceClearPaymentIn(PaymentInRecheckFailureDetails entry, PaymentInActivityLogDto activityLog,
+			UserProfile user) throws CompliancePortalException {
+<span class="nc" id="L1365">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L1367">			connection = getConnection(Boolean.FALSE);</span>
+
+<span class="nc" id="L1369">			PaymentInUpdateDBDto payInUpdateDBDto = new PaymentInUpdateDBDto();</span>
+<span class="nc" id="L1370">			payInUpdateDBDto.setPaymentInId(entry.getPaymentInId());</span>
+<span class="nc" id="L1371">			payInUpdateDBDto.setIsPaymentOnQueue(Boolean.FALSE);</span>
+<span class="nc" id="L1372">			updatePaymentInStatus(PaymentComplianceStatus.CLEAR.name(), payInUpdateDBDto, user.getName(), connection);</span>
+
+<span class="nc" id="L1374">			saveIntoBroadcastQueue(getBroadCastDBObject(entry.getAccountId(), entry.getPaymentInId(), user.getName(),</span>
+<span class="nc" id="L1375">					getPaymentInResponse(PaymentComplianceStatus.CLEAR, entry.getTradeContractNumber(),</span>
+<span class="nc" id="L1376">							entry.getTradePaymentId().toString(), entry.getOrgCode(), &quot;Bulk Cleared Payment&quot;),</span>
+<span class="nc" id="L1377">					entry.getOrgCode(), entry.getContactId()), connection);</span>
+
+<span class="nc bnc" id="L1379" title="All 2 branches missed.">			if (null != activityLog) {</span>
+<span class="nc" id="L1380">				List&lt;PaymentInActivityLogDto&gt; activityLogs = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1381">				activityLogs.add(activityLog);</span>
+<span class="nc" id="L1382">				insertPaymentInActivityLogs(activityLogs, connection);</span>
+<span class="nc" id="L1383">				insertPaymentInActivityLogDetail(activityLogs, connection);</span>
+			}
+<span class="nc" id="L1385">		} catch (Exception e) {</span>
+<span class="nc" id="L1386">			transactionRolledBack(connection);</span>
+<span class="nc" id="L1387">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1389">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L1392">	}</span>
+
+	@Override
+	public boolean setPoiExistsFlagForPaymentIn(UserProfile user, Contact contact) throws CompliancePortalException {
+<span class="nc" id="L1396">		Connection connection = null;</span>
+<span class="nc" id="L1397">		PreparedStatement preparedStatement = null;</span>
+		try{
+<span class="nc" id="L1399">			connection = getConnection(Boolean.TRUE);</span>
+			//update contact table to set POI Exists Flag
+<span class="nc" id="L1401">			preparedStatement = connection.prepareStatement(PaymentInQueryConstant.UPDATE_CONTACT_POI_EXISTS_FLAG.getQuery());	</span>
+<span class="nc" id="L1402">			preparedStatement.setString(1, contact.getContactSFID());</span>
+<span class="nc" id="L1403">		    preparedStatement.executeUpdate();</span>
+<span class="nc" id="L1404">	} catch (Exception e) {</span>
+<span class="nc" id="L1405">		transactionRolledBack(connection);</span>
+<span class="nc" id="L1406">		throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+	} finally {
+<span class="nc" id="L1408">		closeConnection(connection);</span>
+<span class="nc" id="L1409">		closePrepareStatement(preparedStatement);</span>
+	}
+<span class="nc" id="L1411">		return true;</span>
+	}
+	
+	//AT-4306
+	@Override
+	public ViewMoreResponse getMoreIntuitionDetails(PaymentInViewMoreRequest viewMoreRequest)
+			throws CompliancePortalException {
+
+<span class="nc" id="L1419">		ViewMoreResponse viewMoreResponse = new ViewMoreResponse();</span>
+<span class="nc" id="L1420">		Connection connection = null;</span>
+<span class="nc" id="L1421">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L1422">		ResultSet resultSet = null;</span>
+		try {
+<span class="nc" id="L1424">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1425">			preparedStatement = connection</span>
+<span class="nc" id="L1426">					.prepareStatement(PaymentInQueryConstant.GET_VIEWMORE_PAYMENTIN_DETAILS.getQuery());</span>
+<span class="nc" id="L1427">			preparedStatement.setString(1, viewMoreRequest.getServiceType());</span>
+<span class="nc" id="L1428">			preparedStatement.setInt(2, EntityTypeEnum.getDatabaseStatusFromUiStatus(viewMoreRequest.getEntityType()));</span>
+<span class="nc" id="L1429">			preparedStatement.setInt(3, viewMoreRequest.getPaymentInId());</span>
+<span class="nc" id="L1430">			preparedStatement.setInt(4, viewMoreRequest.getMinViewRecord());</span>
+<span class="nc" id="L1431">			preparedStatement.setInt(5, viewMoreRequest.getMaxViewRecord());</span>
+<span class="nc" id="L1432">			List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1433">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc" id="L1434">			domainList = getMoreIntuitionDetails(resultSet);</span>
+<span class="nc" id="L1435">			viewMoreResponse.setServices(domainList);</span>
+
+<span class="nc" id="L1437">			return viewMoreResponse;</span>
+<span class="nc" id="L1438">		} catch (Exception e) {</span>
+<span class="nc" id="L1439">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L1441">			closeResultset(resultSet);</span>
+<span class="nc" id="L1442">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L1443">			closeConnection(connection);</span>
+		}
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

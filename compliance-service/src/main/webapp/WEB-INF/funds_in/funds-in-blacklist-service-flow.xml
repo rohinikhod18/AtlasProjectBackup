@@ -1,0 +1,128 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="FUNDSIN.BLACKLIST_RESEND.in.channel"/>
+	<int:channel id="FUNDSIN.BLACKLIST_RESEND.process"/>
+	<int:channel id="FUNDSIN.BLACKLISTRESEND.out.channel"/>
+	<int:channel id="FUNDSIN.BLACKLIST.RESEND.CHANNEL"/>
+	<int:channel id="FUNDSIN.BLACKLISTRESEND.CREATE.EVENT"/>
+	<int:channel id="FUNDSIN.BLACKLISTRESEND.REQUEST.SENDER"/>
+	<int:channel id="FUNDSIN.BLACKLISTRESEND.RESPONSE"/>
+	<int:channel id="FUNDSIN.BLACKLISTRESEND.ACTIVITY.LOG"/>
+	<int:channel id="FUNDSIN.BLACKLIST_RESEND.ERROR.CHANNEL"/>
+	
+	<int:chain id="resendFundsInBlacklistService" 
+		input-channel="FUNDSIN.BLACKLIST_RESEND.in.channel">
+		<int:service-activator 
+			ref="fundsin.MsgValidator"
+			method="validateBlacklistResendReuqest" />	
+		<int:router
+			id="fundsinBlacklistResendValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDSIN.BLACKLISTRESEND.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDSIN.BLACKLIST_RESEND.process" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain id="fundsInblacklistDataEnrich" input-channel="FUNDSIN.BLACKLIST_RESEND.process" output-channel="FUNDSIN.BLACKLISTRESEND.CREATE.EVENT">
+		<int:service-activator
+			id="FUNDSIN.BlacklistResend.ENRICH"
+			ref="fundsin.DataEnrich"
+			method="enrichDataForBlacklistRecheck" />
+	</int:chain>
+	
+	<int:chain id="fundsInblacklistEventCreater" input-channel="FUNDSIN.BLACKLISTRESEND.CREATE.EVENT" output-channel="FUNDSIN.BLACKLISTRESEND.REQUEST.SENDER">
+		<int:service-activator
+			id="fundsin.BLACKLISTRESEND.event"
+			method="createEvent" ref="eventDBServiceImpl">
+		</int:service-activator>
+	</int:chain>
+	
+		<int:chain id="fundsInblacklistRequestSender" input-channel="FUNDSIN.BLACKLISTRESEND.REQUEST.SENDER" output-channel="FUNDSIN.BLACKLISTRESEND.out.channel">
+		<int:transformer
+			ref="fundsin.blacklistTransformer"
+			method="transformBlacklistResendRequest" />
+		<int:service-activator
+			id="fundsin.BLACKLIST.RESEND"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('INTERNAL_RULE_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).INTERNAL_RULE_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsin.blacklistTransformer"
+			method="transformBlacklistRecheckResponse" />
+			<int:filter discard-channel="FUNDSIN.BLACKLIST_RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	 <int:chain input-channel="FUNDSIN.BLACKLISTRESEND.out.channel" output-channel="FUNDSIN.BLACKLISTRESEND.ACTIVITY.LOG">
+		<int:service-activator id="fundsin.BLACKLISTRESEND.SAVE.EVENT.SERVICE"
+			method="createEventSerivceLog" ref= "eventDBServiceImpl">
+		</int:service-activator>
+		<int:filter  discard-channel="FUNDSIN.BLACKLIST_RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain> 
+	
+	<int:chain id="fundsin.blacklistRepeatcreateActivity" input-channel="FUNDSIN.BLACKLISTRESEND.ACTIVITY.LOG" output-channel="FUNDSIN.BLACKLISTRESEND.RESPONSE">
+		<int:service-activator id="fundsin.blacklistResendActivityBuilder" ref="blacklistResendActivityBuilder"  method="buildActivityLogs" />
+		<int:service-activator id="fundsin.blacklistResendSetServiceStatus" ref="fundsInDBService"  method="updateServiceStatusIntoPaymentIn" />
+		<int:service-activator
+			id="fundsin.kafkaTxExecutor"
+			ref="kafkaTxExecutorServiceImpl"
+			method="executeKafkaTx" />	   
+		<int:service-activator id="fundsin.blacklistResendActivity"  method="createPaymentInActivity" >
+	    <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl" />
+	    </int:service-activator>
+	    <int:filter discard-channel="FUNDSIN.BLACKLIST_RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain input-channel="FUNDSIN.BLACKLISTRESEND.RESPONSE" output-channel="nullChannel">
+	<int:service-activator id="fundsin.FRAUGSTERRESEND.RES" ref="blacklistResendResponse" method="process" />
+	<int:filter discard-channel="FUNDSIN.BLACKLIST_RESEND.ERROR.CHANNEL"
+			expression="!payload.isFailed()" />
+	</int:chain>
+	
+	
+	<int:chain
+		id="fundsin.blacklistResendErrorChain"
+		input-channel="FUNDSIN.BLACKLIST_RESEND.ERROR.CHANNEL"
+		output-channel="nullChannel">
+		<int:service-activator 
+			id="fundsin.resend.blacklist"
+			ref="blacklist.resend.errorhandler"
+			method="logError" />	
+	</int:chain>
+	
+	<bean id="fundsin.MsgValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsin.MessageValidator"/>
+	<bean id="blacklistResendResponse" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist.PrepareBlacklistResendResponse"/>
+	<bean id="blacklistResendActivityBuilder" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist.ResendActivityLogBuilder"/>
+	<bean id="eventDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.EventDBServiceImpl"/>
+	<bean id="fundsin.DataEnrich" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.DataEnricher"/>	
+	<bean id="fundsin.blacklistTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsin.InternalRuleServiceTransformer"/>	
+	<bean id="fundsInDBService" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsInDBServiceImpl"/>
+	<bean id="blacklist.resend.errorhandler" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist.BlacklistRepeatErrorHandler" />
+</beans>

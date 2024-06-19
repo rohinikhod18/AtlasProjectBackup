@@ -1,0 +1,575 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegUpdateTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.transformer</a> &gt; <span class="el_source">RegUpdateTransformer.java</span></div><h1>RegUpdateTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.transformer;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.core.ITransform;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityTemplateEnum;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.core.domain.ComplianceStatus;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.StatusReasonUpdateRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.WatchlistUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.ProfileActivityLogDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegUpdateDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationUpdateRequest;
+import com.currenciesdirect.gtg.compliance.dbport.enums.ServiceStatusEnum;
+import com.currenciesdirect.gtg.compliance.util.StringUtils;
+
+/**
+ * The Class RegUpdateTransformer.
+ */
+@Component(&quot;regUpdateTransformer&quot;)
+<span class="fc" id="L28">public class RegUpdateTransformer implements ITransform&lt;RegUpdateDBDto, RegistrationUpdateRequest&gt; {</span>
+
+	public static final String PRE_WATCHLIST = &quot;{PRE_WATCHLIST}&quot;;
+	public static final String CURRENT_WATCHLIST = &quot;{CURRENT_WATCHLIST}&quot;;
+
+	private String getUserName(RegistrationUpdateRequest request) {
+<span class="pc bpc" id="L34" title="1 of 2 branches missed.">		if (request.getUser() != null) {</span>
+<span class="fc" id="L35">			return request.getUser().getName();</span>
+		}
+<span class="nc" id="L37">		return null;</span>
+	}
+
+	@Override
+	public RegUpdateDBDto transform(RegistrationUpdateRequest request) {
+<span class="fc" id="L42">		RegUpdateDBDto requestHandler = new RegUpdateDBDto();</span>
+<span class="fc" id="L43">		requestHandler.setAccountId(request.getAccountId());</span>
+<span class="fc" id="L44">		requestHandler.setContactId(request.getContactId());</span>
+<span class="fc" id="L45">		requestHandler.setContactSfId(request.getContactSfId());</span>
+<span class="fc" id="L46">		requestHandler.setAccountSfId(request.getAccountSfId());</span>
+<span class="fc" id="L47">		requestHandler.setOrgCode(request.getOrgCode());</span>
+<span class="fc" id="L48">		requestHandler.setComment(request.getComment());</span>
+<span class="fc" id="L49">		requestHandler.setComplianceLog(request.getComplianceLog());</span>
+<span class="fc" id="L50">		requestHandler.setFragusterEventServiceLogId(request.getFraugsterEventServiceLogId());</span>
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">		requestHandler.setOverallPaymentInWatchlistStatus(Boolean.TRUE.equals(request.getOverallWatchlistStatus()) ? ServiceStatusEnum.PASS : ServiceStatusEnum.FAIL);</span>
+<span class="pc bpc" id="L52" title="1 of 2 branches missed.">		requestHandler.setOverallPaymentOutWatchlistStatus(Boolean.TRUE.equals(request.getOverallWatchlistStatus()) ? ServiceStatusEnum.PASS : ServiceStatusEnum.FAIL);</span>
+<span class="fc" id="L53">		requestHandler.setCreatedBy(getUserName(request));</span>
+<span class="fc" id="L54">		requestHandler.setAddWatchlist(new ArrayList&lt;String&gt;());</span>
+<span class="fc" id="L55">		requestHandler.setDeletedWatchlist(new ArrayList&lt;String&gt;());</span>
+<span class="fc" id="L56">		requestHandler.setAddReasons(new ArrayList&lt;String&gt;());</span>
+<span class="fc" id="L57">		requestHandler.setDeletedReasons(new ArrayList&lt;String&gt;());</span>
+<span class="fc" id="L58">		requestHandler.setActivityLog(new ArrayList&lt;ProfileActivityLogDto&gt;());</span>
+<span class="fc" id="L59">		requestHandler.setCustType(request.getCustType());</span>
+<span class="fc" id="L60">		requestHandler.setUserResourceId(request.getUserResourceId());</span>
+		
+<span class="fc" id="L62">		handleWatchlistUpdateRequest(request.getWatchlist(), requestHandler.getAddWatchlist(),</span>
+<span class="fc" id="L63">				requestHandler.getDeletedWatchlist());</span>
+<span class="fc" id="L64">		handleContactStatusReasonUpdateRequest(request.getContactStatusReasons(), requestHandler.getAddReasons(),</span>
+<span class="fc" id="L65">				requestHandler.getDeletedReasons());</span>
+<span class="fc" id="L66">		requestHandler.setContactStatus(</span>
+<span class="fc" id="L67">				handleContactStatusRequest(request.getPreContactStatus(), request.getUpdatedContactStatus()));</span>
+<span class="fc" id="L68">		requestHandler.setAccountStatus(handleAccountStatusRequest(request.getPreAccountStatus(),request.getUpdatedAccountStatus()));</span>
+<span class="fc" id="L69">		ProfileActivityLogDto watchlistActivity = getProfileWatchlistActivityLog(request, requestHandler);</span>
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">		if (watchlistActivity != null) {</span>
+<span class="nc" id="L71">			requestHandler.getActivityLog().add(watchlistActivity);</span>
+		}
+<span class="fc" id="L73">		ProfileActivityLogDto contactStatusActivity = getProfileContactStatusUpdateActivityLog(request, requestHandler);</span>
+		
+<span class="fc" id="L75">		ProfileActivityLogDto accountStatusActivity = getProfileAccountStatusUpdateActivityLog(request, requestHandler);</span>
+		
+<span class="pc bpc" id="L77" title="1 of 2 branches missed.">		if (contactStatusActivity != null) {</span>
+<span class="nc" id="L78">			requestHandler.getActivityLog().add(contactStatusActivity);</span>
+		}
+		
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">		if(accountStatusActivity !=null){</span>
+<span class="fc" id="L82">			requestHandler.getActivityLog().add(accountStatusActivity);</span>
+		}
+		/**added by neelesh Pant
+		 * added to create activity log even if status of account or Contact is not changed or Watchlist reason is not changed**/
+		
+<span class="pc bpc" id="L87" title="6 of 8 branches missed.">		if((contactStatusActivity==null &amp;&amp; accountStatusActivity==null &amp;&amp; watchlistActivity==null) &amp;&amp; request.getComment()!=null)</span>
+		{
+<span class="nc" id="L89">			ProfileActivityLogDto addCommentActivity =getAddCommentActivityLog(request);</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">			if(addCommentActivity!=null)</span>
+<span class="nc" id="L91">				requestHandler.getActivityLog().add(addCommentActivity);	</span>
+		}
+		
+<span class="pc bpc" id="L94" title="3 of 4 branches missed.">		if(request.getComplianceLog() !=null &amp;&amp; !request.getComplianceLog().isEmpty()){</span>
+<span class="nc" id="L95">			ProfileActivityLogDto addCompliacneLogActivity =getAddComplianceLog(request);</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">			if(addCompliacneLogActivity != null){</span>
+<span class="nc" id="L97">				requestHandler.getActivityLog().add(addCompliacneLogActivity);</span>
+			}
+		}
+		
+<span class="fc" id="L101">		requestHandler.setComplianceDoneOn(request.getComplianceDoneOn());	</span>
+<span class="fc" id="L102">		requestHandler.setRegistrationInDate(request.getRegistrationInDate());</span>
+<span class="fc" id="L103">		requestHandler.setComplianceExpiry(request.getComplianceExpiry());</span>
+<span class="fc" id="L104">		requestHandler.setIsContactOnQueue(getContactQueueStatus(request,requestHandler));</span>
+<span class="fc" id="L105">		requestHandler.setIsAccountOnQueue(getAccountQueueStatus(request,requestHandler));</span>
+<span class="fc" id="L106">		requestHandler.setIsRequestFromQueue(request.getIsOnQueue());</span>
+		
+<span class="fc" id="L108">		return requestHandler;</span>
+	}
+
+
+	private Boolean getAccountQueueStatus(RegistrationUpdateRequest request, RegUpdateDBDto requestHandler) {
+<span class="fc" id="L113">		Boolean isOnQueue = Boolean.FALSE;</span>
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">		if (request.getCustType().equalsIgnoreCase(Constants.CUST_TYPE_CFX)) {</span>
+<span class="nc" id="L115">			isOnQueue = getCFXIsOnQueueStatus(request);</span>
+<span class="nc" id="L116">			requestHandler.setIsContactOnQueue(Boolean.FALSE);</span>
+		}
+<span class="fc" id="L118">		return isOnQueue;</span>
+	}
+
+	private Boolean getContactQueueStatus(RegistrationUpdateRequest request, RegUpdateDBDto requestHandler) {
+<span class="fc" id="L122">		Boolean isOnQueue = Boolean.FALSE;</span>
+		
+<span class="pc bpc" id="L124" title="1 of 2 branches missed.">		if (request.getCustType().equalsIgnoreCase(Constants.CUST_TYPE_PFX)) {</span>
+<span class="fc" id="L125">			isOnQueue = getPfxIsOnQueueStatus(request);</span>
+<span class="fc" id="L126">			requestHandler.setIsAccountOnQueue(Boolean.FALSE);</span>
+		}
+<span class="fc" id="L128">		return isOnQueue;</span>
+	}
+
+	private Boolean getCFXIsOnQueueStatus(RegistrationUpdateRequest request) {
+		Boolean isOnQueue;
+<span class="nc bnc" id="L133" title="All 2 branches missed.">		if (Boolean.TRUE.equals(request.getIsOnQueue())) {</span>
+
+<span class="nc bnc" id="L135" title="All 2 branches missed.">			if (request.getUpdatedAccountStatus().equalsIgnoreCase(ComplianceStatus.ACTIVE.name())</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">					|| request.getUpdatedAccountStatus().equalsIgnoreCase(ComplianceStatus.REJECTED.name())</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">					|| !StringUtils.isNullOrEmpty(request.getComment())) {</span>
+<span class="nc" id="L138">				isOnQueue = Boolean.FALSE;</span>
+			} else {
+<span class="nc" id="L140">				isOnQueue = Boolean.TRUE;</span>
+			}
+		} else {
+<span class="nc" id="L143">			isOnQueue = Boolean.FALSE;</span>
+		}
+<span class="nc" id="L145">		return isOnQueue;</span>
+	}
+
+	private Boolean getPfxIsOnQueueStatus(RegistrationUpdateRequest request) {
+		Boolean isOnQueue;
+<span class="pc bpc" id="L150" title="1 of 2 branches missed.">		if (Boolean.TRUE.equals(request.getIsOnQueue())) {</span>
+
+<span class="nc bnc" id="L152" title="All 2 branches missed.">			if (request.getUpdatedContactStatus().equalsIgnoreCase(ComplianceStatus.ACTIVE.name())</span>
+<span class="nc bnc" id="L153" title="All 2 branches missed.">					|| request.getUpdatedContactStatus().equalsIgnoreCase(ComplianceStatus.REJECTED.name())</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">					|| !StringUtils.isNullOrEmpty(request.getComment())) {</span>
+<span class="nc" id="L155">				isOnQueue = Boolean.FALSE;</span>
+			} else {
+<span class="nc" id="L157">				isOnQueue = Boolean.TRUE;</span>
+			}
+		} else {
+<span class="fc" id="L160">			isOnQueue = Boolean.FALSE;</span>
+		}
+<span class="fc" id="L162">		return isOnQueue;</span>
+	}
+
+	/**
+	 * Handle watchlist update request.
+	 *
+	 * @param request
+	 *            the request
+	 * @param addWatchlist
+	 *            the add watchlist
+	 * @param deleteWatchlist
+	 *            the delete watchlist
+	 */
+	private void handleWatchlistUpdateRequest(WatchlistUpdateRequest[] request, List&lt;String&gt; addWatchlist,
+			List&lt;String&gt; deleteWatchlist) {
+        
+<span class="fc bfc" id="L178" title="All 2 branches covered.">		for (WatchlistUpdateRequest watchlist : request) {</span>
+<span class="fc" id="L179">			 boolean preVal = false; </span>
+<span class="fc" id="L180">			 boolean updatedVal = false;</span>
+<span class="pc bpc" id="L181" title="1 of 2 branches missed.">			if(watchlist.getPreValue() != null){</span>
+<span class="fc" id="L182">				  preVal = watchlist.getPreValue();</span>
+			 }
+<span class="pc bpc" id="L184" title="1 of 2 branches missed.">			 if(watchlist.getUpdatedValue() !=null){</span>
+<span class="fc" id="L185">				  updatedVal = watchlist.getUpdatedValue();</span>
+			 }
+			
+<span class="pc bpc" id="L188" title="3 of 6 branches missed.">			if (watchlist.getName() == null || watchlist.getName().isEmpty()</span>
+					|| (preVal == updatedVal)) {
+<span class="fc" id="L190">				continue;</span>
+			}
+
+<span class="nc bnc" id="L193" title="All 4 branches missed.">			if (preVal &amp;&amp; !updatedVal) {</span>
+<span class="nc" id="L194">				deleteWatchlist.add(watchlist.getName());</span>
+			} else {
+<span class="nc" id="L196">				addWatchlist.add(watchlist.getName());</span>
+			}
+		}
+<span class="fc" id="L199">	}</span>
+
+	/**
+	 * Handle contact status reason update request.
+	 *
+	 * @param request
+	 *            the request
+	 * @param addReasons
+	 *            the add reasons
+	 * @param deleteReasons
+	 *            the delete reasons
+	 */
+	private void handleContactStatusReasonUpdateRequest(StatusReasonUpdateRequest[] request, List&lt;String&gt; addReasons,
+			List&lt;String&gt; deleteReasons) {
+
+<span class="fc bfc" id="L214" title="All 2 branches covered.">		for (StatusReasonUpdateRequest reason : request) {</span>
+
+<span class="pc bpc" id="L216" title="2 of 4 branches missed.">			if (reason.getName() == null || reason.getName().isEmpty()</span>
+<span class="pc bpc" id="L217" title="1 of 2 branches missed.">					|| reason.getPreValue().equals(reason.getUpdatedValue())) {</span>
+<span class="fc" id="L218">				continue;</span>
+			}
+
+<span class="nc bnc" id="L221" title="All 4 branches missed.">			if (Boolean.TRUE.equals(reason.getPreValue()) &amp;&amp; Boolean.FALSE.equals(reason.getUpdatedValue())) {</span>
+<span class="nc" id="L222">				deleteReasons.add(reason.getName());</span>
+			} else {
+<span class="nc" id="L224">				addReasons.add(reason.getName());</span>
+			}
+		}
+<span class="fc" id="L227">	}</span>
+
+	/**
+	 * Handle contact status request.
+	 *
+	 * @param preStatus
+	 *            the pre status
+	 * @param updatedStatus
+	 *            the updated status
+	 * @return the string
+	 */
+	private String handleContactStatusRequest(String preStatus, String updatedStatus) {
+
+<span class="pc bpc" id="L240" title="1 of 2 branches missed.">		if (updatedStatus == null) {</span>
+<span class="fc" id="L241">			return null;</span>
+		}
+
+<span class="nc bnc" id="L244" title="All 4 branches missed.">		if (preStatus != null &amp;&amp; preStatus.equals(updatedStatus)) {</span>
+<span class="nc" id="L245">			return null;</span>
+		}
+<span class="nc" id="L247">		return updatedStatus;</span>
+	}
+	
+	private String handleAccountStatusRequest(String preStatus, String updatedAccountStatus) {
+
+<span class="pc bpc" id="L252" title="1 of 2 branches missed.">		if (updatedAccountStatus == null) {</span>
+<span class="nc" id="L253">			return null;</span>
+		}
+
+<span class="pc bpc" id="L256" title="2 of 4 branches missed.">		if (preStatus != null &amp;&amp; preStatus.equals(updatedAccountStatus)) {</span>
+<span class="nc" id="L257">			return null;</span>
+		}
+<span class="fc" id="L259">		return updatedAccountStatus;</span>
+	}
+
+	/**
+	 * Gets the profile watchlist activity log.
+	 *
+	 * @param request
+	 *            the request
+	 * @param requestHandler
+	 *            the request handler
+	 * @return the profile watchlist activity log
+	 */
+	private ProfileActivityLogDto getProfileWatchlistActivityLog(RegistrationUpdateRequest request,
+			RegUpdateDBDto requestHandler) {
+<span class="fc" id="L273">		String log = getLogFromWatchlist(request.getWatchlist(), requestHandler.getAddWatchlist(),</span>
+<span class="fc" id="L274">				requestHandler.getDeletedWatchlist());</span>
+<span class="pc bpc" id="L275" title="1 of 2 branches missed.">		if (log != null) {</span>
+<span class="nc" id="L276">			return getProfileActivityLog(request, log, ActivityType.PROFILE_WATCHLIST);</span>
+		}
+<span class="fc" id="L278">		return null;</span>
+	}
+
+	/**
+	 * Gets the profile contact status update activity log.
+	 *
+	 * @param request
+	 *            the request
+	 * @param requestHandler
+	 *            the request handler
+	 * @return the profile contact status update activity log
+	 */
+	private ProfileActivityLogDto getProfileContactStatusUpdateActivityLog(RegistrationUpdateRequest request,
+			RegUpdateDBDto requestHandler) {
+<span class="fc" id="L292">		String log = getActivityLogsForContactStaus(request.getPreContactStatus(), requestHandler.getContactStatus());</span>
+<span class="pc bpc" id="L293" title="1 of 2 branches missed.">		if (log != null) {</span>
+<span class="nc" id="L294">			return getProfileActivityLog(request, log, ActivityType.PROFILE_CONTACT_STATUS_UPDATE);</span>
+		}
+<span class="fc" id="L296">		return null;</span>
+	}
+	
+	private ProfileActivityLogDto getProfileAccountStatusUpdateActivityLog(RegistrationUpdateRequest request,
+			RegUpdateDBDto requestHandler) {
+<span class="fc" id="L301">		String log = getActivityLogsForAccountStaus(request.getPreAccountStatus(), requestHandler.getAccountStatus());</span>
+<span class="pc bpc" id="L302" title="1 of 2 branches missed.">		if (log != null) {</span>
+<span class="fc" id="L303">			return getProfileActivityLog(request, log, ActivityType.PROFILE_ACCOUNT_STATUS_UPDATE);</span>
+		}
+<span class="nc" id="L305">		return null;</span>
+	}
+	
+	/**
+	 * Gets the profile activity log.
+	 *
+	 * @param request
+	 *            the request
+	 * @param log
+	 *            the log
+	 * @param activityType
+	 *            the activity type
+	 * @return the profile activity log
+	 */
+	private ProfileActivityLogDto getProfileActivityLog(RegistrationUpdateRequest request, String log,
+			ActivityType activityType) {
+
+<span class="fc" id="L322">		ProfileActivityLogDto activityLogDto = new ProfileActivityLogDto();</span>
+<span class="fc" id="L323">		activityLogDto.setAccountId(request.getAccountId());</span>
+<span class="pc bpc" id="L324" title="1 of 2 branches missed.">		if((&quot;PFX&quot;).equalsIgnoreCase(request.getCustType().toUpperCase().trim())){</span>
+<span class="fc" id="L325">			activityLogDto.setContactId(request.getContactId());</span>
+		}
+<span class="fc" id="L327">		activityLogDto.setOrgCode(request.getOrgCode());</span>
+<span class="fc" id="L328">		activityLogDto.setComment(request.getComment());</span>
+<span class="fc" id="L329">		activityLogDto.setActivityBy(getUserName(request));</span>
+<span class="fc" id="L330">		activityLogDto.setCreatedBy(getUserName(request));</span>
+<span class="fc" id="L331">		activityLogDto.setUpdatedBy(getUserName(request));</span>
+<span class="fc" id="L332">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="fc" id="L333">		activityLogDto.setCreatedOn(timestamp);</span>
+<span class="fc" id="L334">		activityLogDto.setTimeStatmp(timestamp);</span>
+<span class="fc" id="L335">		activityLogDto.setUpdatedOn(timestamp);</span>
+<span class="fc" id="L336">		ActivityLogDetailDto activityLogDetailDto = new ActivityLogDetailDto();</span>
+<span class="fc" id="L337">		activityLogDto.setActivityLogDetailDto(activityLogDetailDto);</span>
+<span class="fc" id="L338">		activityLogDetailDto.setActivityType(activityType);</span>
+<span class="fc" id="L339">		activityLogDetailDto.setLog(log);</span>
+<span class="fc" id="L340">		activityLogDetailDto.setCreatedBy(getUserName(request));</span>
+<span class="fc" id="L341">		activityLogDetailDto.setUpdatedBy(getUserName(request));</span>
+<span class="fc" id="L342">		activityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="fc" id="L343">		activityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="fc" id="L344">		return activityLogDto;</span>
+	}
+
+	/**
+	 * Gets the log from watchlist.
+	 *
+	 * @param request
+	 *            the request
+	 * @param addedWatchlists
+	 *            the added watchlists
+	 * @param deletedWatchlists
+	 *            the deleted watchlists
+	 * @return the log from watchlist
+	 */
+	private String getLogFromWatchlist(WatchlistUpdateRequest[] request, List&lt;String&gt; addedWatchlists,
+			List&lt;String&gt; deletedWatchlists) {
+<span class="fc" id="L360">		String preWatchlist = getPreviousWatchlist(request);</span>
+<span class="pc bpc" id="L361" title="2 of 4 branches missed.">		if (addedWatchlists.isEmpty() &amp;&amp; deletedWatchlists.isEmpty()) {</span>
+<span class="fc" id="L362">			return null;</span>
+<span class="nc bnc" id="L363" title="All 4 branches missed.">		} else if (!addedWatchlists.isEmpty() &amp;&amp; !deletedWatchlists.isEmpty()) {</span>
+<span class="nc" id="L364">			return getActivityLogsForAddAndDeleteWatchlist(preWatchlist, addedWatchlists, deletedWatchlists);</span>
+<span class="nc bnc" id="L365" title="All 2 branches missed.">		} else if (!addedWatchlists.isEmpty()) {</span>
+<span class="nc" id="L366">			return getActivityLogsForAddedWatchlist(preWatchlist, addedWatchlists);</span>
+		} else {
+<span class="nc" id="L368">			return getActivityLogsForDeletedWatchlist(preWatchlist, deletedWatchlists);</span>
+		}
+	}
+
+	/**
+	 * Gets the activity logs for deleted watchlist.
+	 *
+	 * @param preWatchlist
+	 *            the pre watchlist
+	 * @param deletedWatchlistList
+	 *            the deleted watchlist list
+	 * @return the activity logs for deleted watchlist
+	 */
+	public static String getActivityLogsForDeletedWatchlist(String preWatchlist, List&lt;String&gt; deletedWatchlistList) {
+<span class="pc bpc" id="L382" title="1 of 2 branches missed.">		if(null == preWatchlist)</span>
+<span class="nc" id="L383">			return null;</span>
+<span class="fc" id="L384">		ArrayList&lt;String&gt; arrayList = new ArrayList&lt;&gt;(Arrays.asList(preWatchlist.split(&quot;,&quot;)));</span>
+<span class="fc" id="L385">		ArrayList&lt;String&gt; current = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L386" title="All 2 branches covered.">		for (String s : arrayList) {</span>
+<span class="pc bpc" id="L387" title="1 of 2 branches missed.">			if (!deletedWatchlistList.contains(s)) {</span>
+<span class="nc" id="L388">				current.add(s);</span>
+			}
+<span class="fc" id="L390">		}</span>
+		
+<span class="fc" id="L392">		String prevWatch = preWatchlist.replace(&quot;,&quot;, &quot;, &quot;);</span>
+<span class="pc bpc" id="L393" title="1 of 2 branches missed.">		if(current.isEmpty()){</span>
+<span class="fc" id="L394">			return ActivityTemplateEnum.ALL_WATHCLIST_DELETED.getTemplate().replace(PRE_WATCHLIST, prevWatch);</span>
+					
+		}
+		
+<span class="nc" id="L398">		String currents = current.toString();</span>
+<span class="nc" id="L399">		currents = currents.substring(1, currents.length() - 1).replace(&quot;, &quot;, &quot;, &quot;);</span>
+<span class="nc" id="L400">		return ActivityTemplateEnum.WATHCLIST.getTemplate().replace(PRE_WATCHLIST, prevWatch)</span>
+<span class="nc" id="L401">				.replace(CURRENT_WATCHLIST, currents);</span>
+	}
+
+	/**
+	 * Gets the activity logs for added watchlist.
+	 *
+	 * @param preWatchlist
+	 *            the pre watchlist
+	 * @param addedWatchlistList
+	 *            the added watchlist list
+	 * @return the activity logs for added watchlist
+	 */
+	private String getActivityLogsForAddedWatchlist(String preWatchlist, List&lt;String&gt; addedWatchlistList) {
+<span class="nc" id="L414">		String addWatchlistFormat = null;</span>
+<span class="nc" id="L415">		ArrayList&lt;String&gt; current = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L416" title="All 4 branches missed.">		if (preWatchlist != null &amp;&amp; !preWatchlist.isEmpty()) {</span>
+<span class="nc" id="L417">			ArrayList&lt;String&gt; arrayList = new ArrayList&lt;&gt;(Arrays.asList(preWatchlist.split(&quot;,&quot;)));</span>
+<span class="nc" id="L418">			current.addAll(arrayList);</span>
+<span class="nc bnc" id="L419" title="All 2 branches missed.">			for (String s : addedWatchlistList) {</span>
+<span class="nc" id="L420">				current.add(s);</span>
+<span class="nc" id="L421">			}</span>
+<span class="nc" id="L422">		} else {</span>
+<span class="nc" id="L423">			current.addAll(addedWatchlistList);</span>
+		}
+
+<span class="nc" id="L426">		String currents = current.toString();</span>
+<span class="nc" id="L427">		currents = currents.substring(1, currents.length() - 1).replace(&quot;, &quot;, &quot;, &quot;);</span>
+		
+<span class="nc bnc" id="L429" title="All 2 branches missed.">		if (preWatchlist != null) {</span>
+<span class="nc" id="L430">			String prevWatch = preWatchlist.replace(&quot;,&quot;, &quot;, &quot;);</span>
+<span class="nc" id="L431">			addWatchlistFormat = ActivityTemplateEnum.WATHCLIST.getTemplate().replace(PRE_WATCHLIST, prevWatch);</span>
+<span class="nc" id="L432">		} else {</span>
+<span class="nc" id="L433">			addWatchlistFormat = ActivityTemplateEnum.ADD_WATCHLIST.getTemplate();</span>
+		}
+<span class="nc" id="L435">		return addWatchlistFormat.replace(CURRENT_WATCHLIST, currents);</span>
+	}
+
+	/**
+	 * Gets the activity logs for add and delete watchlist.
+	 *
+	 * @param preWatchlist
+	 *            the pre watchlist
+	 * @param addedWatchlistList
+	 *            the added watchlist list
+	 * @param delWatchlistList
+	 *            the del watchlist list
+	 * @return the activity logs for add and delete watchlist
+	 */
+	private String getActivityLogsForAddAndDeleteWatchlist(String preWatchlist, List&lt;String&gt; addedWatchlistList,
+			List&lt;String&gt; delWatchlistList) {
+<span class="nc bnc" id="L451" title="All 2 branches missed.">		if(null == preWatchlist)</span>
+<span class="nc" id="L452">			return null;</span>
+<span class="nc" id="L453">		ArrayList&lt;String&gt; arrayList = new ArrayList&lt;&gt;(Arrays.asList(preWatchlist.split(&quot;,&quot;)));</span>
+<span class="nc" id="L454">		ArrayList&lt;String&gt; current = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L455">		current.addAll(arrayList);</span>
+<span class="nc bnc" id="L456" title="All 2 branches missed.">		for (String s : addedWatchlistList) {</span>
+<span class="nc" id="L457">			current.add(s);</span>
+<span class="nc" id="L458">		}</span>
+<span class="nc bnc" id="L459" title="All 2 branches missed.">		for (String s : arrayList) {</span>
+<span class="nc bnc" id="L460" title="All 2 branches missed.">			if (delWatchlistList.contains(s)) {</span>
+<span class="nc" id="L461">				current.remove(s);</span>
+			}
+<span class="nc" id="L463">		}</span>
+<span class="nc" id="L464">		String currents = current.toString();</span>
+<span class="nc" id="L465">		String prevWatch = preWatchlist.replace(&quot;,&quot;, &quot;, &quot;);</span>
+<span class="nc" id="L466">		currents = currents.substring(1, currents.length() - 1);</span>
+<span class="nc" id="L467">		return ActivityTemplateEnum.WATHCLIST.getTemplate().replace(PRE_WATCHLIST, prevWatch)</span>
+<span class="nc" id="L468">				.replace(CURRENT_WATCHLIST, currents);</span>
+	}
+
+	/**
+	 * Gets the activity logs for contact staus.
+	 *
+	 * @param preStatus
+	 *            the pre status
+	 * @param updateStatus
+	 *            the update status
+	 * @return the activity logs for contact staus
+	 */
+	private String getActivityLogsForContactStaus(String preStatus, String updateStatus) {
+<span class="fc" id="L481">		String updateContactFormat = null;</span>
+<span class="pc bpc" id="L482" title="1 of 2 branches missed.">		if (updateStatus != null) {</span>
+<span class="nc" id="L483">			updateContactFormat = ActivityTemplateEnum.UPDATE_CONTACT_STATUS.getTemplate();</span>
+<span class="nc" id="L484">			updateContactFormat = updateContactFormat.replace(&quot;{PRE_STATUS}&quot;, preStatus).replace(&quot;{UPDATED_STATUS}&quot;,</span>
+					updateStatus);
+		}
+<span class="fc" id="L487">		return updateContactFormat;</span>
+	}
+	
+	private String getActivityLogsForAccountStaus(String preStatus, String updateStatus) {
+<span class="fc" id="L491">		String updateContactFormat = null;</span>
+<span class="pc bpc" id="L492" title="1 of 2 branches missed.">		if (updateStatus != null) {</span>
+<span class="fc" id="L493">			updateContactFormat = ActivityTemplateEnum.UPDATE_ACCOUNT_STATUS.getTemplate();</span>
+<span class="fc" id="L494">			updateContactFormat = updateContactFormat.replace(&quot;{PRE_STATUS}&quot;, preStatus).replace(&quot;{UPDATED_STATUS}&quot;,</span>
+					updateStatus);
+		}
+<span class="fc" id="L497">		return updateContactFormat;</span>
+	}
+
+	/**
+	 * Gets the previous watchlist.
+	 *
+	 * @param request
+	 *            the request
+	 * @return the previous watchlist
+	 */
+	private String getPreviousWatchlist(WatchlistUpdateRequest[] request) {
+<span class="fc" id="L508">		StringBuilder preWatchlist = new StringBuilder();</span>
+<span class="fc" id="L509">		boolean isEle = false;</span>
+<span class="fc bfc" id="L510" title="All 2 branches covered.">		for (WatchlistUpdateRequest watchlist : request) {</span>
+
+<span class="pc bpc" id="L512" title="2 of 4 branches missed.">			if (watchlist.getName() == null || watchlist.getName().isEmpty()) {</span>
+<span class="nc" id="L513">				continue;</span>
+			}
+
+<span class="pc bpc" id="L516" title="1 of 2 branches missed.">			if (Boolean.TRUE.equals(watchlist.getPreValue())) {</span>
+<span class="nc" id="L517">				isEle = true;</span>
+<span class="nc" id="L518">				preWatchlist.append(watchlist.getName().concat(&quot;,&quot;));</span>
+			}
+		}
+<span class="pc bpc" id="L521" title="1 of 2 branches missed.">		if (isEle) {</span>
+<span class="nc" id="L522">			preWatchlist.setLength(preWatchlist.length() - 1);</span>
+		}
+<span class="pc bpc" id="L524" title="1 of 2 branches missed.">		if (preWatchlist.length() != 0) {</span>
+<span class="nc" id="L525">			return preWatchlist.toString();</span>
+		}
+<span class="fc" id="L527">		return null;</span>
+
+	}
+	//added By Neelesh 
+			private ProfileActivityLogDto getAddCommentActivityLog(RegistrationUpdateRequest request)
+			{
+<span class="nc" id="L533">				String log=getActivitiesLogsForAddComment(request.getComment());</span>
+<span class="nc bnc" id="L534" title="All 2 branches missed.">				if(log!=null)</span>
+				{
+<span class="nc" id="L536">					return getProfileActivityLog(request, log,ActivityType.PROFILE_ADDED_COMMENT);</span>
+				}
+<span class="nc" id="L538">				return null;</span>
+			}
+
+	//added by neelesh pant
+		private String getActivitiesLogsForAddComment(String comment)
+		{
+<span class="nc" id="L544">			String updateContactFormat = null;</span>
+<span class="nc bnc" id="L545" title="All 2 branches missed.">			if(comment!=null)</span>
+<span class="nc" id="L546">			 updateContactFormat=ActivityTemplateEnum.ADD_COMMENT.getTemplate();</span>
+			
+<span class="nc" id="L548">			return updateContactFormat;</span>
+				
+			    }
+		
+		private ProfileActivityLogDto getAddComplianceLog(RegistrationUpdateRequest request){
+<span class="nc" id="L553">			String log=getActivitiesLogsForAddComplianceLog(request.getComplianceLog());</span>
+<span class="nc bnc" id="L554" title="All 2 branches missed.">			if(log!=null)</span>
+			{
+<span class="nc" id="L556">				ProfileActivityLogDto activityLog=getProfileActivityLog(request, log,ActivityType.PROFILE_ADDED_COMPLIANCE_LOG);</span>
+<span class="nc" id="L557">				activityLog.setComment(request.getComplianceLog());</span>
+<span class="nc" id="L558">				activityLog.setContactId(null);</span>
+<span class="nc" id="L559">				return activityLog;</span>
+			}
+<span class="nc" id="L561">			return null;</span>
+		}
+		
+		private String getActivitiesLogsForAddComplianceLog(String complianceLog)
+		{
+<span class="nc" id="L566">			String updateContactFormat = null;</span>
+<span class="nc bnc" id="L567" title="All 2 branches missed.">			if(complianceLog!=null)</span>
+<span class="nc" id="L568">			 updateContactFormat=ActivityTemplateEnum.COMPLIANCE_LOG.getTemplate();</span>
+			
+<span class="nc" id="L570">			return updateContactFormat;</span>
+				
+		 }
+		
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

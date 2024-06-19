@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DeviceInfoImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">DeviceInfoImpl.java</span></div><h1>DeviceInfoImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.DeviceInfo;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.IDeviceInfo;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class DeviceInfoImpl.
+ */
+<span class="fc" id="L32">public class DeviceInfoImpl extends AbstractDao implements IDeviceInfo {</span>
+	
+	/** The Constant LOG. */
+<span class="fc" id="L35">	private static final Logger LOG = LoggerFactory.getLogger(DeviceInfoImpl.class);</span>
+
+	@Override
+	public Message&lt;MessageContext&gt; saveDeviceInfo(Message&lt;MessageContext&gt; message) {
+<span class="fc" id="L39">		DeviceInfo deviceInfo = null;</span>
+<span class="fc" id="L40">		Integer eventId = null;</span>
+		try {
+<span class="fc" id="L42">			OperationEnum operationEnum = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+<span class="pc bpc" id="L43" title="3 of 4 branches missed.">			switch (operationEnum) {</span>
+			case NEW_REGISTRATION:
+			case ADD_CONTACT:
+<span class="fc" id="L46">				RegistrationServiceRequest request = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="fc" id="L47">						.getGatewayMessageExchange().getRequest();</span>
+<span class="fc" id="L48">				deviceInfo = request.getDeviceInfo();</span>
+<span class="fc" id="L49">				break;</span>
+			case FUNDS_OUT:
+<span class="nc" id="L51">				FundsOutRequest fundsOutRequest = (FundsOutRequest) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L52">						.getRequest();</span>
+<span class="nc" id="L53">				deviceInfo = fundsOutRequest.getDeviceInfo();</span>
+<span class="nc" id="L54">				break;</span>
+			case FUNDS_IN:
+<span class="nc" id="L56">				FundsInCreateRequest fundsInCreateRequest = (FundsInCreateRequest) message.getPayload()</span>
+<span class="nc" id="L57">						.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L58">				deviceInfo = fundsInCreateRequest.getDeviceInfo();</span>
+<span class="nc" id="L59">				break;</span>
+			default:
+				break;
+			}
+
+<span class="fc" id="L64">			eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="fc" id="L65">					.getAdditionalAttribute(&quot;eventId&quot;);</span>
+
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">			if (deviceInfo != null) {</span>
+<span class="fc" id="L68">				saveIntoDeviceInfo(message, deviceInfo, eventId);</span>
+			}
+<span class="nc" id="L70">		} catch (Exception e) {</span>
+<span class="nc" id="L71">			LOG.error(&quot;Error in saveDeviceInfo&quot;, e);</span>
+			try {
+<span class="nc" id="L73">				saveIntoDeviceInfo(message, new DeviceInfo(), eventId);</span>
+<span class="nc" id="L74">			} catch (ComplianceException e1) {</span>
+<span class="nc" id="L75">				LOG.error(&quot;Error in saveDeviceInfo&quot;, e1);</span>
+<span class="nc" id="L76">			}</span>
+<span class="fc" id="L77">		}</span>
+<span class="fc" id="L78">		return message;</span>
+	}
+	private void saveIntoDeviceInfo(Message&lt;MessageContext&gt; message, DeviceInfo deviceInfo, Integer eventId)
+			throws ComplianceException {
+<span class="fc" id="L82">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="fc" id="L83">		Connection connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L84">		PreparedStatement statement = null;</span>
+		try {
+<span class="fc" id="L86">			statement = connection.prepareStatement(DBQueryConstant.INSERT_INTO_DEVICEINFO.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="fc" id="L88">			beginTransaction(connection);</span>
+<span class="fc" id="L89">			statement.setInt(1, eventId);</span>
+<span class="fc" id="L90">			updateParameters(deviceInfo, token, statement);</span>
+<span class="fc" id="L91">			statement.executeUpdate();</span>
+<span class="fc" id="L92">			commitTransaction(connection);</span>
+<span class="nc" id="L93">		} catch (Exception e) {</span>
+<span class="nc" id="L94">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L96">			closePrepareStatement(statement);</span>
+<span class="fc" id="L97">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L99">	}</span>
+	
+	private void updateParameters(DeviceInfo deviceInfo, UserProfile token, PreparedStatement statement)
+			throws SQLException {
+<span class="fc" id="L103">		setUserAgent(deviceInfo, statement);</span>
+			
+<span class="fc" id="L105">		setDeviceType(deviceInfo, statement);</span>
+
+<span class="fc" id="L107">		setDeviceName(deviceInfo, statement);</span>
+
+<span class="fc" id="L109">		setDeviceVersion(deviceInfo, statement);</span>
+
+<span class="fc" id="L111">		setDeviceId(deviceInfo, statement);</span>
+
+<span class="fc" id="L113">		setDeviceMfg(deviceInfo, statement);</span>
+
+<span class="fc" id="L115">		setDeviceOS(deviceInfo, statement);</span>
+
+<span class="fc" id="L117">		setDeviceBrowserDetails(deviceInfo, statement);</span>
+
+<span class="fc" id="L119">		setDeviceOSTime(deviceInfo, statement);</span>
+		// Added new attribute in database
+<span class="fc" id="L121">		setCDAppDetails(deviceInfo, statement);</span>
+<span class="fc" id="L122">		statement.setInt(16, token.getUserID());</span>
+<span class="fc" id="L123">		statement.setTimestamp(17, new Timestamp(System.currentTimeMillis()));</span>
+		
+	  //Following field is added for fraud predict API
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getScreenResolution()))</span>
+<span class="nc" id="L127">			statement.setNull(18, Types.VARCHAR);</span>
+		else
+<span class="fc" id="L129">			statement.setString(18, deviceInfo.getScreenResolution());	</span>
+<span class="fc" id="L130">	}</span>
+	
+	private void setDeviceOSTime(DeviceInfo deviceInfo, PreparedStatement statement) throws SQLException {
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getOsDateAndTime())) {</span>
+<span class="nc" id="L134">			statement.setNull(13, Types.TIMESTAMP);</span>
+		} else {
+<span class="fc" id="L136">			statement.setTimestamp(13, getTimeStampForSQl(deviceInfo));</span>
+		}
+<span class="fc" id="L138">	}</span>
+	
+	private void setCDAppDetails(DeviceInfo deviceInfo, PreparedStatement statement) throws SQLException {
+<span class="pc bpc" id="L141" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getCdAppId()))</span>
+<span class="nc" id="L142">			statement.setNull(14, Types.NVARCHAR);</span>
+		else
+<span class="fc" id="L144">			statement.setString(14, deviceInfo.getCdAppId());</span>
+
+<span class="pc bpc" id="L146" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getCdAppVersion()))</span>
+<span class="nc" id="L147">			statement.setNull(15, Types.NVARCHAR);</span>
+		else
+<span class="fc" id="L149">			statement.setString(15, deviceInfo.getCdAppVersion());</span>
+<span class="fc" id="L150">	}</span>
+	
+	private void setDeviceBrowserDetails(DeviceInfo deviceInfo, PreparedStatement statement) throws SQLException {
+<span class="pc bpc" id="L153" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getBrowserName()))</span>
+<span class="fc" id="L154">			statement.setNull(9, Types.NVARCHAR);</span>
+		else
+<span class="nc" id="L156">			statement.setString(9, deviceInfo.getBrowserName());</span>
+
+<span class="pc bpc" id="L158" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getBrowserMajorVersion()))</span>
+<span class="fc" id="L159">			statement.setNull(10, Types.NVARCHAR);</span>
+		else
+<span class="nc" id="L161">			statement.setString(10, deviceInfo.getBrowserMajorVersion());</span>
+
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getBrowserLanguage()))</span>
+<span class="fc" id="L164">			statement.setNull(11, Types.NVARCHAR);</span>
+		else
+<span class="nc" id="L166">			statement.setString(11, deviceInfo.getBrowserLanguage());</span>
+
+<span class="pc bpc" id="L168" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getBrowserOnline()))</span>
+<span class="fc" id="L169">			statement.setNull(12, Types.BOOLEAN);</span>
+		else
+<span class="nc" id="L171">			statement.setBoolean(12, Boolean.parseBoolean(deviceInfo.getBrowserOnline()));		</span>
+		
+<span class="fc" id="L173">	}</span>
+	
+	private void setDeviceOS(DeviceInfo deviceInfo, PreparedStatement statement) throws SQLException {
+<span class="pc bpc" id="L176" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getOsName()))</span>
+<span class="nc" id="L177">			statement.setNull(8, Types.NVARCHAR);</span>
+		else
+<span class="fc" id="L179">			statement.setString(8, deviceInfo.getOsName());</span>
+<span class="fc" id="L180">	}</span>
+	
+	private void setDeviceMfg(DeviceInfo deviceInfo, PreparedStatement statement) throws SQLException {
+<span class="pc bpc" id="L183" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getDeviceManufacturer()))</span>
+<span class="nc" id="L184">			statement.setNull(7, Types.NVARCHAR);</span>
+		else
+<span class="fc" id="L186">			statement.setString(7, deviceInfo.getDeviceManufacturer());</span>
+<span class="fc" id="L187">	}</span>
+	
+	private void setDeviceId(DeviceInfo deviceInfo, PreparedStatement statement) throws SQLException {
+<span class="pc bpc" id="L190" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getDeviceId()))</span>
+<span class="nc" id="L191">			statement.setNull(6, Types.NVARCHAR);</span>
+		else
+<span class="fc" id="L193">			statement.setString(6, deviceInfo.getDeviceId());</span>
+<span class="fc" id="L194">	}</span>
+	
+	private void setDeviceVersion(DeviceInfo deviceInfo, PreparedStatement statement) throws SQLException {
+<span class="pc bpc" id="L197" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getDeviceVersion()))</span>
+<span class="nc" id="L198">			statement.setNull(5, Types.NVARCHAR);</span>
+		else
+<span class="fc" id="L200">			statement.setString(5, deviceInfo.getDeviceVersion());</span>
+<span class="fc" id="L201">	}</span>
+	
+	private void setDeviceName(DeviceInfo deviceInfo, PreparedStatement statement) throws SQLException {
+<span class="pc bpc" id="L204" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getDeviceName()))</span>
+<span class="nc" id="L205">			statement.setNull(4, Types.NVARCHAR);</span>
+		else
+<span class="fc" id="L207">			statement.setString(4, deviceInfo.getDeviceName());</span>
+<span class="fc" id="L208">	}</span>
+	
+	private void setDeviceType(DeviceInfo deviceInfo, PreparedStatement statement) throws SQLException {
+<span class="pc bpc" id="L211" title="1 of 2 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getDeviceType()))</span>
+<span class="nc" id="L212">			statement.setNull(3, Types.NVARCHAR);</span>
+		else
+<span class="fc" id="L214">			statement.setString(3, deviceInfo.getDeviceType());</span>
+<span class="fc" id="L215">	}</span>
+	
+	private void setUserAgent(DeviceInfo deviceInfo, PreparedStatement statement) throws SQLException {
+<span class="pc bpc" id="L218" title="3 of 4 branches missed.">		if (StringUtils.isNullOrEmpty(deviceInfo.getUserAgent()) || deviceInfo.getUserAgent().length() &gt; 8000){</span>
+<span class="fc" id="L219">			statement.setNull(2, Types.NVARCHAR);</span>
+		} else {
+<span class="nc" id="L221">			statement.setString(2, deviceInfo.getUserAgent());</span>
+		}
+<span class="fc" id="L223">	}</span>
+	
+	private Timestamp getTimeStampForSQl(DeviceInfo deviceInfo) {
+<span class="fc" id="L226">		SimpleDateFormat df = new SimpleDateFormat(&quot;yyyy-MM-dd'T'HH:mm:ssXXX&quot;);</span>
+<span class="fc" id="L227">		Date date = null;</span>
+<span class="fc" id="L228">		Timestamp returnValue = new Timestamp(System.currentTimeMillis());</span>
+		try {
+<span class="fc" id="L230">			date = df.parse(deviceInfo.getOsDateAndTime());</span>
+<span class="fc" id="L231">			returnValue = new Timestamp(date.getTime());</span>
+<span class="nc" id="L232">		} catch (Exception ex) {</span>
+<span class="nc" id="L233">			LOG.debug(&quot;Error parsing Device OsDateAndTime&quot;, ex);</span>
+<span class="fc" id="L234">		}</span>
+<span class="fc" id="L235">		return returnValue;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

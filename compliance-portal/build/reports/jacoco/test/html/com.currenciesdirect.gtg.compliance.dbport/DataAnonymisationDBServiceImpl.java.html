@@ -1,0 +1,510 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataAnonymisationDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">DataAnonymisationDBServiceImpl.java</span></div><h1>DataAnonymisationDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.core.IAnonymisationDBService;
+import com.currenciesdirect.gtg.compliance.core.ITransform;
+import com.currenciesdirect.gtg.compliance.core.domain.Page;
+import com.currenciesdirect.gtg.compliance.core.domain.Sort;
+import com.currenciesdirect.gtg.compliance.core.domain.SourceEnum;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonAccount;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonContact;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymisationDataRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymisationDetailsDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymisationDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymisationDto;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymisationSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.dataanonymisation.DataAnonymizationServiceRequest;
+import com.currenciesdirect.gtg.compliance.dbport.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+
+/**
+ * The Class DataAnonymisationDBServiceImpl.
+ */
+@SuppressWarnings(&quot;squid:S2095&quot;)
+@Component(&quot;dataAnonymisationDBServiceImpl&quot;)
+<span class="nc" id="L40">public class DataAnonymisationDBServiceImpl extends AbstractDBServiceAnonymisation implements IAnonymisationDBService {</span>
+	
+	/** The anonymisation details transformer. */
+	@Autowired
+	@Qualifier(&quot;dataAnonymisationDetailsTransformer&quot;)
+	private ITransform&lt;DataAnonymisationDetailsDto, DataAnonymisationDetailsDBDto&gt; anonymisationDetailsTransformer;
+	
+	/**
+	 * Gets the data anonymisation with criteria.
+	 *
+	 * @param searchCriteria the search criteria
+	 * @return the data anonymisation with criteria
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	@Override
+	public DataAnonymisationDto getDataAnonymisationWithCriteria(DataAnonymisationSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+<span class="nc" id="L57">		int offSet = SearchCriteriaUtil.getPageOffsetRows(searchCriteria);</span>
+<span class="nc" id="L58">		int rowsToFetch = SearchCriteriaUtil.getPageSize();</span>
+<span class="nc" id="L59">		int minRowNum = SearchCriteriaUtil.getMinRowNumber(searchCriteria);</span>
+			
+<span class="nc" id="L61">		String accountFilterQuery = buildAccountFilterQuery(searchCriteria);</span>
+		
+<span class="nc" id="L63">		String listQuery = DataAnonymisationQueryConstant.DATA_ANON_MAIN_QUERY.getQuery()</span>
+<span class="nc" id="L64">				.replace(&quot;{DATA_ANON_QUERY}&quot;, accountFilterQuery);</span>
+		
+<span class="nc" id="L66">		listQuery = executeSort(searchCriteria.getFilter().getSort(),listQuery);</span>
+		
+<span class="nc" id="L68">		DataAnonAccountFilterQueryBuilder accountFilter = new DataAnonAccountFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="nc" id="L69">				DataAnonymisationQueryConstant.DATA_ANON_COUNT.getQuery(),</span>
+				 true);
+		
+<span class="nc" id="L72">		String countQuery = accountFilter.getQuery();</span>
+		
+<span class="nc" id="L74">		DataAnonymisationDto dataAnonymisationDto = new DataAnonymisationDto();</span>
+<span class="nc" id="L75">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L77">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L78">			dataAnonymisationDto= getDataAnonymisationData(connection, offSet, rowsToFetch, listQuery, countQuery);</span>
+<span class="nc" id="L79">			Integer pageSize = SearchCriteriaUtil.getPageSize();</span>
+<span class="nc" id="L80">			Integer totalRecords = dataAnonymisationDto.getTotalRecords();</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">			if (totalRecords != null) {</span>
+<span class="nc" id="L82">				Integer totalPages = totalRecords / pageSize;</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">				if (totalRecords % pageSize != 0) {</span>
+<span class="nc" id="L84">					totalPages += 1;</span>
+				}
+<span class="nc" id="L86">				Page page = new Page();</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">				if (totalRecords == 0) {</span>
+<span class="nc" id="L88">					page.setMinRecord(0);</span>
+				} else {
+<span class="nc" id="L90">					page.setMinRecord(minRowNum);</span>
+				}
+<span class="nc" id="L92">				int tMaxRecord=minRowNum + dataAnonymisationDto.getDataAnonymisation().size() - 1;</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">				if(tMaxRecord&lt;totalRecords)</span>
+<span class="nc" id="L94">					page.setMaxRecord(tMaxRecord);</span>
+				else
+<span class="nc" id="L96">					page.setMaxRecord(totalRecords);</span>
+<span class="nc" id="L97">				page.setPageSize(pageSize);</span>
+<span class="nc" id="L98">				page.setTotalPages(totalPages);</span>
+<span class="nc" id="L99">				page.setTotalRecords(totalRecords);</span>
+<span class="nc" id="L100">				page.setCurrentPage(SearchCriteriaUtil.getCurrentPage(searchCriteria));</span>
+<span class="nc" id="L101">				dataAnonymisationDto.setPage(page);</span>
+<span class="nc" id="L102">				dataAnonymisationDto.setSource(SourceEnum.getSourceValues());</span>
+<span class="nc" id="L103">				List&lt;String&gt; owner = null;</span>
+<span class="nc" id="L104">				owner= getLockedUserName(connection);</span>
+<span class="nc" id="L105">				dataAnonymisationDto.setOwner(owner);	</span>
+<span class="nc" id="L106">				searchCriteria.setPage(dataAnonymisationDto.getPage());</span>
+<span class="nc" id="L107">				dataAnonymisationDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteria));</span>
+				
+				
+			}
+			
+<span class="nc" id="L112">		} catch (Exception e) {</span>
+<span class="nc" id="L113">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L115">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L117">		return dataAnonymisationDto;</span>
+	}
+	
+	/**
+	 * Builds the account filter query.
+	 *
+	 * @param searchCriteria the search criteria
+	 * @return the string
+	 */
+	private String buildAccountFilterQuery(DataAnonymisationSearchCriteria searchCriteria) {
+<span class="nc" id="L127">		FilterQueryBuilder accountFilter = new DataAnonAccountFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="nc" id="L128">				DataAnonymisationQueryConstant.DATA_ANON_QUERY.getQuery(),</span>
+				 true);
+<span class="nc" id="L130">		return accountFilter.getQuery();</span>
+	}
+	
+	
+	/**
+	 * Execute sort.
+	 *
+	 * @param sort the sort
+	 * @param listQuery the list query
+	 * @return the string
+	 */
+	private String executeSort(Sort sort, String listQuery) {
+<span class="nc" id="L142">		String columnName = &quot;dataanon.InitialApprovalDate&quot;;</span>
+<span class="nc" id="L143">		boolean isAsc = false;</span>
+<span class="nc bnc" id="L144" title="All 4 branches missed.">		if(sort != null &amp;&amp; sort.getIsAscend() != null){</span>
+<span class="nc" id="L145">			isAsc = sort.getIsAscend();</span>
+		}		
+<span class="nc" id="L147">		return addSort(columnName, isAsc,listQuery);</span>
+	}
+	
+	/**
+	 * Gets the data anonymisation data.
+	 *
+	 * @param connection the connection
+	 * @param offSet the off set
+	 * @param rowsToFetch the rows to fetch
+	 * @param query the query
+	 * @param countQuery the count query
+	 * @return the data anonymisation data
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	private DataAnonymisationDto getDataAnonymisationData(Connection connection, int offSet, int rowsToFetch,
+			String query, String countQuery) throws CompliancePortalException {
+<span class="nc" id="L163">		DataAnonymisationDto dataAnonDto = new DataAnonymisationDto();</span>
+<span class="nc" id="L164">		List&lt;DataAnonymisationDataRequest&gt; dataAnonymisationDataList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L165">		PreparedStatement listStatement = null;</span>
+<span class="nc" id="L166">		PreparedStatement countStatement = null;</span>
+<span class="nc" id="L167">		ResultSet listRs = null;</span>
+<span class="nc" id="L168">		ResultSet countRs = null;</span>
+<span class="nc" id="L169">		Integer totalRecords = 0;</span>
+		try {
+<span class="nc" id="L171">			listStatement = connection.prepareStatement(query);</span>
+<span class="nc" id="L172">			listStatement.setInt(1, offSet);</span>
+<span class="nc" id="L173">			listStatement.setInt(2, rowsToFetch);</span>
+<span class="nc" id="L174">			listRs = listStatement.executeQuery();</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">			while (listRs.next()) {</span>
+<span class="nc" id="L176">				DataAnonymisationDataRequest dataAnonymisationData = new DataAnonymisationDataRequest();</span>
+<span class="nc" id="L177">				dataAnonymisationData.setContactId(listRs.getInt(DataAnonDBColumns.CONTACTID.getName()));</span>
+<span class="nc" id="L178">				dataAnonymisationData.setAccountId(listRs.getInt(DataAnonDBColumns.ACCOUNTID.getName()));</span>
+<span class="nc" id="L179">				dataAnonymisationData.setContactName(listRs.getString(DataAnonDBColumns.CONTACTNAME.getName()));</span>
+<span class="nc" id="L180">				dataAnonymisationData.setTradeAccountNum(listRs.getString(DataAnonDBColumns.TRADEACCOUNTNUM.getName()));</span>
+<span class="nc" id="L181">				Timestamp requestDate = listRs.getTimestamp(DataAnonDBColumns.INITIAL_APPROVALDATE.getName());</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">				if (requestDate != null) {</span>
+<span class="nc" id="L183">					dataAnonymisationData.setInitialApprovalDate(DateTimeFormatter.dateTimeFormatter(requestDate));</span>
+				}
+				
+<span class="nc" id="L186">				Timestamp approvedDate = listRs.getTimestamp(DataAnonDBColumns.FINAL_APPROVALDATE.getName());</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">				if (approvedDate != null) {</span>
+<span class="nc" id="L188">					dataAnonymisationData.setFinalApprovalDate(DateTimeFormatter.dateTimeFormatter(approvedDate));</span>
+				}
+<span class="nc" id="L190">				dataAnonymisationData.setFinalApprovalBy(listRs.getString(DataAnonDBColumns.OWNER.getName()));</span>
+<span class="nc" id="L191">				dataAnonymisationData.setInitialApprovalBy( listRs.getString(DataAnonDBColumns.REGOWNER.getName()));</span>
+<span class="nc" id="L192">				dataAnonymisationData.setDataAnonymizationStatus(listRs.getInt(DataAnonDBColumns.DATAANONSTATUS.getName()));</span>
+<span class="nc" id="L193">				dataAnonymisationData.setSource(listRs.getString(DataAnonDBColumns.SOURCE.getName()));</span>
+<span class="nc" id="L194">				dataAnonymisationData.setType(CustomerTypeEnum.getUiStatusFromDatabaseStatus(listRs.getInt(DataAnonDBColumns.TYPE.getName())));</span>
+<span class="nc" id="L195">				dataAnonymisationData.setComplianceStatus(listRs.getString(DataAnonDBColumns.STATUS.getName()));</span>
+<span class="nc" id="L196">				dataAnonymisationData.setId(listRs.getInt(DataAnonDBColumns.ID.getName()));</span>
+<span class="nc" id="L197">				dataAnonymisationDataList.add(dataAnonymisationData);</span>
+
+<span class="nc" id="L199">			}</span>
+<span class="nc" id="L200">			countStatement = connection.prepareStatement(countQuery);</span>
+<span class="nc" id="L201">			countRs = countStatement.executeQuery();</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">			if(countRs.next())</span>
+<span class="nc" id="L203">				totalRecords= countRs.getInt(DataAnonDBColumns.TOTALROWS.getName());	</span>
+<span class="nc" id="L204">			dataAnonDto.setDataAnonymisation(dataAnonymisationDataList);</span>
+<span class="nc" id="L205">			dataAnonDto.setTotalRecords(totalRecords);</span>
+<span class="nc" id="L206">		} catch (Exception e) {</span>
+<span class="nc" id="L207">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L209">			closeResultset(listRs);</span>
+<span class="nc" id="L210">			closePrepareStatement(listStatement);</span>
+<span class="nc" id="L211">			closeResultset(countRs);</span>
+<span class="nc" id="L212">			closePrepareStatement(countStatement);</span>
+		}
+<span class="nc" id="L214">		return dataAnonDto;</span>
+	}
+	
+	/**
+	 * Gets the anonymisation details.
+	 *
+	 * @param dataAnonymizeRequest the data anonymize request
+	 * @return the anonymisation details
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	@Override
+	public DataAnonymizationServiceRequest getAnonymisationDetails(DataAnonymisationDataRequest dataAnonymizeRequest) throws CompliancePortalException {
+<span class="nc" id="L226">		Connection connection = null;</span>
+<span class="nc" id="L227">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L228">		ResultSet rs = null;</span>
+<span class="nc" id="L229">		Integer accountID = dataAnonymizeRequest.getAccountId();</span>
+<span class="nc" id="L230">		DataAnonymizationServiceRequest dataanonreq = new DataAnonymizationServiceRequest();</span>
+<span class="nc" id="L231">		DataAnonAccount account= new DataAnonAccount();</span>
+<span class="nc" id="L232">		List&lt;DataAnonContact&gt; list = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L233">		int count = 1;</span>
+		
+		try {
+			
+<span class="nc" id="L237">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L238">			preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.GET_CONTACT_DETAILS_WITH_EVENT.getQuery());</span>
+<span class="nc" id="L239">			preparedStatement.setInt(1, accountID);</span>
+<span class="nc" id="L240">			rs = preparedStatement.executeQuery();</span>
+			
+<span class="nc bnc" id="L242" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">				if(count == 1){</span>
+<span class="nc" id="L244">					dataanonreq.setOrgCode(rs.getString(&quot;Organization&quot;));</span>
+<span class="nc" id="L245">					account.setTradeAccountNumber(rs.getString(&quot;TradeAccountNumber&quot;));</span>
+<span class="nc" id="L246">					account.setTradeAccountID(rs.getInt(&quot;TradeAccountID&quot;));</span>
+<span class="nc" id="L247">					account.setAccountSFID( rs.getString(&quot;CRMAccountID&quot;));</span>
+<span class="nc" id="L248">					dataanonreq.setAccount(account);</span>
+				}
+<span class="nc" id="L250">				DataAnonContact contact = new DataAnonContact();</span>
+<span class="nc" id="L251">				contact.setTradeContactId(rs.getInt(&quot;TradeContactID&quot;));</span>
+<span class="nc" id="L252">				contact.setContactSfId(rs.getString(&quot;CRMContactID&quot;));</span>
+<span class="nc" id="L253">				list.add(contact);</span>
+<span class="nc" id="L254">				count++;</span>
+<span class="nc" id="L255">			}</span>
+<span class="nc" id="L256">			account.setContact(list);</span>
+<span class="nc" id="L257">			dataanonreq.setAccount(account);</span>
+<span class="nc" id="L258">		} catch (Exception e) {</span>
+<span class="nc" id="L259">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L261">			closeResultset(rs);</span>
+<span class="nc" id="L262">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L263">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L266">		return dataanonreq;</span>
+	}
+	
+	/**
+	 * Gets the data anonymize.
+	 *
+	 * @param user the user
+	 * @param dataAnonymizeRequest the data anonymize request
+	 * @return the data anonymize
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	public boolean getDataAnonymize(UserProfile user, DataAnonymisationDataRequest dataAnonymizeRequest) throws CompliancePortalException 
+	{
+<span class="nc" id="L280">	Connection connection = null;</span>
+<span class="nc" id="L281">	PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L282">	ResultSet rs = null;</span>
+	try{
+<span class="nc" id="L284">		connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L285">		preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.GET_COUNT_FROM_ACCOUNTID.getQuery());</span>
+<span class="nc" id="L286">		preparedStatement.setInt(1,dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L287">		rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">			while(rs.next()){</span>
+<span class="nc" id="L289">				int count= rs.getInt(&quot;AnonCount&quot;);</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">				if(count!=0) {</span>
+<span class="nc" id="L291">	             	preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.UPDATE_ON_REINITIATE_DATA_ANONYMISATION.getQuery());</span>
+<span class="nc" id="L292">	     			preparedStatement.setString(1,dataAnonymizeRequest.getEnterComment());</span>
+<span class="nc" id="L293">	     			preparedStatement.setInt(2,user.getId());</span>
+<span class="nc" id="L294">	     			preparedStatement.setTimestamp(3,new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L295">	     			preparedStatement.setInt(4,dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L296">	     			preparedStatement.executeUpdate();</span>
+<span class="nc" id="L297">	     			saveIntoDataAnonHistory(user,dataAnonymizeRequest);</span>
+	             }
+				else {
+<span class="nc" id="L300">					preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.INSERT_INTO_DATA_ANONYMIZE.getQuery());</span>
+<span class="nc" id="L301">					preparedStatement.setInt(1,dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L302">					preparedStatement.setInt(2,dataAnonymizeRequest.getContactId());</span>
+<span class="nc" id="L303">					preparedStatement.setString(3,dataAnonymizeRequest.getEnterComment());</span>
+<span class="nc" id="L304">					preparedStatement.setInt(4,user.getId());</span>
+<span class="nc" id="L305">					preparedStatement.setTimestamp(5,new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L306">					preparedStatement.setInt(6,user.getId());</span>
+<span class="nc" id="L307">					preparedStatement.setTimestamp(7,new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L308">					preparedStatement.setTimestamp(8,new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L309">					boolean result = preparedStatement.execute();</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">					if(!result)</span>
+					{
+<span class="nc" id="L312">						saveIntoDataAnonHistory(user,dataAnonymizeRequest);</span>
+					}
+<span class="nc" id="L314">					return true;</span>
+				}
+<span class="nc" id="L316">		    }</span>
+	}
+<span class="nc" id="L318">	catch(Exception e) {</span>
+<span class="nc" id="L319">		throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+	}
+	finally {
+<span class="nc" id="L322">		closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L323">		closeConnection(connection);</span>
+<span class="nc" id="L324">		closeResultset(rs);</span>
+	}
+<span class="nc" id="L326">	return true;</span>
+	}
+		
+	/**
+	 * Save into data anon history.
+	 *
+	 * @param user the user
+	 * @param dataAnonymizeRequest the data anonymize request
+	 * @return true, if successful
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	public boolean saveIntoDataAnonHistory(UserProfile user, DataAnonymisationDataRequest dataAnonymizeRequest) throws CompliancePortalException 
+	{
+<span class="nc" id="L340">		Connection connection = null;</span>
+<span class="nc" id="L341">		PreparedStatement preparedStatement = null;</span>
+		try{
+<span class="nc" id="L343">			connection = getConnection(Boolean.FALSE);</span>
+			//update account table on initial anonymisation
+<span class="nc" id="L345">			preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.UPDATE_ACCOUNT_DATA_ANON.getQuery());	</span>
+<span class="nc" id="L346">			preparedStatement.setInt(1,dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L347">			preparedStatement.executeUpdate();</span>
+			
+<span class="nc" id="L349">			preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.INSERT_INTO_DATA_ANON_ACTIVITY_LOG_HISTORY.getQuery());</span>
+<span class="nc" id="L350">			preparedStatement.setInt(1, dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L351">			preparedStatement.setString(2, &quot;INITIALIZATION&quot;);</span>
+<span class="nc" id="L352">			preparedStatement.setString(3, dataAnonymizeRequest.getEnterComment());</span>
+<span class="nc" id="L353">			preparedStatement.setInt(4, user.getId());</span>
+<span class="nc" id="L354">			preparedStatement.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L355">			preparedStatement.executeUpdate();</span>
+		}
+<span class="nc" id="L357">			catch(Exception e) {</span>
+<span class="nc" id="L358">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+			}
+			finally {
+<span class="nc" id="L361">				closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L362">				closeConnection(connection);</span>
+			}
+<span class="nc" id="L364">		return true;</span>
+		}
+	
+	/**
+	 * Update data anonymisation.
+	 *
+	 * @param user the user
+	 * @param dataAnonymizeRequest the data anonymize request
+	 * @return the data anonymisation responce
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	public boolean updateDataAnonymisation(UserProfile user, DataAnonymisationDataRequest dataAnonymizeRequest) throws CompliancePortalException 
+	{
+<span class="nc" id="L378">		Connection connection = null;</span>
+<span class="nc" id="L379">		PreparedStatement preparedStatement = null;</span>
+	
+		try{
+<span class="nc" id="L382">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L383">			preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.UPDATE_ON_DATA_ANON_ACTIVITY_LOG.getQuery());</span>
+<span class="nc" id="L384">			preparedStatement.setString(1,dataAnonymizeRequest.getEnterComment());</span>
+<span class="nc" id="L385">			preparedStatement.setInt(2,user.getId());</span>
+<span class="nc" id="L386">			preparedStatement.setTimestamp(3,new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L387">			preparedStatement.setInt(4,dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L388">			boolean result = preparedStatement.execute();</span>
+<span class="nc bnc" id="L389" title="All 2 branches missed.">			if(!result)</span>
+			{
+<span class="nc" id="L391">				preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.UPDATE_FINAL_ACCOUNT_DATA_ANON.getQuery());	</span>
+<span class="nc" id="L392">				preparedStatement.setInt(1,dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L393">				preparedStatement.executeUpdate();</span>
+				
+<span class="nc" id="L395">				preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.INSERT_INTO_DATA_ANON_ACTIVITY_LOG_HISTORY.getQuery());</span>
+<span class="nc" id="L396">				preparedStatement.setInt(1, dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L397">				preparedStatement.setString(2, &quot;APPROVAL&quot;);</span>
+<span class="nc" id="L398">				preparedStatement.setString(3, dataAnonymizeRequest.getEnterComment());</span>
+<span class="nc" id="L399">				preparedStatement.setInt(4, user.getId());</span>
+<span class="nc" id="L400">				preparedStatement.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L401">				preparedStatement.executeUpdate();</span>
+			}
+<span class="nc" id="L403">			return true;</span>
+		}
+<span class="nc" id="L405">		catch(Exception e) {</span>
+<span class="nc" id="L406">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		}
+		finally {
+<span class="nc" id="L409">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L410">			closeConnection(connection);</span>
+		}
+	}
+	
+	
+	/**
+	 * Cancel data anonymisation.
+	 *
+	 * @param user the user
+	 * @param dataAnonymizeRequest the data anonymize request
+	 * @return true, if successful
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	public boolean cancelDataAnonymisation(UserProfile user, DataAnonymisationDataRequest dataAnonymizeRequest) throws CompliancePortalException 
+	{
+<span class="nc" id="L426">		Connection connection = null;</span>
+<span class="nc" id="L427">		PreparedStatement preparedStatement = null;</span>
+	
+		try{
+<span class="nc" id="L430">		connection = getConnection(Boolean.FALSE);</span>
+		
+<span class="nc" id="L432">		preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.UPDATE_ON_DATA_ANONYMIZE_REJECT.getQuery());</span>
+<span class="nc" id="L433">		preparedStatement.setString(1,dataAnonymizeRequest.getEnterComment());</span>
+<span class="nc" id="L434">		preparedStatement.setInt(2,user.getId());</span>
+<span class="nc" id="L435">		preparedStatement.setTimestamp(3,new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L436">		preparedStatement.setInt(4,dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L437">		boolean result = preparedStatement.execute();</span>
+<span class="nc bnc" id="L438" title="All 2 branches missed.">		if(!result)</span>
+		{
+			
+<span class="nc" id="L441">				preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.UPDATE_CANCEL_ACCOUNT_DATA_ANON.getQuery());	</span>
+<span class="nc" id="L442">				preparedStatement.setInt(1,dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L443">				preparedStatement.executeUpdate();</span>
+				
+<span class="nc" id="L445">				preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.INSERT_INTO_DATA_ANON_ACTIVITY_LOG_HISTORY.getQuery());</span>
+<span class="nc" id="L446">				preparedStatement.setInt(1, dataAnonymizeRequest.getAccountId());</span>
+<span class="nc" id="L447">				preparedStatement.setString(2, &quot;REJECTION&quot;);</span>
+<span class="nc" id="L448">				preparedStatement.setString(3, dataAnonymizeRequest.getEnterComment());</span>
+<span class="nc" id="L449">				preparedStatement.setInt(4, user.getId());</span>
+<span class="nc" id="L450">				preparedStatement.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L451">				preparedStatement.executeUpdate();</span>
+		}
+<span class="nc" id="L453">			return true;</span>
+		}
+		
+		
+<span class="nc" id="L457">		catch(Exception e) {</span>
+<span class="nc" id="L458">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		}
+		finally {
+<span class="nc" id="L461">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L462">			closeConnection(connection);</span>
+		}
+	}
+	
+	/**
+	 * Gets the data anon history.
+	 *
+	 * @param dataAnonymizeRequest the data anonymize request
+	 * @return the data anon history
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	public DataAnonymisationDto getDataAnonHistory( DataAnonymisationDataRequest dataAnonymizeRequest) throws CompliancePortalException 
+	{
+<span class="nc" id="L475">        DataAnonymisationDto dataAnonDto = new DataAnonymisationDto();</span>
+<span class="nc" id="L476">		List&lt;DataAnonymisationDataRequest&gt; dataAnonymisationDataList = new ArrayList&lt;&gt;();</span>
+		
+<span class="nc" id="L478">		Connection connection = null;</span>
+<span class="nc" id="L479">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L480">	    ResultSet listRs = null;</span>
+		try{
+<span class="nc" id="L482">		connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L483">		preparedStatement = connection.prepareStatement(DataAnonymisationQueryConstant.SHOW_DATAANON_HISTORY.getQuery());	</span>
+<span class="nc" id="L484">                preparedStatement.setInt(1, dataAnonymizeRequest.getId());</span>
+<span class="nc" id="L485">				listRs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L486" title="All 2 branches missed.">				while (listRs.next()) {</span>
+<span class="nc" id="L487">                            DataAnonymisationDataRequest dataAnonymisationData = new DataAnonymisationDataRequest();             </span>
+<span class="nc" id="L488">                            dataAnonymisationData.setActivity(listRs.getString(DataAnonDBColumns.ACTIVITY.getName()));</span>
+<span class="nc" id="L489">                            dataAnonymisationData.setActivityBy(listRs.getString(DataAnonDBColumns.ACTIVITYBY.getName()));</span>
+<span class="nc" id="L490">                            dataAnonymisationData.setComment(listRs.getString(DataAnonDBColumns.COMMENT.getName()));</span>
+<span class="nc" id="L491">                            Timestamp requestDate = listRs.getTimestamp(DataAnonDBColumns.ACTIVITYDATE.getName());</span>
+                				
+<span class="nc bnc" id="L493" title="All 2 branches missed.">                            if (requestDate != null) {</span>
+<span class="nc" id="L494">                            	dataAnonymisationData.setActivityDate(listRs.getString(DataAnonDBColumns.ACTIVITYDATE.getName()));</span>
+                            }
+<span class="nc" id="L496">                            dataAnonymisationDataList.add(dataAnonymisationData);</span>
+<span class="nc" id="L497">				}</span>
+<span class="nc" id="L498">				dataAnonDto.setDataAnonymisation(dataAnonymisationDataList);</span>
+<span class="nc" id="L499">		} catch (Exception e) {</span>
+<span class="nc" id="L500">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L502">			closeResultset(listRs);</span>
+<span class="nc" id="L503">			closePrepareStatement(preparedStatement);</span>
+			
+		}
+<span class="nc" id="L506">		return dataAnonDto;</span>
+	}
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

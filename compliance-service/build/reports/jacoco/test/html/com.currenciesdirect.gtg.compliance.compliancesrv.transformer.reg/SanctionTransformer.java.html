@@ -1,0 +1,1361 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SanctionTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg</a> &gt; <span class="el_source">SanctionTransformer.java</span></div><h1>SanctionTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionSummary;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ExternalErrorCodes;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ProvideCacheLoader;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Company;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractSanctionTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * 
+ *
+ *The Class SanctionTransformer.
+ *  
+ * Responsibility : 
+ * 
+ * 1) This method is called from registration-flow xml / sanction-service-flow xml
+ * 2) Transform registration Request which comes from CRM system(I.e. SalesForce) into Sanction request and returns
+ * 3) Also it populates registration-sanction Response eventservicelog entries with provider response and summary and returns 
+ * 
+ */
+<span class="nc" id="L50">public class SanctionTransformer extends AbstractSanctionTransformer {</span>
+	private static final String FIRST_SANCTION_SUMMARY = &quot;firstSanctionSummary&quot;;
+
+<span class="nc" id="L53">	private static final Logger LOGGER = LoggerFactory.getLogger(SanctionTransformer.class);</span>
+
+<span class="nc" id="L55">	private ProvideCacheLoader countryCache = ProvideCacheLoader.getInstance();</span>
+
+	/* (non-Javadoc)
+	 * * Business -- 
+	 * Sanction can be performed on Contact/Account 
+	 * While sending sanction request, default status is assumed as NOT_PERFORMED
+	 * And when response is received from HTTPClient, appropriate response is updated	  
+	 * 
+	 * 
+	 * Implementation---
+	 * 1) Get the messageExchange,UserProfile,registrationRequest,contact,eventId from the message
+	 * 2) eventId, contact are already populated from data enricher so that we can use the same to insert records in to the table
+	 * 3) Create sanction request and default SanctionContactResponse with not performed status so that if we get any exception from micro service
+	 *    this default object can be pushed to database
+	 * 4) if CFX type account, create Sanction requests &amp; EventServiceLog entries for Account and all contacts, with default status of NOT_PERFORMED
+	 * 	  else create Sanction requests &amp; EventServiceLog for only Contacts, and with default status of NOT_PERFORMED
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+		
+		try {
+<span class="nc" id="L76">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L77">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L78">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L79">			String custType =account.getCustType();</span>
+<span class="nc" id="L80">			boolean notBlackListed = true;</span>
+			/*** &quot;PERFORM_REMAINING_CHECKS&quot; value is set in InternalRuleServiceTransformer 
+			 * 
+			 * 1) If PERFORM_REMAINING_CHECKS is true means Contact is Not BlackListed and we can perform further checks like Sanction etc.
+			 * 2) Else part is executed when PERFORM_REMAINING_CHECKS is false means 
+			 *    Contact is found in BlackList and Further checks(Sanction,KYC) should not be performed 
+			 *    but Insert entry NOT_REQUIRED for All Remaining Checks.
+			 * 3) Corner Scenario : For PFX and CFX Sanction Resend Operation : Default Value is &quot;True&quot; 
+			 *    since no initial condition like ( BlackListed or NonBlackListed )is applied &quot; So notBlackListed variable is set to &quot;TRUE&quot;&quot; .
+			 *  */
+<span class="nc bnc" id="L90" title="All 2 branches missed.">			if(registrationRequest.getAdditionalAttribute(Constants.NOT_BLACKLISTED)!=null)</span>
+			{
+<span class="nc" id="L92">				notBlackListed =  (boolean) registrationRequest.getAdditionalAttribute(Constants.NOT_BLACKLISTED);	</span>
+			}
+<span class="nc bnc" id="L94" title="All 2 branches missed.">			if (notBlackListed)</span>
+			{
+<span class="nc bnc" id="L96" title="All 2 branches missed.">				if(custType!=null)</span>
+				{
+<span class="nc" id="L98">					custType=custType.trim();</span>
+				}
+<span class="nc bnc" id="L100" title="All 2 branches missed.">				if (Constants.CFX.equalsIgnoreCase(custType)) {</span>
+<span class="nc" id="L101">					transformCFXRequest(message);</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">				} else if (Constants.PFX.equalsIgnoreCase(custType)){</span>
+<span class="nc" id="L103">					transformPFXRequest(message);</span>
+				}
+			}
+			else
+			{
+<span class="nc" id="L108">				List&lt;SanctionContactResponse&gt; responseContactList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L109">				SanctionRequest sanctionRequest = new SanctionRequest();</span>
+				/**
+				 * creates EventServiceLog entry for status &quot;NOT_REQUIRED&quot; , by Abhijit G
+				 */
+<span class="nc" id="L113">				Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L114">						.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+<span class="nc" id="L115">				SanctionResponse fResponse = new SanctionResponse();</span>
+<span class="nc" id="L116">				UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L117">				String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L118">				OperationEnum operation = messageExchange.getOperation();</span>
+<span class="nc" id="L119">				MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L120">				ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L121">				createEventServiceLogForNotRequired(registrationRequest, eventId, ccExchange, token,</span>
+						responseContactList, orgID, operation);
+<span class="nc" id="L123">				fResponse.setContactResponses(responseContactList);		</span>
+<span class="nc" id="L124">				ccExchange.setRequest(sanctionRequest);</span>
+<span class="nc" id="L125">				ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L126">				message.getPayload().appendMessageExchange(ccExchange);</span>
+			}
+			
+			
+<span class="nc" id="L130">		} catch (Exception e) {</span>
+<span class="nc" id="L131">			LOGGER.error(Constants.ERROR, e);</span>
+<span class="nc" id="L132">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L133">		}</span>
+<span class="nc" id="L134">		return message;</span>
+	}
+	
+	
+	private Message&lt;MessageContext&gt; transformCFXRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="nc" id="L140">			 MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L141">			 OperationEnum operation = messageExchange.getOperation();</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">			if (OperationEnum.NEW_REGISTRATION==operation) {</span>
+<span class="nc" id="L143">				transformCFXSignupRequest(message);</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">			} else if (OperationEnum.ADD_CONTACT==operation)  {</span>
+<span class="nc" id="L145">				transformCFXAddContactRequest(message);</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">			}  else if (OperationEnum.UPDATE_ACCOUNT==operation)  {</span>
+<span class="nc" id="L147">				transformCFXUpdateRequest(message);</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">			} else if (OperationEnum.SANCTION_RESEND==operation)  {</span>
+<span class="nc" id="L149">				transformCFXResendRequest(message);</span>
+			}
+			
+<span class="nc" id="L152">		} catch (Exception e) {</span>
+<span class="nc" id="L153">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L154">		}</span>
+<span class="nc" id="L155">		return message;</span>
+	}
+	private Message&lt;MessageContext&gt; transformCFXSignupRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="nc" id="L159">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L160">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L161">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L162">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L163">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L164">			SanctionRequest sanctionRequest = new SanctionRequest();</span>
+<span class="nc" id="L165">			SanctionResponse fResponse = new SanctionResponse();</span>
+<span class="nc" id="L166">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L167">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+			List&lt;SanctionContactRequest&gt; contactList;
+			List&lt;SanctionContactResponse&gt; responseContactList ;
+<span class="nc" id="L170">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L171">			String sanctionAccountCategory = getAccountSanctionCategory();</span>
+			
+<span class="nc" id="L173">			SanctionContactResponse defaultResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L174">			defaultResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+	
+<span class="nc" id="L176">			SanctionSummary summary = new SanctionSummary();</span>
+<span class="nc" id="L177">			summary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L178">			summary.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L179">			summary.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L180">			summary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+			// Not sure if update Account need sanction check for CFX
+		
+			SanctionContactResponse companyResponse;
+<span class="nc" id="L184">			contactList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L185">			responseContactList = new ArrayList&lt;&gt;();</span>
+			
+<span class="nc" id="L187">			SanctionContactRequest comapnyContact = createCompanyCFXRequest(orgID, account, countryCache,sanctionAccountCategory);</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">			if(account.getCompany().isSanctionEligible()){</span>
+<span class="nc" id="L189">				 companyResponse = createCFXResponse(account,ServiceStatus.NOT_PERFORMED);</span>
+			}else{
+<span class="nc" id="L191">				 companyResponse = createCFXResponse(account,ServiceStatus.NOT_REQUIRED);</span>
+			}
+			
+<span class="nc" id="L194">			sanctionRequest.setCustomerType(Constants.CFX);</span>
+<span class="nc" id="L195">			sanctionRequest.setCustomerNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L196">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L197">			ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L198">					ServiceProviderEnum.SANCTION_SERVICE,  account.getId(),</span>
+<span class="nc" id="L199">					account.getVersion(), EntityEnum.ACCOUNT.name(), token.getUserID(),</span>
+					defaultResponse, summary));
+
+<span class="nc bnc" id="L202" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc" id="L203">				SanctionSummary contactSummary = new SanctionSummary();</span>
+<span class="nc" id="L204">				defaultResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L205">				StringBuilder sanctionID = new StringBuilder();</span>
+<span class="nc" id="L206">				sanctionID.append(orgID).append(&quot;-C-&quot;).append(StringUtils.leftPadWithZero(10, contact.getId()));</span>
+<span class="nc" id="L207">				contactSummary.setSanctionId(sanctionID.toString());</span>
+<span class="nc" id="L208">				contactSummary.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L209">				contactSummary.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L210">				contactSummary.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L211">				ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId,</span>
+<span class="nc" id="L212">						ServiceTypeEnum.SANCTION_SERVICE, ServiceProviderEnum.SANCTION_SERVICE, contact.getId(),</span>
+<span class="nc" id="L213">						contact.getVersion(), EntityEnum.CONTACT.name(), token.getUserID(), defaultResponse, contactSummary,</span>
+						ServiceStatus.NOT_REQUIRED));
+<span class="nc" id="L215">				}</span>
+
+<span class="nc bnc" id="L217" title="All 2 branches missed.">			if (null != comapnyContact) {</span>
+<span class="nc" id="L218">				contactList.add(comapnyContact);					</span>
+			}	
+<span class="nc" id="L220">			responseContactList.add(companyResponse);</span>
+<span class="nc" id="L221">			sanctionRequest.setContactrequests(contactList);</span>
+<span class="nc" id="L222">			fResponse.setContactResponses(responseContactList);		</span>
+<span class="nc" id="L223">			ccExchange.setRequest(sanctionRequest);</span>
+<span class="nc" id="L224">			ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L225">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L226">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L227">		} catch (Exception e) {</span>
+<span class="nc" id="L228">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L229">		}</span>
+<span class="nc" id="L230">		return message;</span>
+	}
+	private Message&lt;MessageContext&gt; transformCFXAddContactRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="nc" id="L234">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L235">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L236">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L237">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L238">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L239">			SanctionRequest sanctionRequest = new SanctionRequest();</span>
+<span class="nc" id="L240">			SanctionResponse fResponse = new SanctionResponse();</span>
+<span class="nc" id="L241">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L242">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+			List&lt;SanctionContactRequest&gt; contactList;
+			List&lt;SanctionContactResponse&gt; responseContactList ;
+<span class="nc" id="L245">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L246">			String sanctionContactCategory = getContactSanctionCategory();</span>
+			
+<span class="nc" id="L248">			SanctionContactResponse defaultResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L249">			defaultResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+
+<span class="nc" id="L251">			SanctionSummary summary = new SanctionSummary();</span>
+<span class="nc" id="L252">			summary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L253">			summary.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L254">			summary.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L255">			summary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+	
+
+<span class="nc" id="L258">			contactList = createContactRequest(orgID, contacts, countryCache,sanctionContactCategory);</span>
+<span class="nc" id="L259">			responseContactList = createContactResponse(contacts);</span>
+<span class="nc" id="L260">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc bnc" id="L261" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc" id="L262">				ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L263">						ServiceProviderEnum.SANCTION_SERVICE,  contact.getId(), contact.getVersion(),</span>
+<span class="nc" id="L264">						EntityEnum.CONTACT.name(), token.getUserID(), defaultResponse, summary));</span>
+
+<span class="nc" id="L266">			}				</span>
+<span class="nc" id="L267">			responseContactList.clear();</span>
+<span class="nc" id="L268">			sanctionRequest.setCustomerNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L269">			sanctionRequest.setContactrequests(contactList);</span>
+<span class="nc" id="L270">			fResponse.setContactResponses(responseContactList);		</span>
+<span class="nc" id="L271">			ccExchange.setRequest(sanctionRequest);</span>
+<span class="nc" id="L272">			ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L273">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L274">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L275">		} catch (Exception e) {</span>
+<span class="nc" id="L276">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L277">		}</span>
+<span class="nc" id="L278">		return message;</span>
+		
+	}
+	private Message&lt;MessageContext&gt; transformCFXUpdateRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="nc" id="L283">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L284">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L285">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L286">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L287">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L288">			SanctionRequest sanctionRequest = new SanctionRequest();</span>
+<span class="nc" id="L289">			SanctionResponse fResponse = new SanctionResponse();</span>
+<span class="nc" id="L290">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L291">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+			List&lt;SanctionContactRequest&gt; contactList;
+			List&lt;SanctionContactResponse&gt; responseContactList ;
+<span class="nc" id="L294">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L295">			String sanctionAccountCategory =  getAccountSanctionCategory();</span>
+			
+<span class="nc" id="L297">			SanctionContactResponse defaultResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L298">			defaultResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+
+<span class="nc" id="L300">			SanctionSummary summary = new SanctionSummary();</span>
+<span class="nc" id="L301">			summary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L302">			summary.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L303">			summary.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L304">			summary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());					</span>
+				// Not sure if update Account need sanction check for CFX			
+			SanctionContactResponse companyResponse;
+<span class="nc" id="L307">			contactList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L308">			responseContactList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L310">			SanctionContactRequest comapnyContact = createCompanyCFXRequest(orgID, account, countryCache,sanctionAccountCategory);</span>
+<span class="nc bnc" id="L311" title="All 2 branches missed.">			if(account.getCompany().isSanctionEligible()){</span>
+<span class="nc" id="L312">				 companyResponse = createCFXResponse(account,ServiceStatus.NOT_PERFORMED);</span>
+			}else{
+<span class="nc" id="L314">				 companyResponse = createCFXResponse(account,ServiceStatus.NOT_REQUIRED);</span>
+				 //change done to set Sanction ID into company response
+<span class="nc" id="L316">				 StringBuilder sanctionID = new StringBuilder();</span>
+<span class="nc" id="L317">				 sanctionID.append(orgID).append(&quot;-A-&quot;).append(StringUtils.leftPadWithZero(10, account.getId()));</span>
+<span class="nc" id="L318">				 companyResponse.setSanctionId(sanctionID.toString());</span>
+			}
+			
+<span class="nc" id="L321">			sanctionRequest.setCustomerType(Constants.CFX);</span>
+<span class="nc" id="L322">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L323">			ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L324">					ServiceProviderEnum.SANCTION_SERVICE,  account.getId(),</span>
+<span class="nc" id="L325">					account.getVersion(), EntityEnum.ACCOUNT.name(), token.getUserID(),</span>
+					defaultResponse, summary));
+
+<span class="nc bnc" id="L328" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+				
+<span class="nc" id="L330">				defaultResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L331">				StringBuilder sanctionID = new StringBuilder();</span>
+<span class="nc" id="L332">				sanctionID.append(orgID).append(&quot;-C-&quot;).append(StringUtils.leftPadWithZero(10, contact.getId()));</span>
+<span class="nc" id="L333">				summary.setSanctionId(sanctionID.toString());</span>
+<span class="nc" id="L334">				summary.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L335">				ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId,</span>
+<span class="nc" id="L336">						ServiceTypeEnum.SANCTION_SERVICE, ServiceProviderEnum.SANCTION_SERVICE, contact.getId(),</span>
+<span class="nc" id="L337">						contact.getVersion(), EntityEnum.CONTACT.name(), token.getUserID(), defaultResponse, summary,</span>
+						ServiceStatus.NOT_REQUIRED));
+<span class="nc" id="L339">				}</span>
+
+<span class="nc bnc" id="L341" title="All 2 branches missed.">			if (null != comapnyContact) {</span>
+<span class="nc" id="L342">				contactList.add(comapnyContact);</span>
+			}
+	
+<span class="nc" id="L345">			responseContactList.add(companyResponse);</span>
+					
+				//Update Account set status to NOT_REQUIRED when contact.isSanctionEligible() is False : Laxmi B
+<span class="nc" id="L348">			sanctionRequest.setCustomerNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L349">			sanctionRequest.setContactrequests(contactList);</span>
+<span class="nc" id="L350">			fResponse.setContactResponses(responseContactList);</span>
+<span class="nc" id="L351">			ccExchange.setRequest(sanctionRequest);</span>
+<span class="nc" id="L352">			ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L353">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L354">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L355">		} catch (Exception e) {</span>
+<span class="nc" id="L356">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L357">		}</span>
+<span class="nc" id="L358">		return message;</span>
+	}
+	private Message&lt;MessageContext&gt; transformCFXResendRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="nc" id="L362">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L363">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L364">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L365">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L366">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L367">			SanctionRequest sanctionRequest = new SanctionRequest();</span>
+<span class="nc" id="L368">			SanctionResponse fResponse = new SanctionResponse();</span>
+<span class="nc" id="L369">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L370">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+			List&lt;SanctionContactRequest&gt; contactList;
+			List&lt;SanctionContactResponse&gt; responseContactList ;
+<span class="nc" id="L373">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L374">			String sanctionAccountCategory =  getAccountSanctionCategory();</span>
+<span class="nc" id="L375">			String sanctionContactCategory =  getContactSanctionCategory();</span>
+			
+
+<span class="nc" id="L378">			SanctionContactResponse defaultResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L379">			defaultResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+
+<span class="nc" id="L381">			SanctionSummary summary = new SanctionSummary();</span>
+<span class="nc" id="L382">			summary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L383">			summary.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L384">			summary.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L385">			summary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+	
+<span class="nc" id="L387">			contactList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L388">			responseContactList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L389">			String entityType = (String) registrationRequest.getAdditionalAttribute(&quot;entityType&quot;);</span>
+			
+<span class="nc" id="L391">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc bnc" id="L392" title="All 2 branches missed.">			if (entityType.equalsIgnoreCase(EntityEnum.ACCOUNT.name())) {</span>
+<span class="nc" id="L393">				SanctionContactRequest comapnyContact = createCompanyCFXRequest(orgID, account, countryCache,sanctionAccountCategory);</span>
+<span class="nc" id="L394">				SanctionContactResponse companyResponse = createCFXResponse(account,ServiceStatus.NOT_PERFORMED);</span>
+<span class="nc" id="L395">				sanctionRequest.setCustomerType(Constants.CFX);</span>
+<span class="nc" id="L396">				ccExchange.addEventServiceLog(createSanctionResendAccountEventServiceLog(eventId, account, defaultResponse,</span>
+						summary, token));
+<span class="nc bnc" id="L398" title="All 2 branches missed.">				if (null != comapnyContact) {</span>
+<span class="nc" id="L399">					contactList.add(comapnyContact);</span>
+				}
+<span class="nc" id="L401">				responseContactList.add(companyResponse);</span>
+
+<span class="nc" id="L403">			} else {</span>
+<span class="nc" id="L404">				contactList = createContactRequestForRegistration(orgID, contacts, countryCache,registrationRequest,sanctionContactCategory);</span>
+<span class="nc" id="L405">				responseContactList = createContactResponse(contacts);</span>
+<span class="nc" id="L406">				createSanctionResendContactEventServiceLog(contacts, eventId, ccExchange, defaultResponse,</span>
+						summary, token);
+			}
+<span class="nc" id="L409">			sanctionRequest.setCustomerNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L410">			sanctionRequest.setContactrequests(contactList);</span>
+<span class="nc" id="L411">			fResponse.setContactResponses(responseContactList);</span>
+		
+<span class="nc" id="L413">			ccExchange.setRequest(sanctionRequest);</span>
+<span class="nc" id="L414">			ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L415">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L416">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L417">		} catch (Exception e) {</span>
+<span class="nc" id="L418">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L419">		}</span>
+<span class="nc" id="L420">		return message;</span>
+		
+	}
+	private Message&lt;MessageContext&gt; transformPFXRequest(Message&lt;MessageContext&gt; message) throws ComplianceException{
+		
+		try {
+<span class="nc" id="L426">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L427">			 OperationEnum operation = messageExchange.getOperation();</span>
+<span class="nc bnc" id="L428" title="All 2 branches missed.">			if (OperationEnum.NEW_REGISTRATION==operation) {</span>
+<span class="nc" id="L429">				transformPFXSignupRequest(message);</span>
+<span class="nc bnc" id="L430" title="All 2 branches missed.">			} else if (OperationEnum.ADD_CONTACT==operation)  {</span>
+<span class="nc" id="L431">				transformPFXAddContactRequest(message);</span>
+<span class="nc bnc" id="L432" title="All 2 branches missed.">			}  else if (OperationEnum.UPDATE_ACCOUNT==operation)  {</span>
+<span class="nc" id="L433">				transformPFXUpdateRequest(message);</span>
+<span class="nc bnc" id="L434" title="All 2 branches missed.">			} else if (OperationEnum.SANCTION_RESEND==operation)  {</span>
+<span class="nc" id="L435">				transformPFXResendRequest(message);</span>
+			}
+<span class="nc" id="L437">		} catch (Exception e) {</span>
+<span class="nc" id="L438">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L439">		}</span>
+<span class="nc" id="L440">		return message;</span>
+		
+	}	
+	private Message&lt;MessageContext&gt; transformPFXSignupRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="nc" id="L445">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L446">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L447">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L448">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L449">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L450">			SanctionRequest sanctionRequest = new SanctionRequest();</span>
+<span class="nc" id="L451">			SanctionResponse fResponse = new SanctionResponse();</span>
+<span class="nc" id="L452">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L453">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+			List&lt;SanctionContactRequest&gt; contactList;
+			List&lt;SanctionContactResponse&gt; responseContactList ;
+<span class="nc" id="L456">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L457">			String sanctionContactCategory =  getContactSanctionCategory();</span>
+			
+<span class="nc" id="L459">			SanctionContactResponse defaultResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L460">			defaultResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+	
+<span class="nc" id="L462">			SanctionSummary summary = new SanctionSummary();</span>
+<span class="nc" id="L463">			summary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L464">			summary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L465">			contactList = createContactRequest(orgID, contacts, countryCache,sanctionContactCategory);</span>
+<span class="nc" id="L466">			responseContactList = createContactResponse(contacts);</span>
+<span class="nc" id="L467">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc bnc" id="L468" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc" id="L469">				ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L470">						ServiceProviderEnum.SANCTION_SERVICE,  contact.getId(), contact.getVersion(),</span>
+<span class="nc" id="L471">						EntityEnum.CONTACT.name(), token.getUserID(), defaultResponse, summary));</span>
+	
+<span class="nc" id="L473">			}</span>
+<span class="nc" id="L474">			sanctionRequest.setCustomerNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L475">			sanctionRequest.setContactrequests(contactList);</span>
+<span class="nc" id="L476">			fResponse.setContactResponses(responseContactList);</span>
+			
+<span class="nc" id="L478">			ccExchange.setRequest(sanctionRequest);</span>
+<span class="nc" id="L479">			ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L480">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L481">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L482">		} catch (Exception e) {</span>
+<span class="nc" id="L483">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L484">		}</span>
+<span class="nc" id="L485">		return message;</span>
+	}	
+	private Message&lt;MessageContext&gt; transformPFXAddContactRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="nc" id="L489">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L490">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L491">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L492">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L493">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L494">			SanctionRequest sanctionRequest = new SanctionRequest();</span>
+<span class="nc" id="L495">			SanctionResponse fResponse = new SanctionResponse();</span>
+<span class="nc" id="L496">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L497">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+			List&lt;SanctionContactRequest&gt; contactList;
+			List&lt;SanctionContactResponse&gt; responseContactList ;
+<span class="nc" id="L500">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L501">			String sanctionContactCategory =  getContactSanctionCategory();</span>
+			
+<span class="nc" id="L503">			SanctionContactResponse defaultResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L504">			defaultResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+
+<span class="nc" id="L506">			SanctionSummary summary = new SanctionSummary();</span>
+<span class="nc" id="L507">			summary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L508">			summary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L509">			contactList = createContactRequest(orgID, contacts, countryCache,sanctionContactCategory);</span>
+<span class="nc" id="L510">			responseContactList = createContactResponse(contacts);</span>
+<span class="nc" id="L511">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc bnc" id="L512" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc" id="L513">				ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L514">						ServiceProviderEnum.SANCTION_SERVICE,  contact.getId(), contact.getVersion(),</span>
+<span class="nc" id="L515">						EntityEnum.CONTACT.name(), token.getUserID(), defaultResponse, summary));</span>
+
+<span class="nc" id="L517">			}</span>
+<span class="nc" id="L518">			sanctionRequest.setCustomerNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L519">			sanctionRequest.setContactrequests(contactList);</span>
+<span class="nc" id="L520">			fResponse.setContactResponses(responseContactList);			</span>
+<span class="nc" id="L521">			ccExchange.setRequest(sanctionRequest);</span>
+<span class="nc" id="L522">			ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L523">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L524">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L525">		} catch (Exception exception) {</span>
+<span class="nc" id="L526">			LOGGER.debug(Constants.ERROR, exception);</span>
+<span class="nc" id="L527">		 }</span>
+<span class="nc" id="L528">		return message;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformPFXUpdateRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		
+		try {
+<span class="nc" id="L534">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();		</span>
+<span class="nc" id="L535">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L536">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L537">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L538">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L539">			SanctionRequest sanctionRequest = new SanctionRequest();</span>
+<span class="nc" id="L540">			SanctionResponse fResponse = new SanctionResponse();</span>
+<span class="nc" id="L541">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L542">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+			List&lt;SanctionContactRequest&gt; contactList;
+<span class="nc" id="L544">			List&lt;SanctionContactResponse&gt; responseContactList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L545">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L546">			String sanctionContactCategory =  getContactSanctionCategory();</span>
+						
+			///Update Account set status to NOT_REQUIRED when contact.isSanctionEligible() is False : Laxmi B			
+<span class="nc" id="L549">			contactList = createContactRequest(orgID, contacts, countryCache,sanctionContactCategory);</span>
+<span class="nc" id="L550">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L551">			ServiceStatus status = ServiceStatus.NOT_PERFORMED;</span>
+<span class="nc bnc" id="L552" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L553" title="All 2 branches missed.">				if(!contact.isSanctionEligible()){</span>
+<span class="nc" id="L554">					status = ServiceStatus.NOT_REQUIRED;</span>
+				}
+<span class="nc" id="L556">				String sanctionId=createReferenceId(registrationRequest.getOrgId().toString(),</span>
+<span class="nc" id="L557">						EntityEnum.CONTACT.name(), contact.getId().toString());</span>
+<span class="nc" id="L558">				SanctionSummary summary = new SanctionSummary();</span>
+<span class="nc" id="L559">				summary.setStatus(status.name());</span>
+<span class="nc" id="L560">				summary.setSanctionId(sanctionId);</span>
+<span class="nc" id="L561">				summary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+				
+<span class="nc" id="L563">				SanctionContactResponse defaultResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L564">				defaultResponse.setContactId(contact.getId());</span>
+<span class="nc" id="L565">				defaultResponse.setSanctionId(sanctionId);</span>
+<span class="nc" id="L566">				defaultResponse.setStatus(status.name());</span>
+<span class="nc" id="L567">				responseContactList.add(defaultResponse);</span>
+<span class="nc" id="L568">				ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L569">						ServiceProviderEnum.SANCTION_SERVICE,  contact.getId(), contact.getVersion(),</span>
+<span class="nc" id="L570">						EntityEnum.CONTACT.name(), token.getUserID(), defaultResponse, summary, status));</span>
+<span class="nc" id="L571">			}</span>
+<span class="nc" id="L572">			sanctionRequest.setCustomerNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L573">			sanctionRequest.setContactrequests(contactList);</span>
+<span class="nc" id="L574">			fResponse.setContactResponses(responseContactList);</span>
+		
+<span class="nc" id="L576">			ccExchange.setRequest(sanctionRequest);</span>
+<span class="nc" id="L577">			ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L578">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L579">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L580">		} catch (Exception e) {</span>
+<span class="nc" id="L581">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L582">		}</span>
+<span class="nc" id="L583">		return message;</span>
+	}
+	private Message&lt;MessageContext&gt; transformPFXResendRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+			
+<span class="nc" id="L588">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();		</span>
+<span class="nc" id="L589">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L590">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L591">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L592">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L593">			SanctionRequest sanctionRequest = new SanctionRequest();</span>
+<span class="nc" id="L594">			SanctionResponse fResponse = new SanctionResponse();</span>
+<span class="nc" id="L595">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L596">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+			List&lt;SanctionContactRequest&gt; contactList;
+			List&lt;SanctionContactResponse&gt; responseContactList ;
+<span class="nc" id="L599">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L600">			String sanctionContactCategory =  getContactSanctionCategory();</span>
+			
+<span class="nc" id="L602">			SanctionContactResponse defaultResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L603">			defaultResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+
+<span class="nc" id="L605">			SanctionSummary summary = new SanctionSummary();</span>
+<span class="nc" id="L606">			summary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L607">			summary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+				
+<span class="nc" id="L609">			contactList = createContactRequestForRegistration(orgID, contacts, countryCache,registrationRequest,sanctionContactCategory);</span>
+<span class="nc" id="L610">			responseContactList = createContactResponse(contacts);</span>
+<span class="nc" id="L611">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L612">			createSanctionResendContactEventServiceLog(contacts, eventId, ccExchange, defaultResponse,</span>
+					summary, token);	
+			
+<span class="nc" id="L615">			sanctionRequest.setCustomerNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L616">			sanctionRequest.setContactrequests(contactList);</span>
+<span class="nc" id="L617">			fResponse.setContactResponses(responseContactList);			</span>
+		
+<span class="nc" id="L619">			ccExchange.setRequest(sanctionRequest);</span>
+<span class="nc" id="L620">			ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L621">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L622">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L623">		} catch (Exception e) {</span>
+<span class="nc" id="L624">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L625">		}</span>
+<span class="nc" id="L626">		return message;</span>
+	}
+	
+	/* (non-Javadoc)
+	 *  
+	 * Implementation---
+	 * Once Sanction micro service call is performed, this method is invoked to update EventServiceLog Entry
+	 * If call to micro service and provider is successful, update response in EventServiceLog entry for each contact
+	 * if failed, 
+	 * 		update the status to SERVICE_FAILURE, if Sanction service is down/failed
+	 * 
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+		try{
+<span class="nc" id="L641">		RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L642">				.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L643">			String custType =registrationRequest.getAccount().getCustType();</span>
+<span class="nc bnc" id="L644" title="All 2 branches missed.">			if (Constants.CFX.equalsIgnoreCase(custType.trim())) {</span>
+<span class="nc" id="L645">				transformCFXResponse(message);</span>
+<span class="nc bnc" id="L646" title="All 2 branches missed.">			} else if (Constants.PFX.equalsIgnoreCase(custType.trim())){</span>
+<span class="nc" id="L647">				transformPFXResponse(message);</span>
+			}
+<span class="nc" id="L649">		} catch(Exception e){</span>
+<span class="nc" id="L650">			LOGGER.error(&quot;Exception in transformResponse() of Sanction Transformer&quot;, e);</span>
+<span class="nc" id="L651">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L652">		}</span>
+<span class="nc" id="L653">	return message;</span>
+		
+	}
+	
+	private Message&lt;MessageContext&gt; transformPFXResponse(Message&lt;MessageContext&gt; message) {
+		
+		try{
+<span class="nc" id="L660">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L661">			OperationEnum operation = messageExchange.getOperation();</span>
+<span class="nc bnc" id="L662" title="All 2 branches missed.">			if (OperationEnum.NEW_REGISTRATION==operation) {</span>
+<span class="nc" id="L663">				transformPFXSignupResponse(message);</span>
+<span class="nc bnc" id="L664" title="All 2 branches missed.">			} else if (OperationEnum.ADD_CONTACT==operation)  {</span>
+<span class="nc" id="L665">				transformPFXAddContactResponse(message);</span>
+<span class="nc bnc" id="L666" title="All 2 branches missed.">			}  else if (OperationEnum.UPDATE_ACCOUNT==operation)  {</span>
+<span class="nc" id="L667">				transformPFXUpdateResponse(message);</span>
+<span class="nc bnc" id="L668" title="All 2 branches missed.">			} else if (OperationEnum.SANCTION_RESEND==operation)  {</span>
+<span class="nc" id="L669">				transformPFXResendResponse(message);</span>
+			}
+<span class="nc" id="L671">		}catch(Exception e){</span>
+<span class="nc" id="L672">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L673">		}</span>
+<span class="nc" id="L674">		return message;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformPFXSignupResponse(Message&lt;MessageContext&gt; messageSignup) {
+<span class="nc" id="L678">		transformCommonPFXResponse(messageSignup);</span>
+<span class="nc" id="L679">		return messageSignup;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformPFXAddContactResponse(Message&lt;MessageContext&gt; messageAddContact) {
+<span class="nc" id="L683">		transformCommonPFXResponse(messageAddContact);</span>
+<span class="nc" id="L684">		return messageAddContact;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformPFXUpdateResponse(Message&lt;MessageContext&gt; messageUpdate) {
+<span class="nc" id="L688">		transformCommonPFXResponse(messageUpdate);</span>
+<span class="nc" id="L689">		return messageUpdate;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformPFXResendResponse(Message&lt;MessageContext&gt; messageResend) {
+<span class="nc" id="L693">		transformCommonPFXResponse(messageResend);</span>
+<span class="nc" id="L694">		return messageResend;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformCFXResponse(Message&lt;MessageContext&gt; message) {
+		
+		try{
+<span class="nc" id="L700">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L701">	 		 OperationEnum operation = messageExchange.getOperation();</span>
+<span class="nc bnc" id="L702" title="All 2 branches missed.">			if (OperationEnum.NEW_REGISTRATION==operation) {</span>
+<span class="nc" id="L703">				transformCFXSignupResponse(message);</span>
+<span class="nc bnc" id="L704" title="All 2 branches missed.">			} else if (OperationEnum.ADD_CONTACT==operation)  {</span>
+<span class="nc" id="L705">				transformCFXAddContactResponse(message);</span>
+<span class="nc bnc" id="L706" title="All 2 branches missed.">			}  else if (OperationEnum.UPDATE_ACCOUNT==operation)  {</span>
+<span class="nc" id="L707">				transformCFXUpdateResponse(message);</span>
+<span class="nc bnc" id="L708" title="All 2 branches missed.">			} else if (OperationEnum.SANCTION_RESEND==operation)  {</span>
+<span class="nc" id="L709">				transformCFXResendResponse(message);</span>
+			}
+<span class="nc" id="L711">		}catch(Exception e){</span>
+<span class="nc" id="L712">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L713">		}</span>
+<span class="nc" id="L714">		return message;</span>
+	}
+	private Message&lt;MessageContext&gt; transformCFXSignupResponse(Message&lt;MessageContext&gt; messageSignup) {
+<span class="nc" id="L717">		transformCommonCFXResponse(messageSignup);</span>
+<span class="nc" id="L718">		return messageSignup;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformCFXAddContactResponse(Message&lt;MessageContext&gt; messageAddContact) {
+<span class="nc" id="L722">		transformCommonCFXResponse(messageAddContact);</span>
+<span class="nc" id="L723">		return messageAddContact;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformCFXUpdateResponse(Message&lt;MessageContext&gt; messageUpdate) {
+<span class="nc" id="L727">		transformCommonCFXResponse(messageUpdate);</span>
+<span class="nc" id="L728">		return messageUpdate;</span>
+	}
+	
+	/**
+	 * This method will get call if user clicks on 'Repeat check' button for SANCTION.
+	 * At a time, user can perform repeat check either for ACCOUNT or CONTACT so we are separating functionality 
+	 * for them based on entity type.
+	 * */
+	private Message&lt;MessageContext&gt; transformCFXResendResponse(Message&lt;MessageContext&gt; message) {
+		
+		try{
+<span class="nc" id="L739">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L740">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc bnc" id="L741" title="All 2 branches missed.">			if(&quot;ACCOUNT&quot;.equals(registrationRequest.getAdditionalAttribute(Constants.ENTITY_TYPE))){</span>
+<span class="nc" id="L742">				transformRepeatCheckResponseAccount(message);</span>
+			}
+<span class="nc bnc" id="L744" title="All 2 branches missed.">			if(&quot;CONTACT&quot;.equals(registrationRequest.getAdditionalAttribute(Constants.ENTITY_TYPE))){</span>
+<span class="nc" id="L745">				transformRepeatCheckResponseContact(message);</span>
+			}
+<span class="nc" id="L747">		}catch(Exception e){</span>
+<span class="nc" id="L748">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L749">		}</span>
+<span class="nc" id="L750">		return message;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformCommonPFXResponse(Message&lt;MessageContext&gt; message) {
+		
+		try {
+<span class="nc" id="L756">			message.getPayload().setServiceTobeInvoked(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L757">			MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L758">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L759">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L760">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());		</span>
+<span class="nc" id="L761">			List&lt;Contact&gt; contacts = registrationRequest.getAccount().getContacts();			</span>
+<span class="nc" id="L762">			SanctionSummary firstSummary = (SanctionSummary) registrationRequest.getAdditionalAttribute(FIRST_SANCTION_SUMMARY);</span>
+<span class="nc" id="L763">			SanctionResponse fResponse = (SanctionResponse) exchange.getResponse();</span>
+			//When Micro Service is down we get fResponse as null 
+<span class="nc bnc" id="L765" title="All 2 branches missed.">			if (fResponse == null) {</span>
+<span class="nc" id="L766">				return transformServicePFXFailureResponse(message);</span>
+			}
+
+<span class="nc" id="L769">			List&lt;SanctionContactResponse&gt; contactList = fResponse.getContactResponses();</span>
+<span class="nc bnc" id="L770" title="All 2 branches missed.">			if (contactList == null) {</span>
+<span class="nc" id="L771">				contactList = createDefaultServiceDownResponse(orgID, contacts, fResponse);</span>
+<span class="nc" id="L772">				fResponse.setContactResponses(contactList);</span>
+			}
+<span class="nc" id="L774">			updateSanctionServiceResponse(orgID, exchange, firstSummary, fResponse, contactList);</span>
+			
+<span class="nc" id="L776">		} catch (Exception e) {</span>
+<span class="nc" id="L777">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L778">		}</span>
+<span class="nc" id="L779">		return message;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformCommonCFXResponse(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L785">			message.getPayload().setServiceTobeInvoked(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L786">			MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L787"> 			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L788">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L789">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L790">			List&lt;Contact&gt; contacts = registrationRequest.getAccount().getContacts();</span>
+<span class="nc" id="L791">			SanctionSummary firstSummary = (SanctionSummary) registrationRequest</span>
+<span class="nc" id="L792">					.getAdditionalAttribute(FIRST_SANCTION_SUMMARY);</span>
+<span class="nc" id="L793">			SanctionResponse fResponse = (SanctionResponse) exchange.getResponse();</span>
+			// When Micro Service is down we get fResponse as null
+<span class="nc bnc" id="L795" title="All 2 branches missed.">			if (fResponse == null) {</span>
+<span class="nc" id="L796">				return transformServiceCFXFailureResponse(message);</span>
+			}
+
+<span class="nc" id="L799">			List&lt;SanctionContactResponse&gt; contactList = fResponse.getContactResponses();</span>
+<span class="nc bnc" id="L800" title="All 2 branches missed.">			if (contactList == null) {</span>
+<span class="nc" id="L801">				contactList = createDefaultServiceDownResponse(orgID, contacts, fResponse);</span>
+<span class="nc" id="L802">				fResponse.setContactResponses(contactList);</span>
+			}
+<span class="nc" id="L804">			updateSanctionServiceResponse(orgID, exchange, firstSummary, fResponse, contactList);</span>
+
+<span class="nc bnc" id="L806" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L807" title="All 2 branches missed.">				if (!contact.isSanctionEligible()) {</span>
+<span class="nc" id="L808">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L809">							EntityEnum.CONTACT.name(), contact.getId());</span>
+					//change done by Vishal J
+					//to show sanction ID on UI instead of 'NOT AVAILABLE'
+<span class="nc" id="L812">					String sanctionID = createReferenceId(orgID,Constants.ENTITY_TYPE_CONTACT,contact.getId()+&quot;&quot;);</span>
+					//end of change
+					/*
+					 * parameter 'sanctionID' is added to this method to send
+					 * * that sanction ID to set into summary
+					 */
+<span class="nc" id="L818">					updateEventLogs(eventServiceLog, sanctionID);</span>
+				}
+<span class="nc" id="L820">			}</span>
+<span class="nc" id="L821">		} catch (Exception e) {</span>
+<span class="nc" id="L822">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L823">		}</span>
+<span class="nc" id="L824">		return message;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformRepeatCheckResponseAccount(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L830">			message.getPayload().setServiceTobeInvoked(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L831">			MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L832">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L833">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L834">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L835">			List&lt;Contact&gt; contacts = registrationRequest.getAccount().getContacts();</span>
+<span class="nc" id="L836">			SanctionSummary firstSummary = (SanctionSummary) registrationRequest</span>
+<span class="nc" id="L837">					.getAdditionalAttribute(FIRST_SANCTION_SUMMARY);</span>
+<span class="nc" id="L838">			SanctionResponse fResponse = (SanctionResponse) exchange.getResponse();</span>
+			// When Micro Service is down we get fResponse as null
+<span class="nc bnc" id="L840" title="All 2 branches missed.">			if (fResponse == null) {</span>
+<span class="nc" id="L841">				return setAccountFailureResponse(message, exchange, registrationRequest, orgID);</span>
+			}
+
+<span class="nc" id="L844">			List&lt;SanctionContactResponse&gt; contactList = fResponse.getContactResponses();</span>
+<span class="nc bnc" id="L845" title="All 2 branches missed.">			if (contactList == null) {</span>
+<span class="nc" id="L846">				contactList = createDefaultServiceDownResponse(orgID, contacts, fResponse);</span>
+<span class="nc" id="L847">				fResponse.setContactResponses(contactList);</span>
+			}
+<span class="nc" id="L849">			updateSanctionServiceResponse(orgID, exchange, firstSummary, fResponse, contactList);</span>
+
+<span class="nc bnc" id="L851" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L852" title="All 2 branches missed.">				if (!contact.isSanctionEligible()) {</span>
+<span class="nc" id="L853">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L854">							EntityEnum.CONTACT.name(), contact.getId());</span>
+					// change done by Vishal J
+					// to show sanction ID on UI instead of 'NOT AVAILABLE'
+<span class="nc" id="L857">					String sanctionID = createReferenceId(orgID, Constants.ENTITY_TYPE_CONTACT, contact.getId() + &quot;&quot;);</span>
+					// end of change
+					/*
+					 * parameter 'sanctionID' is added to this method to send *
+					 * that sanction ID to set into summary
+					 */
+<span class="nc" id="L863">					updateEventLogs(eventServiceLog, sanctionID);</span>
+				}
+<span class="nc" id="L865">			}</span>
+<span class="nc" id="L866">		} catch (Exception e) {</span>
+<span class="nc" id="L867">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L868">		}</span>
+<span class="nc" id="L869">		return message;</span>
+	}
+
+
+	private Message&lt;MessageContext&gt; setAccountFailureResponse(Message&lt;MessageContext&gt; message, MessageExchange exchange,
+			RegistrationServiceRequest registrationRequest, String orgID) {
+		SanctionResponse sResponse;
+<span class="nc" id="L876">		sResponse = new SanctionResponse();</span>
+		/**Add service failure response for Entity Type Account*/
+<span class="nc" id="L878">		Account account = registrationRequest.getAccount();</span>
+		
+		/*Response For Account SERVICE_FAILURE*/
+<span class="nc" id="L881">		SanctionContactResponse sanctionAccountResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L882">		String sanctionID = createReferenceId(orgID,Constants.ENTITY_TYPE_ACCOUNT,account.getId()+&quot;&quot;);</span>
+<span class="nc" id="L883">		sanctionAccountResponse.setSanctionId(sanctionID);</span>
+<span class="nc" id="L884">		sanctionAccountResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L885">		sanctionAccountResponse.setContactId(account.getId());</span>
+<span class="nc" id="L886">		EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L887">				EntityEnum.ACCOUNT.name(), account.getId());</span>
+<span class="nc" id="L888">		createEventServiceLogForServiceFailureWithSanctionID(eventServiceLog, sanctionAccountResponse, sanctionID);</span>
+		
+<span class="nc" id="L890">		exchange.setResponse(sResponse);</span>
+<span class="nc" id="L891">		return message;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformRepeatCheckResponseContact(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L897">			message.getPayload().setServiceTobeInvoked(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L898">			MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L899">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L900">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L901">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L902">			List&lt;Contact&gt; contacts = registrationRequest.getAccount().getContacts();</span>
+<span class="nc" id="L903">			SanctionSummary firstSummary = (SanctionSummary) registrationRequest</span>
+<span class="nc" id="L904">					.getAdditionalAttribute(FIRST_SANCTION_SUMMARY);</span>
+<span class="nc" id="L905">			SanctionResponse fResponse = (SanctionResponse) exchange.getResponse();</span>
+			// When Micro Service is down we get fResponse as null
+<span class="nc bnc" id="L907" title="All 2 branches missed.">			if (fResponse == null) {</span>
+<span class="nc" id="L908">				return setContactFailureResponse(message, exchange, orgID);</span>
+			}
+
+<span class="nc" id="L911">			List&lt;SanctionContactResponse&gt; contactList = fResponse.getContactResponses();</span>
+<span class="nc bnc" id="L912" title="All 2 branches missed.">			if (contactList == null) {</span>
+<span class="nc" id="L913">				contactList = createDefaultServiceDownResponse(orgID, contacts, fResponse);</span>
+<span class="nc" id="L914">				fResponse.setContactResponses(contactList);</span>
+			}
+<span class="nc" id="L916">			updateSanctionServiceResponse(orgID, exchange, firstSummary, fResponse, contactList);</span>
+
+<span class="nc bnc" id="L918" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L919" title="All 2 branches missed.">				if (!contact.isSanctionEligible()) {</span>
+<span class="nc" id="L920">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L921">							EntityEnum.CONTACT.name(), contact.getId());</span>
+					// change done by Vishal J
+					// to show sanction ID on UI instead of 'NOT AVAILABLE'
+<span class="nc" id="L924">					String sanctionID = createReferenceId(orgID, Constants.ENTITY_TYPE_CONTACT, contact.getId() + &quot;&quot;);</span>
+					// end of change
+					/*
+					 * parameter 'sanctionID' is added to this method to send *
+					 * that sanction ID to set into summary
+					 */
+<span class="nc" id="L930">					updateEventLogs(eventServiceLog, sanctionID);</span>
+				}
+<span class="nc" id="L932">			}</span>
+<span class="nc" id="L933">		} catch (Exception e) {</span>
+<span class="nc" id="L934">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L935">		}</span>
+<span class="nc" id="L936">		return message;</span>
+	}
+
+
+	/**
+	 * Sets the contact failure response.
+	 *
+	 * @param message the message
+	 * @param exchange the exchange
+	 * @param orgID the org ID
+	 * @return the message
+	 */
+	private Message&lt;MessageContext&gt; setContactFailureResponse(Message&lt;MessageContext&gt; message, MessageExchange exchange,
+			String orgID) {
+<span class="nc" id="L950">		SanctionRequest sanctionRequest = exchange.getRequest(SanctionRequest.class);</span>
+<span class="nc" id="L951">		List&lt;SanctionContactResponse&gt; contactResponseList = new ArrayList&lt;&gt;();</span>
+		SanctionResponse sResponse;
+<span class="nc" id="L953">		sResponse = new SanctionResponse();</span>
+		/*Response For Contact SERVICE_FAILURE*/
+<span class="nc bnc" id="L955" title="All 2 branches missed.">		if (sanctionRequest.getContactrequests() != null) {</span>
+<span class="nc bnc" id="L956" title="All 2 branches missed.">			for (SanctionContactRequest contact : sanctionRequest.getContactrequests()) {</span>
+<span class="nc" id="L957">				SanctionContactResponse contactResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L958">				contactResponse.setContactId(contact.getContactId());</span>
+				//changes done by Vishal J to set Sanction ID
+<span class="nc" id="L960">				String sanctionID = createReferenceId(orgID,Constants.ENTITY_TYPE_CONTACT,contact.getContactId()+&quot;&quot;);</span>
+<span class="nc" id="L961">				contactResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L962">				contactResponseList.add(contactResponse);</span>
+<span class="nc" id="L963">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L964">						EntityEnum.CONTACT.name(), contact.getContactId());</span>
+				//changes done by Vishal J to set Sanction ID
+<span class="nc" id="L966">				createEventServiceLogForServiceFailureWithSanctionID(eventServiceLog, contactResponse, sanctionID);</span>
+<span class="nc" id="L967">			}</span>
+		}
+
+<span class="nc" id="L970">		sResponse.setContactResponses(contactResponseList);</span>
+<span class="nc" id="L971">		exchange.setResponse(sResponse);</span>
+<span class="nc" id="L972">		return message;</span>
+	}
+	
+	/**
+	 * @param orgID
+	 * @param logs
+	 * @param firstSummary
+	 * @param fResponse
+	 * @param contactList
+	 */
+	private void updateSanctionServiceResponse(String orgID, MessageExchange exchange, SanctionSummary firstSummary,
+			SanctionResponse fResponse, List&lt;SanctionContactResponse&gt; contactList) {
+		
+<span class="nc bnc" id="L985" title="All 2 branches missed.">		for (SanctionContactResponse response : contactList) {</span>
+			
+<span class="nc" id="L987">			EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L988">					getEntityTypeFromSanctionID(response.getSanctionId()).name(), response.getContactId());</span>
+			try {
+<span class="nc bnc" id="L990" title="All 2 branches missed."> 				if (response.getErrorCode() == null) {</span>
+<span class="nc" id="L991">					handleValidSanctionResponse(firstSummary, response, eventServiceLog);</span>
+				} else {
+<span class="nc" id="L993">					handleErrorSanctionResponse(orgID, fResponse, response, eventServiceLog);</span>
+				}
+<span class="nc" id="L995">			} catch (Exception e) {</span>
+<span class="nc" id="L996">				LOGGER.error(&quot;Error in reading Sanction response&quot;, e);</span>
+<span class="nc" id="L997">				eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L998">				eventServiceLog.setSummary(&quot;Unable to parse response&quot;);</span>
+<span class="nc" id="L999">			}</span>
+<span class="nc" id="L1000">		}</span>
+<span class="nc" id="L1001">	}</span>
+
+	/**
+	 * Gets the entity type from sanction ID.
+	 * Sanction Service does not respond with EntityType, 
+	 * hence determine it based on SanctiondID
+	 * @param sanctionId the sanction id
+	 * @return the entity type from sanction ID
+	 * 
+	 */
+	private EntityEnum getEntityTypeFromSanctionID(String sanctionId){
+<span class="nc bnc" id="L1012" title="All 2 branches missed.">		if(sanctionId.contains(&quot;-C-&quot;)){</span>
+<span class="nc" id="L1013">			return EntityEnum.CONTACT;</span>
+<span class="nc bnc" id="L1014" title="All 2 branches missed.">		}else if(sanctionId.contains(&quot;-A-&quot;)){</span>
+<span class="nc" id="L1015">			return EntityEnum.ACCOUNT;</span>
+		}else {
+<span class="nc" id="L1017">			return EntityEnum.UNKNOWN;</span>
+		}
+	}
+
+	/**
+	 * 1)When third party service is down then sanction response is SERVICE_FAILURE
+	 * 2)In other failure condition sanction response set to NOT_PERFORMED 
+	 * 
+	 * 
+	 * @param orgID
+	 * @param fResponse
+	 * @param response
+	 * @param eventServiceLog
+	 */
+	private void handleErrorSanctionResponse(String orgID, SanctionResponse fResponse,
+			SanctionContactResponse response, EventServiceLog eventServiceLog) {
+		String serviceStatus;
+		//change done by Vishal J
+		//to show sanction ID on UI instead of 'NOT AVAILABLE'
+<span class="nc" id="L1036">		String sanctionID = createReferenceId(orgID,Constants.ENTITY_TYPE_CONTACT,response.getContactId()+&quot;&quot;);</span>
+		//end of change
+		/*parameter 'sanctionID' is added to this method to send 
+		 * that sanction ID to set into	summary*/
+<span class="nc" id="L1040">		if (response.getErrorCode()</span>
+<span class="nc bnc" id="L1041" title="All 2 branches missed.">				.equals(ExternalErrorCodes.SANCTION_VALIDATION_EXCEPTION.getErrorCode())</span>
+<span class="nc" id="L1042">				|| response.getErrorCode()</span>
+<span class="nc bnc" id="L1043" title="All 2 branches missed.">						.equals(ExternalErrorCodes.SANCTION_ERROR_WHILE_TRANSFORMATION_REQUEST</span>
+<span class="nc" id="L1044">								.getErrorCode())</span>
+<span class="nc" id="L1045">				|| response.getErrorCode()</span>
+<span class="nc bnc" id="L1046" title="All 2 branches missed.">						.equals(ExternalErrorCodes.SANCTION_ERROR_WHILE_TRANSFORMATION_RESPONSE</span>
+<span class="nc" id="L1047">								.getErrorCode())) {</span>
+<span class="nc" id="L1048">			serviceStatus = ServiceStatus.NOT_PERFORMED.name();</span>
+		} else {
+<span class="nc" id="L1050">			serviceStatus = ServiceStatus.SERVICE_FAILURE.name();</span>
+		}
+		//passing sanctionID parameter to set it into summary
+<span class="nc" id="L1053">		SanctionSummary contactSummary = createSanctionSummary(response.getOfacList(),</span>
+<span class="nc" id="L1054">				response.getWorldCheck(), sanctionID, serviceStatus);</span>
+<span class="nc" id="L1055">		updateResponseInEventLog(eventServiceLog,</span>
+<span class="nc" id="L1056">				JsonConverterUtil.convertToJsonWithoutNull(fResponse), serviceStatus,</span>
+				contactSummary);
+<span class="nc" id="L1058">	}</span>
+
+
+	/**
+	 * Added changes if Status is NOT_REQUIRED then set values of WorldCheck and OfacList
+	 *  as NOT_AVAILBALE
+	 * Changes made by -Saylee
+	 */
+	private void handleValidSanctionResponse(SanctionSummary firstSummary, SanctionContactResponse response,
+			EventServiceLog eventServiceLog) {
+<span class="nc bnc" id="L1068" title="All 4 branches missed.">		if (response.getOfacList() == null || response.getWorldCheck() == null) {</span>
+<span class="nc bnc" id="L1069" title="All 2 branches missed.">			if (null != firstSummary) {</span>
+<span class="nc" id="L1070">				response.setSanctionId(firstSummary.getSanctionId());</span>
+			}
+<span class="nc" id="L1072">			response.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L1073">			response.setOfacList(Constants.NOT_AVAILABLE);</span>
+		}
+<span class="nc" id="L1075">		SanctionSummary contactSummary = createSanctionSummary(response.getOfacList(), response.getWorldCheck(),</span>
+<span class="nc" id="L1076">				response.getSanctionId(), response.getStatus());</span>
+<span class="nc" id="L1077">		contactSummary.setProviderName(response.getProviderName());</span>
+<span class="nc" id="L1078">		contactSummary.setProviderMethod(response.getProviderMethod());</span>
+<span class="nc bnc" id="L1079" title="All 2 branches missed.">		if (Constants.NOT_PERFORMED.equalsIgnoreCase(response.getStatus())</span>
+<span class="nc bnc" id="L1080" title="All 2 branches missed.">				|| Constants.NOT_REQUIRED.equalsIgnoreCase(response.getStatus())</span>
+<span class="nc bnc" id="L1081" title="All 2 branches missed.">				|| Constants.SERVICE_FAILURE.equalsIgnoreCase(response.getStatus())) {</span>
+<span class="nc" id="L1082">			contactSummary.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L1083">			contactSummary.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc bnc" id="L1084" title="All 4 branches missed.">		} else if (null != firstSummary &amp;&amp; (Constants.NOT_AVAILABLE.equalsIgnoreCase(response.getWorldCheck())</span>
+<span class="nc bnc" id="L1085" title="All 2 branches missed.">				|| Constants.NOT_AVAILABLE.equalsIgnoreCase(response.getOfacList()))) {</span>
+<span class="nc" id="L1086">			contactSummary.setWorldCheck(firstSummary.getWorldCheck());</span>
+<span class="nc" id="L1087">			contactSummary.setOfacList(firstSummary.getOfacList());</span>
+		}
+<span class="nc" id="L1089">		updateResponseInEventLog(eventServiceLog, JsonConverterUtil.convertToJsonWithoutNull(response),</span>
+<span class="nc" id="L1090">				response.getStatus(), contactSummary);</span>
+<span class="nc" id="L1091">	}</span>
+
+
+	/**
+	 * @param orgID
+	 * @param contacts
+	 * @param fResponse
+	 * @return
+	 */
+	private List&lt;SanctionContactResponse&gt; createDefaultServiceDownResponse(String orgID, List&lt;Contact&gt; contacts,
+			SanctionResponse fResponse) {
+		List&lt;SanctionContactResponse&gt; contactList;
+<span class="nc" id="L1103">		contactList = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L1104" title="All 2 branches missed.">		for (Contact contact : contacts) {</span>
+<span class="nc" id="L1105">			SanctionContactResponse response = new SanctionContactResponse();</span>
+
+			
+			
+<span class="nc" id="L1109">			response.setContactId(contact.getId());</span>
+<span class="nc" id="L1110">			response.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(fResponse));</span>
+<span class="nc" id="L1111">			response.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1112">			response.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L1113">			response.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+			//changes done by Vishal J to set Sanction ID
+<span class="nc" id="L1115">			String sanctionID = createReferenceId(orgID,Constants.ENTITY_TYPE_CONTACT,response.getContactId()+&quot;&quot;);</span>
+<span class="nc" id="L1116">			response.setSanctionId(sanctionID);</span>
+			//changes end
+<span class="nc" id="L1118">			response.setErrorCode(fResponse.getErrorCode());</span>
+<span class="nc" id="L1119">			response.setErrorDescription(fResponse.getErrorDescription());</span>
+<span class="nc" id="L1120">			contactList.add(response);</span>
+<span class="nc" id="L1121">		}</span>
+<span class="nc" id="L1122">		return contactList;</span>
+	}
+
+
+	/**
+	 * @param exchange
+	 * @param orgID
+	 * @param sanctionRequest
+	 * @param logs
+	 * @param contactResponseList
+	 * @param bankResponseList
+	 * @param beneficiaryResponseList
+	 * @return
+	 */
+	private Message&lt;MessageContext&gt;  transformServiceCFXFailureResponse(Message&lt;MessageContext&gt; message) {
+		
+		try{
+<span class="nc" id="L1139">			message.getPayload().setServiceTobeInvoked(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L1140">			MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L1141">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L1142">					.getGatewayMessageExchange().getRequest();</span>
+			// orgID is fetched from Registrationrequest
+<span class="nc" id="L1144">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L1145">			List&lt;SanctionContactResponse&gt; contactResponseList = new ArrayList&lt;&gt;();</span>
+			SanctionResponse fResponse;
+<span class="nc" id="L1147">			fResponse = new SanctionResponse();</span>
+			/**Add service failure response for Entity Type Account*/
+<span class="nc" id="L1149">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L1150">			Company company = registrationRequest.getAccount().getCompany();</span>
+			
+			/*Response For Account SERVICE_FAILURE*/
+<span class="nc" id="L1153">			SanctionContactResponse sanctionAccountResponse = new SanctionContactResponse();</span>
+<span class="nc bnc" id="L1154" title="All 2 branches missed.">			if (null != company) {</span>
+<span class="nc" id="L1155">				String sanctionID = createReferenceId(orgID,Constants.ENTITY_TYPE_ACCOUNT,account.getId()+&quot;&quot;);</span>
+<span class="nc" id="L1156">				sanctionAccountResponse.setSanctionId(sanctionID);</span>
+<span class="nc" id="L1157">				sanctionAccountResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1158">				sanctionAccountResponse.setContactId(account.getId());</span>
+<span class="nc" id="L1159">				sanctionAccountResponse.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L1160">				sanctionAccountResponse.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L1161">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.ACCOUNT.name(), account.getId());</span>
+<span class="nc" id="L1162">				createEventServiceLogForServiceFailureWithSanctionID(eventServiceLog, sanctionAccountResponse, sanctionID);</span>
+			}
+			
+<span class="nc" id="L1165">			fResponse.setContactResponses(contactResponseList);</span>
+<span class="nc" id="L1166">			exchange.setResponse(fResponse);</span>
+			 
+<span class="nc" id="L1168">		}catch(Exception e){</span>
+<span class="nc" id="L1169">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L1170">		}</span>
+<span class="nc" id="L1171">		return message;</span>
+	}
+	
+	
+	
+	/**
+	 * @param exchange
+	 * @param orgID
+	 * @param sanctionRequest
+	 * @param logs
+	 * @param contactResponseList
+	 * @param bankResponseList
+	 * @param beneficiaryResponseList
+	 * @return
+	 */
+	private Message&lt;MessageContext&gt;  transformServicePFXFailureResponse(Message&lt;MessageContext&gt; message) {
+		
+<span class="nc" id="L1188">		message.getPayload().setServiceTobeInvoked(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L1189">		MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L1190">		RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L1191">				.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L1192">		String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L1193">		SanctionRequest sanctionRequest = exchange.getRequest(SanctionRequest.class);</span>
+<span class="nc" id="L1194">		List&lt;SanctionContactResponse&gt; contactResponseList = new ArrayList&lt;&gt;();</span>
+		
+<span class="nc" id="L1196">		SanctionResponse fResponse= new SanctionResponse();</span>
+<span class="nc bnc" id="L1197" title="All 2 branches missed.">		if (sanctionRequest.getContactrequests() != null) {</span>
+<span class="nc bnc" id="L1198" title="All 2 branches missed.">			for (SanctionContactRequest contact : sanctionRequest.getContactrequests()) {</span>
+<span class="nc" id="L1199">				SanctionContactResponse contactResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L1200">				contactResponse.setContactId(contact.getContactId());</span>
+				//changes done by Vishal J to set Sanction ID
+<span class="nc" id="L1202">				String sanctionID = createReferenceId(orgID,Constants.ENTITY_TYPE_CONTACT,contact.getContactId()+&quot;&quot;);</span>
+<span class="nc" id="L1203">				contactResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1204">				contactResponse.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L1205">				contactResponse.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L1206">				contactResponseList.add(contactResponse);</span>
+<span class="nc" id="L1207">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.CONTACT.name(), contact.getContactId());</span>
+				//changes done by Vishal J to set Sanction ID
+<span class="nc" id="L1209">				createEventServiceLogForServiceFailureWithSanctionID(eventServiceLog, contactResponse, sanctionID);</span>
+<span class="nc" id="L1210">			}</span>
+		}
+
+<span class="nc" id="L1213">		fResponse.setContactResponses(contactResponseList);</span>
+<span class="nc" id="L1214">		exchange.setResponse(fResponse);</span>
+<span class="nc" id="L1215">		return message;</span>
+	}
+	
+	/*
+	 * Parameter 'StringBuilder sanctionID' is added to this method to show sanction ID on UI and setting
+	 * it into summary object. 
+	 * changes done by Vishal J
+	 */
+	private void updateEventLogs( EventServiceLog eventServiceLog, String sanctionID) {
+<span class="nc" id="L1224">		SanctionSummary sanctionSummary = new SanctionSummary();</span>
+<span class="nc" id="L1225">		SanctionContactResponse defaultResponse = new SanctionContactResponse();</span>
+		try {
+<span class="nc" id="L1227">			defaultResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L1228">			eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(defaultResponse));</span>
+<span class="nc" id="L1229">			sanctionSummary.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L1230">			sanctionSummary.setUpdatedOn(eventServiceLog.getCreatedOn().toString());</span>
+<span class="nc" id="L1231">			sanctionSummary.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L1232">			sanctionSummary.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+			//setting that sanction ID into summary
+<span class="nc" id="L1234">			sanctionSummary.setSanctionId(sanctionID);</span>
+<span class="nc" id="L1235">			eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(sanctionSummary));</span>
+<span class="nc" id="L1236">			eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1237">			eventServiceLog.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L1238">		} catch (Exception e) {</span>
+<span class="nc" id="L1239">			LOGGER.error(Constants.ERROR, e);</span>
+<span class="nc" id="L1240">			eventServiceLog.setProviderResponse(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1241">			sanctionSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L1242">		}</span>
+<span class="nc" id="L1243">	}</span>
+	
+	private EventServiceLog createSanctionResendAccountEventServiceLog(Integer eventId, Account account,
+			SanctionContactResponse defaultResponse, SanctionSummary summary, UserProfile token) {
+<span class="nc" id="L1247">		return createEventServiceLogEntry(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L1248">				ServiceProviderEnum.SANCTION_SERVICE, account.getId(), account.getVersion(), EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L1249">				token.getUserID(), defaultResponse, summary);</span>
+	}
+	
+	private void createSanctionResendContactEventServiceLog(List&lt;Contact&gt; contacts, Integer eventId,
+			MessageExchange ccExchange, SanctionContactResponse defaultResponse, SanctionSummary summary,
+			UserProfile token) {
+		try {
+<span class="nc bnc" id="L1256" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc" id="L1257">				ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L1258">						ServiceProviderEnum.SANCTION_SERVICE, contact.getId(), contact.getVersion(),</span>
+<span class="nc" id="L1259">						EntityEnum.CONTACT.name(), token.getUserID(), defaultResponse, summary));</span>
+<span class="nc" id="L1260">			}</span>
+<span class="nc" id="L1261">		} catch (Exception e) {</span>
+<span class="nc" id="L1262">			LOGGER.error(&quot;Error&quot;, e);</span>
+<span class="nc" id="L1263">		}</span>
+<span class="nc" id="L1264">	}</span>
+
+	/**
+	 *  Creates EventServiceLog entry for NOT_REQUIRED status, if performRemainingCheck is false. 
+	 *  if custType is CFX then create EventServiceLog entry for entity type Account and Contact.
+	 *  if custType is PFX then create EventServiceLog entry for only entity type Contact. 
+	 * @author abhijeet g
+	 * @param request
+	 * @param eventId
+	 * @param eventServiceLogs
+	 * @param token
+	 * @param responseContactList
+	 */
+	private void createEventServiceLogForNotRequired(RegistrationServiceRequest request,Integer eventId, MessageExchange ccExchange,
+			UserProfile token, List&lt;SanctionContactResponse&gt; responseContactList,String orgID,OperationEnum operation) {
+
+		try {
+			String entityType ;
+<span class="nc" id="L1282">			Account account = request.getAccount();</span>
+<span class="nc bnc" id="L1283" title="All 4 branches missed.">			if (Constants.CFX.equalsIgnoreCase(account.getCustType()) &amp;&amp; (OperationEnum.ADD_CONTACT!=operation)) {</span>
+<span class="nc" id="L1284">				entityType = EntityEnum.ACCOUNT.name();</span>
+<span class="nc" id="L1285">				String sanctionID = createReferenceId(orgID,Constants.ENTITY_TYPE_ACCOUNT,account.getId()+&quot;&quot;);</span>
+				
+<span class="nc" id="L1287">				SanctionSummary summary = createSanctionSummary(Constants.NOT_AVAILABLE, Constants.NOT_AVAILABLE,</span>
+<span class="nc" id="L1288">						sanctionID, ServiceStatus.NOT_REQUIRED.name());</span>
+				
+<span class="nc" id="L1290">				SanctionContactResponse sanctionContactResponse = createCFXResponse(account, ServiceStatus.NOT_REQUIRED);</span>
+<span class="nc" id="L1291">				sanctionContactResponse.setSanctionId(sanctionID);</span>
+				
+<span class="nc" id="L1293">				ccExchange.addEventServiceLog(createEventServiceLogEntryNotRequired(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L1294">						ServiceProviderEnum.SANCTION_SERVICE, account.getId(), account.getVersion(), entityType,</span>
+<span class="nc" id="L1295">						token.getUserID(),sanctionContactResponse , summary));</span>
+				
+<span class="nc" id="L1297">				responseContactList.add(sanctionContactResponse);</span>
+			} 
+			
+<span class="nc bnc" id="L1300" title="All 2 branches missed.">			for (Contact contact : account.getContacts()) {</span>
+<span class="nc" id="L1301">				entityType = EntityEnum.CONTACT.name();</span>
+<span class="nc" id="L1302">				String sanctionID = createReferenceId(orgID,Constants.ENTITY_TYPE_CONTACT,contact.getId()+&quot;&quot;);</span>
+				
+<span class="nc" id="L1304">				SanctionSummary summary = createSanctionSummary(Constants.NOT_AVAILABLE, Constants.NOT_AVAILABLE,</span>
+<span class="nc" id="L1305">						sanctionID, ServiceStatus.NOT_REQUIRED.name());</span>
+				
+<span class="nc" id="L1307">				ccExchange.addEventServiceLog(createEventServiceLogEntryNotRequired(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L1308">						ServiceProviderEnum.SANCTION_SERVICE, contact.getId(), contact.getVersion(), entityType,</span>
+<span class="nc" id="L1309">						token.getUserID(), createContactResponse(contact, ServiceStatus.NOT_REQUIRED,orgID), summary));</span>
+				
+<span class="nc" id="L1311">				responseContactList.add(createContactResponse(contact, ServiceStatus.NOT_REQUIRED,orgID));</span>
+<span class="nc" id="L1312">			}</span>
+
+<span class="nc" id="L1314">		} catch (Exception e) {</span>
+<span class="nc" id="L1315">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L1316">		}</span>
+<span class="nc" id="L1317">	}</span>
+	
+	 /**
+	  *Implementation :-
+	  * 1.Get contact list and check the condition for SanctionEligible or not
+	  * 2.Get the firstSanctionSummary and 
+	  * 	set values for OfacList,WorldCheck and Status from that summary -Saylee
+	 * @param sanctionContactCategory 
+	  * */
+	private List&lt;SanctionContactRequest&gt; createContactRequestForRegistration(String orgID, List&lt;Contact&gt; contacts,
+			ProvideCacheLoader cacheLoader,RegistrationServiceRequest registrationRequest, String category) throws ComplianceException {
+<span class="nc" id="L1328">		List&lt;SanctionContactRequest&gt; contactList = new ArrayList&lt;&gt;();</span>
+		
+<span class="nc bnc" id="L1330" title="All 2 branches missed.">		for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L1331" title="All 2 branches missed.">			if (contact.isSanctionEligible()) {</span>
+<span class="nc" id="L1332">				String countryName = cacheLoader</span>
+<span class="nc bnc" id="L1333" title="All 2 branches missed.">						.getCountryFullName(null != contact.getCountry() ? contact.getCountry() : &quot;&quot;);</span>
+<span class="nc" id="L1334">				SanctionSummary summary = (SanctionSummary) registrationRequest.getAdditionalAttribute(FIRST_SANCTION_SUMMARY);</span>
+				
+<span class="nc" id="L1336">				SanctionContactRequest sanctionContact = new SanctionContactRequest();</span>
+<span class="nc bnc" id="L1337" title="All 2 branches missed.">				if (null != countryName) {</span>
+<span class="nc" id="L1338">					sanctionContact.setCountry(countryName);</span>
+				}
+<span class="nc" id="L1340">				sanctionContact.setDob(contact.getDob());</span>
+<span class="nc" id="L1341">				sanctionContact.setFullName(contact.getFullName());</span>
+<span class="nc" id="L1342">				sanctionContact.setGender(contact.getGender());</span>
+<span class="nc" id="L1343">				StringBuilder sanctionID = new StringBuilder();</span>
+<span class="nc" id="L1344">				sanctionID.append(orgID).append(&quot;-C-&quot;).append(StringUtils.leftPadWithZero(10, contact.getId()));</span>
+<span class="nc" id="L1345">				sanctionContact.setSanctionId(sanctionID.toString());</span>
+<span class="nc" id="L1346">				sanctionContact.setContactId(contact.getId());</span>
+<span class="nc" id="L1347">				sanctionContact.setIsExisting(contact.isSanctionPerformed());</span>
+<span class="nc" id="L1348">				sanctionContact.setCategory(category);</span>
+<span class="nc bnc" id="L1349" title="All 2 branches missed.">				if(null != summary){</span>
+<span class="nc" id="L1350">					sanctionContact.setPreviousOfac(summary.getOfacList());</span>
+<span class="nc" id="L1351">					sanctionContact.setPreviousWorldCheck(summary.getWorldCheck());</span>
+<span class="nc" id="L1352">					sanctionContact.setPreviousStatus(summary.getStatus());</span>
+					}
+<span class="nc" id="L1354">				contactList.add(sanctionContact);</span>
+			}
+<span class="nc" id="L1356">		}</span>
+<span class="nc" id="L1357">		return contactList;</span>
+	}
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

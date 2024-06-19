@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PaymentReferenceResendActivityLogBuilder.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist</a> &gt; <span class="el_source">PaymentReferenceResendActivityLogBuilder.java</span></div><h1>PaymentReferenceResendActivityLogBuilder.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.integration.annotation.ServiceActivator;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogData;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityTemplateEnum;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistPayRefSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsOutPaymentReferenceResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.PaymentReferenceResendResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class ResendActivityLogBuilder.
+ */
+<span class="nc" id="L36">public class PaymentReferenceResendActivityLogBuilder {</span>
+
+	public static final String UPDATED_STATUS = &quot;{UPDATED_STATUS}&quot;;
+	public static final String PRE_STATUS = &quot;{PRE_STATUS}&quot;;
+	public static final String PAYMENT_REFERENCE = &quot;Payment Reference&quot;;
+	public static final String RECHECK_SERVICE_NAME = &quot;{RECHECK_SERVICE_NAME}&quot;;
+	/** The Constant LOGGER. */
+<span class="nc" id="L43">	private static final Logger LOGGER = LoggerFactory.getLogger(PaymentReferenceResendActivityLogBuilder.class);</span>
+
+	/**
+	 * Builds the activity logs.
+	 *
+	 * @param fResendMessage the f resend message
+	 * @return the message
+	 */
+	@ServiceActivator
+	public Message&lt;MessageContext&gt; buildActivityLogs(Message&lt;MessageContext&gt; fResendMessage) {
+
+		try {
+<span class="nc" id="L55">			UserProfile userProfile = (UserProfile) fResendMessage.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L56">			String userName = userProfile.getPreferredUserName();</span>
+<span class="nc" id="L57">			MessageExchange fExchange = fResendMessage.getPayload()</span>
+<span class="nc" id="L58">					.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L59">			ServiceInterfaceType serviceType = fResendMessage.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L60">					.getServiceInterface();</span>
+<span class="nc" id="L61">			ActivityLogs resendActivityLogs = null;</span>
+			String summary;
+<span class="nc" id="L63">			PaymentReferenceResendResponse fResendResponse = new PaymentReferenceResendResponse();</span>
+
+<span class="nc bnc" id="L65" title="All 2 branches missed.">			if (ServiceInterfaceType.FUNDSOUT == serviceType) {</span>
+
+<span class="nc" id="L67">				FundsOutPaymentReferenceResendRequest resendRequest = fResendMessage.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L68">						.getRequest(FundsOutPaymentReferenceResendRequest.class);</span>
+<span class="nc" id="L69">				FundsOutRequest fRequest = resendRequest.getAdditionalAttribute(Constants.OLD_REQUEST,</span>
+						FundsOutRequest.class);
+<span class="nc" id="L71">				EventServiceLog resendLog = fExchange.getEventServiceLog(ServiceTypeEnum.BLACKLIST_PAY_REF_SERVICE,</span>
+<span class="nc" id="L72">						EntityEnum.BENEFICIARY.name(), fRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L73">				summary = resendLog.getSummary();</span>
+<span class="nc" id="L74">				setPaymetReferenceSummaryData(summary, fResendResponse);</span>
+<span class="nc" id="L75">				List&lt;PaymentOutActivityLogDto&gt; activityLogDtos = getPaymentOutActivityLog(fRequest, userName,</span>
+						resendLog);
+<span class="nc" id="L77">				resendActivityLogs = getPaymentOutActivityLogData(activityLogDtos);</span>
+<span class="nc" id="L78">				fResendResponse.setActivityLogs(resendActivityLogs);</span>
+<span class="nc" id="L79">				fResendResponse.setEventServiceLogId(resendLog.getEventServiceLogId());</span>
+<span class="nc" id="L80">				fResendResponse.addAttribute(&quot;paymentOutActivities&quot;, activityLogDtos);</span>
+			}
+<span class="nc" id="L82">			fResendMessage.getPayload().getGatewayMessageExchange().setResponse(fResendResponse);</span>
+<span class="nc" id="L83">		} catch (Exception ex) {</span>
+<span class="nc" id="L84">			LOGGER.error(&quot;Error building log : &quot;, ex);</span>
+<span class="nc" id="L85">			fResendMessage.getPayload().setFailed(true);</span>
+<span class="nc" id="L86">		}</span>
+
+<span class="nc" id="L88">		return fResendMessage;</span>
+	}
+	
+	/**
+	 * Gets the payment out activity log.
+	 *
+	 * @param request the request
+	 * @param userName the user name
+	 * @param logs the logs
+	 * @return the payment out activity log
+	 */
+	private List&lt;PaymentOutActivityLogDto&gt; getPaymentOutActivityLog(FundsOutRequest request, String userName,
+			EventServiceLog logs) {
+
+<span class="nc" id="L102">		List&lt;PaymentOutActivityLogDto&gt; activityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L103">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L104">		PaymentOutActivityLogDto fPOActivityLogDto = new PaymentOutActivityLogDto();</span>
+<span class="nc" id="L105">		fPOActivityLogDto.setPaymentOutId(request.getFundsOutId());</span>
+<span class="nc" id="L106">		fPOActivityLogDto.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L107">		fPOActivityLogDto.setActivityBy(userName);</span>
+<span class="nc" id="L108">		fPOActivityLogDto.setCreatedBy(userName);</span>
+<span class="nc" id="L109">		fPOActivityLogDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L110">		fPOActivityLogDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L111">		fPOActivityLogDto.setTimeStatmp(timestamp);</span>
+<span class="nc" id="L112">		fPOActivityLogDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L113">		PaymentOutActivityLogDetailDto fPOActivityLogDetailDto = new PaymentOutActivityLogDetailDto();</span>
+<span class="nc" id="L114">		fPOActivityLogDto.setActivityLogDetailDto(fPOActivityLogDetailDto);</span>
+<span class="nc" id="L115">		fPOActivityLogDetailDto.setActivityType(ActivityType.PAYMENT_OUT_PAYMENT_REFERENCE_REPEAT);</span>
+<span class="nc" id="L116">		fPOActivityLogDetailDto.setLog(getPaymentOutPaymentReferenceLog(request, logs));</span>
+<span class="nc" id="L117">		fPOActivityLogDetailDto.setCreatedBy(userName);</span>
+<span class="nc" id="L118">		fPOActivityLogDetailDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L119">		fPOActivityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L120">		fPOActivityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L121">		activityLogDtos.add(fPOActivityLogDto);</span>
+<span class="nc" id="L122">		return activityLogDtos;</span>
+	}
+	
+	/**
+	 * Set blacklist summary data
+	 * @param userName
+	 * @param summary
+	 * @param resendResponse
+	 * @param eventServiceLog
+	 */
+	private void setPaymetReferenceSummaryData(String summary, PaymentReferenceResendResponse resendResponse) {
+<span class="nc bnc" id="L133" title="All 2 branches missed.">		if(summary != null) {</span>
+<span class="nc" id="L134">			BlacklistPayRefSummary paymentReferenceSummary = JsonConverterUtil.convertToObject(BlacklistPayRefSummary.class, summary);</span>
+<span class="nc" id="L135">			 resendResponse.setSummary(paymentReferenceSummary);</span>
+			}
+<span class="nc" id="L137">		}	</span>
+	
+	/**
+	 * Gets the payment out activity log data.
+	 *
+	 * @param activityLogDtos the activity log dtos
+	 * @return the payment out activity log data
+	 */
+	private ActivityLogs getPaymentOutActivityLogData(List&lt;PaymentOutActivityLogDto&gt; activityLogDtos) {
+<span class="nc" id="L146">		ActivityLogs activityLogs = null;</span>
+<span class="nc bnc" id="L147" title="All 4 branches missed.">		if (activityLogDtos != null &amp;&amp; !activityLogDtos.isEmpty()) {</span>
+<span class="nc" id="L148">			activityLogs = getPaymentOutActivityLogsResponse(activityLogDtos);</span>
+		}
+<span class="nc" id="L150">		return activityLogs;</span>
+	}
+	
+	/**
+	 * Gets the payment out activity logs response.
+	 *PAYMENT_OUT_PAYMENT_REFERENCE_REPEAT
+	 * @param activityLogDtos the activity log dtos
+	 * @return the payment out activity logs response
+	 */
+	private ActivityLogs getPaymentOutActivityLogsResponse(List&lt;PaymentOutActivityLogDto&gt; activityLogDtos) {
+<span class="nc" id="L160">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L161">		List&lt;ActivityLogData&gt; activityData = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">		for (PaymentOutActivityLogDto profileActivityLogDto : activityLogDtos) {</span>
+<span class="nc" id="L163">			ActivityLogData activity = new ActivityLogData();</span>
+<span class="nc" id="L164">			activity.setActivity(profileActivityLogDto.getActivityLogDetailDto().getLog());</span>
+<span class="nc" id="L165">			activity.setActivityType(ActivityType.PAYMENT_OUT_PAYMENT_REFERENCE_REPEAT.getModule() + &quot; &quot;</span>
+<span class="nc" id="L166">					+ ActivityType.PAYMENT_OUT_PAYMENT_REFERENCE_REPEAT.getType());</span>
+<span class="nc" id="L167">			activity.setCreatedBy(profileActivityLogDto.getActivityBy());</span>
+<span class="nc" id="L168">			activity.setCreatedOn(profileActivityLogDto.getCreatedOn().toString());</span>
+<span class="nc" id="L169">			activityData.add(activity);</span>
+<span class="nc" id="L170">		}</span>
+<span class="nc" id="L171">		activityLogs.setActivityLogData(activityData);</span>
+<span class="nc" id="L172">		return activityLogs;</span>
+	}
+	
+	/**
+	 * Gets the payment out payment reference log.
+	 *
+	 * @param request the request
+	 * @param log the log
+	 * @return the payment out payment reference log
+	 */
+	private String getPaymentOutPaymentReferenceLog(FundsOutRequest request, EventServiceLog log) {
+<span class="nc" id="L183">		String prevFStatus = request.getAdditionalAttribute(Constants.PAYMENT_REFERENCE_STATUS, String.class);</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">		if(prevFStatus == null) {</span>
+<span class="nc" id="L185">			prevFStatus = Constants.NOT_PERFORMED;</span>
+		}
+<span class="nc" id="L187">		return ActivityTemplateEnum.PAYMENT_RECHECK.getTemplate().replace(RECHECK_SERVICE_NAME, PAYMENT_REFERENCE)</span>
+<span class="nc" id="L188">				.replace(PRE_STATUS, prevFStatus).replace(UPDATED_STATUS, log.getStatus());</span>
+
+	}	
+}
+	
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

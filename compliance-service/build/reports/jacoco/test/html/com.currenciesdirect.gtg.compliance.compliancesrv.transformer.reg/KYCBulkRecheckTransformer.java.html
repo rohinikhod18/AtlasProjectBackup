@@ -1,0 +1,827 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>KYCBulkRecheckTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg</a> &gt; <span class="el_source">KYCBulkRecheckTransformer.java</span></div><h1>KYCBulkRecheckTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.Address;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.Identification;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.PersonalDetails;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.Phone;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.NationalIdType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ProvideCacheLoader;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class KYCBulkRecheckTransformer.
+ */
+<span class="nc" id="L45">public class KYCBulkRecheckTransformer extends AbstractTransformer {</span>
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L48">	private static final Logger LOGGER = LoggerFactory.getLogger(KYCBulkRecheckTransformer.class);</span>
+
+	/** The country cache. */
+<span class="nc" id="L51">	private ProvideCacheLoader countryCache = ProvideCacheLoader.getInstance();</span>
+
+	/** The Constant ERROR_MSG. */
+	private static final String ERROR_MSG = &quot;Error creating request for provider:&quot;;
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer#
+	 * transformRequest(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L66">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L67">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L68">			boolean notBlackListed = true;</span>
+
+<span class="nc bnc" id="L70" title="All 2 branches missed.">			if (registrationRequest.getAdditionalAttribute(Constants.NOT_BLACKLISTED) != null) {</span>
+<span class="nc" id="L71">				notBlackListed = (boolean) registrationRequest.getAdditionalAttribute(Constants.NOT_BLACKLISTED);</span>
+			}
+<span class="nc bnc" id="L73" title="All 2 branches missed.">			if (notBlackListed) {</span>
+<span class="nc" id="L74">				transformPFXRequest(message);</span>
+			} else {
+<span class="nc" id="L76">				createEventServiceLogEntryForNotRequired(message, registrationRequest);</span>
+			}
+
+<span class="nc" id="L79">		} catch (Exception e) {</span>
+<span class="nc" id="L80">			LOGGER.error(Constants.ERROR, e);</span>
+<span class="nc" id="L81">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L82">		}</span>
+<span class="nc" id="L83">		return message;</span>
+	}
+
+	/**
+	 * Creates the event service log entry for not required.
+	 *
+	 * @param message
+	 *            the message
+	 * @param registrationRequest
+	 *            the registration request
+	 */
+	private void createEventServiceLogEntryForNotRequired(Message&lt;MessageContext&gt; message,
+			RegistrationServiceRequest registrationRequest) {
+
+		try {
+<span class="nc" id="L98">			KYCProviderRequest kycProviderRequest = new KYCProviderRequest();</span>
+<span class="nc" id="L99">			List&lt;KYCContactRequest&gt; contact = new ArrayList&lt;&gt;();</span>
+			List&lt;KYCContactResponse&gt; contactResponses;
+<span class="nc" id="L101">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L102">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+<span class="nc" id="L103">			KYCProviderResponse kycProviderResponse = new KYCProviderResponse();</span>
+<span class="nc" id="L104">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L105">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+
+<span class="nc" id="L107">			MessageExchange ccExchange = new MessageExchange();</span>
+
+<span class="nc" id="L109">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.KYC_SERVICE);</span>
+
+<span class="nc" id="L111">			contactResponses = createEventServiceLogForNotRequired(registrationRequest, eventId, ccExchange, token,</span>
+					orgID);
+<span class="nc" id="L113">			kycProviderRequest.setContact(contact);</span>
+<span class="nc" id="L114">			kycProviderResponse.setContactResponse(contactResponses);</span>
+<span class="nc" id="L115">			ccExchange.setRequest(kycProviderRequest);</span>
+<span class="nc" id="L116">			ccExchange.setResponse(kycProviderResponse);</span>
+<span class="nc" id="L117">			message.getPayload().removeMessageExchange(ServiceTypeEnum.KYC_SERVICE);</span>
+<span class="nc" id="L118">			message.getPayload().appendMessageExchange(ccExchange);</span>
+
+<span class="nc" id="L120">		} catch (Exception e) {</span>
+<span class="nc" id="L121">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L122">		}</span>
+<span class="nc" id="L123">	}</span>
+
+	/**
+	 * Transform PFX request.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Message&lt;MessageContext&gt; transformPFXRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+
+		try {
+
+<span class="nc" id="L138">			transformPFXRecheckServiceFailureRequest(message);</span>
+
+<span class="nc" id="L140">		} catch (Exception e) {</span>
+<span class="nc" id="L141">			LOGGER.warn(ERROR_MSG, e);</span>
+<span class="nc" id="L142">			throw new ComplianceException(InternalProcessingCode.SERVICE_ERROR,e);</span>
+<span class="nc" id="L143">		}</span>
+<span class="nc" id="L144">		return message;</span>
+
+	}
+
+	/**
+	 * Transform PFX recheck service failure request.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Message&lt;MessageContext&gt; transformPFXRecheckServiceFailureRequest(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+
+		try {
+<span class="nc" id="L161">			KYCProviderRequest kycProviderRequest = new KYCProviderRequest();</span>
+<span class="nc" id="L162">			List&lt;KYCContactRequest&gt; contactRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L163">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+
+<span class="nc" id="L165">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L166">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L167">			Integer contactId = (Integer) registrationRequest.getAdditionalAttribute(Constants.CONTACT_ID);</span>
+<span class="nc" id="L168">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L169">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L170">			KYCProviderResponse kycProviderResponse = new KYCProviderResponse();</span>
+<span class="nc" id="L171">			kycProviderRequest.setCorrelationID(registrationRequest.getCorrelationID());</span>
+<span class="nc" id="L172">			kycProviderRequest.setAccountSFId(account.getAccSFID());</span>
+<span class="nc" id="L173">			kycProviderRequest.setOrgCode(registrationRequest.getOrgCode());</span>
+<span class="nc" id="L174">			kycProviderRequest.setLegalEntity(account.getCustLegalEntity());//AT-3327</span>
+<span class="nc" id="L175">			kycProviderRequest.setSourceApplication(registrationRequest.getSourceApplication());</span>
+<span class="nc" id="L176">			kycProviderResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L177">			List&lt;KYCContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L178">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L179">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.KYC_SERVICE);</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L181" title="All 4 branches missed.">				if (null != contactId &amp;&amp; contactId.equals(contact.getId())) {</span>
+<span class="nc" id="L182">					KYCContactRequest contactRequest = new KYCContactRequest();</span>
+
+<span class="nc bnc" id="L184" title="All 2 branches missed.">					if (contact.isKYCEligible()) {</span>
+<span class="nc" id="L185">						populateContactRequest(contactRequests, orgID, contact, contactRequest);</span>
+					}
+
+<span class="nc" id="L188">					KYCContactResponse kycContactResponse = new KYCContactResponse();</span>
+<span class="nc" id="L189">					KYCSummary summary = new KYCSummary();</span>
+<span class="nc" id="L190">					kycContactResponse.setId(contact.getId());</span>
+<span class="nc" id="L191">					summary.setCheckedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L192">					summary.setDob(contact.getDob());</span>
+<span class="nc" id="L193">					summary.setEidCheck(Boolean.FALSE);</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">					if (!contact.isKYCEligible()) {</span>
+<span class="nc" id="L195">						ccExchange.addEventServiceLog(setKYCDefaultResponseStatus(message, contactResponses, contact,</span>
+								kycContactResponse, summary, ServiceStatus.NOT_REQUIRED));
+					} else {
+<span class="nc" id="L198">						ccExchange.addEventServiceLog(setKYCDefaultResponseStatus(message, contactResponses, contact,</span>
+								kycContactResponse, summary, ServiceStatus.NOT_PERFORMED));
+
+					}
+				}
+<span class="nc" id="L203">			}</span>
+<span class="nc" id="L204">			kycProviderRequest.setContact(contactRequests);</span>
+<span class="nc" id="L205">			kycProviderResponse.setContactResponse(contactResponses);</span>
+
+<span class="nc" id="L207">			ccExchange.setRequest(kycProviderRequest);</span>
+<span class="nc" id="L208">			ccExchange.setResponse(kycProviderResponse);</span>
+<span class="nc" id="L209">			message.getPayload().removeMessageExchange(ServiceTypeEnum.KYC_SERVICE);</span>
+<span class="nc" id="L210">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L211">		} catch (Exception e) {</span>
+<span class="nc" id="L212">			LOGGER.warn(ERROR_MSG, e);</span>
+<span class="nc" id="L213">			throw new ComplianceException(InternalProcessingCode.SERVICE_ERROR,e);</span>
+<span class="nc" id="L214">		}</span>
+<span class="nc" id="L215">		return message;</span>
+	}
+
+	/**
+	 * Populate contact request.
+	 *
+	 * @param contactRequests
+	 *            the contact requests
+	 * @param orgID
+	 *            the org ID
+	 * @param contact
+	 *            the contact
+	 * @param contactRequest
+	 *            the contact request
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void populateContactRequest(List&lt;KYCContactRequest&gt; contactRequests, String orgID, Contact contact,
+			KYCContactRequest contactRequest) throws ComplianceException {
+		Address address;
+		PersonalDetails personalDetails;
+		List&lt;Phone&gt; phones;
+		List&lt;Identification&gt; identifications;
+<span class="nc" id="L238">		address = new Address();</span>
+<span class="nc" id="L239">		personalDetails = new PersonalDetails();</span>
+
+<span class="nc" id="L241">		identifications = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L242">		phones = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L243">		contactRequest.setId(contact.getId());</span>
+<span class="nc" id="L244">		String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_CONTACT, contact.getId() + &quot;&quot;);</span>
+<span class="nc" id="L245">		contactRequest.setContactSFId(providerRef);</span>
+
+<span class="nc" id="L247">		personalDetails.setTitle(contact.getTitle());</span>
+<span class="nc" id="L248">		personalDetails.setForeName(contact.getFirstName());</span>
+<span class="nc" id="L249">		personalDetails.setMiddleName(contact.getMiddleName());</span>
+<span class="nc" id="L250">		personalDetails.setSurName(contact.getLastName());</span>
+<span class="nc" id="L251">		personalDetails.setSecondSurname(contact.getSecondSurname());</span>
+<span class="nc" id="L252">		personalDetails.setDob(contact.getDob());</span>
+<span class="nc" id="L253">		personalDetails.setGender(contact.getGender());</span>
+<span class="nc" id="L254">		personalDetails.setMunicipalityOfBirth(contact.getMunicipalityOfBirth());</span>
+<span class="nc" id="L255">		personalDetails.setStateOfBirth(contact.getStateOfBirth());</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">		if (null != contact.getCountryOfBirth()) {</span>
+<span class="nc bnc" id="L257" title="All 2 branches missed.">			personalDetails.setCountryOfBirth(null != countryCache.getCountryFullName(contact.getCountryOfBirth())</span>
+<span class="nc" id="L258">					? countryCache.getCountryFullName(contact.getCountryOfBirth()) : &quot;&quot;);</span>
+		}
+<span class="nc" id="L260">		contactRequest.setPersonalDetails(personalDetails);</span>
+
+<span class="nc" id="L262">		address.setAddress1(contact.getBuildingNumber() + &quot; &quot; + contact.getStreet());</span>
+<span class="nc" id="L263">		address.setBuildingName(contact.getBuildingName());</span>
+<span class="nc" id="L264">		address.setBuildingNumber(contact.getBuildingNumber());</span>
+<span class="nc" id="L265">		address.setCity(contact.getCity());</span>
+<span class="nc" id="L266">		address.setCivicNumber(contact.getCivicNumber());</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">		if (null != contact.getCountry()) {</span>
+<span class="nc bnc" id="L268" title="All 2 branches missed.">			address.setCountry(null != countryCache.getCountryFullName(contact.getCountry())</span>
+<span class="nc" id="L269">					? countryCache.getCountryFullName(contact.getCountry()) : &quot;&quot;);</span>
+		}
+<span class="nc" id="L271">		address.setPostCode(contact.getPostCode());</span>
+<span class="nc" id="L272">		address.setRegion(contact.getRegion());</span>
+<span class="nc" id="L273">		address.setState(contact.getState());</span>
+<span class="nc" id="L274">		address.setStreet(contact.getStreet());</span>
+<span class="nc" id="L275">		address.setStreetType(contact.getStreetType());</span>
+<span class="nc" id="L276">		address.setStreetNumber(contact.getStreetNumber());</span>
+<span class="nc" id="L277">		address.setSubBuildingOrFlat(contact.getSubBuildingorFlat());</span>
+<span class="nc" id="L278">		address.setSubCity(contact.getSubCity());</span>
+<span class="nc" id="L279">		address.setUnitNumber(contact.getUnitNumber());</span>
+<span class="nc" id="L280">		address.setAza(contact.getAza());</span>
+<span class="nc" id="L281">		address.setPrefecture(contact.getPrefecture());</span>
+<span class="nc" id="L282">		address.setDistrict(contact.getDistrict());</span>
+<span class="nc" id="L283">		address.setAreaNumber(contact.getAreaNumber());</span>
+
+<span class="nc" id="L285">		setFreeFormatAddressLineFields(address, contact);</span>
+<span class="nc" id="L286">		contactRequest.setAddress(address);</span>
+
+<span class="nc" id="L288">		transformPhoneInfo(phones, contact);</span>
+<span class="nc" id="L289">		contactRequest.setPhone(phones);</span>
+
+<span class="nc" id="L291">		transformIdentificationInfo(identifications, contact);</span>
+<span class="nc" id="L292">		contactRequest.setIdentification(identifications);</span>
+<span class="nc" id="L293">		contactRequests.add(contactRequest);</span>
+<span class="nc" id="L294">	}</span>
+
+	/**
+	 * Sets the free format address line fields.
+	 *
+	 * @param address
+	 *            the address
+	 * @param contact
+	 *            the contact
+	 */
+	private void setFreeFormatAddressLineFields(Address address, Contact contact) {
+<span class="nc" id="L305">		address.setAddressLine1(contact.getAddress1()); // Without parsing</span>
+														// street
+
+<span class="nc" id="L308">	}</span>
+
+	/**
+	 * Sets the KYC default response status.
+	 *
+	 * @param message
+	 *            the message
+	 * @param contactResponses
+	 *            the contact responses
+	 * @param contact
+	 *            the contact
+	 * @param kycContactResponse
+	 *            the kyc contact response
+	 * @param summary
+	 *            the summary
+	 * @param serviceStatus
+	 *            the service status
+	 * @return the event service log
+	 */
+	private EventServiceLog setKYCDefaultResponseStatus(Message&lt;MessageContext&gt; message,
+			List&lt;KYCContactResponse&gt; contactResponses, Contact contact, KYCContactResponse kycContactResponse,
+			KYCSummary summary, ServiceStatus serviceStatus) {
+<span class="nc" id="L330">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L331">		Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L332">				.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+<span class="nc" id="L333">		kycContactResponse.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L334">		summary.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L335">		contactResponses.add(kycContactResponse);</span>
+<span class="nc" id="L336">		return createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.KYC_SERVICE,</span>
+<span class="nc" id="L337">				ServiceProviderEnum.KYC_SERVICE, contact.getId(), contact.getVersion(), EntityEnum.CONTACT.name(),</span>
+<span class="nc" id="L338">				token.getUserID(), kycContactResponse, summary, serviceStatus);</span>
+	}
+
+	/**
+	 * Transform identification info.
+	 *
+	 * @param identifications
+	 *            the identifications
+	 * @param contact
+	 *            the contact
+	 */
+	private void transformIdentificationInfo(List&lt;Identification&gt; identifications, Contact contact) {
+		try {
+<span class="nc" id="L351">			transformPassportInfo(identifications, contact);</span>
+
+<span class="nc" id="L353">			transaformDLInfo(identifications, contact);</span>
+
+<span class="nc" id="L355">			transformMedicareInfo(identifications, contact);</span>
+
+<span class="nc" id="L357">			transformHKIdInfo(identifications, contact);</span>
+
+<span class="nc" id="L359">			transformSANationalIdInfo(identifications, contact);</span>
+
+<span class="nc" id="L361">			transformCurpIdInfo(identifications, contact);</span>
+
+<span class="nc" id="L363">			transformSocialInsuranceInfo(identifications, contact);</span>
+
+<span class="nc" id="L365">			transformSSNInfo(identifications, contact);</span>
+
+<span class="nc" id="L367">			transformNIFInfo(identifications, contact);</span>
+<span class="nc" id="L368">		} catch (Exception e) {</span>
+<span class="nc" id="L369">			LOGGER.error(Constants.ERROR, e);</span>
+<span class="nc" id="L370">		}</span>
+<span class="nc" id="L371">	}</span>
+
+	/**
+	 * Transform NIF info.
+	 *
+	 * @param identifications
+	 *            the identifications
+	 * @param contact
+	 *            the contact
+	 */
+	private void transformNIFInfo(List&lt;Identification&gt; identifications, Contact contact) {
+<span class="nc bnc" id="L382" title="All 4 branches missed.">		if (!isNullOrEmpty(contact.getNationalIdNumber()) &amp;&amp; contact.getCountry().equals(&quot;ESP&quot;)) {</span>
+<span class="nc" id="L383">			Identification identification = new Identification();</span>
+<span class="nc" id="L384">			identification.setType(Constants.TAX_ID_NUMBER);</span>
+<span class="nc" id="L385">			identification.setNumber(contact.getNationalIdNumber());</span>
+<span class="nc" id="L386">			identifications.add(identification);</span>
+		}
+<span class="nc" id="L388">	}</span>
+
+	/**
+	 * Transform SSN info.
+	 *
+	 * @param identifications
+	 *            the identifications
+	 * @param contact
+	 *            the contact
+	 */
+	private void transformSSNInfo(List&lt;Identification&gt; identifications, Contact contact) {
+<span class="nc bnc" id="L399" title="All 4 branches missed.">		if (!isNullOrEmpty(contact.getNationalIdType()) &amp;&amp; !isNullOrEmpty(contact.getNationalIdNumber())</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">				&amp;&amp; contact.getNationalIdType().equals(NationalIdType.SSN.getName())) {</span>
+<span class="nc" id="L401">			Identification identification = new Identification();</span>
+<span class="nc" id="L402">			identification.setType(Constants.IDENTITY_CARD);</span>
+<span class="nc" id="L403">			identification.setNumber(contact.getNationalIdNumber());</span>
+<span class="nc" id="L404">			identifications.add(identification);</span>
+		}
+<span class="nc" id="L406">	}</span>
+
+	/**
+	 * Transform social insurance info.
+	 *
+	 * @param identifications
+	 *            the identifications
+	 * @param contact
+	 *            the contact
+	 */
+	private void transformSocialInsuranceInfo(List&lt;Identification&gt; identifications, Contact contact) {
+<span class="nc bnc" id="L417" title="All 4 branches missed.">		if (!isNullOrEmpty(contact.getNationalIdType()) &amp;&amp; !isNullOrEmpty(contact.getNationalIdNumber())</span>
+<span class="nc bnc" id="L418" title="All 2 branches missed.">				&amp;&amp; contact.getNationalIdType().equals(NationalIdType.SOCIAL_INSURANCE_NUMBER.getName())) {</span>
+<span class="nc" id="L419">			Identification identification = new Identification();</span>
+<span class="nc" id="L420">			identification.setType(Constants.SOCIAL_INSURANCE_NUMBER);</span>
+<span class="nc" id="L421">			identification.setNumber(contact.getNationalIdNumber());</span>
+<span class="nc" id="L422">			identifications.add(identification);</span>
+		}
+<span class="nc" id="L424">	}</span>
+
+	/**
+	 * Transform curp id info.
+	 *
+	 * @param identifications
+	 *            the identifications
+	 * @param contact
+	 *            the contact
+	 */
+	private void transformCurpIdInfo(List&lt;Identification&gt; identifications, Contact contact) {
+<span class="nc bnc" id="L435" title="All 4 branches missed.">		if (!isNullOrEmpty(contact.getNationalIdType()) &amp;&amp; !isNullOrEmpty(contact.getNationalIdNumber())</span>
+<span class="nc bnc" id="L436" title="All 2 branches missed.">				&amp;&amp; contact.getNationalIdType().equals(NationalIdType.CURP_ID_NUMBER.getName())) {</span>
+<span class="nc" id="L437">			Identification identification = new Identification();</span>
+<span class="nc" id="L438">			identification.setType(Constants.CURP_ID_NUMBER);</span>
+<span class="nc" id="L439">			identification.setNumber(contact.getNationalIdNumber());</span>
+<span class="nc" id="L440">			identifications.add(identification);</span>
+		}
+<span class="nc" id="L442">	}</span>
+
+	/**
+	 * Transform SA national id info.
+	 *
+	 * @param identifications
+	 *            the identifications
+	 * @param contact
+	 *            the contact
+	 */
+	private void transformSANationalIdInfo(List&lt;Identification&gt; identifications, Contact contact) {
+<span class="nc bnc" id="L453" title="All 4 branches missed.">		if (!isNullOrEmpty(contact.getNationalIdType()) &amp;&amp; !isNullOrEmpty(contact.getNationalIdNumber())</span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">				&amp;&amp; contact.getNationalIdType().equals(NationalIdType.SA_NATIONAL_ID_NUMBER.getName())) {</span>
+<span class="nc" id="L455">			Identification identification = new Identification();</span>
+<span class="nc" id="L456">			identification.setType(Constants.NATIONAL_ID_NUMBER);</span>
+<span class="nc" id="L457">			identification.setNumber(contact.getNationalIdNumber());</span>
+<span class="nc" id="L458">			identifications.add(identification);</span>
+		}
+<span class="nc" id="L460">	}</span>
+
+	/**
+	 * Transform HK id info.
+	 *
+	 * @param identifications
+	 *            the identifications
+	 * @param contact
+	 *            the contact
+	 */
+	private void transformHKIdInfo(List&lt;Identification&gt; identifications, Contact contact) {
+<span class="nc bnc" id="L471" title="All 4 branches missed.">		if (!isNullOrEmpty(contact.getNationalIdType()) &amp;&amp; !isNullOrEmpty(contact.getNationalIdNumber())</span>
+<span class="nc bnc" id="L472" title="All 2 branches missed.">				&amp;&amp; contact.getNationalIdType().equals(NationalIdType.HK_ID_NUMBER.getName())) {</span>
+<span class="nc" id="L473">			Identification identification = new Identification();</span>
+<span class="nc" id="L474">			identification.setType(Constants.HK_ID_NUMBER);</span>
+<span class="nc" id="L475">			identification.setNumber(contact.getNationalIdNumber());</span>
+<span class="nc" id="L476">			identifications.add(identification);</span>
+		}
+<span class="nc" id="L478">	}</span>
+
+	/**
+	 * Transform medicare info.
+	 *
+	 * @param identifications
+	 *            the identifications
+	 * @param contact
+	 *            the contact
+	 */
+	private void transformMedicareInfo(List&lt;Identification&gt; identifications, Contact contact) {
+<span class="nc bnc" id="L489" title="All 2 branches missed.">		if (!isNullOrEmpty(contact.getMedicareCardNumber())) {</span>
+<span class="nc" id="L490">			Identification identification = new Identification();</span>
+<span class="nc" id="L491">			identification.setType(Constants.MEDICARE);</span>
+<span class="nc" id="L492">			identification.setNumber(contact.getMedicareCardNumber());</span>
+<span class="nc" id="L493">			identification.setMedicareRefNumber(contact.getMedicareReferenceNumber());</span>
+<span class="nc" id="L494">			identifications.add(identification);</span>
+		}
+<span class="nc" id="L496">	}</span>
+
+	/**
+	 * Transaform DL info.
+	 *
+	 * @param identifications
+	 *            the identifications
+	 * @param contact
+	 *            the contact
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void transaformDLInfo(List&lt;Identification&gt; identifications, Contact contact) throws ComplianceException {
+<span class="nc bnc" id="L509" title="All 2 branches missed.">		if (!isNullOrEmpty(contact.getDlLicenseNumber())) {</span>
+<span class="nc" id="L510">			Identification identification = new Identification();</span>
+<span class="nc" id="L511">			identification.setType(Constants.DRIVING_LICENSE);</span>
+<span class="nc" id="L512">			identification.setNumber(contact.getDlLicenseNumber());</span>
+<span class="nc" id="L513">			identification.setExiprydate(contact.getDlExpiryDate());</span>
+<span class="nc bnc" id="L514" title="All 2 branches missed.">			if (null != contact.getDlCountryCode()) {</span>
+<span class="nc bnc" id="L515" title="All 2 branches missed.">				identification.setCountryOfIssue(null != countryCache.getCountryFullName(contact.getDlCountryCode())</span>
+<span class="nc" id="L516">						? countryCache.getCountryFullName(contact.getDlCountryCode()) : &quot;&quot;);</span>
+			}
+<span class="nc" id="L518">			identification.setStateOfIssue(contact.getDlStateCode());</span>
+<span class="nc" id="L519">			identification.setDlVersionNumber(contact.getDlVersionNumber());</span>
+<span class="nc" id="L520">			identifications.add(identification);</span>
+		}
+<span class="nc" id="L522">	}</span>
+
+	/**
+	 * Transform passport info.
+	 *
+	 * @param identifications
+	 *            the identifications
+	 * @param contact
+	 *            the contact
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void transformPassportInfo(List&lt;Identification&gt; identifications, Contact contact)
+			throws ComplianceException {
+<span class="nc bnc" id="L536" title="All 2 branches missed.">		if (!isNullOrEmpty(contact.getPassportNumber())) {</span>
+<span class="nc" id="L537">			Identification identification = new Identification();</span>
+<span class="nc" id="L538">			identification.setType(Constants.PASSPORT);</span>
+<span class="nc" id="L539">			identification.setNumber(contact.getPassportNumber());</span>
+<span class="nc" id="L540">			identification.setPassportFullName(contact.getPassportFullName());</span>
+<span class="nc" id="L541">			identification.setPassportMRZLine1(contact.getPassportMRZLine1());</span>
+<span class="nc" id="L542">			identification.setPassportMRZLine2(contact.getPassportMRZLine2());</span>
+<span class="nc" id="L543">			identification.setExiprydate(contact.getPassportExiprydate());</span>
+<span class="nc bnc" id="L544" title="All 2 branches missed.">			if (null != contact.getDlCountryCode()) {</span>
+<span class="nc" id="L545">				identification</span>
+<span class="nc bnc" id="L546" title="All 2 branches missed.">						.setCountryOfIssue(null != countryCache.getCountryFullName(contact.getPassportCountryCode())</span>
+<span class="nc" id="L547">								? countryCache.getCountryFullName(contact.getPassportCountryCode()) : &quot;&quot;);</span>
+			}
+<span class="nc" id="L549">			identifications.add(identification);</span>
+		}
+<span class="nc" id="L551">	}</span>
+
+	/**
+	 * Transform phone info.
+	 *
+	 * @param phones
+	 *            the phones
+	 * @param contact
+	 *            the contact
+	 */
+	private void transformPhoneInfo(List&lt;Phone&gt; phones, Contact contact) {
+		try {
+<span class="nc bnc" id="L563" title="All 4 branches missed.">			if (contact.getPhoneMobile() != null &amp;&amp; !contact.getPhoneMobile().isEmpty()) {</span>
+<span class="nc" id="L564">				Phone phone = new Phone();</span>
+<span class="nc" id="L565">				phone.setType(Constants.PHONE_TYPE_MOBILE);</span>
+<span class="nc" id="L566">				phone.setNumber(contact.getPhoneMobile());</span>
+<span class="nc" id="L567">				phones.add(phone);</span>
+			}
+
+<span class="nc bnc" id="L570" title="All 4 branches missed.">			if (contact.getPhoneHome() != null &amp;&amp; !contact.getPhoneHome().isEmpty()) {</span>
+<span class="nc" id="L571">				Phone phone = new Phone();</span>
+<span class="nc" id="L572">				phone.setType(Constants.PHONE_TYPE_HOME);</span>
+<span class="nc" id="L573">				phone.setNumber(contact.getPhoneHome());</span>
+<span class="nc" id="L574">				phones.add(phone);</span>
+			}
+<span class="nc" id="L576">		} catch (Exception e) {</span>
+<span class="nc" id="L577">			LOGGER.error(Constants.ERROR, e);</span>
+<span class="nc" id="L578">		}</span>
+<span class="nc" id="L579">	}</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer#
+	 * transformResponse(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="nc" id="L590">			message.getPayload().setServiceTobeInvoked(ServiceTypeEnum.KYC_SERVICE);</span>
+<span class="nc" id="L591">			MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.KYC_SERVICE);</span>
+<span class="nc" id="L592">			KYCProviderResponse kycProviderResponse = (KYCProviderResponse) exchange.getResponse();</span>
+<span class="nc" id="L593">			KYCProviderRequest kycProviderRequest = exchange.getRequest(KYCProviderRequest.class);</span>
+
+<span class="nc" id="L595">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L596">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L597">			String orgID = StringUtils.leftPadWithZero(3, registrationRequest.getOrgId());</span>
+<span class="nc" id="L598">			Integer contactId = (Integer) registrationRequest.getAdditionalAttribute(Constants.CONTACT_ID);</span>
+
+<span class="nc bnc" id="L600" title="All 2 branches missed.">			if (kycProviderResponse == null) {</span>
+<span class="nc" id="L601">				List&lt;KYCContactResponse&gt; contactResponseList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L603">				KYCSummary kycSummary = new KYCSummary();</span>
+<span class="nc" id="L604">				kycProviderResponse = new KYCProviderResponse();</span>
+<span class="nc" id="L605">				kycProviderResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+
+<span class="nc" id="L607">				kycResponseForServiceFailure(exchange, kycProviderResponse, kycProviderRequest, orgID, contactId,</span>
+						contactResponseList, kycSummary);
+<span class="nc" id="L609">				kycProviderResponse.setContactResponse(contactResponseList);</span>
+<span class="nc" id="L610">				exchange.setResponse(kycProviderResponse);</span>
+<span class="nc" id="L611">				return message;</span>
+			}
+
+<span class="nc" id="L614">			KYCProviderRequest kycRequest = (KYCProviderRequest) exchange.getRequest();</span>
+<span class="nc" id="L615">			List&lt;KYCContactResponse&gt; contactResponseList = kycProviderResponse.getContactResponse();</span>
+
+<span class="nc bnc" id="L617" title="All 2 branches missed.">			if (contactResponseList != null) {</span>
+<span class="nc bnc" id="L618" title="All 2 branches missed.">				for (KYCContactResponse kycContactResponse : contactResponseList) {</span>
+<span class="nc bnc" id="L619" title="All 4 branches missed.">					if (null != contactId &amp;&amp; contactId.equals(kycContactResponse.getId())) {</span>
+<span class="nc" id="L620">						setKYCSummaryDetails(exchange, kycRequest, kycContactResponse);</span>
+					}
+<span class="nc" id="L622">				}</span>
+			} else {
+<span class="nc" id="L624">				contactResponseList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L625">				setKYCSummaryDetailsForServiceFailure(exchange, kycProviderResponse, orgID, contactId, kycRequest,</span>
+						contactResponseList);
+			}
+<span class="nc" id="L628">			List&lt;Contact&gt; contacts = registrationRequest.getAccount().getContacts();</span>
+<span class="nc" id="L629">			setKYCSummaryDetailsForNotRequired(exchange, orgID, contacts);</span>
+<span class="nc" id="L630">		} catch (Exception e) {</span>
+<span class="nc" id="L631">			LOGGER.error(Constants.ERROR, e);</span>
+<span class="nc" id="L632">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L633">		}</span>
+<span class="nc" id="L634">		return message;</span>
+	}
+
+	private void setKYCSummaryDetailsForNotRequired(MessageExchange exchange, String orgID, List&lt;Contact&gt; contacts) {
+<span class="nc bnc" id="L638" title="All 2 branches missed.">		for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L639" title="All 2 branches missed.">			if (!contact.isKYCEligible()) {</span>
+<span class="nc" id="L640">				String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_CONTACT, contact.getId() + &quot;&quot;);</span>
+<span class="nc" id="L641">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.KYC_SERVICE,</span>
+<span class="nc" id="L642">						EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L643">				KYCSummary kycSummary = new KYCSummary();</span>
+<span class="nc" id="L644">				KYCContactResponse defaultResponse = new KYCContactResponse();</span>
+<span class="nc" id="L645">				defaultResponse.setId(contact.getId());</span>
+<span class="nc" id="L646">				defaultResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L647">				kycSummary.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L648">				kycSummary.setCheckedOn(eventServiceLog.getCreatedOn().toString());</span>
+<span class="nc" id="L649">				kycSummary.setDob(DateTimeFormatter.getUKDateFormat(contact.getDob()));</span>
+<span class="nc" id="L650">				kycSummary.setReferenceId(providerRef);</span>
+<span class="nc" id="L651">				kycSummary.setVerifiactionResult(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L652">				kycSummary.setEidCheck(Boolean.FALSE);</span>
+<span class="nc" id="L653">				eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(defaultResponse));</span>
+<span class="nc" id="L654">				eventServiceLog.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L655">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(kycSummary));</span>
+<span class="nc" id="L656">				eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+			}
+<span class="nc" id="L658">		}</span>
+<span class="nc" id="L659">	}</span>
+
+	private void setKYCSummaryDetailsForServiceFailure(MessageExchange exchange,
+			KYCProviderResponse kycProviderResponse, String orgID, Integer contactId, KYCProviderRequest kycRequest,
+			List&lt;KYCContactResponse&gt; contactResponseList) {
+<span class="nc bnc" id="L664" title="All 2 branches missed.">		for (KYCContactRequest c : kycRequest.getContact()) {</span>
+<span class="nc bnc" id="L665" title="All 4 branches missed.">			if (null != contactId &amp;&amp; contactId.equals(c.getId())) {</span>
+<span class="nc" id="L666">				String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_CONTACT, c.getId() + &quot;&quot;);</span>
+<span class="nc" id="L667">				KYCContactResponse kycContactResponse = new KYCContactResponse();</span>
+<span class="nc" id="L668">				kycContactResponse.setId(c.getId());</span>
+<span class="nc" id="L669">				kycContactResponse.setStatus(ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L670">				contactResponseList.add(kycContactResponse);</span>
+
+<span class="nc" id="L672">				KYCSummary kycSummary = new KYCSummary();</span>
+<span class="nc" id="L673">				kycSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L674">				kycSummary.setCheckedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L675">				kycSummary.setDob(DateTimeFormatter.getUKDateFormat(c.getPersonalDetails().getDob()));</span>
+<span class="nc" id="L676">				kycSummary.setEidCheck(Boolean.FALSE);</span>
+<span class="nc" id="L677">				kycSummary.setReferenceId(providerRef);</span>
+<span class="nc" id="L678">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.KYC_SERVICE,</span>
+<span class="nc" id="L679">						EntityEnum.CONTACT.name(), c.getId());</span>
+<span class="nc" id="L680">				eventServiceLog</span>
+<span class="nc" id="L681">						.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(kycProviderResponse));</span>
+<span class="nc" id="L682">				eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L683">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(kycSummary));</span>
+<span class="nc" id="L684">				eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+			}
+<span class="nc" id="L686">		}</span>
+<span class="nc" id="L687">	}</span>
+
+	private void kycResponseForServiceFailure(MessageExchange exchange, KYCProviderResponse kycProviderResponse,
+			KYCProviderRequest kycProviderRequest, String orgID, Integer contactId,
+			List&lt;KYCContactResponse&gt; contactResponseList, KYCSummary kycSummary) {
+<span class="nc bnc" id="L692" title="All 2 branches missed.">		for (KYCContactRequest contact : kycProviderRequest.getContact()) {</span>
+
+<span class="nc bnc" id="L694" title="All 4 branches missed.">			if (null != contactId &amp;&amp; contactId.equals(contact.getId())) {</span>
+<span class="nc" id="L695">				String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_CONTACT,</span>
+<span class="nc" id="L696">						contact.getId() + &quot;&quot;);</span>
+<span class="nc" id="L697">				KYCContactResponse contactResponse = new KYCContactResponse();</span>
+<span class="nc" id="L698">				contactResponse.setBandText(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L699">				contactResponse.setId(contact.getId());</span>
+<span class="nc" id="L700">				contactResponseList.add(contactResponse);</span>
+<span class="nc" id="L701">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.KYC_SERVICE,</span>
+<span class="nc" id="L702">						EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L703">				kycProviderResponse.setContactResponse(null);</span>
+<span class="nc" id="L704">				eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L705">				kycSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L706">				kycSummary.setCheckedOn(eventServiceLog.getCreatedOn().toString());</span>
+<span class="nc" id="L707">				kycSummary.setDob(DateTimeFormatter.getUKDateFormat(contact.getPersonalDetails().getDob()));</span>
+<span class="nc" id="L708">				kycSummary.setEidCheck(Boolean.FALSE);</span>
+<span class="nc" id="L709">				kycSummary.setReferenceId(providerRef);</span>
+<span class="nc" id="L710">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(kycSummary));</span>
+<span class="nc" id="L711">				eventServiceLog</span>
+<span class="nc" id="L712">						.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(contactResponse));</span>
+			}
+<span class="nc" id="L714">		}</span>
+<span class="nc" id="L715">	}</span>
+
+	/**
+	 * Sets the KYC summary details.
+	 *
+	 * @param exchange
+	 *            the exchange
+	 * @param kycRequest
+	 *            the kyc request
+	 * @param kycContactResponse
+	 *            the kyc contact response
+	 */
+	private void setKYCSummaryDetails(MessageExchange exchange, KYCProviderRequest kycRequest,
+			KYCContactResponse kycContactResponse) {
+<span class="nc" id="L729">		KYCSummary kycSummary = new KYCSummary();</span>
+
+<span class="nc" id="L731">		EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.KYC_SERVICE,</span>
+<span class="nc" id="L732">				EntityEnum.CONTACT.name(), kycContactResponse.getId());</span>
+<span class="nc bnc" id="L733" title="All 2 branches missed.">		if (ServiceStatus.SERVICE_FAILURE.name().equals(kycContactResponse.getStatus())</span>
+<span class="nc bnc" id="L734" title="All 2 branches missed.">				|| ServiceStatus.NOT_PERFORMED.name().equals(kycContactResponse.getStatus())</span>
+<span class="nc bnc" id="L735" title="All 2 branches missed.">				|| ServiceStatus.NOT_REQUIRED.name().equals(kycContactResponse.getStatus())) {</span>
+<span class="nc" id="L736">			kycSummary.setEidCheck(Boolean.FALSE);</span>
+<span class="nc" id="L737">			kycSummary.setVerifiactionResult(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L738">			kycSummary.setReferenceId(kycContactResponse.getContactSFId());</span>
+		} else {
+<span class="nc" id="L740">			kycSummary.setEidCheck(Boolean.TRUE);</span>
+<span class="nc" id="L741">			kycSummary.setVerifiactionResult(kycContactResponse.getOverallScore());</span>
+<span class="nc" id="L742">			kycSummary.setReferenceId(kycContactResponse.getContactSFId());</span>
+		}
+
+<span class="nc" id="L745">		kycSummary.setStatus(kycContactResponse.getStatus());</span>
+<span class="nc" id="L746">		eventServiceLog.setStatus(kycContactResponse.getStatus());</span>
+
+<span class="nc" id="L748">		kycSummary.setCheckedOn(eventServiceLog.getUpdatedOn().toString());</span>
+<span class="nc" id="L749">		kycSummary.setProviderName(kycContactResponse.getProviderName());</span>
+<span class="nc" id="L750">		kycSummary.setProviderMethod(kycContactResponse.getProviderMethod());</span>
+
+<span class="nc" id="L752">		KYCContactRequest req = kycRequest.getContactRequestByID(kycContactResponse.getId());</span>
+<span class="nc bnc" id="L753" title="All 2 branches missed.">		if (req != null) {</span>
+<span class="nc" id="L754">			kycSummary.setDob(DateTimeFormatter.getUKDateFormat(req.getPersonalDetails().getDob()));</span>
+		}
+<span class="nc" id="L756">		eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(kycContactResponse));</span>
+<span class="nc" id="L757">		String providerResponse = kycContactResponse.getProviderResponse();</span>
+<span class="nc" id="L758">		kycContactResponse.setProviderResponse(null);</span>
+<span class="nc" id="L759">		eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(kycSummary));</span>
+<span class="nc" id="L760">		eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L761">		kycContactResponse.setProviderResponse(providerResponse);</span>
+<span class="nc bnc" id="L762" title="All 2 branches missed.">		if (kycContactResponse.getProviderName() != null)</span>
+<span class="nc" id="L763">			eventServiceLog.setServiceProviderName(kycContactResponse.getProviderName());</span>
+<span class="nc" id="L764">	}</span>
+
+	/**
+	 * Checks if is null or empty.
+	 *
+	 * @param str
+	 *            the str
+	 * @return true, if is null or empty
+	 */
+	private boolean isNullOrEmpty(String str) {
+<span class="nc" id="L774">		boolean result = true;</span>
+<span class="nc bnc" id="L775" title="All 4 branches missed.">		if (str != null &amp;&amp; !str.isEmpty())</span>
+<span class="nc" id="L776">			return false;</span>
+
+<span class="nc" id="L778">		return result;</span>
+	}
+
+	/**
+	 * Creates the event service log for not required.
+	 *
+	 * @param request
+	 *            the request
+	 * @param eventId
+	 *            the event id
+	 * @param ccExchange
+	 *            the cc exchange
+	 * @param token
+	 *            the token
+	 * @param orgID
+	 *            the org ID
+	 * @return the list
+	 */
+	private List&lt;KYCContactResponse&gt; createEventServiceLogForNotRequired(RegistrationServiceRequest request,
+			Integer eventId, MessageExchange ccExchange, UserProfile token, String orgID) {
+
+<span class="nc" id="L799">		List&lt;KYCContactResponse&gt; contactResponsesList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L802">			Account account = request.getAccount();</span>
+
+<span class="nc bnc" id="L804" title="All 2 branches missed.">			for (Contact contact : account.getContacts()) {</span>
+<span class="nc" id="L805">				String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_CONTACT, contact.getId() + &quot;&quot;);</span>
+<span class="nc" id="L806">				KYCContactResponse kycContactResponse = new KYCContactResponse();</span>
+<span class="nc" id="L807">				KYCSummary summary = new KYCSummary();</span>
+<span class="nc" id="L808">				kycContactResponse.setId(contact.getId());</span>
+<span class="nc" id="L809">				summary.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L810">				summary.setReferenceId(providerRef);</span>
+<span class="nc" id="L811">				summary.setCheckedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L812">				summary.setDob(DateTimeFormatter.getUKDateFormat(contact.getDob()));</span>
+<span class="nc" id="L813">				summary.setEidCheck(Boolean.FALSE);</span>
+<span class="nc" id="L814">				kycContactResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L815">				ccExchange</span>
+<span class="nc" id="L816">						.addEventServiceLog(createEventServiceLogEntryNotRequired(eventId, ServiceTypeEnum.KYC_SERVICE,</span>
+<span class="nc" id="L817">								ServiceProviderEnum.KYC_SERVICE, contact.getId(), contact.getVersion(),</span>
+<span class="nc" id="L818">								EntityEnum.CONTACT.name(), token.getUserID(), kycContactResponse, summary));</span>
+<span class="nc" id="L819">				contactResponsesList.add(kycContactResponse);</span>
+<span class="nc" id="L820">			}</span>
+<span class="nc" id="L821">		} catch (Exception e) {</span>
+<span class="nc" id="L822">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L823">		}</span>
+<span class="nc" id="L824">		return contactResponsesList;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

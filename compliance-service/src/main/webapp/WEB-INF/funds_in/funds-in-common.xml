@@ -1,0 +1,103 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+	<int:channel id="FUNDS_IN.ERROR.CHANNEL"/>
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<task:executor
+		id="FUNDS_IN.SPLITTER.channel.executor"
+		pool-size="15-25"
+		queue-capacity="5000"
+		keep-alive="15"
+		rejection-policy="CALLER_RUNS" />
+	
+	<int:chain
+		id="fundsin.response"
+		input-channel="FUNDS_IN.RESPONSE"
+		output-channel="nullChannel">
+		<int:service-activator ref="fundsin.replyHandler" />
+	</int:chain>
+	<bean
+		id="fundsin.replyHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.ReplyHandler" />
+	<bean
+		id="fundsin.DataEnrich"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.DataEnricher" />
+		
+	 <bean
+		id="fundsInDBService"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsInDBServiceImpl"/>
+		
+	<bean
+		id="activityDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl"/>
+		
+	<!-- <bean
+		id="fundsin.EventDB"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.EventDBServiceImpl"/> -->
+	<bean
+		id="fundsin.MsgValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsin.MessageValidator"/>
+	<bean
+		id="fundsin.DataValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsin.DataValidator"/>
+	<bean
+		id="fundsin.internalRulesTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsin.InternalRuleServiceTransformer" />
+	<bean
+		id="fundsin.sanctionTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsin.SanctionTransformer" />	
+	<bean
+		id="fundsin.customCheckTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsin.CustomChecksTransformer" />	
+	<bean
+		id="fundsin.fraugsterTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsin.FraugsterTransformer" />
+	<!-- <bean
+		id="fundsin.splitter"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.flowcontrol.RequestMessageSplitter" /> -->
+	<bean
+		id="fundsin.responseMessageAggregator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.flowcontrol.FundsInAggregator" />	
+	<!-- <bean
+		id="fundsin.eventDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.EventDBServiceImpl" /> -->
+	<bean
+		id="fundsin.RulesService"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.rules.FundsInRulesService" />
+	
+	<bean id="fundsin.dataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.DataEnricher" />
+		
+	<!-- AT-4006 -->
+	<bean id="fundsin.transactionMonitoringTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsin.TransactionMonitoringTransformer" />
+		
+	<int:chain
+		id="fundsin.errorChain"
+		input-channel="FUNDS_IN.ERROR.CHANNEL"
+		output-channel="nullChannel">
+		<int:service-activator id="fundsin.errorHandle"
+			method="logError" ref="fundsin.errorHandler">
+		</int:service-activator>
+	</int:chain>
+	<bean id="fundsin.errorHandler" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInErrorHandler"/>
+</beans>

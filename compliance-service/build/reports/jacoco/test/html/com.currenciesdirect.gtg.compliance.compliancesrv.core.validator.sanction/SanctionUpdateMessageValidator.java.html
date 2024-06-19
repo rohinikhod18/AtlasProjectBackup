@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SanctionUpdateMessageValidator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.sanction</a> &gt; <span class="el_source">SanctionUpdateMessageValidator.java</span></div><h1>SanctionUpdateMessageValidator.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.sanction;
+
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.Header;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse.DECISION;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateData;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class SanctionUpdateMessageValidator.
+ */
+<span class="nc" id="L26">public class SanctionUpdateMessageValidator {</span>
+
+	private static final String REQUEST_IS_NOT_VALID = &quot;Request is not valid&quot;;
+	
+	private static final String MANDATORY_FIELDS_ARE_MISSING =&quot;Mandatory fields are missing&quot;;
+
+<span class="nc" id="L32">	private static final Logger LOGGER = LoggerFactory.getLogger(SanctionUpdateMessageValidator.class);</span>
+	
+	/**
+	 * Process.
+	 *
+	 * @param message the message
+	 * @param correlationID the correlation ID
+	 * @return the message
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+<span class="nc" id="L43">		SanctionUpdateResponse response=new SanctionUpdateResponse();</span>
+<span class="nc" id="L44">		MessageExchange messageExchange = null;</span>
+		try{
+<span class="nc" id="L46">			messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+
+<span class="nc" id="L48">			SanctionUpdateRequest sanctionUpdateRequest = messageExchange.getRequest(SanctionUpdateRequest.class);</span>
+			
+<span class="nc" id="L50">			ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc" id="L51">			OperationEnum operation = messageExchange.getOperation();</span>
+			
+<span class="nc bnc" id="L53" title="All 4 branches missed.">			if(serviceInterfaceType == ServiceInterfaceType.PROFILE &amp;&amp; operation == OperationEnum.SANCTION_UPDATE){</span>
+<span class="nc" id="L54">				    validateMandatoryFields(sanctionUpdateRequest);</span>
+<span class="nc" id="L55">					response.setDecision(DECISION.SUCCESS);</span>
+			}else{
+<span class="nc" id="L57">				response.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L58">				response.setErrorCode(InternalProcessingCode.INV_REQUEST.getCode());</span>
+<span class="nc" id="L59">				response.setErrorDescription(InternalProcessingCode.INV_REQUEST.name());</span>
+<span class="nc" id="L60">				LOGGER.error(REQUEST_IS_NOT_VALID);</span>
+		}
+			
+			
+<span class="nc" id="L64">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L65">			LOGGER.error(REQUEST_IS_NOT_VALID, e);</span>
+<span class="nc" id="L66">			response.setDecision(DECISION.FAIL);</span>
+<span class="nc" id="L67">			response.setErrorCode(InternalProcessingCode.INV_REQUEST.getCode());</span>
+<span class="nc" id="L68">			response.setErrorDescription(e.getMessage());</span>
+<span class="nc" id="L69">		} catch (Exception e) {</span>
+<span class="nc" id="L70">			LOGGER.error(REQUEST_IS_NOT_VALID, e);</span>
+<span class="nc" id="L71">			response.setDecision(DECISION.FAIL);</span>
+<span class="nc" id="L72">			response.setErrorCode(InternalProcessingCode.INV_REQUEST.getCode());</span>
+<span class="nc" id="L73">			response.setErrorDescription(InternalProcessingCode.INV_REQUEST.name());</span>
+<span class="nc" id="L74">		}</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">		if(messageExchange != null) {</span>
+<span class="nc" id="L76">			messageExchange.setResponse(response);</span>
+		}
+<span class="nc" id="L78">		return message;</span>
+	}
+	
+    void validateMandatoryFields(SanctionUpdateRequest request) throws ComplianceException {
+<span class="nc bnc" id="L82" title="All 6 branches missed.">    	if(request.getResourceType() == null || request.getResourceType().isEmpty() || request.getResourceId() == null) {</span>
+<span class="nc" id="L83">    		throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(MANDATORY_FIELDS_ARE_MISSING));</span>
+    	}
+    	/** Validate fields from FUNDSOUT */
+<span class="nc" id="L86">    	validateFundsOutFields(request);</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">    	for(SanctionUpdateData data : request.getSanctions()) {</span>
+<span class="nc bnc" id="L88" title="All 6 branches missed.">			if(data.getEventServiceLogId() == null || StringUtils.isNullOrEmpty(data.getField()) || StringUtils.isNullOrEmpty(data.getValue())) {</span>
+<span class="nc" id="L89">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(&quot;Event specific data missing&quot;));</span>
+			}
+<span class="nc" id="L91">		}</span>
+    	
+<span class="nc" id="L93">    }</span>
+
+	/**
+	 * @param request
+	 * @throws ComplianceException
+	 */
+	private void validateFundsOutFields(SanctionUpdateRequest request) throws ComplianceException {
+		
+<span class="nc bnc" id="L101" title="All 2 branches missed.">		if(request.getResourceType().equals(ServiceInterfaceType.FUNDSOUT.name())){</span>
+<span class="nc" id="L102">    		validateFields(request);</span>
+    	}
+<span class="nc" id="L104">	}</span>
+
+	/**
+	 * @param request
+	 * @throws ComplianceException
+	 */
+	private void validateFields(SanctionUpdateRequest request) throws ComplianceException {
+<span class="nc bnc" id="L111" title="All 4 branches missed.">		if(request.getSanctions().get(0).getBankStatus() == null || request.getSanctions().get(0).getBankStatus().isEmpty()) {</span>
+<span class="nc" id="L112">			throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(MANDATORY_FIELDS_ARE_MISSING));</span>
+		}
+<span class="nc bnc" id="L114" title="All 4 branches missed.">		if(request.getSanctions().get(0).getBeneficiaryStatus() == null || request.getSanctions().get(0).getBeneficiaryStatus().isEmpty()) {</span>
+<span class="nc" id="L115">			throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(MANDATORY_FIELDS_ARE_MISSING));</span>
+		}
+<span class="nc bnc" id="L117" title="All 4 branches missed.">		if(request.getSanctions().get(0).getContactStatus() == null || request.getSanctions().get(0).getContactStatus().isEmpty()) {</span>
+<span class="nc" id="L118">			throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(MANDATORY_FIELDS_ARE_MISSING));</span>
+		}
+<span class="nc" id="L120">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

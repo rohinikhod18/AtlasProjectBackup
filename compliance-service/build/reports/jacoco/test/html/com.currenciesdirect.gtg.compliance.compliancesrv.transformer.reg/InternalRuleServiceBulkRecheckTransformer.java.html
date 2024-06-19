@@ -1,0 +1,765 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>InternalRuleServiceBulkRecheckTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg</a> &gt; <span class="el_source">InternalRuleServiceBulkRecheckTransformer.java</span></div><h1>InternalRuleServiceBulkRecheckTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.ContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.CountryCheckContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.GlobalCheckContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalRuleSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequestData;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.IpContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.IpSummary;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ProvideCacheLoader;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Company;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractInternalRulesTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+/**
+ * The Class InternalRuleServiceBulkRecheckTransformer.
+ */
+<span class="nc" id="L43">public class InternalRuleServiceBulkRecheckTransformer extends AbstractInternalRulesTransformer {</span>
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L46">	private static final Logger LOGGER = LoggerFactory.getLogger(InternalRuleServiceBulkRecheckTransformer.class);</span>
+
+	/** The Constant EVENT_ID. */
+	public static final String EVENT_ID = &quot;eventId&quot;;
+
+	/** The country cache. */
+<span class="nc" id="L52">	private ProvideCacheLoader countryCache = ProvideCacheLoader.getInstance();</span>
+
+	/** The Constant ERROR. */
+	private static final String ERROR = &quot;ERROR&quot;;
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer#
+	 * transformRequest(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L67">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L68">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L69">			Account account = registrationRequest.getAccount();</span>
+<span class="nc bnc" id="L70" title="All 2 branches missed.">			if (Constants.CFX.equalsIgnoreCase(account.getCustType())) {</span>
+<span class="nc" id="L71">				transformCFXRequest(message);</span>
+			} else {
+<span class="nc" id="L73">				transformPFXRequest(message);</span>
+			}
+<span class="nc" id="L75">		} catch (Exception e) {</span>
+<span class="nc" id="L76">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L77">			LOGGER.error(ERROR, e);</span>
+<span class="nc" id="L78">		}</span>
+<span class="nc" id="L79">		return message;</span>
+	}
+
+	/**
+	 * Transform CFX request.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Message&lt;MessageContext&gt; transformCFXRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+
+		try {
+<span class="nc" id="L94">			transformCFXSignupUpdateRequest(message);</span>
+<span class="nc" id="L95">		} catch (Exception e) {</span>
+<span class="nc" id="L96">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L97">		}</span>
+<span class="nc" id="L98">		return message;</span>
+	}
+
+	/**
+	 * Transform CFX signup update request.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Message&lt;MessageContext&gt; transformCFXSignupUpdateRequest(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+
+		try {
+<span class="nc" id="L114">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L115">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L116">			Integer contactId = (Integer) registrationRequest.getAdditionalAttribute(Constants.CONTACT_ID);</span>
+<span class="nc" id="L117">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+
+<span class="nc" id="L119">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L120">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L121">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+<span class="nc" id="L122">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L123">			InternalServiceRequest internalServiceRequest = initServiceRequest(registrationRequest);</span>
+<span class="nc" id="L124">			List&lt;InternalServiceRequestData&gt; datas = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L126">			InternalServiceResponse iResponse = new InternalServiceResponse();</span>
+			ContactResponse cResponse;
+
+			// START - Company/Account Blacklist check
+<span class="nc" id="L130">			InternalServiceRequestData data = createCompanyCFXRequest(account,</span>
+<span class="nc" id="L131">					registrationRequest.getSourceApplication());</span>
+<span class="nc" id="L132">			datas.add(data);</span>
+
+<span class="nc" id="L134">			cResponse = createDefaultCFXContactResponse(null);</span>
+<span class="nc" id="L135">			iResponse.addContactResponse(cResponse);</span>
+
+<span class="nc" id="L137">			MessageExchange exchange = new MessageExchange();</span>
+<span class="nc" id="L138">			exchange.setServiceTypeEnum(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L139">			exchange.addEventServiceLog(createEventServiceLogEntry(eventId, ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L140">					ServiceProviderEnum.BLACKLIST, account.getId(), account.getVersion(), EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L141">					token.getUserID(), cResponse, createDefaultBlacklistSummary(ServiceStatus.NOT_PERFORMED)));</span>
+<span class="nc" id="L142">			String orgLegalEntity = account.getCustLegalEntity();</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L144" title="All 4 branches missed.">				if (null != contactId &amp;&amp; contactId.equals(contact.getId())) {</span>
+
+<span class="nc" id="L146">					String countryName = countryCache</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">							.getCountryFullName(null != contact.getCountry() ? contact.getCountry() : &quot;&quot;);</span>
+<span class="nc" id="L148">					InternalServiceRequestData contactData = createContactRequest(</span>
+<span class="nc" id="L149">							registrationRequest.getSourceApplication(), contact, countryName, orgLegalEntity);</span>
+<span class="nc" id="L150">					datas.add(contactData);</span>
+
+<span class="nc" id="L152">					cResponse = createDefaultCFXContactResponse(countryName);</span>
+<span class="nc" id="L153">					iResponse.addContactResponse(cResponse);</span>
+<span class="nc" id="L154">					populateAllEventServiceLogs(token, exchange, eventId, cResponse,</span>
+<span class="nc" id="L155">							createDefaultBlacklistSummary(ServiceStatus.NOT_PERFORMED),</span>
+<span class="nc" id="L156">							createDefaultIpSummary(ServiceStatus.NOT_REQUIRED, contact.getIpAddress()), contact);</span>
+
+				}
+<span class="nc" id="L159">			}</span>
+
+<span class="nc" id="L161">			internalServiceRequest.setOnlyBlacklistCheckPerform(Boolean.FALSE);</span>
+<span class="nc" id="L162">			internalServiceRequest.setSearchdata(datas);</span>
+<span class="nc" id="L163">			createRequestType(internalServiceRequest, account.getCustType());</span>
+<span class="nc" id="L164">			exchange.setRequest(internalServiceRequest);</span>
+<span class="nc" id="L165">			exchange.setResponse(iResponse);</span>
+<span class="nc" id="L166">			message.getPayload().removeMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L167">			message.getPayload().appendMessageExchange(exchange);</span>
+
+<span class="nc" id="L169">		} catch (Exception e) {</span>
+<span class="nc" id="L170">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L171">		}</span>
+<span class="nc" id="L172">		return message;</span>
+	}
+
+	/**
+	 * Transform PFX request.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Message&lt;MessageContext&gt; transformPFXRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+
+		try {
+<span class="nc" id="L187">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+
+			
+<span class="nc" id="L190">				RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange</span>
+<span class="nc" id="L191">						.getRequest();</span>
+<span class="nc" id="L192">				Integer contactId = (Integer) registrationRequest.getAdditionalAttribute(Constants.CONTACT_ID);</span>
+<span class="nc" id="L193">				UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+
+<span class="nc" id="L195">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L196">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L197">					.getAdditionalAttribute(EVENT_ID);</span>
+<span class="nc" id="L198">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+
+<span class="nc" id="L200">			InternalServiceRequest internalServiceRequest = initServiceRequest(registrationRequest);</span>
+<span class="nc" id="L201">			List&lt;InternalServiceRequestData&gt; datas = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L203">			InternalServiceResponse iResponse = new InternalServiceResponse();</span>
+			ContactResponse cResponse;
+<span class="nc" id="L205">			MessageExchange exchange = new MessageExchange();</span>
+<span class="nc" id="L206">			exchange.setServiceTypeEnum(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L207">			String orgLegalEntity = account.getCustLegalEntity();</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L209" title="All 4 branches missed.">				if (null != contactId &amp;&amp; contactId.equals(contact.getId())) {</span>
+
+<span class="nc" id="L211">					String countryName = countryCache</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">							.getCountryFullName(null != contact.getCountry() ? contact.getCountry() : &quot;&quot;);</span>
+
+<span class="nc" id="L214">					InternalServiceRequestData data = createContactRequest(registrationRequest.getSourceApplication(),</span>
+							contact, countryName, orgLegalEntity);
+<span class="nc" id="L216">					datas.add(data);</span>
+
+<span class="nc" id="L218">					cResponse = createDefaultPFXContactResponse(countryName);</span>
+<span class="nc" id="L219">					iResponse.addContactResponse(cResponse);</span>
+<span class="nc" id="L220">					populateAllEventServiceLogs(token, exchange, eventId, cResponse,</span>
+<span class="nc" id="L221">							createDefaultBlacklistSummary(ServiceStatus.NOT_PERFORMED),</span>
+<span class="nc" id="L222">							createDefaultIpSummary(ServiceStatus.NOT_PERFORMED, contact.getIpAddress()), contact);</span>
+
+				}
+<span class="nc" id="L225">			}</span>
+
+<span class="nc" id="L227">			internalServiceRequest.setOnlyBlacklistCheckPerform(Boolean.FALSE);</span>
+<span class="nc" id="L228">			internalServiceRequest.setSearchdata(datas);</span>
+<span class="nc" id="L229">			createRequestType(internalServiceRequest, account.getCustType());</span>
+<span class="nc" id="L230">			exchange.setRequest(internalServiceRequest);</span>
+<span class="nc" id="L231">			exchange.setResponse(iResponse);</span>
+<span class="nc" id="L232">			message.getPayload().removeMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L233">			message.getPayload().appendMessageExchange(exchange);</span>
+<span class="nc" id="L234">		} catch (Exception e) {</span>
+<span class="nc" id="L235">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L236">		}</span>
+<span class="nc" id="L237">		return message;</span>
+	}
+
+	/**
+	 * Creates the default blacklist summary.
+	 *
+	 * @param status
+	 *            the status
+	 * @return the blacklist summary
+	 */
+	private BlacklistSummary createDefaultBlacklistSummary(ServiceStatus status) {
+<span class="nc" id="L248">		BlacklistSummary blacklistSummary = new BlacklistSummary();</span>
+<span class="nc" id="L249">		blacklistSummary.setStatus(status.name());</span>
+<span class="nc" id="L250">		return blacklistSummary;</span>
+	}
+
+	/**
+	 * Creates the default blacklist response.
+	 *
+	 * @param status
+	 *            the status
+	 * @return the blacklist contact response
+	 */
+	private BlacklistContactResponse createDefaultBlacklistResponse(ServiceStatus status) {
+<span class="nc" id="L261">		BlacklistContactResponse blacklist = new BlacklistContactResponse();</span>
+<span class="nc" id="L262">		blacklist.setStatus(status.name());</span>
+<span class="nc" id="L263">		blacklist.setData(null);</span>
+<span class="nc" id="L264">		return blacklist;</span>
+	}
+
+	/**
+	 * Creates the default global check response.
+	 *
+	 * @param status
+	 *            the status
+	 * @param country
+	 *            the country
+	 * @return the global check contact response
+	 */
+	private GlobalCheckContactResponse createDefaultGlobalCheckResponse(ServiceStatus status, String country) {
+<span class="nc" id="L277">		GlobalCheckContactResponse globalCheck = new GlobalCheckContactResponse();</span>
+<span class="nc" id="L278">		globalCheck.setStatus(status.name());</span>
+<span class="nc" id="L279">		globalCheck.setCountry(country);</span>
+<span class="nc" id="L280">		return globalCheck;</span>
+	}
+
+	/**
+	 * Creates the default country check response.
+	 *
+	 * @param status
+	 *            the status
+	 * @param country
+	 *            the country
+	 * @return the country check contact response
+	 */
+	private CountryCheckContactResponse createDefaultCountryCheckResponse(ServiceStatus status, String country) {
+<span class="nc" id="L293">		CountryCheckContactResponse countryCheck = new CountryCheckContactResponse();</span>
+<span class="nc" id="L294">		countryCheck.setStatus(status.name());</span>
+<span class="nc" id="L295">		countryCheck.setCountry(country);</span>
+<span class="nc" id="L296">		return countryCheck;</span>
+	}
+
+	/**
+	 * Creates the default ip response.
+	 *
+	 * @param status
+	 *            the status
+	 * @return the ip contact response
+	 */
+	private IpContactResponse createDefaultIpResponse(ServiceStatus status) {
+<span class="nc" id="L307">		IpContactResponse ipCheck = new IpContactResponse();</span>
+<span class="nc" id="L308">		ipCheck.setStatus(status.name());</span>
+<span class="nc" id="L309">		return ipCheck;</span>
+	}
+
+	/**
+	 * Creates the default ip summary.
+	 *
+	 * @param status
+	 *            the status
+	 * @param ipAddress
+	 *            the ip address
+	 * @return the ip summary
+	 */
+	private IpSummary createDefaultIpSummary(ServiceStatus status, String ipAddress) {
+<span class="nc" id="L322">		IpSummary ip = new IpSummary();</span>
+<span class="nc" id="L323">		ip.setIpAddress(ipAddress);</span>
+<span class="nc" id="L324">		ip.setStatus(status.name());</span>
+<span class="nc" id="L325">		return ip;</span>
+	}
+
+	/**
+	 * Creates the default CFX contact response.
+	 *
+	 * @param countryName
+	 *            the country name
+	 * @return the contact response
+	 */
+	private ContactResponse createDefaultCFXContactResponse(String countryName) {
+<span class="nc" id="L336">		ContactResponse response = new ContactResponse();</span>
+<span class="nc" id="L337">		response.setBlacklist(createDefaultBlacklistResponse(ServiceStatus.NOT_PERFORMED));</span>
+<span class="nc" id="L338">		response.setGlobalCheck(createDefaultGlobalCheckResponse(ServiceStatus.NOT_REQUIRED, countryName));</span>
+<span class="nc" id="L339">		response.setCountryCheck(createDefaultCountryCheckResponse(ServiceStatus.NOT_REQUIRED, countryName));</span>
+<span class="nc" id="L340">		response.setIpCheck(createDefaultIpResponse(ServiceStatus.NOT_REQUIRED));</span>
+<span class="nc" id="L341">		return response;</span>
+	}
+
+	/**
+	 * Creates the default PFX contact response.
+	 *
+	 * @param countryName
+	 *            the country name
+	 * @return the contact response
+	 */
+	private ContactResponse createDefaultPFXContactResponse(String countryName) {
+<span class="nc" id="L352">		ContactResponse response = new ContactResponse();</span>
+<span class="nc" id="L353">		response.setBlacklist(createDefaultBlacklistResponse(ServiceStatus.NOT_PERFORMED));</span>
+<span class="nc" id="L354">		response.setGlobalCheck(createDefaultGlobalCheckResponse(ServiceStatus.NOT_PERFORMED, countryName));</span>
+<span class="nc" id="L355">		response.setCountryCheck(createDefaultCountryCheckResponse(ServiceStatus.NOT_PERFORMED, countryName));</span>
+<span class="nc" id="L356">		response.setIpCheck(createDefaultIpResponse(ServiceStatus.NOT_PERFORMED));</span>
+<span class="nc" id="L357">		return response;</span>
+	}
+
+	/**
+	 * Inits the service request.
+	 *
+	 * @param registrationRequest
+	 *            the registration request
+	 * @return the internal service request
+	 */
+	private InternalServiceRequest initServiceRequest(RegistrationServiceRequest registrationRequest) {
+
+<span class="nc" id="L369">		InternalServiceRequest internalServiceRequest = new InternalServiceRequest();</span>
+<span class="nc" id="L370">		internalServiceRequest.setCorrelationID(registrationRequest.getCorrelationID());</span>
+<span class="nc" id="L371">		internalServiceRequest.setOrgCode(registrationRequest.getOrgCode());</span>
+<span class="nc" id="L372">		internalServiceRequest.setAccountSFId(registrationRequest.getAccount().getAccSFID());</span>
+<span class="nc" id="L373">		return internalServiceRequest;</span>
+	}
+
+	/**
+	 * Populate all event service logs.
+	 *
+	 * @param token
+	 *            the token
+	 * @param exchange
+	 *            the exchange
+	 * @param eventId
+	 *            the event id
+	 * @param response
+	 *            the response
+	 * @param blacklistSummary
+	 *            the blacklist summary
+	 * @param ip
+	 *            the ip
+	 * @param contact
+	 *            the contact
+	 */
+	private void populateAllEventServiceLogs(UserProfile token, MessageExchange exchange, Integer eventId,
+			ContactResponse response, BlacklistSummary blacklistSummary, IpSummary ip, Contact contact) {
+<span class="nc" id="L396">		exchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L397">				ServiceProviderEnum.BLACKLIST, contact.getId(), contact.getVersion(), EntityEnum.CONTACT.name(),</span>
+<span class="nc" id="L398">				token.getUserID(), response, blacklistSummary,</span>
+<span class="nc" id="L399">				ServiceStatus.valueOf(response.getBlacklist().getStatus())));</span>
+
+<span class="nc" id="L401">		exchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.IP_SERVICE,</span>
+<span class="nc" id="L402">				ServiceProviderEnum.IP, contact.getId(), contact.getVersion(), EntityEnum.CONTACT.name(),</span>
+<span class="nc" id="L403">				token.getUserID(), response, ip, ServiceStatus.valueOf(response.getIpCheck().getStatus())));</span>
+
+<span class="nc" id="L405">		exchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.GLOBAL_CHECK_SERVICE,</span>
+<span class="nc" id="L406">				ServiceProviderEnum.GLOBALCHECK, contact.getId(), contact.getVersion(), EntityEnum.CONTACT.name(),</span>
+<span class="nc" id="L407">				token.getUserID(), response, response.getGlobalCheck(),</span>
+<span class="nc" id="L408">				ServiceStatus.valueOf(response.getGlobalCheck().getStatus())));</span>
+
+<span class="nc" id="L410">		exchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.HRC_SERVICE,</span>
+<span class="nc" id="L411">				ServiceProviderEnum.COUNTRYCHECK, contact.getId(), contact.getVersion(), EntityEnum.CONTACT.name(),</span>
+<span class="nc" id="L412">				token.getUserID(), response, response.getCountryCheck(),</span>
+<span class="nc" id="L413">				ServiceStatus.valueOf(response.getCountryCheck().getStatus())));</span>
+<span class="nc" id="L414">	}</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer#
+	 * transformResponse(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L424">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L425">		RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+
+<span class="nc" id="L427">		OperationEnum operation = messageExchange.getOperation();</span>
+<span class="nc" id="L428">		MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L429">		InternalServiceResponse internalServiceResponse = (InternalServiceResponse) exchange.getResponse();</span>
+
+		try {
+<span class="nc bnc" id="L432" title="All 2 branches missed.">			if (internalServiceResponse == null) {</span>
+<span class="nc" id="L433">				transformResponseForServiceFailure(exchange, registrationRequest, operation);</span>
+
+			} else {
+<span class="nc" id="L436">				registrationRequest.addAttribute(Constants.NOT_BLACKLISTED, Boolean.TRUE);</span>
+<span class="nc" id="L437">				internalServiceResponse.setStatus(ServiceStatus.PASS.name());</span>
+<span class="nc" id="L438">				List&lt;ContactResponse&gt; contactResponses = internalServiceResponse.getContacts();</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">				for (ContactResponse response : contactResponses) {</span>
+
+<span class="nc" id="L441">					transformResponseForAccountAndContactUpdate(registrationRequest, exchange, internalServiceResponse,</span>
+							response, operation);
+<span class="nc" id="L443">				}</span>
+			}
+<span class="nc" id="L445">		} catch (Exception e) {</span>
+<span class="nc" id="L446">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L447">			LOGGER.error(&quot;Error in internalService response mapping&quot;, e);</span>
+<span class="nc" id="L448">		}</span>
+<span class="nc" id="L449">		return message;</span>
+	}
+
+	/**
+	 * Transform response for account and contact update.
+	 *
+	 * @param registrationRequest
+	 *            the registration request
+	 * @param exchange
+	 *            the exchange
+	 * @param internalServiceResponse
+	 *            the internal service response
+	 * @param response
+	 *            the response
+	 * @param operation
+	 *            the operation
+	 */
+	private void transformResponseForAccountAndContactUpdate(RegistrationServiceRequest registrationRequest,
+			MessageExchange exchange, InternalServiceResponse internalServiceResponse, ContactResponse response,
+			OperationEnum operation) {
+<span class="nc" id="L469">		InternalRuleSummary internalRuleSummary = new InternalRuleSummary();</span>
+<span class="nc" id="L470">		Integer contactId = (Integer) registrationRequest.getAdditionalAttribute(Constants.CONTACT_ID);</span>
+<span class="nc bnc" id="L471" title="All 2 branches missed.">		if ((EntityEnum.ACCOUNT.toString()).equalsIgnoreCase(response.getEntityType())) {</span>
+
+<span class="nc" id="L473">			EventServiceLog blacklistLog = exchange.getEventServiceLog(ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L474">					response.getEntityType(), response.getId());</span>
+<span class="nc" id="L475">			transformResponseForAccount(registrationRequest, internalServiceResponse, blacklistLog, response,</span>
+					internalRuleSummary);
+
+<span class="nc" id="L478">		} else {</span>
+<span class="nc bnc" id="L479" title="All 4 branches missed.">			if (null != contactId &amp;&amp; contactId.equals(response.getId())) {</span>
+<span class="nc" id="L480">				tranformResponseForContact(registrationRequest, internalServiceResponse, exchange, response,</span>
+						internalRuleSummary, operation);
+			}
+		}
+<span class="nc" id="L484">	}</span>
+
+	/**
+	 * Transform response for account.
+	 *
+	 * @param registrationRequest
+	 *            the registration request
+	 * @param internalServiceResponse
+	 *            the internal service response
+	 * @param blacklistLog
+	 *            the blacklist log
+	 * @param response
+	 *            the response
+	 * @param internalRuleSummary
+	 *            the internal rule summary
+	 */
+	private void transformResponseForAccount(RegistrationServiceRequest registrationRequest,
+			InternalServiceResponse internalServiceResponse, EventServiceLog blacklistLog, ContactResponse response,
+			InternalRuleSummary internalRuleSummary) {
+
+		try {
+
+<span class="nc" id="L506">			Company c = registrationRequest.getAccount().getCompany();</span>
+
+<span class="nc bnc" id="L508" title="All 4 branches missed.">			if (c != null &amp;&amp; (ServiceStatus.FAIL.name().equalsIgnoreCase(response.getBlacklist().getStatus()))) {</span>
+<span class="nc" id="L509">				c.setSanctionEligible(false);</span>
+<span class="nc" id="L510">				c.setFraugsterEligible(false);</span>
+<span class="nc" id="L511">				internalServiceResponse.setStatus(ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L512">				registrationRequest.addAttribute(Constants.NOT_BLACKLISTED, Boolean.FALSE);</span>
+			}
+
+<span class="nc" id="L515">			updateEventServiceLogEntry(blacklistLog, createBlacklistSummary(response), response.getBlacklist(),</span>
+<span class="nc" id="L516">					response.getBlacklist().getStatus());</span>
+<span class="nc" id="L517">			internalRuleSummary.setBlacklistSummary(createBlacklistSummary(response));</span>
+
+<span class="nc" id="L519">		} catch (Exception e) {</span>
+<span class="nc" id="L520">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L521">		}</span>
+
+<span class="nc" id="L523">	}</span>
+
+	/**
+	 * Tranform response for contact.
+	 *
+	 * @param registrationRequest
+	 *            the registration request
+	 * @param internalServiceResponse
+	 *            the internal service response
+	 * @param exchange
+	 *            the exchange
+	 * @param response
+	 *            the response
+	 * @param internalRuleSummary
+	 *            the internal rule summary
+	 * @param operation
+	 *            the operation
+	 */
+	private void tranformResponseForContact(RegistrationServiceRequest registrationRequest,
+			InternalServiceResponse internalServiceResponse, MessageExchange exchange, ContactResponse response,
+			InternalRuleSummary internalRuleSummary, OperationEnum operation) {
+<span class="nc" id="L544">		EventServiceLog blacklistLog = exchange.getEventServiceLog(ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L545">				response.getEntityType(), response.getId());</span>
+<span class="nc" id="L546">		EventServiceLog ipLog = exchange.getEventServiceLog(ServiceTypeEnum.IP_SERVICE, response.getEntityType(),</span>
+<span class="nc" id="L547">				response.getId());</span>
+<span class="nc" id="L548">		EventServiceLog globalCheckLog = exchange.getEventServiceLog(ServiceTypeEnum.GLOBAL_CHECK_SERVICE,</span>
+<span class="nc" id="L549">				response.getEntityType(), response.getId());</span>
+<span class="nc" id="L550">		EventServiceLog countryCheckLog = exchange.getEventServiceLog(ServiceTypeEnum.HRC_SERVICE,</span>
+<span class="nc" id="L551">				response.getEntityType(), response.getId());</span>
+
+		try {
+<span class="nc" id="L554">			Contact c = registrationRequest.getAccount().getContactByID(response.getId());</span>
+
+<span class="nc bnc" id="L556" title="All 4 branches missed.">			if (c != null &amp;&amp; (ServiceStatus.FAIL.name().equalsIgnoreCase(response.getBlacklist().getStatus())</span>
+<span class="nc bnc" id="L557" title="All 2 branches missed.">					|| ServiceStatus.FAIL.name().equalsIgnoreCase(response.getGlobalCheck().getStatus())</span>
+<span class="nc bnc" id="L558" title="All 2 branches missed.">					|| ServiceStatus.FAIL.name().equalsIgnoreCase(response.getCountryCheck().getStatus()))) {</span>
+<span class="nc" id="L559">				c.setKYCEligible(false);</span>
+<span class="nc" id="L560">				c.setFraugsterEligible(true);</span>
+<span class="nc" id="L561">				c.setSanctionEligible(false);</span>
+<span class="nc" id="L562">				internalServiceResponse.setStatus(ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L563">				registrationRequest.addAttribute(Constants.NOT_BLACKLISTED, Boolean.FALSE);</span>
+			}
+
+<span class="nc" id="L566">			updateEventServiceLogEntry(blacklistLog, createBlacklistSummary(response), response.getBlacklist(),</span>
+<span class="nc" id="L567">					response.getBlacklist().getStatus());</span>
+
+<span class="nc bnc" id="L569" title="All 2 branches missed.">			if (null == internalServiceResponse.getOnlyBlacklistCheckPerform()</span>
+<span class="nc bnc" id="L570" title="All 2 branches missed.">					|| !internalServiceResponse.getOnlyBlacklistCheckPerform()) {</span>
+<span class="nc" id="L571">				updateEventServiceLogEntry(ipLog, createIpSummary(response), response.getIpCheck(),</span>
+<span class="nc" id="L572">						response.getIpCheck().getStatus());</span>
+<span class="nc" id="L573">				updateEventServiceLogEntry(globalCheckLog, response.getGlobalCheck(), response.getGlobalCheck(),</span>
+<span class="nc" id="L574">						response.getGlobalCheck().getStatus());</span>
+<span class="nc" id="L575">				updateEventServiceLogEntry(countryCheckLog, response.getCountryCheck(), response.getCountryCheck(),</span>
+<span class="nc" id="L576">						response.getCountryCheck().getStatus());</span>
+			}
+
+<span class="nc bnc" id="L579" title="All 2 branches missed.">			if (response.getIpCheck() != null</span>
+<span class="nc bnc" id="L580" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.FAIL.toString().equals(response.getIpCheck().getStatus())) {</span>
+<span class="nc" id="L581">				populateIpPostCodeFieldsInContact(registrationRequest, response.getIpCheck(), response.getId());</span>
+			}
+
+<span class="nc" id="L584">			internalRuleSummary.setBlacklistSummary(createBlacklistSummary(response));</span>
+<span class="nc bnc" id="L585" title="All 2 branches missed.">			if (null == internalServiceResponse.getOnlyBlacklistCheckPerform()</span>
+<span class="nc bnc" id="L586" title="All 2 branches missed.">					|| !internalServiceResponse.getOnlyBlacklistCheckPerform()) {</span>
+<span class="nc" id="L587">				internalRuleSummary.setIpSummary(createIpSummary(response));</span>
+<span class="nc" id="L588">				internalRuleSummary.setHrcSummary(response.getCountryCheck());</span>
+<span class="nc" id="L589">				internalRuleSummary.setGlobalCheckSummary(response.getGlobalCheck());</span>
+			}
+
+<span class="nc" id="L592">		} catch (Exception e) {</span>
+<span class="nc" id="L593">			LOGGER.error(&quot;Error while mapping InternalService response ::  tranformResponseForContact()&quot;, e);</span>
+<span class="nc" id="L594">			transformResponseForServiceFailure(exchange, registrationRequest, operation);</span>
+<span class="nc" id="L595">		}</span>
+<span class="nc" id="L596">	}</span>
+
+	/**
+	 * Transform response for service failure.
+	 *
+	 * @param exchange
+	 *            the exchange
+	 * @param registrationRequest
+	 *            the registration request
+	 * @param operation
+	 *            the operation
+	 */
+	private void transformResponseForServiceFailure(MessageExchange exchange,
+			RegistrationServiceRequest registrationRequest, OperationEnum operation) {
+<span class="nc" id="L610">		InternalServiceResponse internalServiceResponse = new InternalServiceResponse();</span>
+<span class="nc" id="L611">		internalServiceResponse.setStatus(ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L612">		List&lt;ContactResponse&gt; contactResponseList = new ArrayList&lt;&gt;();</span>
+
+		try {
+
+<span class="nc" id="L616">			registrationRequest.addAttribute(Constants.NOT_BLACKLISTED, Boolean.FALSE);</span>
+<span class="nc" id="L617">			Account account = registrationRequest.getAccount();</span>
+<span class="nc" id="L618">			List&lt;Contact&gt; contacts = account.getContacts();</span>
+<span class="nc" id="L619">			Integer contactId = (Integer) registrationRequest.getAdditionalAttribute(Constants.CONTACT_ID);</span>
+
+<span class="nc bnc" id="L621" title="All 2 branches missed.">			if (contacts.isEmpty()) {</span>
+<span class="nc" id="L622">				transformResponseForServiceFailureForAccount(exchange, account, contactResponseList);</span>
+			}
+
+<span class="nc bnc" id="L625" title="All 2 branches missed.">			for (Contact contact : account.getContacts()) {</span>
+<span class="nc bnc" id="L626" title="All 4 branches missed.">				if (null != contactId &amp;&amp; contactId.equals(contact.getId())) {</span>
+
+<span class="nc" id="L628">					ContactResponse response = new ContactResponse();</span>
+<span class="nc" id="L629">					GlobalCheckContactResponse globalCheck = new GlobalCheckContactResponse();</span>
+<span class="nc" id="L630">					BlacklistContactResponse blacklist = new BlacklistContactResponse();</span>
+<span class="nc" id="L631">					IpContactResponse ipCheck = new IpContactResponse();</span>
+<span class="nc" id="L632">					CountryCheckContactResponse countryCheck = new CountryCheckContactResponse();</span>
+<span class="nc" id="L633">					BlacklistSummary blacklistSummary = new BlacklistSummary();</span>
+
+<span class="nc" id="L635">					response.setBlacklist(blacklist);</span>
+<span class="nc" id="L636">					blacklist.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L637">					blacklist.setData(null);</span>
+<span class="nc" id="L638">					blacklistSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L639">					globalCheck.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L640">					ipCheck.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L641">					countryCheck.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L642">					response.setBlacklist(blacklist);</span>
+<span class="nc" id="L643">					response.setGlobalCheck(globalCheck);</span>
+<span class="nc" id="L644">					response.setCountryCheck(countryCheck);</span>
+<span class="nc" id="L645">					response.setIpCheck(ipCheck);</span>
+<span class="nc" id="L646">					response.setId(contact.getId());</span>
+
+<span class="nc" id="L648">					EventServiceLog accBlacklistLog = exchange.getEventServiceLog(ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L649">							EntityEnum.ACCOUNT.name(), account.getId());</span>
+
+<span class="nc" id="L651">					EventServiceLog contactBlacklistLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L652">							ServiceTypeEnum.BLACK_LIST_SERVICE, EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L653">					EventServiceLog ipLog = exchange.getEventServiceLog(ServiceTypeEnum.IP_SERVICE,</span>
+<span class="nc" id="L654">							EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L655">					EventServiceLog globalCheckLog = exchange.getEventServiceLog(ServiceTypeEnum.GLOBAL_CHECK_SERVICE,</span>
+<span class="nc" id="L656">							EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L657">					EventServiceLog countryCheckLog = exchange.getEventServiceLog(ServiceTypeEnum.HRC_SERVICE,</span>
+<span class="nc" id="L658">							EntityEnum.CONTACT.name(), contact.getId());</span>
+
+<span class="nc bnc" id="L660" title="All 2 branches missed.">					if (null != accBlacklistLog) {</span>
+<span class="nc" id="L661">						updateEventServiceLogEntry(accBlacklistLog, blacklistSummary, response.getBlacklist(),</span>
+<span class="nc" id="L662">								ServiceStatus.SERVICE_FAILURE.name());</span>
+					}
+<span class="nc" id="L664">					updateEventServiceLogEntry(contactBlacklistLog, blacklistSummary, response.getBlacklist(),</span>
+<span class="nc" id="L665">							ServiceStatus.SERVICE_FAILURE.name());</span>
+
+<span class="nc bnc" id="L667" title="All 2 branches missed.">					if (OperationEnum.BLACKLIST_RESEND!=operation) {</span>
+<span class="nc" id="L668">						updateEventServiceLogEntry(ipLog, createIpSummaryForServiceFailure(response),</span>
+<span class="nc" id="L669">								response.getIpCheck(), ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L670">						updateEventServiceLogEntry(globalCheckLog, response.getGlobalCheck(), response.getGlobalCheck(),</span>
+<span class="nc" id="L671">								ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L672">						updateEventServiceLogEntry(countryCheckLog, response.getCountryCheck(),</span>
+<span class="nc" id="L673">								response.getCountryCheck(), ServiceStatus.SERVICE_FAILURE.name());</span>
+					}
+
+<span class="nc" id="L676">					contactResponseList.add(response);</span>
+				}
+<span class="nc" id="L678">			}</span>
+
+<span class="nc" id="L680">			internalServiceResponse.setContacts(contactResponseList);</span>
+<span class="nc" id="L681">			exchange.setResponse(internalServiceResponse);</span>
+
+<span class="nc" id="L683">		} catch (Exception e) {</span>
+<span class="nc" id="L684">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L685">		}</span>
+
+<span class="nc" id="L687">	}</span>
+
+	/**
+	 * Creates the ip summary for service failure.
+	 *
+	 * @param contactResponse
+	 *            the contact response
+	 * @return the ip summary
+	 */
+	private IpSummary createIpSummaryForServiceFailure(ContactResponse contactResponse) {
+<span class="nc" id="L697">		IpContactResponse response = contactResponse.getIpCheck();</span>
+<span class="nc" id="L698">		IpSummary ip = new IpSummary();</span>
+<span class="nc bnc" id="L699" title="All 2 branches missed.">		if (response != null) {</span>
+<span class="nc" id="L700">			ip.setIpAddress(response.getIpAddress());</span>
+<span class="nc" id="L701">			ip.setIpRule(response.getChecks());</span>
+<span class="nc" id="L702">			ip.setGeoDifference(response.getGeoDifference());</span>
+<span class="nc" id="L703">			ip.setIpCity(response.getIpCity());</span>
+<span class="nc" id="L704">			ip.setIpCountry(response.getIpCountry());</span>
+<span class="nc" id="L705">			ip.setUnit(response.getUnit());</span>
+<span class="nc" id="L706">			ip.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+		}
+<span class="nc" id="L708">		return ip;</span>
+	}
+
+	/**
+	 * Creates the request type.
+	 *
+	 * @param internalServiceRequest
+	 *            the internal service request
+	 * @param custType
+	 *            the cust type
+	 */
+	private void createRequestType(InternalServiceRequest internalServiceRequest, String custType) {
+<span class="nc bnc" id="L720" title="All 2 branches missed.">		if (Constants.PFX.equalsIgnoreCase(custType))</span>
+<span class="nc" id="L721">			internalServiceRequest.setRequestType(Constants.PFX_UPDATE_ACCOUNT);</span>
+		else
+<span class="nc" id="L723">			internalServiceRequest.setRequestType(Constants.CFX_UPDATE_ACCOUNT);</span>
+
+<span class="nc" id="L725">	}</span>
+
+	/**
+	 * Transform response for service failure for account.
+	 *
+	 * @param exchange
+	 *            the exchange
+	 * @param account
+	 *            the account
+	 * @param contactResponseList
+	 *            the contact response list
+	 */
+	private void transformResponseForServiceFailureForAccount(MessageExchange exchange, Account account,
+			List&lt;ContactResponse&gt; contactResponseList) {
+		try {
+<span class="nc" id="L740">			ContactResponse response = new ContactResponse();</span>
+<span class="nc" id="L741">			BlacklistContactResponse blacklist = new BlacklistContactResponse();</span>
+<span class="nc" id="L742">			BlacklistSummary blacklistSummary = new BlacklistSummary();</span>
+
+<span class="nc" id="L744">			response.setBlacklist(blacklist);</span>
+<span class="nc" id="L745">			blacklist.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L746">			blacklist.setData(null);</span>
+<span class="nc" id="L747">			blacklistSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L748">			response.setBlacklist(blacklist);</span>
+
+<span class="nc" id="L750">			EventServiceLog accBlacklistLog = exchange.getEventServiceLog(ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L751">					EntityEnum.ACCOUNT.name(), account.getId());</span>
+
+<span class="nc bnc" id="L753" title="All 2 branches missed.">			if (null != accBlacklistLog) {</span>
+<span class="nc" id="L754">				updateEventServiceLogEntry(accBlacklistLog, blacklistSummary, response.getBlacklist(),</span>
+<span class="nc" id="L755">						ServiceStatus.SERVICE_FAILURE.name());</span>
+			}
+
+<span class="nc" id="L758">			contactResponseList.add(response);</span>
+<span class="nc" id="L759">		} catch (Exception e) {</span>
+<span class="nc" id="L760">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L761">		}</span>
+
+<span class="nc" id="L763">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

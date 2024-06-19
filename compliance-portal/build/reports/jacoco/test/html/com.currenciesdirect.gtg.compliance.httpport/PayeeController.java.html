@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PayeeController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.httpport</a> &gt; <span class="el_source">PayeeController.java</span></div><h1>PayeeController.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.httpport;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.ModelAndView;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.titan.response.PayeeESResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.titan.response.PayeePaymentsRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.titan.response.PayeePaymentsResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.report.BeneficiaryReportFilter;
+import com.currenciesdirect.gtg.compliance.core.domain.report.BeneficiaryReportSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.titan.payee.IPayeeService;
+import com.currenciesdirect.gtg.compliance.core.titan.payee.PayeeDetailsRequest;
+import com.currenciesdirect.gtg.compliance.core.titan.payee.PayeeQueueDto;
+import com.currenciesdirect.gtg.compliance.core.titan.payee.PayeeResponse;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.FunctionsAllowed;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.UserPermissionFilterBuilder;
+
+/**
+ * The Class PayeeController.
+ */
+@Controller
+<span class="nc" id="L42">public class PayeeController extends BaseController {</span>
+
+	/** The log. */
+<span class="nc" id="L45">	private Logger log = LoggerFactory.getLogger(PayeeController.class);</span>
+
+	/** The i payee service. */
+	@Autowired
+	@Qualifier(&quot;payeeServiceImpl&quot;)
+	private IPayeeService iPayeeService;
+
+	/**
+	 * Gets the registration details.
+	 *
+	 * @param user
+	 *            the user
+	 * @param payeeRequest
+	 *            the payee request
+	 * @return the registration details
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BENEFICIARY })
+	@PostMapping(value = &quot;/beneficiaryDetails&quot;)
+	public ModelAndView getRegistrationDetails(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestParam(value = &quot;payeeDetailsRequest&quot;, required = false) String payeeRequest) {
+
+<span class="nc" id="L66">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="nc" id="L67">		PayeeResponse payeeDetailsResponse = new PayeeResponse();</span>
+<span class="nc" id="L68">		PayeeESResponse payeeESReponse = new PayeeESResponse();</span>
+		try {
+<span class="nc" id="L70">			PayeeDetailsRequest payeeRequestObj = JsonConverterUtil.convertToObject(PayeeDetailsRequest.class,</span>
+					payeeRequest);
+<span class="nc" id="L72">			BeneficiaryReportFilter filter = UserPermissionFilterBuilder</span>
+<span class="nc" id="L73">					.getFilterFromUserPermission(user.getPermissions(), BeneficiaryReportFilter.class);</span>
+<span class="nc" id="L74">			filter.setUserProfile(user);</span>
+<span class="nc" id="L75">			BeneficiaryReportSearchCriteria searchCriteria = new BeneficiaryReportSearchCriteria();</span>
+<span class="nc" id="L76">			searchCriteria.setFilter(filter);</span>
+<span class="nc" id="L77">			modelAndView.setViewName(ViewNameEnum.BENE_DETAILS.getViewName());</span>
+<span class="nc" id="L78">			payeeDetailsResponse = iPayeeService.getBeneficiaryDetails(user, payeeRequestObj, searchCriteria);</span>
+<span class="nc bnc" id="L79" title="All 4 branches missed.">			if (null != payeeDetailsResponse.getPayee() &amp;&amp; !payeeDetailsResponse.getIsBeneficiaryWhitelisted())</span>
+<span class="nc" id="L80">				payeeESReponse = iPayeeService.getRegistrationDetailsFromES(user, payeeDetailsResponse);</span>
+<span class="nc" id="L81">			String payeeESResponseJSON = JsonConverterUtil.convertToJsonWithNull(payeeESReponse);</span>
+<span class="nc" id="L82">			modelAndView.addObject(&quot;payeeESReponse&quot;, payeeESReponse);</span>
+<span class="nc" id="L83">			modelAndView.addObject(&quot;payeeDetailsResponse&quot;, payeeDetailsResponse);</span>
+<span class="nc" id="L84">			modelAndView.addObject(&quot;payeeESResponseJSON&quot;, payeeESResponseJSON);</span>
+<span class="nc" id="L85">		} catch (CompliancePortalException e) {</span>
+
+<span class="nc" id="L87">			log.debug(&quot;Error in getRegistrationDetails method of Titancontroller class {1}&quot;, e);</span>
+<span class="nc" id="L88">			payeeDetailsResponse = new PayeeResponse();</span>
+<span class="nc" id="L89">			payeeDetailsResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L90">			payeeDetailsResponse.setErrorDescription(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L91">		}</span>
+<span class="nc" id="L92">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the beneficiaries report.
+	 *
+	 * @param user
+	 *            the user
+	 * @return the beneficiaries report
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	//@FunctionsAllowed(functions = { IS_READ_ONLY_USER })
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BENEFICIARY })
+	@GetMapping(value = &quot;/beneReport&quot;)
+	public ModelAndView getBeneficiariesReport(@RequestAttribute(&quot;user&quot;) UserProfile user)
+			throws CompliancePortalException {
+<span class="nc" id="L109">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="nc" id="L110">		PayeeResponse payeeResponse = new PayeeResponse();</span>
+<span class="nc" id="L111">		PayeeQueueDto payeeQueueDto = new PayeeQueueDto();</span>
+		try {
+<span class="nc" id="L113">			BeneficiaryReportFilter filter = UserPermissionFilterBuilder</span>
+<span class="nc" id="L114">					.getFilterFromUserPermission(user.getPermissions(), BeneficiaryReportFilter.class);</span>
+
+<span class="nc" id="L116">			filter.setUserProfile(user);</span>
+
+<span class="nc" id="L118">			BeneficiaryReportSearchCriteria searchCriteria = new BeneficiaryReportSearchCriteria();</span>
+<span class="nc" id="L119">			searchCriteria.setFilter(filter);</span>
+<span class="nc" id="L120">			payeeResponse = iPayeeService.getBeneficiaryList(searchCriteria);</span>
+<span class="nc" id="L121">			payeeQueueDto = iPayeeService.getBeneficiaryListWithCriteria(searchCriteria);</span>
+
+<span class="nc" id="L123">			modelAndView.setViewName(ViewNameEnum.BENE_REPORT.getViewName());</span>
+<span class="nc" id="L124">			modelAndView.addObject(&quot;payeeResponse&quot;, payeeResponse);</span>
+<span class="nc" id="L125">			modelAndView.addObject(&quot;payeeQueueDto&quot;, payeeQueueDto);</span>
+<span class="nc" id="L126">		} catch (CompliancePortalException e) {</span>
+
+<span class="nc" id="L128">			log.debug(&quot;Error in getBeneficiariesReport method of Titancontroller class {1}&quot;, e);</span>
+<span class="nc" id="L129">			payeeResponse = new PayeeResponse();</span>
+<span class="nc" id="L130">			payeeResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L131">			payeeResponse.setErrorDescription(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L132">			payeeQueueDto = new PayeeQueueDto();</span>
+<span class="nc" id="L133">			payeeQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L134">			payeeQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L135">		}</span>
+<span class="nc" id="L136">		return modelAndView;</span>
+
+	}
+
+	/**
+	 * Gets the beneficiaries report.
+	 *
+	 * @param user
+	 *            the user
+	 * @param searchCriteriaObj
+	 *            the search criteria obj
+	 * @return the beneficiaries report
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BENEFICIARY })
+	@PostMapping(value = &quot;/beneReportApply&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public PayeeResponse getBeneficiariesReport(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestBody BeneficiaryReportSearchCriteria searchCriteriaObj) throws CompliancePortalException {
+<span class="nc" id="L158">		PayeeResponse payeeResponse = new PayeeResponse();</span>
+		try {
+<span class="nc bnc" id="L160" title="All 4 branches missed.">			if (null != searchCriteriaObj &amp;&amp; null != searchCriteriaObj.getFilter())</span>
+<span class="nc" id="L161">				searchCriteriaObj.getFilter().setUserProfile(user);</span>
+<span class="nc" id="L162">			payeeResponse = iPayeeService.getBeneficiaryList(searchCriteriaObj);</span>
+<span class="nc" id="L163">		} catch (CompliancePortalException e) {</span>
+
+<span class="nc" id="L165">			log.debug(&quot;Error in getBeneficiariesReport method of Titancontroller class {1}&quot;, e);</span>
+<span class="nc" id="L166">			payeeResponse = new PayeeResponse();</span>
+<span class="nc" id="L167">			payeeResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L168">			payeeResponse.setErrorDescription(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L169">		}</span>
+<span class="nc" id="L170">		return payeeResponse;</span>
+
+	}
+
+	/**
+	 * @param user
+	 * @param searchCriteriaRedirect
+	 * @return
+	 * @throws CompliancePortalException
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BENEFICIARY })
+	@PostMapping(value = &quot;/beneReport&quot;)
+	public ModelAndView getBeneficiariesReportOnRedirect(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestParam(value = &quot;ququefilter&quot;, required = false) String searchCriteriaRedirect)
+			throws CompliancePortalException {
+<span class="nc" id="L185">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="nc" id="L186">		PayeeResponse payeeResponse = new PayeeResponse();</span>
+<span class="nc" id="L187">		PayeeQueueDto payeeQueueDto = new PayeeQueueDto();</span>
+		try {
+<span class="nc" id="L189">			BeneficiaryReportFilter filter = UserPermissionFilterBuilder</span>
+<span class="nc" id="L190">					.getFilterFromUserPermission(user.getPermissions(), BeneficiaryReportFilter.class);</span>
+
+<span class="nc" id="L192">			filter.setUserProfile(user);</span>
+<span class="nc" id="L193">			BeneficiaryReportSearchCriteria searchCriteriaRedirectObj = JsonConverterUtil</span>
+<span class="nc" id="L194">					.convertToObject(BeneficiaryReportSearchCriteria.class, searchCriteriaRedirect);</span>
+<span class="nc bnc" id="L195" title="All 4 branches missed.">			if (null != searchCriteriaRedirectObj &amp;&amp; null != searchCriteriaRedirectObj.getFilter())</span>
+<span class="nc" id="L196">				searchCriteriaRedirectObj.getFilter().setUserProfile(user);</span>
+<span class="nc" id="L197">			payeeResponse = iPayeeService.getBeneficiaryList(searchCriteriaRedirectObj);</span>
+<span class="nc" id="L198">			payeeQueueDto = iPayeeService.getBeneficiaryListWithCriteria(searchCriteriaRedirectObj);</span>
+
+<span class="nc" id="L200">			modelAndView.setViewName(ViewNameEnum.BENE_REPORT.getViewName());</span>
+<span class="nc" id="L201">			modelAndView.addObject(&quot;payeeResponse&quot;, payeeResponse);</span>
+<span class="nc" id="L202">			modelAndView.addObject(&quot;payeeQueueDto&quot;, payeeQueueDto);</span>
+<span class="nc" id="L203">		} catch (CompliancePortalException e) {</span>
+
+<span class="nc" id="L205">			log.debug(&quot;Error in getBeneficiariesReportOn Redirect method of Titancontroller class {1}&quot;, e);</span>
+<span class="nc" id="L206">			payeeResponse = new PayeeResponse();</span>
+<span class="nc" id="L207">			payeeResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L208">			payeeResponse.setErrorDescription(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L209">			payeeQueueDto = new PayeeQueueDto();</span>
+<span class="nc" id="L210">			payeeQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L211">			payeeQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L212">		}</span>
+<span class="nc" id="L213">		return modelAndView;</span>
+	}
+
+	/**
+	 * Get the client of beneficiary trade account number
+	 * 
+	 * @param user
+	 * @param accountid
+	 * @return
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BENEFICIARY })
+	@PostMapping(value = &quot;/getBeneficiaryListOfClient&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public PayeeResponse getBeneClientTradeAccountNumber(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestBody String accountid) {
+
+<span class="nc" id="L231">		PayeeResponse payeeResponse = new PayeeResponse();</span>
+<span class="nc" id="L232">		BeneficiaryReportSearchCriteria searchCriteria = new BeneficiaryReportSearchCriteria();</span>
+<span class="nc" id="L233">		BeneficiaryReportFilter filter = new BeneficiaryReportFilter();</span>
+
+<span class="nc" id="L235">		String tradeAccountNumber = accountid.replaceAll(&quot;\&quot;&quot;, &quot;&quot;);</span>
+		try {
+<span class="nc" id="L237">			searchCriteria.setFilter(filter);</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">			if (null != searchCriteria.getFilter())</span>
+<span class="nc" id="L239">				searchCriteria.getFilter().setUserProfile(user);</span>
+<span class="nc" id="L240">			searchCriteria.getFilter().setKeyword(tradeAccountNumber);</span>
+<span class="nc" id="L241">			payeeResponse = iPayeeService.getBeneficiaryList(searchCriteria);</span>
+
+<span class="nc" id="L243">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L244">			log.debug(&quot;Error in getBeneficiaryListOfClient method of Titancontroller class {1}&quot;, e);</span>
+<span class="nc" id="L245">		}</span>
+<span class="nc" id="L246">		return payeeResponse;</span>
+	}
+
+	/**
+	 * Gets the transaction list.
+	 *
+	 * @param user
+	 *            the user
+	 * @param atlasBeneAccNum
+	 *            the atlas bene acc num
+	 * @param tradeAccountNumber
+	 *            the trade account number
+	 * @return the transaction list
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BENEFICIARY })
+	@PostMapping(value = &quot;/getTransactionList&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public List&lt;PayeePaymentsResponse&gt; getTransactionList(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestBody PayeePaymentsRequest payeeRequest) throws CompliancePortalException {
+<span class="nc" id="L269">		List&lt;PayeePaymentsResponse&gt; payeeResponse = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L271">			payeeResponse = iPayeeService.getTransactionList(user, payeeRequest);</span>
+<span class="nc" id="L272">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L273">			log.debug(&quot;Error in getTransactionList method of Titancontroller class {1}&quot;, e);</span>
+<span class="nc" id="L274">		}</span>
+<span class="nc" id="L275">		return payeeResponse;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

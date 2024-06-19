@@ -1,0 +1,68 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="TITAN.GET_PAYMENT_STATUS.in.channel" />
+
+	<int:chain
+		input-channel="TITAN.GET_PAYMENT_STATUS.in.channel">
+		<int:header-enricher id="titan.HeaderEnricher">
+			<int:header name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+		</int:header-enricher>
+		<int:service-activator ref="titan.MsgValidator"
+			id="titan.Validator" />
+
+		<int:router id="titan.postValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="FUNDS_OUT.DATA_ENRICHMENT">
+			<int:mapping value="FAIL"
+				channel="TITAN.GET_PAYMENT_STATUS.RESPONSE" />
+			<int:mapping value="SUCCESS"
+				channel="TITAN.GET_PAYMENT_STATUS.DATA_ENRICHMENT" />
+		</int:router>
+	</int:chain>
+
+	<int:chain
+		input-channel="TITAN.GET_PAYMENT_STATUS.DATA_ENRICHMENT"
+		output-channel="TITAN.GET_PAYMENT_STATUS.RESPONSE">
+
+		<int:service-activator ref="titan.DataEnricher" />
+
+	</int:chain>
+
+	<int:chain input-channel="TITAN.GET_PAYMENT_STATUS.RESPONSE"
+		output-channel="nullChannel">
+
+		<int:service-activator
+			ref="titan.ResponseHandler" />
+
+	</int:chain>
+
+	<bean id="titan.MsgValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.titan.MessageValidator" />
+
+	<bean id="titan.DataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.titan.DataEnricher" />
+
+	<bean id="titan.ResponseHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.titan.ResponseHandler" />
+</beans>

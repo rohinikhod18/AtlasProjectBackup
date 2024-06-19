@@ -1,0 +1,567 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationReportQueryConstant.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport.report</a> &gt; <span class="el_source">RegistrationReportQueryConstant.java</span></div><h1>RegistrationReportQueryConstant.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport.report;
+
+<span class="fc" id="L3">@SuppressWarnings(&quot;squid:S1192&quot;)</span>
+public enum RegistrationReportQueryConstant {
+	
+	
+<span class="fc" id="L7">	REGISTRATION_REPORT_CONTACT_FILTER( &quot;SELECT B.AccountId , A.Id ContactId, ROW_NUMBER() OVER (PARTITION BY B.AccountId ORDER BY B.UpdatedOn) RNum &quot;</span>
+			+ &quot; FROM ContactAttribute A JOIN Contact B ON A.Id = B.ID {REGISTRATION_REPORT_COUNTRY_OF_RESIDENCE_FILTER} {WATCHLIST_CATEGORY_FILTER} &quot;),
+	
+<span class="fc" id="L10">	REGISTRATION_REPORT_ACCOUNT_FILTER( &quot;SELECT A.Id AccountId &quot;</span>
+			+ &quot; FROM AccountAttribute A JOIN ACCOUNT B ON A.id = B.id &quot;),
+	
+<span class="fc" id="L13">	REGISTRATION_REPORT_FILTER( &quot; SELECT A.Type,A.ResourceType,A.ResourceId, A.ContactId, A.AccountId, A.UpdatedOn,  &quot;</span>
+			+ &quot;ROW_NUMBER() over (PARTITION BY CASE WHEN a.Type = 2 THEN a.contactId ELSE a.accountid END ORDER BY a.updatedon DESC) RowNum &quot; 
+			+ &quot; FROM vCustomer A &quot;
+			+ &quot; {CONTACT_FILTER_JOIN} {ACCOUNT_FILTER_JOIN} {ORG_TABLE_JOIN} {USER_FILTER_JOIN} {LEGAL_ENTITY_JOIN} {DEVICE_ID_JOIN} {ONFIDO_JOIN}&quot;),
+			
+<span class="fc" id="L18">	CONTACT_FILTER_JOIN(&quot; JOIN ContactAttributeFilter CF ON A.ContactId = CF.ContactId&quot;),//AND CF.Rnum=1 </span>
+	
+<span class="fc" id="L20">	ACCOUNT_FILTER_JOIN(&quot; JOIN AccountAttributeFilter AF ON A.AccountId = AF.AccountId &quot;),</span>
+	
+<span class="fc" id="L22">	CONTACT_FILTER_LEFT_JOIN(&quot; LEFT JOIN ContactAttributeFilter CF ON A.ContactId = CF.ContactId&quot;),//AND CF.Rnum=1</span>
+	
+<span class="fc" id="L24">	ACCOUNT_FILTER_LEFT_JOIN(&quot; LEFT JOIN AccountAttributeFilter AF ON A.AccountId = AF.AccountId &quot;),</span>
+	
+<span class="fc" id="L26">	REPORT_FILTER_NULL_CHECK(&quot; ((CF.ContactId IS NOT NULL AND A.Type=2) OR (AF.AccountId IS NOT NULL AND A.Type IN (1,3))) &quot;),</span>
+	
+<span class="fc" id="L28">	ORG_TABLE_JOIN(&quot;JOIN ACCOUNT acc ON A.AccountId = acc.id &quot;	</span>
+			+ &quot; JOIN organization org ON acc.organizationid = org.id&quot;),
+	
+<span class="fc" id="L31">	LEGEL_ENTITY_TABLE_JOIN(&quot;JOIN ACCOUNT ac ON A.AccountId = ac.id JOIN LegalEntity le ON ac.LegalEntityID = le.ID &quot;),</span>
+	
+<span class="fc" id="L33">	USER_FILTER_JOIN(&quot;JOIN Userresourcelock ul ON (ul.Resourceid = A.ContactId AND ul.resourcetype=3) OR (ul.Resourceid = A.Accountid AND ul.resourcetype=4)&quot;</span>
+			+ &quot; JOIN [USER] usr ON usr.id = ul.createdby&quot;),
+	
+<span class="fc" id="L36">	WATCHLIST_CATEGORY_FILTER(&quot; LEFT JOIN ContactWatchList CL ON CL.contact=B.id LEFT JOIN watchlist W ON CL.reason=w.id AND w.category IN(?) &quot;),</span>
+	
+<span class="fc" id="L38">	WATCHLIST_FILTER(&quot; EXISTS( SELECT 1 FROM ContactWatchList CL WHERE Reason IN(?) AND A.contactid = CL.contact ) &quot;),</span>
+<span class="fc" id="L39">	REGISTRATION_REPORT_COUNTRY_OF_RESIDENCE_FILTER(&quot;JOIN Country coun ON coun.id = b.country&quot;),</span>
+	
+<span class="fc" id="L41">	GET_REGISTRATION_REPORT(&quot;DECLARE @Offset int = ?, @Rows int = ?; DECLARE @tmpRows int = @Rows*10;&quot;</span>
+			+ &quot; WITH &quot;
+			+ &quot;ContactAttributeFilter AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_CONTACT_FILTER} ),&quot;
+			+ &quot;AccountAttributeFilter AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_ACCOUNT_FILTER} ),&quot;
+			+ &quot;SelectedIds AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_FILTER} &quot;
+			+ &quot;   ORDER BY {SORT_FIELD_NAME} {ORDER_TYPE} OFFSET @Offset ROWS FETCH NEXT @tmpRows ROWS ONLY), &quot;//
+			+ &quot; SelectedId AS ( &quot;
+			+ &quot;select TOP (@Rows) * &quot;
+			+ &quot;from SelectedIds a &quot;
+			+ &quot; WHERE RowNum = 1  ORDER BY  {SORT_FIELD_NAME} {ORDER_TYPE} &quot;//here
+			+ &quot;) &quot;
+			+ &quot; SELECT &quot;
+			+ &quot;    c.Id                     AS contactid,&quot;
+			+ &quot; CASE acc.[type] WHEN 2 THEN c.compliancestatus ELSE acc.compliancestatus END AS compliancestatus, &quot;
+			//+ &quot;				c.compliancestatus, &quot;
+			
+			+ &quot; c.accountid, &quot;
+			+ &quot;     CASE acc.[type] WHEN 2 THEN  c.NAME ELSE acc.NAME END   AS contactname, &quot;
+			+ &quot; acc.tradeaccountnumber AS TradeAccountNumber, &quot;
+			+ &quot;    c.updatedon              AS registeredon, &quot;
+			+ &quot;    acc.crmaccountid         AS ACSFID, &quot;
+			+ &quot;    accattrib.vsellcurrency, &quot;
+			+ &quot;    accattrib.vbuycurrency, &quot;
+			+ &quot;    accattrib.vsource, &quot;
+			+ &quot;    accattrib.vtransactionvalue, &quot;
+			+ &quot; org.NAME AS organization, &quot;
+			+ &quot;    acc.LegalEntity, &quot;
+			+ &quot;    acc.[type]  AS Type, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.eidstatus  ELSE acc.eidstatus END AS eidstatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.blackliststatus ELSE acc.blackliststatus END AS blackliststatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.fraugsterstatus ELSE acc.fraugsterstatus END AS fraugsterstatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.sanctionstatus ELSE acc.sanctionstatus END AS sanctionstatus, &quot;
+			+ &quot; CASE acc.[type] WHEN 2 THEN c.customCheckStatus ELSE 9 END AS customCheckStatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN contactstatusEnum.Status ELSE accountstatusEnum.Status END AS status, &quot;
+			+ &quot;    contactstatusEnum.status AS contactStatus, &quot;
+			+ &quot; ur.id AS userresourceilockid, &quot;
+			+ &quot; usr.ssouserid AS lockedby, &quot;
+			+ &quot;    ur.createdon             AS UserResourceCreatedOn, &quot;
+			+ &quot;    ur.workflowtime          AS UserResourceWorkflowTime, &quot;
+			+ &quot;    ur.resourcetype          AS UserResourceEntityType, &quot;
+			+ &quot;    SI.UpdatedOn AS UpdatedOn, &quot;
+			+ &quot;    coun.DisplayName         AS CountryFullName, &quot;
+			+ &quot;    coun.Code                AS CountryCode, &quot;
+			+ &quot;    acc.ComplianceDoneOn     AS registeredDate, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.version &quot;
+			+ &quot;    ELSE acc.version END AS version &quot;
+			+ &quot;FROM   contact c &quot;
+			+ &quot;JOIN SelectedId Si ON c.Id = Si.ContactId &quot;
+			+ &quot;JOIN contactattribute conattrib ON c.id = conattrib.id &quot;
+			+ &quot;JOIN account acc ON acc.id = c.accountid &quot;
+			+ &quot; {JOIN_LEGAL_ENTITY} &quot; //Add for AT-3269
+			+ &quot;JOIN accountattribute accattrib ON c.accountid = accattrib.id &quot;
+			+ &quot;JOIN organization org ON acc.organizationid = org.id &quot;
+			+ &quot;JOIN contactcompliancestatusenum contactstatusEnum ON c.compliancestatus = contactstatusEnum.id &quot;
+			+ &quot;JOIN accountcompliancestatusenum accountstatusEnum ON acc.compliancestatus = accountstatusEnum.id &quot;
+			+ &quot;  JOIN      country coun ON c.country = coun.id &quot;
+			+ &quot;LEFT JOIN userresourcelock ur ON  ur.resourceId = Si.ResourceId AND ur.ResourceType = si.ResourceType &quot;
+			+ &quot; AND ur.lockreleasedon IS NULL &quot;
+			+ &quot;LEFT JOIN [user] usr ON usr.id = ur.createdby WHERE c.Deleted = 0 OR c.Deleted IS NULL&quot;),
+			//+ &quot; ORDER BY  Si.UpdatedOn DESC &quot;),
+	
+<span class="fc" id="L105">	GET_REGISTRATION_EXCEL_REPORT(&quot; WITH &quot;</span>
+			+ &quot;ContactAttributeFilter AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_CONTACT_FILTER} ),&quot;
+			+ &quot;AccountAttributeFilter AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_ACCOUNT_FILTER} ),&quot;
+			+ &quot;SelectedIds AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_FILTER} ), &quot;//
+			+ &quot; SelectedId AS ( &quot;
+			+ &quot;select TOP 100 PERCENT * &quot;
+			+ &quot;from SelectedIds a WHERE RowNum = 1 &quot;
+			+ &quot;ORDER BY ROW_NUMBER() over (PARTITION BY CASE WHEN a.Type = 2 THEN a.contactId ELSE a.accountid END &quot;
+			+ &quot; ORDER BY a.updatedon DESC),a.updatedon DESC &quot;
+			+ &quot;) &quot;
+			+ &quot; SELECT &quot;
+			+ &quot;    c.Id                     AS contactid, &quot;
+			+ &quot; c.compliancestatus, &quot;
+			+ &quot; c.accountid, &quot;
+			+ &quot;     CASE acc.[type] WHEN 2 THEN c.NAME ELSE acc.NAME END   AS contactname, &quot;
+			+ &quot; acc.tradeaccountnumber AS TradeAccountNumber, &quot;
+			+ &quot;    c.updatedon              AS registeredon, &quot;
+			+ &quot;    acc.crmaccountid         AS ACSFID, &quot;
+			+ &quot;    accattrib.vsellcurrency, &quot;
+			+ &quot;    accattrib.vbuycurrency, &quot;
+			+ &quot;    accattrib.vsource, &quot;
+			+ &quot;    accattrib.vtransactionvalue, &quot;
+			+ &quot; org.NAME AS organization, &quot;
+			+ &quot; acc.LegalEntity, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN 'PFX' WHEN 1 THEN 'CFX' ELSE 'CFX(Etailer)' END AS Type, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.eidstatus  ELSE acc.eidstatus END AS eidstatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.blackliststatus ELSE acc.blackliststatus END AS blackliststatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.fraugsterstatus ELSE acc.fraugsterstatus END AS fraugsterstatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.sanctionstatus ELSE acc.sanctionstatus END AS sanctionstatus,&quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.customCheckStatus ELSE 9 END AS customCheckStatus, &quot;// for AT-3011
+			+ &quot;    CASE acc.[type] WHEN 2 THEN contactstatusEnum.Status ELSE accountstatusEnum.Status END AS status, &quot;
+			+ &quot;    contactstatusEnum.status AS contactStatus, &quot;
+			+ &quot;             ur.id AS userresourceilockid, &quot;
+			+ &quot;             usr.ssouserid AS lockedby, &quot;
+			+ &quot;    ur.createdon             AS UserResourceCreatedOn, &quot;
+			+ &quot;    ur.workflowtime          AS UserResourceWorkflowTime, &quot;
+			+ &quot;    ur.resourcetype          AS UserResourceEntityType, &quot;
+			+ &quot;    SI.UpdatedOn AS UpdatedOn, &quot;
+			+ &quot;    coun.DisplayName         AS CountryFullName, &quot;
+			+ &quot;    coun.Code                AS CountryCode, &quot;
+			+ &quot;    acc.ComplianceDoneOn     AS registeredDate, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.version &quot;
+			+ &quot;    ELSE acc.version END AS version &quot;
+			+ &quot;FROM   contact c &quot;
+			+ &quot;JOIN SelectedId Si ON c.Id = Si.ContactId &quot;
+			+ &quot;JOIN contactattribute conattrib ON c.id = conattrib.id &quot;
+			+ &quot;JOIN account acc ON acc.id = c.accountid &quot;
+			+ &quot; {JOIN_LEGAL_ENTITY} &quot; //Add for AT-3269 
+			+ &quot;JOIN accountattribute accattrib ON c.accountid = accattrib.id &quot;
+			+ &quot;JOIN organization org ON acc.organizationid = org.id &quot;
+			+ &quot;JOIN contactcompliancestatusenum contactstatusEnum ON c.compliancestatus = contactstatusEnum.id &quot;
+			+ &quot;JOIN accountcompliancestatusenum accountstatusEnum ON acc.compliancestatus = accountstatusEnum.id &quot;
+			+ &quot;  JOIN      country coun ON c.country = coun.id &quot;
+			+ &quot;LEFT JOIN userresourcelock ur ON c.id = ur.resourceid &quot;
+			+ &quot;   AND ur.resourcetype = Si.ResourceType &quot;
+			+ &quot;             AND ur.lockreleasedon IS NULL &quot;
+			+ &quot;LEFT JOIN [user] usr ON usr.id = ur.createdby WHERE c.Deleted = 0 OR c.Deleted IS NULL&quot;
+			+ &quot; ORDER BY  Si.UpdatedOn DESC&quot;),
+	
+<span class="fc" id="L167">	GET_REGISTRATION_REPORT_COUNT(&quot; WITH &quot;</span>
+			+ &quot;ContactAttributeFilter AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_CONTACT_FILTER} ),&quot;
+			+ &quot;AccountAttributeFilter AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_ACCOUNT_FILTER} ),&quot;
+			+ &quot;SelectedIds AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_FILTER} &quot;
+			+ &quot; ), &quot;//ORDER BY A.UpdatedOn DESC OFFSET @Offset ROWS FETCH NEXT @rows ROWS ONLY
+			+ &quot; SelectedId AS ( &quot;
+			+ &quot;select TOP 100 PERCENT *, &quot;
+			+ &quot;ROW_NUMBER() over (PARTITION BY CASE WHEN a.Type = 2 THEN a.contactId ELSE a.accountid END ORDER BY a.updatedon DESC) Rnum &quot; 
+			+ &quot;from SelectedIds a &quot;
+			+ &quot;ORDER BY ROW_NUMBER() over (PARTITION BY CASE WHEN a.Type = 2 THEN a.contactId ELSE a.accountid END ORDER BY a.updatedon DESC),a.updatedon DESC &quot;
+			+ &quot; ) &quot;
+			+ &quot; SELECT &quot;
+			+ &quot;    Count(1) AS TotalRows &quot;
+			+ &quot;FROM   contact c &quot;
+			+ &quot;LEFT JOIN SelectedId Si ON c.Id = Si.ContactId &quot;
+			+ &quot;LEFT JOIN contactattribute conattrib ON c.id = conattrib.id &quot;
+			+ &quot;LEFT JOIN account acc ON acc.id = c.accountid &quot;
+			+ &quot; {JOIN_LEGAL_ENTITY} &quot; //Add for AT-3269
+			+ &quot;LEFT JOIN accountattribute accattrib ON c.accountid = accattrib.id &quot;
+			+ &quot;LEFT JOIN organization org ON acc.organizationid = org.id &quot;
+			+ &quot;LEFT JOIN contactcompliancestatusenum contactstatusEnum ON c.compliancestatus = contactstatusEnum.id &quot;
+			+ &quot;LEFT JOIN userresourcelock ur ON ur.resourceId = Si.ResourceId AND ur.ResourceType = si.ResourceType &quot;
+			+ &quot;   AND ur.lockreleasedon IS NULL &quot;
+			+ &quot;LEFT JOIN [user] usr ON usr.id = ur.createdby&quot;
+			+ &quot; WHERE Si.Rnum = 1 AND (c.Deleted = 0 OR c.Deleted IS NULL)&quot;),
+
+<span class="fc" id="L196">	GET_REGISTRATION_REPORT_WITHOUT_PAGINATION( &quot;SELECT Count(*) AS count &quot;</span>
+			+ &quot;FROM   ( &quot;
+			+ &quot;                 SELECT    ur.id AS userresourceilockid, &quot;
+			+ &quot;                           ( &quot;
+			+ &quot;                                  SELECT ssouserid &quot;
+			+ &quot;                                  FROM   [User] &quot;
+			+ &quot;                                  WHERE  id=ur.createdby) AS lockedby, &quot;
+			+ &quot;                           c.id                           AS contactid, &quot;
+			+ &quot;                           ( &quot;
+			+ &quot;                                  SELECT status &quot;
+			+ &quot;                                  FROM   contactcompliancestatusenum &quot;
+			+ &quot;                                  WHERE  id = c.compliancestatus) AS contactstatus, &quot;
+			+ &quot;                           c.accountid, &quot;
+			+ &quot;                           c.NAME                 AS contactname, &quot;
+			+ &quot;                             acc.CRMAccountID AS ACSFID, &quot;
+			+ &quot;                             accattrib.Attributes AS AccountAttributes, &quot;
+			+ &quot;                             conattrib.Attributes    AS ContactAttributes, &quot;
+			+ &quot;                           acc.tradeaccountnumber AS tradeaccountnumber, &quot;
+			+ &quot;                           acc.createdon          AS registeredon, &quot;
+			+ &quot;                           ur.userid              AS username, &quot;
+			+ &quot;                           accattrib.type, &quot;
+			+ &quot;                           accattrib.sellcurrency, &quot;
+			+ &quot;                           accattrib.buycurrency, &quot;
+			+ &quot;                           accattrib.source, &quot;
+			+ &quot;                           accattrib.transactionvalue, &quot;
+			+ &quot;                           ( &quot;
+			+ &quot;                                  SELECT ',' &quot;
+			+ &quot;                                        + ( &quot;
+			+ &quot;                                                SELECT reason &quot;
+			+ &quot;                                                FROM   watchlist &quot;
+			+ &quot;                                                WHERE  id = st1.reason) AS [text()] &quot;
+			+ &quot;                                  FROM   contactwatchlist st1 &quot;
+			+ &quot;                                  WHERE  st1.contact = c.id FOR xml path ('')) AS watchlist, &quot;
+			+ &quot;                           ( &quot;
+			+ &quot;                                  SELECT NAME &quot;
+			+ &quot;                                  FROM   organization &quot;
+			+ &quot;                                  WHERE  id = acc.organizationid) AS organization, &quot;
+			+ &quot;                           ( &quot;
+			+ &quot;                                    SELECT TOP 1 &quot;
+			+ &quot;                                             status &quot;
+			+ &quot;                                    FROM     eventservicelog e &quot;
+			+ &quot;                                    WHERE    e.servicetype = &quot;
+			+ &quot;                                             ( &quot;
+			+ &quot;                                                    SELECT id &quot;
+			+ &quot;                                                    FROM   compliance_servicetypeenum &quot;
+			+ &quot;                                                    WHERE  code = 'KYC') &quot;
+			+ &quot;                                    AND      e.entityid = c.id &quot;
+			+ &quot;                                    AND      e.entitytype = 'CONTACT' &quot;
+			+ &quot;                                    AND      e.eventid IN &quot;
+			+ &quot;                                             ( &quot;
+			+ &quot;                                                    SELECT id &quot;
+			+ &quot;                                                    FROM   event &quot;
+			+ &quot;                                                    WHERE  paymentinid IS NULL &quot;
+			+ &quot;                                                    AND    paymentoutid IS NULL &quot;
+			+ &quot;                                                    AND    accountid = acc.id) &quot;
+			+ &quot;                                    ORDER BY e.updatedon DESC) AS kycstatus, &quot;
+			+ &quot;                           ( &quot;
+			+ &quot;                                    SELECT TOP 1 &quot;
+			+ &quot;                                             status &quot;
+			+ &quot;                                    FROM     eventservicelog e &quot;
+			+ &quot;                                    WHERE    e.servicetype = &quot;
+			+ &quot;                                             ( &quot;
+			+ &quot;                                                    SELECT id &quot;
+			+ &quot;                                                    FROM   compliance_servicetypeenum &quot;
+			+ &quot;                                                    WHERE  code = 'BLACKLIST') &quot;
+			+ &quot;                                    AND      e.entityid = c.id &quot;
+			+ &quot;                                    AND      e.entitytype = 'CONTACT' &quot;
+			+ &quot;                                    AND      e.eventid IN &quot;
+			+ &quot;                                             ( &quot;
+			+ &quot;                                                    SELECT id &quot;
+			+ &quot;                                                    FROM   event &quot;
+			+ &quot;                                                    WHERE  paymentinid IS NULL &quot;
+			+ &quot;                                                    AND    paymentoutid IS NULL &quot;
+			+ &quot;                                                    AND    accountid = acc.id) &quot;
+			+ &quot;                                    ORDER BY e.updatedon DESC) AS blackliststatus, &quot;
+			+ &quot;                           ( &quot;
+			+ &quot;                                    SELECT TOP 1 &quot;
+			+ &quot;                                             status &quot;
+			+ &quot;                                    FROM     eventservicelog e &quot;
+			+ &quot;                                    WHERE    e.servicetype = &quot;
+			+ &quot;                                             ( &quot;
+			+ &quot;                                                    SELECT id &quot;
+			+ &quot;                                                    FROM   compliance_servicetypeenum &quot;
+			+ &quot;                                                    WHERE  code = 'FRAUGSTER') &quot;
+			+ &quot;                                    AND      e.entityid = c.id &quot;
+			+ &quot;                                    AND      e.entitytype = 'CONTACT' &quot;
+			+ &quot;                                    AND      e.eventid IN &quot;
+			+ &quot;                                             ( &quot;
+			+ &quot;                                                    SELECT id &quot;
+			+ &quot;                                                    FROM   event &quot;
+			+ &quot;                                                    WHERE  paymentinid IS NULL &quot;
+			+ &quot;                                                    AND    paymentoutid IS NULL &quot;
+			+ &quot;                                                    AND    accountid = acc.id) &quot;
+			+ &quot;                                    ORDER BY e.updatedon DESC) AS fraugsterstatus, &quot;
+			+ &quot;                           ( &quot;
+			+ &quot;                                    SELECT TOP 1 &quot;
+			+ &quot;                                             status &quot;
+			+ &quot;                                    FROM     eventservicelog e &quot;
+			+ &quot;                                    WHERE    e.servicetype = &quot;
+			+ &quot;                                             ( &quot;
+			+ &quot;                                                    SELECT id &quot;
+			+ &quot;                                                    FROM   compliance_servicetypeenum &quot;
+			+ &quot;                                                    WHERE  code = 'SANCTION') &quot;
+			+ &quot;                                    AND      e.entityid = c.id &quot;
+			+ &quot;                                    AND      e.entitytype = 'CONTACT' &quot;
+			+ &quot;                                    AND      e.eventid IN &quot;
+			+ &quot;                                             ( &quot;
+			+ &quot;                                                    SELECT id &quot;
+			+ &quot;                                                    FROM   event &quot;
+			+ &quot;                                                    WHERE  paymentinid IS NULL &quot;
+			+ &quot;                                                    AND    paymentoutid IS NULL &quot;
+			+ &quot;                                                    AND    accountid = acc.id) &quot;
+			+ &quot;                                    ORDER BY e.updatedon DESC) AS sanctionstatus &quot;
+			+ &quot;                 FROM   contact c &quot;
+			+ &quot;                 LEFT JOIN ContactAttribute conattrib &quot;
+			+ &quot;                 ON        c.id = conattrib.id &quot;
+			+ &quot;                 LEFT JOIN account acc &quot;
+			+ &quot;                 ON        acc.id = c.accountid &quot;
+			+ &quot;                 LEFT JOIN accountattribute accattrib &quot;
+			+ &quot;                 ON        c.accountid = accattrib.id &quot;
+			+ &quot;                 LEFT JOIN userresourcelock ur &quot;
+			+ &quot;                 ON        c.id = ur.resourceid &quot;
+			+ &quot;                 AND       ur.lockreleasedon IS NULL &quot;
+			+ &quot;                 AND       ur.resourcetype = 'CONTACT' &quot;
+			+ &quot;                 WHERE     c.compliancestatus IN ( 1, &quot;
+			+ &quot;                                                  4, &quot;
+			+ &quot;                                                  5 )) AS rc1&quot;),	
+	
+	
+<span class="fc" id="L325">	GET_REG_REPORT_INNER_QUERY(&quot;SELECT row_number()  OVER ( ORDER BY {SORT_FIELD_NAME} {ORDER_TYPE}) AS rownum, &quot;</span>
+			+ &quot;        rqtemp.* &quot;
+			+ &quot;    FROM &quot;
+			+ &quot;( &quot;
+			+ &quot; select &quot;
+			+ &quot; ur.id AS userresourceilockid,  usr.ssouserid AS lockedby, &quot;
+			+ &quot; ur.CreatedOn AS UserResourceCreatedOn,    ur.WorkflowTime AS UserResourceWorkflowTime, &quot;
+			+ &quot; ur.ResourceType AS UserResourceEntityType,  c.id AS contactid, &quot;
+			+ &quot; c.compliancestatus, &quot;
+			+ &quot; c.accountid, &quot;
+			+ &quot; c.NAME AS contactname, &quot;
+			+ &quot; acc.tradeaccountnumber AS TradeAccountNumber ,  &quot;
+			+ &quot; c.createdon AS registeredon, &quot;
+			+ &quot; acc.CRMAccountID AS ACSFID, &quot;
+			+ &quot; conattrib.attributes       AS ContactAttributes, &quot;
+			+ &quot; accattrib.sellcurrency,  &quot;
+			+ &quot; accattrib.buycurrency, &quot;
+			+ &quot; accattrib.source,   accattrib.transactionvalue, &quot;
+			+ &quot; (   SELECT ','  +    (  SELECT reason       FROM   watchlist &quot;
+			+ &quot; WHERE  id = st1.reason) AS [text()] &quot;
+			+ &quot; FROM   contactwatchlist st1 &quot;
+			+ &quot; WHERE  st1.contact = c.id      FOR xml path ('')) AS watchlist , &quot;
+			+ &quot; org.NAME AS organization,    acc.[type] AS Type, &quot;
+			+ &quot; c.EIDStatus AS kycstatus, &quot;
+			+ &quot; c.BlacklistStatus AS blackliststatus, &quot;
+			+ &quot; c.FraugsterStatus AS fraugsterstatus, &quot;
+			+ &quot; c.SanctionStatus AS sanctionstatus,  contactstatusEnum.status AS contactStatus &quot;
+			+ &quot; FROM    contact c &quot;
+			+ &quot;                                         LEFT JOIN contactattribute conattrib &quot;
+			+ &quot;                              ON c.id = conattrib.id &quot;
+			+ &quot; JOIN account acc ON &quot;
+			+ &quot; acc.id = c.accountid &quot;
+			+ &quot; JOIN accountattribute accattrib ON       c.accountid = accattrib.id &quot;
+			+ &quot; JOIN organization org ON     acc.organizationid = org.id &quot; 
+			+ &quot; JOIN ContactComplianceStatusEnum  contactstatusEnum  ON c.compliancestatus = contactstatusEnum.id &quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON   c.id = ur.resourceid &quot;
+			+ &quot; AND ur.resourcetype = 'CONTACT'  AND ur.lockreleasedon IS NULL LEFT JOIN [user] usr ON &quot;
+			+ &quot; usr.id = ur.createdby        WHERE &quot;
+			+ &quot; {PFX_DATETIME_CRITERIA} &quot;
+			+ &quot; acc.[type] = 'PFX' &quot;
+			+ &quot; UNION ALL SELECT &quot;
+			+ &quot; ur.id AS userresourceilockid,   usr.ssouserid AS lockedby, &quot;
+			+ &quot; ur.CreatedOn AS UserResourceCreatedOn,    ur.WorkflowTime AS UserResourceWorkflowTime,   ur.ResourceType AS UserResourceEntityType, &quot;
+			+ &quot; ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; top 1 c.id &quot;
+			+ &quot; FROM &quot;
+			+ &quot; Contact c &quot;
+			+ &quot; where &quot;
+			+ &quot; c.AccountID = acc.id &quot;
+			+ &quot; order by &quot;
+			+ &quot; c.id &quot;
+			+ &quot; ) AS contactid, &quot;
+			+ &quot; acc.compliancestatus, &quot;
+			+ &quot; acc.id as accountid, &quot;
+			+ &quot; acc.NAME AS contactname,  &quot;
+			+ &quot; acc.tradeaccountnumber AS TradeAccountNumber , &quot;
+			+ &quot; acc.createdon AS registeredon, &quot;
+			+ &quot;                          acc.CRMAccountID AS ACSFID, &quot;
+			//+ &quot;                          conattrib.attributes     AS ContactAttributes, &quot;
+			+ &quot;                          ''    AS ContactAttributes, &quot;
+			+ &quot;                          accattrib.sellcurrency, &quot;
+			+ &quot;                          accattrib.buycurrency,   accattrib.source, &quot;
+			+ &quot;                          accattrib.transactionvalue,  &quot;
+			+ &quot;                         (   SELECT ','   +   (  SELECT reason       FROM   watchlist &quot;
+			+ &quot;                          WHERE  id = st1.reason) AS [text()] &quot;
+			+ &quot;                          FROM   contactwatchlist st1 &quot;
+			+ &quot;                         WHERE  st1.contact = acc.id      FOR xml path ('')) AS watchlist ,   org.NAME AS organization, &quot;
+			+ &quot;                          acc.[type] AS Type,     acc.EIDStatus AS kycstatus, &quot;
+			+ &quot;                          acc.BlacklistStatus AS blackliststatus, &quot;
+			+ &quot;                          acc.FraugsterStatus AS fraugsterstatus, &quot;
+			+ &quot;                          acc.SanctionStatus AS sanctionstatus ,  contactstatusEnum.status AS contactStatus &quot;
+			+ &quot;                      FROM  account acc &quot;
+			+ &quot;                      JOIN accountattribute accattrib ON    acc.id = accattrib.id &quot;
+			/*+ &quot; 					 JOIN contact c  ON acc.id = c.accountid &quot;
+			+ &quot;						 JOIN contactattribute conattrib  ON c.id = conattrib.id &quot;*/
+			+ &quot;                      JOIN organization org ON    acc.organizationid = org.id &quot;
+			+ &quot;                      JOIN ContactComplianceStatusEnum  contactstatusEnum  ON acc.compliancestatus = contactstatusEnum.id &quot;
+			+ &quot;                      LEFT JOIN userresourcelock ur ON      acc.id = ur.resourceid &quot;
+			+ &quot;                           AND ur.resourcetype = 'ACCOUNT' AND ur.lockreleasedon IS NULL&quot;
+			+ &quot;                      LEFT JOIN [user] usr ON    usr.id = ur.createdby &quot;
+			+ &quot;                      WHERE  {CFX_DATETIME_CRITERIA} &quot;
+			+ &quot;                           acc.[type] = 'CFX'      &quot;
+			+ &quot; &quot;
+			+ &quot;                      ) AS rqtemp&quot;),
+	
+<span class="fc" id="L411">	GET_REG_REPORT_FOR_FILTER(&quot;WITH regque &quot;</span>
+			+ &quot; AS &quot;
+			+ &quot; ( &quot;
+			+ &quot; {INNER_QUERY} &quot;
+			+ &quot; ) &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; regque.*, &quot;
+			+ &quot; ( SELECT max (rownum) FROM regque) AS 'TotalRows' &quot;
+			+ &quot; FROM regque &quot;
+			+ &quot; WHERE rownum &gt;= ? &quot;
+			+ &quot; AND rownum &lt;= ?&quot;),
+	
+<span class="fc" id="L423">	GET_REGISTRATION_REPORT_WHOLE_DATA( &quot;select rc.* &quot;</span>
+			+ &quot;from( {INNER_QUERY}&quot;
+			+ &quot; )as rc&quot;
+			),
+	
+<span class="fc" id="L428">	GET_REGISTRATION_DASHBOARD_BY_LEGALENTITY(&quot;SELECT &quot;</span>
+			+ &quot; CASE &quot;
+			+ &quot; WHEN c.[Type] IN(1,3) THEN COUNT( DISTINCT c.AccountID ) &quot;
+			+ &quot; ELSE COUNT( c.contactid ) &quot;
+			+ &quot; END AS BUWiseTotal, &quot;
+			+ &quot; le.code as legalEntity, &quot;
+			+ &quot; CASE &quot;
+			+ &quot; WHEN c.[type] IN(1, 3) THEN 'CFX' &quot;
+			+ &quot; ELSE 'PFX' &quot;
+			+ &quot; END AS [customerType] &quot;
+			+ &quot; FROM vInactiveCustomer c &quot;
+			+ &quot; JOIN Account acc ON c.accountid = acc.id &quot;
+			+ &quot; JOIN LegalEntity le ON acc.LegalEntityID = le.id &quot;
+			+ &quot; GROUP BY &quot;
+			+ &quot; le.code, &quot;
+			+ &quot; C.type&quot;),
+	
+<span class="fc" id="L445">	GET_REGISTRATION_DASHBOARD_BY_COUNTRY(&quot;SELECT &quot;</span>
+			+ &quot; CASE &quot;
+			+ &quot; WHEN c.[type] IN(1, 3) THEN COUNT(DISTINCT c.AccountID ) &quot;
+			+ &quot; ELSE COUNT( c.contactid ) &quot;
+			+ &quot; END AS CountryWiseTotal, &quot;
+			+ &quot; ctr.displayname, ctr.ShortCode, &quot;
+			+ &quot; CASE &quot;
+			+ &quot;     WHEN c.[type] IN(1, 3) THEN 'CFX' &quot;
+			+ &quot;     ELSE 'PFX' &quot;
+			+ &quot; END AS [customerType] &quot;
+			+ &quot;FROM &quot;
+			+ &quot; vInactiveCustomer c &quot;
+			+ &quot;JOIN Contact cn ON cn.id = c.contactid &quot;
+			+ &quot;JOIN Country ctr ON cn.country = ctr.id &quot;
+			+ &quot;GROUP BY &quot;
+			+ &quot; ctr.displayname, ctr.ShortCode, c.[type] &quot;
+			+ &quot;order by &quot;
+			+ &quot; CountryWiseTotal desc&quot;),
+	
+<span class="fc" id="L464">	GET_REGISTRATION_DASHBOARD_TIMELINE_SNAP_SHOT(&quot;select &quot;</span>
+			+ &quot; min( vc.contactid ) AS firstContactId, &quot;
+			+ &quot; max( vc.contactid ) AS lastContactId, &quot;
+			+ &quot; CASE &quot;
+			+ &quot;     WHEN vc.[type] IN(1,3) THEN 'CFX' &quot;
+			+ &quot;     ELSE 'PFX' &quot;
+			+ &quot; END AS [customerType], &quot;
+			+ &quot; CASE &quot;
+			+ &quot;     WHEN vc.[type] IN(1,3) THEN DATEDIFF(dd, min( acc.createdon ), CURRENT_TIMESTAMP) &quot;
+			+ &quot;     ELSE DATEDIFF(dd, min( c.createdon), CURRENT_TIMESTAMP) &quot;
+			+ &quot; END As oldContactAge, &quot;
+			+ &quot; CASE &quot;
+			+ &quot;     WHEN vc.[type] IN(1,3) THEN DATEDIFF(dd, max( acc.createdon ),CURRENT_TIMESTAMP) &quot;
+			+ &quot;     ELSE DATEDIFF(dd,max( c.createdon ),CURRENT_TIMESTAMP) &quot;
+			+ &quot; END As newContactAge, &quot;
+			+ &quot; CASE &quot;
+			+ &quot;     WHEN vc.[type] IN(1,3) THEN Avg( CAST( Datediff( dd, acc.createdon, CURRENT_TIMESTAMP ) AS BIGINT )) &quot;
+			+ &quot;     ELSE Avg( CAST( Datediff( dd, c.createdon, CURRENT_TIMESTAMP ) AS BIGINT )) &quot;
+			+ &quot; END AS Age &quot;
+			+ &quot;FROM &quot;
+			+ &quot; vInactiveCustomer vc &quot;
+			+ &quot;JOIN account acc ON acc.id = vc.accountid &quot;
+			+ &quot;JOIN Contact c ON c.id = vc.contactid &quot;
+			+ &quot;group by &quot;
+			+ &quot; vc.[type]&quot;),
+	
+<span class="fc" id="L490">	GET_PAYMENTIN_DASHBOARD_TIMELINE_SNAP_SHOT(&quot;SELECT  min(payin.id) AS firstPaymentInId, max(payin.id) AS lastPaymentInId, &quot;</span>
+			+ &quot; DATEDIFF(mi, min(payin.transactiondate) , CURRENT_TIMESTAMP) As oldPaymentInAge, &quot;
+			+ &quot; DATEDIFF(mi, max(payin.transactiondate) , CURRENT_TIMESTAMP) As newPaymentInAge, &quot;
+			+ &quot; Avg (CAST ( (Datediff(mi, payin.transactiondate, CURRENT_TIMESTAMP))  AS BIGINT ) )  AS Age  FROM paymentin payIn &quot;
+			+ &quot; JOIN paymentinattribute payInAttri ON payin.id = payinattri.id &quot;
+			+ &quot; JOIN paymentcompliancestatusenum pcse ON payin.compliancestatus = pcse.id &quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON ur.resourceid = payin.id AND resourcetype = 2 AND ur.lockreleasedon IS NULL&quot;
+			+ &quot; WHERE  pcse.status='HOLD' AND payIn.deleted &lt;&gt; 1 AND payIn.isOnQueue=1 &quot;),
+	
+<span class="fc" id="L499">	GET_PAYMENTOUT_DASHBOARD_TIMELINE_SNAP_SHOT(&quot;SELECT min(payOut.id) AS firstPaymentOutId, max(payOut.id) AS lastPaymentOutid, &quot;</span>
+			+ &quot; DATEDIFF(mi, min(payOut.transactiondate) , CURRENT_TIMESTAMP) As oldPaymentOutAge, &quot;
+			+ &quot; DATEDIFF(mi, max(payOut.transactiondate) , CURRENT_TIMESTAMP) As newPaymentOutAge, &quot;
+			+ &quot; Avg (CAST ( (Datediff(mi, payOut.transactiondate, CURRENT_TIMESTAMP)) AS BIGINT ) ) AS Age FROM paymentout payOut &quot;
+			+ &quot; JOIN paymentoutattribute payOutAttri ON payOut.id = payOutAttri.id &quot;
+			+ &quot; JOIN paymentcompliancestatusenum pcse ON payOut.compliancestatus = pcse.id &quot;
+			+ &quot; LEFT JOIN UserResourceLock usr ON usr.ResourceID = payOut.id AND usr.ResourceType=1 and lockreleasedon IS NULL &quot;
+			+ &quot; WHERE pcse.status='HOLD' AND payOut.deleted &lt;&gt; 1  AND payOut.isOnQueue=1&quot;),
+	
+<span class="fc" id="L508">	GET_PAYMENTIN_DASHBOARD_BY_LEGALENTITY(&quot;SELECT &quot;</span>
+			+ &quot; Count(payin.id) AS records, &quot;
+			+ &quot; le.code AS legalEntity &quot;
+			+ &quot; FROM &quot;
+			+ &quot; account acc JOIN LegalEntity le ON acc.LegalEntityID = le.id &quot;
+			+ &quot; JOIN paymentIn payin ON payin.accountid = acc.id &quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON ur.resourceid = payin.id AND resourcetype = 2 &quot;
+			+ &quot; AND ur.lockreleasedon IS NULL &quot;
+			+ &quot; WHERE &quot;
+			+ &quot; payin.compliancestatus = 4 AND payin.deleted = 0 AND payin.isOnQueue=1 &quot;
+			+ &quot; GROUP BY le.code&quot;),
+
+<span class="fc" id="L520">	GET_PAYMENTOUT_DASHBOARD_BY_LEGALENTITY(&quot;SELECT &quot;</span>
+			+ &quot; Count(po.id) AS records, &quot;
+			+ &quot; le.code AS legalEntity &quot;
+			+ &quot; FROM &quot;
+			+ &quot; account acc &quot;
+			+ &quot; JOIN LegalEntity le ON acc.LegalEntityID = le.id &quot;
+			+ &quot; JOIN paymentout po ON po.accountid = acc.id &quot;
+			+ &quot; LEFT JOIN UserResourceLock ur ON po.id = ur.resourceid AND Resourcetype=1 AND lockreleasedon IS NULL &quot;
+			+ &quot; WHERE &quot;
+			+ &quot; po.compliancestatus = 4 AND po.deleted = 0 AND po.isOnQueue=1 &quot;
+			+ &quot; GROUP BY le.code &quot;),
+	
+<span class="fc" id="L532">	GET_CLEARED_RECORD_DETAILS(&quot; select &quot;</span>
+			+ &quot; CASE ResourceType &quot;
+			+ &quot; WHEN 1 THEN 'PAYMENT_OUT' &quot;
+			+ &quot; WHEN 2 THEN 'PAYMENT_IN' &quot;
+			+ &quot; WHEN 3 THEN 'CONTACT' &quot;
+			+ &quot; WHEN 4 THEN 'ACCOUNT' &quot;
+			+ &quot; END AS ResourceType, &quot;
+			+ &quot; AVG(datediff(mi,createdOn , WorkflowTime)) As AvgClearingTime, &quot;
+			+ &quot;        datediff(hh, ? , getDate() )As TotalHours,  count(WorkflowTime) As ToatalRecords &quot;
+			+ &quot; from &quot;
+			+ &quot; UserResourceLock ur &quot;
+			+ &quot; where &quot;
+			+ &quot; WorkflowTime &gt;= ? &quot;
+			+ &quot; GROUP BY ResourceType&quot;),
+	
+
+<span class="fc" id="L548">	DEVICE_ID_JOIN(&quot;JOIN Event e ON A.AccountId = e.AccountID AND e.EventType = 1&quot;  </span>
+			+  &quot; JOIN DeviceInfo di ON di.EventID = e.ID&quot;),
+	
+<span class="fc" id="L551">	ONFIDO_JOIN(&quot;JOIN ACCOUNT ac ON A.AccountId = ac.id &quot;);</span>
+	
+	//***********************************************************************************************/
+	private String query;
+
+<span class="fc" id="L556">	RegistrationReportQueryConstant(String query) {</span>
+<span class="fc" id="L557">		this.query = query;</span>
+
+<span class="fc" id="L559">	}</span>
+
+	public String getQuery() {
+<span class="fc" id="L562">		return this.query;</span>
+	}
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,688 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbstractDBServiceLevel2.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">AbstractDBServiceLevel2.java</span></div><h1>AbstractDBServiceLevel2.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.core.IDBService;
+import com.currenciesdirect.gtg.compliance.core.domain.AccountHistoryRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.AccountHistoryResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.Company;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.ContactHistoryResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.CorperateCompliance;
+import com.currenciesdirect.gtg.compliance.core.domain.DeviceInfoRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.DeviceInfoResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.IDomain;
+import com.currenciesdirect.gtg.compliance.core.domain.LockResourceDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.LockResourceResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.ProviderResponseLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ProviderResponseLogResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationAccount;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationCompany;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationContact;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationCorperateCompliance;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationRiskProfile;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.RiskProfile;
+import com.currenciesdirect.gtg.compliance.dbport.enums.UserLockResourceTypeEnum;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.ObjectUtils;
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+import com.currenciesdirect.gtg.compliance.util.StringUtils;
+
+<span class="fc" id="L43">public abstract class AbstractDBServiceLevel2 extends AbstractDBServiceLevel1 implements IDBService {</span>
+	
+	/** The Constant LOGGER. */
+<span class="fc" id="L46">	private static final Logger LOGGER = LoggerFactory.getLogger(AbstractDBServiceLevel2.class);</span>
+
+	@Override
+	public ProviderResponseLogResponse getProviderResponse(ProviderResponseLogRequest logRequest)
+			throws CompliancePortalException {
+<span class="nc" id="L51">		ProviderResponseLogResponse logResponse = new ProviderResponseLogResponse();</span>
+<span class="nc" id="L52">		String responseJson = null;</span>
+		try {
+<span class="nc" id="L54">			responseJson = getProviderReponsebyEventServiceLogId(logRequest.getEventServiceLogId(),</span>
+<span class="nc" id="L55">					logRequest.getServiceType());</span>
+<span class="nc" id="L56">			logResponse.setResponseJson(responseJson);</span>
+<span class="nc" id="L57">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L58">			throw e;</span>
+<span class="nc" id="L59">		} catch (Exception e) {</span>
+<span class="nc" id="L60">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+<span class="nc" id="L61">		}</span>
+<span class="nc" id="L62">		return logResponse;</span>
+	}
+	//This method is added to resolve sonar issue
+	
+		private String serviceTypeResponse(String response)
+		{
+<span class="nc" id="L68">			String responseJson=&quot;&quot;;</span>
+			try {
+<span class="nc" id="L70">				JSONObject jsonObject = new JSONObject(response);</span>
+<span class="nc" id="L71">				responseJson = jsonObject.get(&quot;providerResponse&quot;).toString();</span>
+				} 
+<span class="nc" id="L73">			catch (Exception e) {</span>
+<span class="nc" id="L74">				LOGGER.debug(&quot;Error&quot;, e);</span>
+<span class="nc" id="L75">				responseJson=response;</span>
+<span class="nc" id="L76">			}</span>
+<span class="nc" id="L77">			return responseJson;</span>
+		}
+		
+		
+		/**
+		 * Gets the provider reponseby event service log id.
+		 *
+		 * @param evenServiceLogID
+		 *            the even service log ID
+		 * @param serviceType
+		 *            the service type
+		 * @return the provider reponseby event service log id
+		 * @throws CompliancePortalException
+		 *             the compliance portal exception
+		 */
+		@SuppressWarnings(&quot;squid:S5361&quot;)
+		protected String getProviderReponsebyEventServiceLogId(Integer evenServiceLogID, String serviceType)
+				throws CompliancePortalException {
+<span class="nc" id="L95">			String responseJson = &quot;&quot;;</span>
+<span class="nc" id="L96">			Connection connection = null;</span>
+<span class="nc" id="L97">			PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L98">			ResultSet rs = null;</span>
+			try {
+<span class="nc" id="L100">				connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L101">				preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_PROVIDER_RESPONSE.getQuery());</span>
+<span class="nc" id="L102">				preparedStatement.setInt(1, evenServiceLogID);</span>
+<span class="nc" id="L103">				rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">				while (rs.next()) {</span>
+
+<span class="nc" id="L106">					responseJson = rs.getString(&quot;ProviderResponse&quot;);</span>
+<span class="nc" id="L107">					responseJson = responseJson.replaceAll(&quot;\n&quot;, &quot;&quot;);</span>
+<span class="nc" id="L108">					responseJson = responseJson.replaceAll(&quot;\\\\&quot;, &quot;&quot;);</span>
+<span class="nc" id="L109">					responseJson = responseJson.replaceAll(&quot;\&quot;\\{&quot;, &quot;\\{&quot;);</span>
+<span class="nc" id="L110">					responseJson = responseJson.replaceAll(&quot;\\}\&quot;&quot;, &quot;\\}&quot;);</span>
+
+<span class="nc bnc" id="L112" title="All 4 branches missed.">					if (&quot;SANCTION&quot;.equalsIgnoreCase(serviceType) || &quot;KYC&quot;.equalsIgnoreCase(serviceType)) {</span>
+<span class="nc" id="L113">						responseJson=serviceTypeResponse(responseJson);</span>
+					}
+				}
+<span class="nc" id="L116">			} catch (Exception e) {</span>
+<span class="nc" id="L117">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+			} finally {
+<span class="nc" id="L119">				closeResultset(rs);</span>
+<span class="nc" id="L120">				closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L121">				closeConnection(connection);</span>
+			}
+<span class="nc" id="L123">			return responseJson;</span>
+		}
+		
+		@Override
+		public DeviceInfoResponse getDeviceInfo(DeviceInfoRequest deviceInfoRequest)
+				throws CompliancePortalException {
+<span class="nc" id="L129">			DeviceInfoResponse deviceInfoResponse = new DeviceInfoResponse();</span>
+<span class="nc" id="L130">			List&lt;IDomain&gt; deviceInfoResponseList = null;</span>
+			try {
+<span class="nc" id="L132">				deviceInfoResponseList = getDeviceInfoByAccountId(deviceInfoRequest.getAccountId());</span>
+<span class="nc" id="L133">				deviceInfoResponse.setDeviceInfoList(deviceInfoResponseList);</span>
+<span class="nc" id="L134">			} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L135">				throw e;</span>
+<span class="nc" id="L136">			} catch (Exception e) {</span>
+<span class="nc" id="L137">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_GETTING_DEVICE_INFO_DATA, e);</span>
+<span class="nc" id="L138">			}</span>
+<span class="nc" id="L139">			return deviceInfoResponse;</span>
+		}
+		
+		
+		protected List&lt;IDomain&gt; getDeviceInfoByAccountId(Integer accountId)	throws CompliancePortalException {
+<span class="nc" id="L144">			List&lt;IDomain&gt; deviceInfoResponseList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L145">			Connection connection = null;</span>
+<span class="nc" id="L146">			PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L147">			ResultSet rs = null;</span>
+			try {
+<span class="nc" id="L149">				connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L150">				preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_DEVICE_INFO.getQuery());</span>
+<span class="nc" id="L151">				preparedStatement.setInt(1, accountId);</span>
+				
+<span class="nc" id="L153">				rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">				while (rs.next()) {</span>
+<span class="nc" id="L155">					DeviceInfoResponse deviceInfoResponse = new DeviceInfoResponse();</span>
+<span class="nc" id="L156">					deviceInfoResponse.setUserAgent(rs.getString(&quot;UserAgent&quot;));</span>
+<span class="nc" id="L157">					deviceInfoResponse.setEventType(rs.getString(&quot;Type&quot;));</span>
+<span class="nc" id="L158">					deviceInfoResponse.setCreatedOn(rs.getString(&quot;CreatedOn&quot;));</span>
+<span class="nc" id="L159">					deviceInfoResponseList.add(deviceInfoResponse);</span>
+<span class="nc" id="L160">				}</span>
+				
+<span class="nc" id="L162">			} catch (Exception e) {</span>
+<span class="nc" id="L163">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_GETTING_DEVICE_INFO_DATA, e);</span>
+			} finally {
+<span class="nc" id="L165">				closeResultset(rs);</span>
+<span class="nc" id="L166">				closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L167">				closeConnection(connection);</span>
+			}
+<span class="nc" id="L169">			return deviceInfoResponseList;</span>
+		}
+	
+		@Override
+		public AccountHistoryResponse getAccountHistory(AccountHistoryRequest accountHistoryRequest)throws CompliancePortalException {
+<span class="nc" id="L174">			AccountHistoryResponse accountHistoryResponse = null;</span>
+<span class="nc" id="L175">			List&lt;ContactHistoryResponse&gt; contactHistoryResponse=null;</span>
+<span class="nc" id="L176">			DeviceInfoResponse deviceInfoResponse=null;</span>
+			try {
+<span class="nc" id="L178">				accountHistoryResponse = getAccountHistoryByAccountId(accountHistoryRequest.getAccountId());</span>
+<span class="nc" id="L179">				contactHistoryResponse = getContactHistoryByContactId(accountHistoryRequest.getAccountId());</span>
+<span class="nc" id="L180">				deviceInfoResponse = getDeviceInfoForSignup(accountHistoryRequest.getAccountId());</span>
+<span class="nc" id="L181">				accountHistoryResponse.setContactHistory(contactHistoryResponse);</span>
+<span class="nc" id="L182">				accountHistoryResponse.setDeviceInfo(deviceInfoResponse);</span>
+<span class="nc" id="L183">			} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L184">				throw e;</span>
+<span class="nc" id="L185">			} catch (Exception e) {</span>
+<span class="nc" id="L186">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+<span class="nc" id="L187">			}</span>
+<span class="nc" id="L188">			return accountHistoryResponse;</span>
+		}
+		private AccountHistoryResponse getAccountHistoryByAccountId(Integer accountId)throws CompliancePortalException {
+<span class="nc" id="L191">			AccountHistoryResponse accountHistoryResponse = new AccountHistoryResponse();</span>
+<span class="nc" id="L192">			Connection connection = null;</span>
+<span class="nc" id="L193">			PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L194">			ResultSet rs = null;</span>
+			try {
+<span class="nc" id="L196">				connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L197">				preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_ACCOUNT_HISTORY.getQuery());</span>
+<span class="nc" id="L198">				preparedStatement.setInt(1, accountId);</span>
+<span class="nc" id="L199">				rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">				while (rs.next()) {</span>
+<span class="nc" id="L201">					RegistrationAccount regCfxAccount = JsonConverterUtil.convertToObject(RegistrationAccount.class, rs.getString(Constants.ATTRIBUTES));</span>
+					
+<span class="nc bnc" id="L203" title="All 2 branches missed.">					if (regCfxAccount != null) {</span>
+<span class="nc" id="L204">						accountHistoryResponse.setClientType(regCfxAccount.getCustType());</span>
+<span class="nc" id="L205">						accountHistoryResponse.setCurrencyPair(regCfxAccount.getSellingCurrency() + &quot;  -  &quot; + regCfxAccount.getBuyingCurrency());</span>
+<span class="nc" id="L206">						accountHistoryResponse.setEstimTransValue(regCfxAccount.getValueOfTransaction());</span>
+<span class="nc" id="L207">						accountHistoryResponse.setPurposeOfTrans(regCfxAccount.getPurposeOfTran());</span>
+<span class="nc" id="L208">						accountHistoryResponse.setServiceRequired(regCfxAccount.getServiceRequired());</span>
+<span class="nc" id="L209">						accountHistoryResponse.setSource(regCfxAccount.getSource());</span>
+<span class="nc" id="L210">						accountHistoryResponse.setSourceOfFund(regCfxAccount.getSourceOfFund());</span>
+<span class="nc" id="L211">						accountHistoryResponse.setRefferalText(regCfxAccount.getReferralText());</span>
+<span class="nc" id="L212">						accountHistoryResponse.setAffiliateName(regCfxAccount.getAffiliateName());</span>
+<span class="nc" id="L213">						accountHistoryResponse.setRegMode(regCfxAccount.getRegistrationMode());</span>
+<span class="nc" id="L214">						getCompanyHistory(accountHistoryResponse, regCfxAccount);</span>
+<span class="nc" id="L215">						getRiskProfileHistory(accountHistoryResponse, regCfxAccount);</span>
+<span class="nc" id="L216">						getCorperateComplianceHistory(accountHistoryResponse, regCfxAccount);</span>
+<span class="nc" id="L217">						accountHistoryResponse.setName(regCfxAccount.getAccountName());</span>
+<span class="nc" id="L218">						accountHistoryResponse.setWebSite(regCfxAccount.getWebsite());</span>
+<span class="nc" id="L219">						accountHistoryResponse.setSourceLookup(regCfxAccount.getSubSource());</span>
+<span class="nc" id="L220">						accountHistoryResponse.setAvgTransactionValue(String.valueOf(regCfxAccount.getAverageTransactionValue()));</span>
+<span class="nc" id="L221">						accountHistoryResponse.setCountriesOfOperation(regCfxAccount.getCountriesOfOperation());</span>
+<span class="nc" id="L222">						accountHistoryResponse.setAnnualFXRequirement(regCfxAccount.getTurnover());</span>
+<span class="nc" id="L223">						accountHistoryResponse.setTradeAccountNum(regCfxAccount.getTradeAccountNumber());</span>
+<span class="nc" id="L224">						accountHistoryResponse.setTradeAccountId(regCfxAccount.getTradeAccountID().toString());</span>
+<span class="nc" id="L225">						accountHistoryResponse.setAccSFID(regCfxAccount.getAccSFID());</span>
+<span class="nc" id="L226">						accountHistoryResponse.setAddCampaign(regCfxAccount.getAdCampaign());</span>
+<span class="nc" id="L227">						accountHistoryResponse.setAffiliateNumber(regCfxAccount.getAffiliateNumber());</span>
+<span class="nc" id="L228">						accountHistoryResponse.setBranch(regCfxAccount.getBranch());</span>
+<span class="nc" id="L229">						accountHistoryResponse.setBuyingCurrency(regCfxAccount.getBuyingCurrency());</span>
+<span class="nc" id="L230">						accountHistoryResponse.setChannel(regCfxAccount.getChannel());</span>
+<span class="nc" id="L231">						accountHistoryResponse.setExtendedReferral(regCfxAccount.getExtendedReferral());</span>
+<span class="nc" id="L232">						accountHistoryResponse.setCountryOfInterest(regCfxAccount.getCountryOfInterest());</span>
+<span class="nc" id="L233">						accountHistoryResponse.setKeywords(regCfxAccount.getKeywords());</span>
+<span class="nc" id="L234">						accountHistoryResponse.setReferralId(regCfxAccount.getReferral());</span>
+<span class="nc" id="L235">						accountHistoryResponse.setSearchEngine(regCfxAccount.getSearchEngine());</span>
+<span class="nc" id="L236">						accountHistoryResponse.setSellingCurrency(regCfxAccount.getSellingCurrency());</span>
+<span class="nc" id="L237">						accountHistoryResponse.setSubSource(regCfxAccount.getSubSource());</span>
+<span class="nc" id="L238">						accountHistoryResponse.setTradeName(regCfxAccount.getTradingName());</span>
+<span class="nc" id="L239">						accountHistoryResponse.setTurnover(regCfxAccount.getTurnover());</span>
+<span class="nc" id="L240">						accountHistoryResponse.setComplianceDoneOn(DateTimeFormatter.removeTimeFromDate(rs.getTimestamp(&quot;compliancedoneon&quot;)));</span>
+<span class="nc" id="L241">						accountHistoryResponse.setDateOfReg(DateTimeFormatter.removeTimeFromDate(rs.getTimestamp(&quot;createdon&quot;)));</span>
+<span class="nc" id="L242">						setLegalEntity(accountHistoryResponse, regCfxAccount);</span>
+						//PFX 
+<span class="nc" id="L244">						accountHistoryResponse.setEstimTransValue(regCfxAccount.getValueOfTransaction());</span>
+<span class="nc" id="L245">						accountHistoryResponse.setPurposeOfTrans(regCfxAccount.getPurposeOfTran());</span>
+<span class="nc" id="L246">						accountHistoryResponse.setSourceOfFund(regCfxAccount.getSourceOfFund());</span>
+					}
+<span class="nc" id="L248">				}</span>
+<span class="nc" id="L249">			} catch (Exception e) {</span>
+<span class="nc" id="L250">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+			} finally {
+<span class="nc" id="L252">				closeResultset(rs);</span>
+<span class="nc" id="L253">				closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L254">				closeConnection(connection);</span>
+			}
+<span class="nc" id="L256">			accountHistoryResponse.setIsAllFieldsEmpty(ObjectUtils.isAllFieldsEmpty(accountHistoryResponse));</span>
+<span class="nc" id="L257">			return accountHistoryResponse;</span>
+		}
+		/**
+		 * @param accountHistoryResponse
+		 * @param regCfxAccount
+		 */
+		private void setLegalEntity(AccountHistoryResponse accountHistoryResponse, RegistrationAccount regCfxAccount) {
+<span class="nc bnc" id="L264" title="All 4 branches missed.">			if(regCfxAccount.getLegalEntity() != null &amp;&amp; !regCfxAccount.getLegalEntity().isEmpty())</span>
+<span class="nc" id="L265">				accountHistoryResponse.setLegalEntity(regCfxAccount.getLegalEntity());</span>
+<span class="nc" id="L266">			else accountHistoryResponse.setLegalEntity(Constants.DASH_UI);</span>
+<span class="nc" id="L267">		}</span>
+		/**
+		 * @param accountHistoryResponse
+		 * @param regCfxAccount
+		 */
+		private void getCorperateComplianceHistory(AccountHistoryResponse accountHistoryResponse,
+				RegistrationAccount regCfxAccount) {
+<span class="nc bnc" id="L274" title="All 2 branches missed.">			if (null != regCfxAccount.getRiskProfile()) {</span>
+<span class="nc" id="L275">				accountHistoryResponse.setCorporateCompliance(getCorporateCompliance(regCfxAccount.getCorperateCompliance()));</span>
+			}
+<span class="nc" id="L277">		}</span>
+		
+		/**
+		 * @param accountHistoryResponse
+		 * @param regCfxAccount
+		 */
+		private void getRiskProfileHistory(AccountHistoryResponse accountHistoryResponse,
+				RegistrationAccount regCfxAccount) {
+<span class="nc bnc" id="L285" title="All 2 branches missed.">			if (null != regCfxAccount.getRiskProfile()) {</span>
+<span class="nc" id="L286">				accountHistoryResponse.setRiskProfile(getRiskProfile(regCfxAccount.getRiskProfile()));</span>
+			}
+<span class="nc" id="L288">		}</span>
+		/**
+		 * @param accountHistoryResponse
+		 * @param regCfxAccount
+		 */
+		private void getCompanyHistory(AccountHistoryResponse accountHistoryResponse, RegistrationAccount regCfxAccount) {
+<span class="nc bnc" id="L294" title="All 2 branches missed.">			if (null != regCfxAccount.getCompany()) {</span>
+<span class="nc" id="L295">				accountHistoryResponse.setCompany(getCompany(regCfxAccount.getCompany()));</span>
+			}
+<span class="nc" id="L297">		}</span>
+		
+		
+
+		private Company getCompany(RegistrationCompany comanyDetails) {
+<span class="nc" id="L302">			Company company = new Company();</span>
+
+<span class="nc" id="L304">			company.setBillingAddress(comanyDetails.getBillingAddress());</span>
+<span class="nc" id="L305">			company.setCcj(comanyDetails.getCcj());</span>
+<span class="nc" id="L306">			company.setCompanyPhone(comanyDetails.getCompanyPhone());</span>
+<span class="nc" id="L307">			company.setCorporateType(comanyDetails.getCorporateType());</span>
+<span class="nc" id="L308">			company.setCountryOfEstablishment(comanyDetails.getCountryOfEstablishment());</span>
+<span class="nc" id="L309">			company.setCountryRegion(comanyDetails.getCountryRegion());</span>
+<span class="nc" id="L310">			company.setEstNoTransactionsPcm(comanyDetails.getEstNoTransactionsPcm());</span>
+<span class="nc" id="L311">			company.setEtailer(comanyDetails.getEtailer());</span>
+<span class="nc" id="L312">			company.setIncorporationDate(DateTimeFormatter.dateFormat(comanyDetails.getIncorporationDate()));</span>
+<span class="nc" id="L313">			company.setIndustry(comanyDetails.getIndustry());</span>
+<span class="nc" id="L314">			company.setOngoingDueDiligenceDate(DateTimeFormatter.dateFormat(comanyDetails.getOngoingDueDiligenceDate()));</span>
+<span class="nc" id="L315">			company.setOption(comanyDetails.getOption());</span>
+<span class="nc" id="L316">			company.setRegistrationNo(comanyDetails.getRegistrationNo());</span>
+<span class="nc" id="L317">			company.setShippingAddress(comanyDetails.getShippingAddress());</span>
+<span class="nc" id="L318">			company.settAndcSignedDate(DateTimeFormatter.dateFormat(comanyDetails.gettAndcSignedDate()));</span>
+<span class="nc" id="L319">			company.setTypeOfFinancialAccount(comanyDetails.getTypeOfFinancialAccount());</span>
+<span class="nc" id="L320">			company.setVatNo(comanyDetails.getVatNo());</span>
+
+<span class="nc" id="L322">			return company;</span>
+		}
+		
+		
+		private RiskProfile getRiskProfile(RegistrationRiskProfile riskProfileDetails) {
+<span class="nc" id="L327">			RiskProfile riskProfile = new RiskProfile();</span>
+
+<span class="nc" id="L329">			riskProfile.setCountryRiskIndicator(riskProfileDetails.getCountryRiskIndicator());</span>
+<span class="nc" id="L330">			riskProfile.setDelinquencyFailureScore(riskProfileDetails.getDelinquencyFailureScore());</span>
+<span class="nc" id="L331">			riskProfile.setFailureScore(riskProfileDetails.getFailureScore());</span>
+<span class="nc" id="L332">			riskProfile.setRiskDirection(riskProfileDetails.getRiskDirection());</span>
+<span class="nc" id="L333">			riskProfile.setRiskTrend(riskProfileDetails.getRiskTrend());</span>
+<span class="nc" id="L334">			riskProfile.setUpdatedRisk(riskProfileDetails.getUpdatedRisk());</span>
+			//newly added DNB DAta
+<span class="nc" id="L336">			riskProfile.setContinent(riskProfileDetails.getContinent());</span>
+<span class="nc" id="L337">			riskProfile.setCountry(riskProfileDetails.getCountry());</span>
+<span class="nc" id="L338">			riskProfile.setStateCountry(riskProfileDetails.getStateCountry());</span>
+<span class="nc" id="L339">			riskProfile.setDunsNumber(riskProfileDetails.getDunsNumber());</span>
+<span class="nc" id="L340">			riskProfile.setTradingStyles(riskProfileDetails.getTradingStyles());</span>
+<span class="nc" id="L341">			riskProfile.setUs1987PrimarySic4Digit(riskProfileDetails.getUs1987PrimarySic4Digit());</span>
+<span class="nc" id="L342">			riskProfile.setFinancialFiguresMonth(riskProfileDetails.getFinancialFiguresMonth());</span>
+<span class="nc" id="L343">			riskProfile.setFinancialFiguresYear(riskProfileDetails.getFinancialFiguresYear());</span>
+<span class="nc" id="L344">			riskProfile.setFinancialYearEndDate(riskProfileDetails.getFinancialYearEndDate());</span>
+<span class="nc" id="L345">			riskProfile.setAnnualSales(riskProfileDetails.getAnnualSales());</span>
+<span class="nc" id="L346">			riskProfile.setModelledAnnualSales(riskProfileDetails.getModelledAnnualSales());</span>
+<span class="nc" id="L347">			riskProfile.setNetWorthAmount(riskProfileDetails.getNetWorthAmount());</span>
+<span class="nc" id="L348">			riskProfile.setModelledNetWorth(riskProfileDetails.getModelledNetWorth());</span>
+<span class="nc" id="L349">			riskProfile.setLocationType(riskProfileDetails.getLocationType());</span>
+<span class="nc" id="L350">			riskProfile.setImportExportIndicator(riskProfileDetails.getImportExportIndicator());</span>
+<span class="nc" id="L351">			riskProfile.setDomesticUltimateRecord(riskProfileDetails.getDomesticUltimateRecord());</span>
+<span class="nc" id="L352">			riskProfile.setGlobalUltimateRecord(riskProfileDetails.getGlobalUltimateRecord());</span>
+<span class="nc" id="L353">			riskProfile.setGroupStructureNumberOfLevels(riskProfileDetails.getGroupStructureNumberOfLevels());</span>
+<span class="nc" id="L354">			riskProfile.setHeadquarterDetails(riskProfileDetails.getHeadquarterDetails());</span>
+<span class="nc" id="L355">			riskProfile.setImmediateParentDetails(riskProfileDetails.getImmediateParentDetails());</span>
+<span class="nc" id="L356">			riskProfile.setDomesticUltimateParentDetails(riskProfileDetails.getDomesticUltimateParentDetails());</span>
+<span class="nc" id="L357">			riskProfile.setGlobalUltimateParentDetails(riskProfileDetails.getGlobalUltimateParentDetails());</span>
+<span class="nc" id="L358">			riskProfile.setCreditLimit(riskProfileDetails.getCreditLimit());</span>
+<span class="nc" id="L359">			riskProfile.setRiskRating(riskProfileDetails.getRiskRating());</span>
+<span class="nc" id="L360">			riskProfile.setProfitLoss(riskProfileDetails.getProfitLoss());</span>
+			//newly added DNB DAta ends
+			
+<span class="nc" id="L363">			return riskProfile;</span>
+		}
+		
+		private CorperateCompliance getCorporateCompliance(RegistrationCorperateCompliance corpComplianceDetails) {
+<span class="nc" id="L367">			CorperateCompliance corporateCompliance = new CorperateCompliance();</span>
+
+<span class="nc" id="L369">			corporateCompliance.setFixedAssets(corpComplianceDetails.getFixedAssets());</span>
+<span class="nc" id="L370">			corporateCompliance.setForeignOwnedCompany(corpComplianceDetails.getForeignOwnedCompany());</span>
+<span class="nc" id="L371">			corporateCompliance.setFormerName(corpComplianceDetails.getFormerName());</span>
+<span class="nc" id="L372">			corporateCompliance.setLegalForm(corpComplianceDetails.getLegalForm());</span>
+<span class="nc" id="L373">			corporateCompliance.setNetWorth(corpComplianceDetails.getNetWorth());</span>
+<span class="nc" id="L374">			corporateCompliance.setRegistrationNumber(corpComplianceDetails.getRegistrationNumber());</span>
+<span class="nc" id="L375">			corporateCompliance.setSic(corpComplianceDetails.getSic());</span>
+<span class="nc" id="L376">			corporateCompliance.setSicDesc(corpComplianceDetails.getSicDesc());</span>
+<span class="nc" id="L377">			corporateCompliance.setTotalLiabilitiesAndEquities(corpComplianceDetails.getTotalLiabilitiesAndEquities());</span>
+<span class="nc" id="L378">			corporateCompliance.setTotalShareHolders(corpComplianceDetails.getTotalShareHolders());</span>
+			// newly added dnb data for corporate compliance added by neelesh pant
+<span class="nc" id="L380">			corporateCompliance.setGlobalUltimateDuns(corpComplianceDetails.getGlobalUltimateDuns());</span>
+<span class="nc" id="L381">			corporateCompliance.setGlobalUltimateName(corpComplianceDetails.getGlobalUltimateName());</span>
+<span class="nc" id="L382">			corporateCompliance.setGlobalUltimateCountry(corpComplianceDetails.getGlobalUltimateCountry());</span>
+<span class="nc" id="L383">			corporateCompliance.setRegistrationDate(corpComplianceDetails.getRegistrationDate());</span>
+<span class="nc" id="L384">			corporateCompliance.setMatchName(corpComplianceDetails.getMatchName());</span>
+<span class="nc" id="L385">			corporateCompliance.setIsoCountryCode2Digit(corpComplianceDetails.getIsoCountryCode2Digit());</span>
+<span class="nc" id="L386">			corporateCompliance.setIsoCountryCode3Digit(corpComplianceDetails.getIsoCountryCode2Digit());</span>
+<span class="nc" id="L387">			corporateCompliance.setStatementDate(corpComplianceDetails.getStatementDate());</span>
+<span class="nc" id="L388">			corporateCompliance.setGrossIncome(corpComplianceDetails.getGrossIncome());</span>
+<span class="nc" id="L389">			corporateCompliance.setNetIncome(corpComplianceDetails.getNetIncome());</span>
+<span class="nc" id="L390">			corporateCompliance.setTotalCurrentAssets(corpComplianceDetails.getTotalCurrentAssets());</span>
+<span class="nc" id="L391">			corporateCompliance.setTotalAssets(corpComplianceDetails.getTotalAssets());</span>
+<span class="nc" id="L392">			corporateCompliance.setTotalLongTermLiabilities(corpComplianceDetails.getTotalLongTermLiabilities());</span>
+<span class="nc" id="L393">			corporateCompliance.setTotalCurrentLiabilities(corpComplianceDetails.getTotalCurrentLiabilities());</span>
+<span class="nc" id="L394">			corporateCompliance.setTotalMatchedShareholders(corpComplianceDetails.getTotalMatchedShareholders());</span>
+<span class="nc" id="L395">			corporateCompliance.setFinancialStrength(corpComplianceDetails.getFinancialStrength());</span>
+			//newly added DnB data ends
+
+<span class="nc" id="L398">			return corporateCompliance;</span>
+		}
+		
+		
+		private List&lt;ContactHistoryResponse&gt; getContactHistoryByContactId(Integer accountId)throws CompliancePortalException {
+<span class="nc" id="L403">			List&lt;ContactHistoryResponse&gt; contactHistoryList=new ArrayList&lt;&gt;();</span>
+			
+<span class="nc" id="L405">			Connection connection = null;</span>
+<span class="nc" id="L406">			PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L407">			ResultSet rs = null;</span>
+			try {
+<span class="nc" id="L409">				String time = SearchCriteriaUtil.getHistoryInfoTime();</span>
+<span class="nc" id="L410">				connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L411">				preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_CONTACT_HISTORY.getQuery());</span>
+<span class="nc" id="L412">				preparedStatement.setString(1, time);</span>
+<span class="nc" id="L413">				preparedStatement.setInt(2, accountId);</span>
+				
+				
+<span class="nc" id="L416">				rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L417" title="All 2 branches missed.">				while (rs.next()) {</span>
+<span class="nc" id="L418">					ContactHistoryResponse contactHistoryResponse = new ContactHistoryResponse();</span>
+<span class="nc" id="L419">					RegistrationContact regContact = JsonConverterUtil.convertToObject(RegistrationContact.class, rs.getString(Constants.ATTRIBUTES));</span>
+				    
+<span class="nc bnc" id="L421" title="All 2 branches missed.">					if (regContact != null) {</span>
+<span class="nc" id="L422">						contactHistoryResponse.setAddress(regContact.getAddress1());</span>
+<span class="nc" id="L423">						contactHistoryResponse.setCountryOfResidence(regContact.getCountry());</span>
+<span class="nc" id="L424">						contactHistoryResponse.setEmail(regContact.getEmail());</span>
+<span class="nc" id="L425">						contactHistoryResponse.setMobile(regContact.getPhoneMobile());</span>
+<span class="nc" id="L426">						contactHistoryResponse.setNationality(regContact.getNationality());</span>
+<span class="nc" id="L427">						contactHistoryResponse.setOccupation(regContact.getOccupation());</span>
+<span class="nc" id="L428">						contactHistoryResponse.setPhone(regContact.getPhoneHome());</span>
+<span class="nc bnc" id="L429" title="All 4 branches missed.">						contactHistoryResponse.setIsUsClient(regContact.getCountry() != null &amp;&amp; &quot;USA&quot;.equals(regContact.getCountry()));</span>
+<span class="nc" id="L430">						contactHistoryResponse.setIpAddress(regContact.getIpAddress());</span>
+<span class="nc" id="L431">						contactHistoryResponse.setDateofbirth(DateTimeFormatter.dateFormat(regContact.getDob()));</span>
+<span class="nc" id="L432">						setWorkphone(contactHistoryResponse, regContact);</span>
+						//changes done to show full name on UI
+<span class="nc" id="L434">						setName(contactHistoryResponse, regContact);</span>
+						//CFX Contact Extra Fields 
+<span class="nc" id="L436">						contactHistoryResponse.setJobTitle(regContact.getJobTitle());</span>
+<span class="nc" id="L437">						contactHistoryResponse.setPositionOfSignificance(regContact.getPositionOfSignificance());</span>
+<span class="nc" id="L438">						contactHistoryResponse.setAuthorisedSignatory(regContact.getAuthorisedSignatory());</span>
+<span class="nc" id="L439">						contactHistoryResponse.setAddressType(regContact.getAddressType());</span>
+<span class="nc" id="L440">						contactHistoryResponse.setCrmContactId(regContact.getContactSFID());</span>
+<span class="nc" id="L441">						contactHistoryResponse.setTradeContactId(regContact.getTradeContactID().toString());</span>
+<span class="nc" id="L442">						contactHistoryResponse.setAreaNumber(regContact.getAreaNumber());</span>
+<span class="nc" id="L443">						contactHistoryResponse.setAustraliaRTACardNumber(regContact.getAustraliaRTACardNumber());</span>
+<span class="nc" id="L444">						contactHistoryResponse.setAza(regContact.getAza());</span>
+<span class="nc" id="L445">						contactHistoryResponse.setBuildingNumber(regContact.getBuildingNumber());</span>
+<span class="nc" id="L446">						contactHistoryResponse.setCivicNumber(regContact.getCivicNumber());</span>
+<span class="nc" id="L447">						contactHistoryResponse.setCountryOfBirth(regContact.getCountryOfBirth());</span>
+<span class="nc" id="L448">						contactHistoryResponse.setDistrict(regContact.getDistrict());</span>
+<span class="nc" id="L449">						contactHistoryResponse.setPostCode(regContact.getPostCode());</span>
+<span class="nc" id="L450">						contactHistoryResponse.setPrefName(regContact.getPreferredName());</span>
+<span class="nc" id="L451">						contactHistoryResponse.setPrefecture(regContact.getPrefecture());</span>
+<span class="nc" id="L452">						contactHistoryResponse.setPrimaryPhoneNumber(regContact.getPrimaryPhone());</span>
+<span class="nc" id="L453">						contactHistoryResponse.setRegionSuburb(regContact.getRegion());</span>
+<span class="nc" id="L454">						contactHistoryResponse.setResidentialStatus(regContact.getResidentialStatus());</span>
+<span class="nc" id="L455">						contactHistoryResponse.setSecondEmail(regContact.getSecondEmail());</span>
+<span class="nc" id="L456">						contactHistoryResponse.setSecondSurname(regContact.getSecondSurname());</span>
+<span class="nc" id="L457">						contactHistoryResponse.setStateOfBirth(regContact.getStateOfBirth());</span>
+<span class="nc" id="L458">						contactHistoryResponse.setStateProvinceCounty(regContact.getState());</span>
+<span class="nc" id="L459">						contactHistoryResponse.setStreet(regContact.getStreet());</span>
+<span class="nc" id="L460">						contactHistoryResponse.setStreetNumber(regContact.getStreetNumber());</span>
+<span class="nc" id="L461">						contactHistoryResponse.setStreetType(regContact.getStreetType());</span>
+<span class="nc" id="L462">						contactHistoryResponse.setSubBuilding(regContact.getSubBuildingorFlat());</span>
+<span class="nc" id="L463">						contactHistoryResponse.setSubCity(regContact.getSubCity());</span>
+<span class="nc" id="L464">						contactHistoryResponse.setTitle(regContact.getTitle());</span>
+<span class="nc" id="L465">						contactHistoryResponse.setTownCityMuncipalty(regContact.getCity());</span>
+<span class="nc" id="L466">						contactHistoryResponse.setUnitNumber(regContact.getUnitNumber());</span>
+<span class="nc" id="L467">						contactHistoryResponse.setYearsInAddress(regContact.getYearsInAddress());</span>
+<span class="nc" id="L468">						contactHistoryResponse.setDlLicenseNumber(regContact.getDlLicenseNumber());</span>
+<span class="nc" id="L469">						contactHistoryResponse.setDlExpiryDate(regContact.getDlExpiryDate());</span>
+<span class="nc" id="L470">						contactHistoryResponse.setDlCardNumber(regContact.getDlCardNumber());</span>
+<span class="nc" id="L471">						contactHistoryResponse.setDlCountryCode(regContact.getDlCountryCode());</span>
+<span class="nc" id="L472">						contactHistoryResponse.setDlStateCode(regContact.getDlStateCode());</span>
+<span class="nc" id="L473">						contactHistoryResponse.setDlVersionNumber(regContact.getDlVersionNumber());</span>
+<span class="nc" id="L474">						contactHistoryResponse.setFirstName(regContact.getFirstName());</span>
+<span class="nc" id="L475">						contactHistoryResponse.setFloorNumber(regContact.getFloorNumber());</span>
+<span class="nc" id="L476">						contactHistoryResponse.setGender(regContact.getGender());</span>
+<span class="nc" id="L477">						contactHistoryResponse.setPhoneHome(regContact.getPhoneHome());</span>
+<span class="nc" id="L478">						contactHistoryResponse.setLastName(regContact.getLastName());</span>
+<span class="nc" id="L479">						contactHistoryResponse.setMedicareCardNumber(regContact.getMedicareCardNumber());</span>
+<span class="nc" id="L480">						contactHistoryResponse.setMedicareReferenceNumber(regContact.getMedicareReferenceNumber());</span>
+<span class="nc" id="L481">						contactHistoryResponse.setMiddleName(regContact.getMiddleName());</span>
+<span class="nc" id="L482">						contactHistoryResponse.setMothersSurname(regContact.getMothersSurname());</span>
+<span class="nc" id="L483">						contactHistoryResponse.setMunicipalityOfBirth(regContact.getMunicipalityOfBirth());</span>
+<span class="nc" id="L484">						contactHistoryResponse.setNationalIdType(regContact.getNationalIdType());</span>
+<span class="nc" id="L485">						contactHistoryResponse.setPassportFamilyNameAtBirth(regContact.getPassportFamilyNameAtBirth());</span>
+<span class="nc" id="L486">						contactHistoryResponse.setPassportPlaceOfBirth(regContact.getPassportPlaceOfBirth());</span>
+<span class="nc" id="L487">						contactHistoryResponse.setPassportCountryCode(regContact.getPassportCountryCode());</span>
+<span class="nc" id="L488">						contactHistoryResponse.setPassportExiprydate(regContact.getPassportExiprydate());</span>
+<span class="nc" id="L489">						contactHistoryResponse.setPassportFullName(regContact.getPassportFullName());</span>
+<span class="nc" id="L490">						contactHistoryResponse.setPassportMRZLine1(regContact.getPassportMRZLine1());</span>
+<span class="nc" id="L491">						contactHistoryResponse.setPassportMRZLine2(regContact.getPassportMRZLine2());</span>
+<span class="nc" id="L492">						contactHistoryResponse.setPassportNameAtCitizenship(regContact.getPassportNameAtCitizenship());</span>
+<span class="nc" id="L493">						contactHistoryResponse.setPassportNumber(regContact.getPassportNumber());</span>
+<span class="nc" id="L494">						contactHistoryResponse.setNationalIdNumber(regContact.getNationalIdNumber());</span>
+<span class="nc" id="L495">						contactHistoryResponse.setIsAllFieldsEmpty(ObjectUtils.isAllFieldsEmpty(contactHistoryResponse));</span>
+<span class="nc" id="L496">						contactHistoryList.add(contactHistoryResponse);</span>
+					}
+<span class="nc" id="L498">				}</span>
+<span class="nc" id="L499">			} catch (Exception e) {</span>
+<span class="nc" id="L500">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+			} finally {
+<span class="nc" id="L502">				closeResultset(rs);</span>
+<span class="nc" id="L503">				closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L504">				closeConnection(connection);</span>
+			}
+			
+<span class="nc" id="L507">			return contactHistoryList;</span>
+		}
+		/**
+		 * @param contactHistoryResponse
+		 * @param regContact
+		 */
+		private void setWorkphone(ContactHistoryResponse contactHistoryResponse, RegistrationContact regContact) {
+<span class="nc bnc" id="L514" title="All 4 branches missed.">			if((!StringUtils.isNullOrEmpty(regContact.getPhoneWorkExtn())) &amp;&amp; (!StringUtils.isNullOrEmpty(regContact.getPhoneWork())))</span>
+<span class="nc" id="L515">				contactHistoryResponse.setWorkphone(regContact.getPhoneWork()+&quot;;&quot;+regContact.getPhoneWorkExtn());</span>
+<span class="nc bnc" id="L516" title="All 4 branches missed.">			if((!StringUtils.isNullOrEmpty(regContact.getPhoneWorkExtn())) &amp;&amp; (StringUtils.isNullOrEmpty(regContact.getPhoneWork())))</span>
+<span class="nc" id="L517">				contactHistoryResponse.setWorkphone(regContact.getPhoneWorkExtn());</span>
+<span class="nc bnc" id="L518" title="All 4 branches missed.">			if((StringUtils.isNullOrEmpty(regContact.getPhoneWorkExtn()))&amp;&amp; (!StringUtils.isNullOrEmpty(regContact.getPhoneWork())))</span>
+<span class="nc" id="L519">				contactHistoryResponse.setWorkphone(regContact.getPhoneWork());</span>
+<span class="nc" id="L520">		}</span>
+		
+		
+		
+		/**
+		 * @param contactHistoryResponse
+		 * @param regContact
+		 */
+		private void setName(ContactHistoryResponse contactHistoryResponse, RegistrationContact regContact) {
+<span class="nc bnc" id="L529" title="All 4 branches missed.">			if(regContact.getMiddleName() != null &amp;&amp; !regContact.getMiddleName().trim().isEmpty()){</span>
+<span class="nc" id="L530">				String fullName = new StringBuilder().append(regContact.getFirstName()).append(&quot; &quot;+regContact.getMiddleName()).append(&quot; &quot;+regContact.getLastName()).toString();</span>
+<span class="nc" id="L531">				contactHistoryResponse.setName(fullName);</span>
+<span class="nc" id="L532">			} else{</span>
+<span class="nc" id="L533">				contactHistoryResponse.setName(regContact.getFirstName()+ &quot; &quot;+regContact.getLastName());</span>
+			}
+<span class="nc" id="L535">		}</span>
+		
+		
+		private DeviceInfoResponse getDeviceInfoForSignup(Integer accountId)throws CompliancePortalException {
+			
+<span class="nc" id="L540">			Connection connection = null;</span>
+<span class="nc" id="L541">			PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L542">			ResultSet rs = null;</span>
+<span class="nc" id="L543">			DeviceInfoResponse deviceInfo=new DeviceInfoResponse();</span>
+			try {
+<span class="nc" id="L545">				connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L546">				preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_DEVICE_FOR_SIGNUP.getQuery());</span>
+<span class="nc" id="L547">				preparedStatement.setInt(1, accountId);</span>
+<span class="nc" id="L548">				rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L549" title="All 2 branches missed.">				while (rs.next()) {</span>
+<span class="nc" id="L550">					deviceInfo.setApplicationId(rs.getString(&quot;CDAppID&quot;));</span>
+<span class="nc" id="L551">					deviceInfo.setApplicationVersion(rs.getString(&quot;CDAppVersion&quot;));</span>
+<span class="nc" id="L552">					deviceInfo.setBrowserLanguage(rs.getString(&quot;BrowserLanguage&quot;));</span>
+<span class="nc" id="L553">					deviceInfo.setBrowserOnline(rs.getBoolean(&quot;BrowserOnline&quot;));</span>
+<span class="nc" id="L554">					deviceInfo.setBrowserVersion(rs.getString(&quot;BrowserVersion&quot;));</span>
+<span class="nc" id="L555">					deviceInfo.setDeviceId(rs.getString(&quot;DeviceID&quot;));</span>
+<span class="nc" id="L556">					deviceInfo.setDeviceManufacturer(rs.getString(&quot;DeviceManufacturer&quot;));</span>
+<span class="nc" id="L557">					deviceInfo.setDeviceName(rs.getString(&quot;DeviceName&quot;));</span>
+<span class="nc" id="L558">					deviceInfo.setDeviceType(rs.getString(&quot;DeviceType&quot;));</span>
+<span class="nc" id="L559">					deviceInfo.setDeviceVersion(rs.getString(&quot;DeviceVersion&quot;));</span>
+<span class="nc bnc" id="L560" title="All 2 branches missed.">					if(null != rs.getTimestamp(&quot;OSTimestamp&quot;)){</span>
+<span class="nc" id="L561">						deviceInfo.setoSTimestamp(DateTimeFormatter.removeTimeFromDate(rs.getTimestamp(&quot;OSTimestamp&quot;)));</span>
+					}
+<span class="nc" id="L563">					deviceInfo.setoSType(rs.getString(&quot;OSType&quot;));</span>
+<span class="nc" id="L564">					deviceInfo.setUserAgent(rs.getString(&quot;UserAgent&quot;));</span>
+				}
+<span class="nc" id="L566">			} catch (Exception e) {</span>
+<span class="nc" id="L567">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+			} finally {
+<span class="nc" id="L569">				closeResultset(rs);</span>
+<span class="nc" id="L570">				closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L571">				closeConnection(connection);</span>
+			}
+			
+<span class="nc" id="L574">			return deviceInfo;</span>
+		}
+		
+		
+		@Override
+		public LockResourceResponse insertLockResource(LockResourceDBDto updatelockResourceDBDto)
+				throws CompliancePortalException {
+<span class="nc" id="L581">			Connection connection = null;</span>
+<span class="nc" id="L582">			PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L583">			ResultSet rs = null;</span>
+<span class="nc" id="L584">			LockResourceResponse lockResourceResponse = null;</span>
+			try {
+<span class="nc" id="L586">				connection = getConnection(Boolean.FALSE);</span>
+
+<span class="nc" id="L588">				lockResourceResponse = checkLockResource(updatelockResourceDBDto.getResourceId(),</span>
+<span class="nc" id="L589">						updatelockResourceDBDto.getResourceType(), connection);</span>
+<span class="nc bnc" id="L590" title="All 2 branches missed.">				if (lockResourceResponse != null) {</span>
+<span class="nc" id="L591">					return lockResourceResponse;</span>
+				}
+<span class="nc" id="L593">				lockResourceResponse = new LockResourceResponse();</span>
+
+<span class="nc" id="L595">				preparedStatement = connection.prepareStatement(RegistrationQueryConstant.INSERT_USER_RESOURCE_LOCK_PFX.getQuery(),</span>
+						Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L597">				preparedStatement.setString(1, updatelockResourceDBDto.getUserId());</span>
+<span class="nc" id="L598">				preparedStatement.setInt(2, UserLockResourceTypeEnum.getDbStatusFromUiStatus(updatelockResourceDBDto.getResourceType()));</span>
+<span class="nc" id="L599">				preparedStatement.setInt(3, updatelockResourceDBDto.getResourceId());</span>
+<span class="nc" id="L600">				preparedStatement.setTimestamp(4, updatelockResourceDBDto.getLockReleasedOn());</span>
+<span class="nc" id="L601">				preparedStatement.setString(5, updatelockResourceDBDto.getCreatedBy());</span>
+<span class="nc" id="L602">				preparedStatement.setTimestamp(6, updatelockResourceDBDto.getCreatedOn());</span>
+<span class="nc" id="L603">				preparedStatement.setTimestamp(7, null);</span>
+
+<span class="nc" id="L605">				int updateCount = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L606" title="All 2 branches missed.">				if (updateCount == 0) {</span>
+<span class="nc" id="L607">					lockResourceResponse.setStatus(&quot;Fail&quot;);</span>
+<span class="nc" id="L608">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				}
+<span class="nc" id="L610">				rs = preparedStatement.getGeneratedKeys();</span>
+<span class="nc bnc" id="L611" title="All 2 branches missed.">				if (rs.next()) {</span>
+<span class="nc" id="L612">					lockResourceResponse.setUserResourceId(rs.getInt(1));</span>
+<span class="nc" id="L613">					lockResourceResponse.setStatus(&quot;Pass&quot;);</span>
+<span class="nc" id="L614">					lockResourceResponse.setResourceId(updatelockResourceDBDto.getResourceId());</span>
+<span class="nc" id="L615">					lockResourceResponse.setName(updatelockResourceDBDto.getUserId());</span>
+				}
+
+<span class="nc" id="L618">			} catch (Exception e) {</span>
+<span class="nc" id="L619">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+			} finally {
+<span class="nc" id="L621">				closeResultset(rs);</span>
+<span class="nc" id="L622">				closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L623">				closeConnection(connection);</span>
+			}
+<span class="nc" id="L625">			return lockResourceResponse;</span>
+		}
+
+		private LockResourceResponse checkLockResource(Integer resourceId, String resourceType, Connection connection)
+				throws CompliancePortalException {
+<span class="nc" id="L630">			PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L631">			ResultSet resultSet = null;</span>
+
+			try {
+<span class="nc" id="L634">				preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_RECORDLOCK_STATUS.getQuery());</span>
+<span class="nc" id="L635">				preparedStatement.setInt(1, resourceId);</span>
+<span class="nc" id="L636">				preparedStatement.setInt(2, UserLockResourceTypeEnum.getDbStatusFromUiStatus(resourceType));</span>
+<span class="nc" id="L637">				resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L638" title="All 2 branches missed.">				if (resultSet.next()) {</span>
+<span class="nc" id="L639">					LockResourceResponse lockResourceDBDto = new LockResourceResponse();</span>
+<span class="nc" id="L640">					lockResourceDBDto.setName(resultSet.getString(&quot;UserID&quot;));</span>
+<span class="nc" id="L641">					lockResourceDBDto.setUserResourceId(resultSet.getInt(&quot;Id&quot;));</span>
+<span class="nc" id="L642">					return lockResourceDBDto;</span>
+				}
+<span class="nc" id="L644">			} catch (Exception e) {</span>
+<span class="nc" id="L645">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+			} finally {
+<span class="nc" id="L647">				closeResultset(resultSet);</span>
+<span class="nc" id="L648">				closePrepareStatement(preparedStatement);</span>
+			}
+<span class="nc" id="L650">			return null;</span>
+		}
+		
+		@Override
+		public LockResourceResponse updateLockResource(LockResourceDBDto updatelockResourceDBDto)
+				throws CompliancePortalException {
+<span class="nc" id="L656">			Connection connection = null;</span>
+<span class="nc" id="L657">			PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L658">			LockResourceResponse lockResourceResponse = new LockResourceResponse();</span>
+			try {
+<span class="nc" id="L660">				connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L661">				preparedStatement = connection.prepareStatement(RegistrationQueryConstant.UPDATE_USER_RESOURCE_LOCK_PFX.getQuery());</span>
+<span class="nc" id="L662">				preparedStatement.setTimestamp(1, updatelockResourceDBDto.getLockReleasedOn());</span>
+<span class="nc" id="L663">				preparedStatement.setInt(2, updatelockResourceDBDto.getId());</span>
+<span class="nc" id="L664">				int updateCount = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L665" title="All 2 branches missed.">				if (updateCount == 0) {</span>
+<span class="nc" id="L666">					lockResourceResponse.setStatus(&quot;Fail&quot;);</span>
+<span class="nc" id="L667">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				} else {
+<span class="nc" id="L669">					lockResourceResponse.setStatus(&quot;Pass&quot;);</span>
+<span class="nc" id="L670">					lockResourceResponse.setUserResourceId(updatelockResourceDBDto.getId());</span>
+<span class="nc" id="L671">					lockResourceResponse.setResourceId(updatelockResourceDBDto.getResourceId());</span>
+<span class="nc" id="L672">					lockResourceResponse.setName(updatelockResourceDBDto.getUserId());</span>
+				}
+
+<span class="nc" id="L675">			} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L676">				throw exception;</span>
+<span class="nc" id="L677">			} catch (Exception e) {</span>
+<span class="nc" id="L678">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_UPDATING_DATA, e);</span>
+			} finally {
+<span class="nc" id="L680">				closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L681">				closeConnection(connection);</span>
+			}
+<span class="nc" id="L683">			return lockResourceResponse;</span>
+		}
+
+		
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

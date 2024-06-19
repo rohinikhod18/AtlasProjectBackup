@@ -1,0 +1,112 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<int:channel id="PROFILE.REPEAT_CHECK_STATUS_UPDATE.in.channel" />
+	<int:channel id="PROFILE.REPEAT_CHECK_STATUS_UPDATE.RESPONSE" />
+	<int:channel id="PROFILE.REPEAT_CHECK_STATUS_UPDATE.ERROR.CHANNEL" />
+
+	<int:chain id="updateRepeatCheckStatusServcie"
+		input-channel="PROFILE.REPEAT_CHECK_STATUS_UPDATE.in.channel"
+		output-channel="PROFILE.REPEAT_CHECK_STATUS_UPDATE.EVENT.CHANNEL">
+		<int:header-enricher>
+			<int:header name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header name="username"
+				expression="headers['username']" />
+			<int:header name="password"
+				expression="headers['password']" />
+		</int:header-enricher>
+
+		<int:service-activator
+			id="updateRepeatCheckStatus.dataEnricher"
+			ref="updateRepeactCheckStatusDataEnricher"
+			method="process"/>
+		<int:filter discard-channel="PROFILE.REPEAT_CHECK_STATUS_UPDATE.ERROR.CHANNEL" expression="!payload.isFailed()" />	
+
+	</int:chain>
+
+	<int:chain id="updateRepeatCheckStatusChannel"
+		input-channel="PROFILE.REPEAT_CHECK_STATUS_UPDATE.EVENT.CHANNEL"
+		output-channel="PROFILE.REPEAT_CHECK_STATUS_UPDATE.RESPONSE">
+
+		<int:service-activator
+			method="createEvent"
+			ref="eventDBServiceImpl">
+		</int:service-activator>
+
+		<int:transformer
+			ref="transactionMonitoringTransformer" method="transformRequest" />
+		<int:service-activator
+			id="REPEATCHECK.TRANSACTIONMONITORING" method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="transactionMonitoringTransformer" method="transformResponse" />
+
+		<int:service-activator ref="eventDBServiceImpl"
+			method="createTransactionMonitoringEventSerivceLog">
+		</int:service-activator>
+		
+		<int:service-activator
+			ref="updateRepeatCheckistrationDBServiceImpl"
+			method="updateIntuitionRiskLevelForRegUpdate">
+		</int:service-activator>
+
+		<int:filter
+			discard-channel="PROFILE.REPEAT_CHECK_STATUS_UPDATE.ERROR.CHANNEL"
+			expression="!payload.isFailed()" />
+	</int:chain>
+
+	<int:chain input-channel="PROFILE.REPEAT_CHECK_STATUS_UPDATE.RESPONSE"
+		output-channel="nullChannel">
+		<int:service-activator id="intuitionStatusResponse"
+			ref="updateRepeatCheckStatusResponse" method="process" />
+		<int:filter
+			discard-channel="PROFILE.REPEAT_CHECK_STATUS_UPDATE.ERROR.CHANNEL"
+			expression="!payload.isFailed()" />
+	</int:chain>
+
+	<int:chain id="intuitionupdate.repeat.check.status.errorchain"
+		input-channel="PROFILE.REPEAT_CHECK_STATUS_UPDATE.ERROR.CHANNEL"
+		output-channel="nullChannel">
+		<int:service-activator id="update.repeat.check.status"
+			method="logError" ref="update.repeat.check.status.errorhandler">
+		</int:service-activator>
+	</int:chain>
+
+	<bean id="update.repeat.check.status.errorhandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.TranscationMonitoringErrorHandler" />
+	<bean id="updateRepeatCheckStatusResponse"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.TransactionMonitoringUpdateStatusResponse" />	
+	<bean id="updateRepeactCheckStatusDataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.DataEnricher" />
+	<bean id="updateRepeatCheckistrationDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.UpdateRegistrationDBServiceImpl" />		
+		
+</beans>

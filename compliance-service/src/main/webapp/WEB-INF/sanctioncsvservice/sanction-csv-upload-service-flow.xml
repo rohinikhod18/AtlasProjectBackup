@@ -1,0 +1,110 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:int-sftp="http://www.springframework.org/schema/integration/sftp"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+	http://www.springframework.org/schema/beans/spring-beans.xsd 
+	http://www.springframework.org/schema/integration 
+	http://www.springframework.org/schema/integration/spring-integration.xsd 
+	http://www.springframework.org/schema/task 
+	http://www.springframework.org/schema/task/spring-task.xsd 
+	http://www.springframework.org/schema/context 
+	http://www.springframework.org/schema/context/spring-context.xsd 
+	http://www.springframework.org/schema/integration/http
+	http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+	http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd
+	http://www.springframework.org/schema/integration/sftp
+	http://www.springframework.org/schema/integration/sftp/spring-integration-sftp.xsd">
+	
+	<int:channel id="SANCTION.CSV.IN.CHANNEL" />
+	<int:channel id="SANCTION.CSV.MAKER.CHANNEL" />
+	<int:channel id="SanctionSFTPSender" />
+	<int:channel id="SanctionUploadSuccessChannel" />
+	<int:channel id="SanctionUploadErrorChannel" />
+	
+	<int:chain id="sanc-csv" input-channel="SANCTION.CSV.IN.CHANNEL" output-channel="SANCTION.CSV.MAKER.CHANNEL">
+		<int:service-activator ref="sanctionCsvDBServiceImpl" id="SanctionCsv.DB.LOAD" method="getSanctionCsvData"/>
+	</int:chain>
+	
+	<int:chain id="createSanctionCsv" input-channel="SANCTION.CSV.MAKER.CHANNEL" output-channel="SanctionSFTPSender">
+		<int:service-activator id="SanctionCsv.FileMaker" ref="sanctionCsvFileMaker" method="createCsvData"/>
+	</int:chain>
+	
+	<bean id="sftpSessionFactory"
+		class="org.springframework.integration.sftp.session.DefaultSftpSessionFactory">
+		<property name="host" value="#{SanctionServerConf.session.host}" />
+		<property name="port" value="#{SanctionServerConf.session.port}" />
+		<property name="user" value="#{SanctionServerConf.session.username}" />
+		<property name="password" value="#{SanctionServerConf.session.password}"/>
+		<property name="sessionConfig" ref="sessionConfig"/>
+	</bean>
+	<util:properties id="sessionConfig">
+   		<prop key="StrictHostKeyChecking">no</prop>
+	</util:properties>
+	
+	<!-- remote-filename-generator-expression="new java.text.SimpleDateFormat('yyyyMMddHHmmssSSS').format(new java.util.Date()) + '.csv'" -->
+	<int-sftp:outbound-channel-adapter 
+		id="sftpOutboundAdapter"
+		session-factory="sftpSessionFactory" 
+		channel="SanctionSFTPSender" 
+		charset="UTF-8"
+		remote-file-separator="/" 
+		remote-directory="#{SanctionServerConf.remoteDirectory}"
+		remote-filename-generator-expression="'Full_inactiveclnts_' + new java.text.SimpleDateFormat('yyyyMMdd').format(new java.util.Date()) + '.csv'"
+		use-temporary-file-name="true"
+		auto-create-directory="true"
+		mode="#{SanctionServerConf.mode}" > 
+<!-- 		chmod="#{SanctionServerConf.chmod}" -->		
+		
+		<int-sftp:request-handler-advice-chain>
+        	<bean class="org.springframework.integration.handler.advice.ExpressionEvaluatingRequestHandlerAdvice">
+        		<property name="onSuccessExpression" value="#root" />
+            	<property name="successChannel" ref="SanctionUploadSuccessChannel" />	
+            	<property name="onFailureExpression" value="#root" />
+				<property name="failureChannel" ref="SanctionUploadErrorChannel" />
+        	</bean>
+    	</int-sftp:request-handler-advice-chain>
+    </int-sftp:outbound-channel-adapter>
+	
+	<int:service-activator id="onSuccess" 
+		input-channel="SanctionUploadSuccessChannel" output-channel="nullChannel" ref="SanctionCsvSuccesser" method="onSuccess">
+	</int:service-activator>
+	<int:service-activator id="onError" 
+		input-channel="SanctionUploadErrorChannel" output-channel="nullChannel" ref="SanctionCsvFailure" method="onError">
+	</int:service-activator>
+	
+	<bean id="SanctionSessionConf" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanctioncsv.SanctionCsvUploadSessionConf">
+				<property name="host" value="${sanction.csv.server.ip}" />
+        	    <property name="port" value="${sanction.csv.server.port}" />
+            	<property name="username" value="${sanction.csv.server.username}" />
+				<property name="password" value="${sanction.csv.server.password}" />
+	</bean>
+
+	<bean id="SanctionServerConf" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanctioncsv.SanctionCsvUploadServerConf">
+    	<property name="session" ref="SanctionSessionConf" />
+	 	<property name="remoteDirectory" value="${sanction.csv.server.directory}" />
+     	<property name="chmod" value="750" />
+     	<property name="mode" value="REPLACE" />	
+	</bean>
+
+	<bean id="fileNameGenerator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.FileNameGeneratorImpl">
+		<property name="name" value="sanction"></property>
+		<property name="ext" value="csv"></property>
+	</bean>
+	
+	
+	<bean id="sanctionCsvDBServiceImpl" 
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanctioncsv.SanctionCsvDBServiceImpl" />
+	<bean id="sanctionCsvFileMaker" 
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanctioncsv.SanctionCsvMaker" />
+	<bean id="SanctionCsvSuccesser" 
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanctioncsv.SanctionUploadSuccessHandler"></bean>
+	<bean id="SanctionCsvFailure" 
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanctioncsv.SanctionUplaodErrorHandler"></bean>
+</beans>

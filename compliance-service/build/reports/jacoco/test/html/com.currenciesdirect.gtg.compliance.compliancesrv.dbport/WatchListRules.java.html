@@ -1,0 +1,502 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WatchListRules.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">WatchListRules.java</span></div><h1>WatchListRules.java</h1><pre class="source lang-java linenums">/*
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.ContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.WatchList;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.WatchListDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchangeWrapper;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+/**
+ * @author bnt
+ *
+ */
+<span class="fc" id="L45">public class WatchListRules extends AbstractDao {</span>
+	
+	/** The Constant LOG. */
+<span class="fc" id="L48">	private static final Logger LOG = LoggerFactory.getLogger(WatchListRules.class);</span>
+
+	/**
+	 * Business -- whenever Global check and Country check status is
+	 * &quot;WATCH_LIST&quot; then contact should be added in Contact watch list table for
+	 * its respective watch list reason. When Fraugster status is &quot;WATCH_LIST&quot;
+	 * or &quot;SERVICE_FAILURE&quot; then contact should be added in Contact watch list
+	 * table for its respective watch list reason. If status is updated from
+	 * &quot;WATCH_LIST&quot; to any other then status then remove entries from contact
+	 * watch list table.
+	 * 
+	 * Implementation-- 1) Create an list of watch list and delete watch list.
+	 * a) if service type is &quot;INTERNAL_RULE_SERVICE&quot; then check statuses for
+	 * &quot;USGLOBALCHECK&quot; and &quot;COUNTRYCHECK&quot; if &quot;USGLOBALCHECK&quot; status is
+	 * &quot;WATCH_LIST&quot; then add in watch list else add in delete watch list. (for
+	 * all registration flow) b) if service type is &quot;FRAUGSTER_SERVICE&quot; and
+	 * having status &quot;WATCH_LIST&quot; or &quot;SERVICE_FAILURE&quot; then add in watch list
+	 * else add in delete watch list. 2) After generating delete watch list ,
+	 * delete records from contact watch list. 3) Set watch list status to
+	 * update Account table (i.e watchlist column), set status in
+	 * &quot;WATCHLIST_STATUS&quot; additional attribute. 4) save watch list entries in
+	 * contactWatchlist table.
+	 * 
+	 * @param msg
+	 * @return
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; msg) {
+<span class="fc" id="L76">		UserProfile token = (UserProfile) msg.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="fc" id="L77">		List&lt;WatchListEnry&gt; watchList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L78">		List&lt;WatchListEnry&gt; deleteWatchList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L79">		MessageExchange messageExchange = msg.getPayload().getGatewayMessageExchange();</span>
+<span class="fc" id="L80">		RegistrationServiceRequest request = messageExchange.getRequest(RegistrationServiceRequest.class);</span>
+<span class="fc" id="L81">		OperationEnum operation = msg.getPayload().getGatewayMessageExchange().getOperation();</span>
+		try {
+<span class="fc bfc" id="L83" title="All 2 branches covered.">			for (MessageExchangeWrapper exchange : msg.getPayload().getMessageCollection()) {</span>
+<span class="fc bfc" id="L84" title="All 3 branches covered.">				switch (exchange.getMessageExchange().getServiceTypeEnum()) {</span>
+
+				case INTERNAL_RULE_SERVICE:
+<span class="fc" id="L87">					InternalServiceResponse iResponse = (InternalServiceResponse) exchange.getMessageExchange()</span>
+<span class="fc" id="L88">							.getResponse();</span>
+<span class="fc" id="L89">					updateInternaRulesWatchList(watchList, iResponse, deleteWatchList);</span>
+<span class="fc" id="L90">					break;</span>
+
+				case FRAUGSTER_SERVICE:
+<span class="fc" id="L93">					handleFraugsterWatchList(msg, watchList, deleteWatchList, operation, exchange);</span>
+<span class="fc" id="L94">					break;</span>
+				default:
+					break;
+				}
+
+<span class="fc" id="L99">			}</span>
+<span class="fc" id="L100">			checkForKYCWatchlist(watchList, messageExchange, request, operation);</span>
+
+<span class="nc" id="L102">		} catch (Exception ex) {</span>
+<span class="nc" id="L103">			LOG.error(&quot;error creating watchlist: &quot;, ex);</span>
+<span class="nc" id="L104">			msg.getPayload().setFailed(true);</span>
+<span class="fc" id="L105">		}</span>
+		try {
+			/**
+			 * added delete method to remove entries from contactWatchlist table
+			 * ,fixed issue AT-440: abhijit G
+			 */
+<span class="fc" id="L111">			deleteFromContactWatchList(deleteWatchList);</span>
+<span class="fc" id="L112">			setAccountWatchListStatus(msg, watchList);</span>
+<span class="fc" id="L113">			saveWatchList(watchList, token.getUserID());</span>
+
+<span class="nc" id="L115">		} catch (Exception e) {</span>
+<span class="nc" id="L116">			msg.getPayload().setFailed(true);</span>
+<span class="nc" id="L117">			LOG.error(&quot;Error saving: &quot;, e);</span>
+<span class="fc" id="L118">		}</span>
+<span class="fc" id="L119">		return msg;</span>
+	}
+
+	/**
+	 * Check for KYC watchlist.
+	 *
+	 * @param watchList
+	 *            the watch list
+	 * @param messageExchange
+	 *            the message exchange
+	 * @param request
+	 *            the request
+	 * @param operation
+	 *            the operation
+	 * @param isAddToWatchlist
+	 *            the is add to watchlist
+	 * @param isAccountModified
+	 *            the is account modified
+	 */
+	private void checkForKYCWatchlist(List&lt;WatchListEnry&gt; watchList, MessageExchange messageExchange,
+			RegistrationServiceRequest request, OperationEnum operation) {
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">		Boolean isCFXForUpdate = OperationEnum.UPDATE_ACCOUNT==operation</span>
+<span class="pc bnc" id="L141" title="All 2 branches missed.">				&amp;&amp; CustomerTypeEnum.CFX.name().equals(request.getAccount().getCustType());</span>
+<span class="fc" id="L142">		Boolean isKYCSanctionPerformed = (Boolean) messageExchange.getRequest()</span>
+<span class="fc" id="L143">				.getAdditionalAttribute(&quot;isKYCSanctionPerformed&quot;);</span>
+
+		// if CFX customer KYC sanction eligible then add watchlist
+<span class="pc bpc" id="L146" title="5 of 6 branches missed.">		if (Boolean.TRUE.equals(isCFXForUpdate) &amp;&amp; null != isKYCSanctionPerformed &amp;&amp; Boolean.TRUE.equals(isKYCSanctionPerformed))</span>
+<span class="nc" id="L147">			addKYCWatchList(watchList, messageExchange);</span>
+
+<span class="fc" id="L149">	}</span>
+
+	private void handleFraugsterWatchList(Message&lt;MessageContext&gt; msg, List&lt;WatchListEnry&gt; watchList,
+			List&lt;WatchListEnry&gt; deleteWatchList, OperationEnum operation, MessageExchangeWrapper exchange) {
+<span class="pc bpc" id="L153" title="1 of 2 branches missed.">		if ((OperationEnum.NEW_REGISTRATION)==operation</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">				|| (OperationEnum.ADD_CONTACT)==(msg.getPayload().getGatewayMessageExchange().getOperation())) {</span>
+<span class="fc" id="L155">			FraugsterSignupResponse fResponse = (FraugsterSignupResponse) exchange.getMessageExchange().getResponse();</span>
+<span class="fc" id="L156">			handleFraugsterSignUp(watchList, fResponse);</span>
+<span class="pc bnc" id="L157" title="All 2 branches missed.">		} else if ((OperationEnum.UPDATE_ACCOUNT)==(operation)) {</span>
+<span class="nc" id="L158">			handleFraugsterOnUpdate(watchList, exchange, deleteWatchList);</span>
+		}
+<span class="fc" id="L160">	}</span>
+
+	private void setAccountWatchListStatus(Message&lt;MessageContext&gt; msg, List&lt;WatchListEnry&gt; watchList)
+			throws ComplianceException {
+
+<span class="fc" id="L165">		RegistrationServiceRequest request = (RegistrationServiceRequest) msg.getPayload().getGatewayMessageExchange()</span>
+<span class="fc" id="L166">				.getRequest();</span>
+<span class="fc" id="L167">		Account account = request.getAccount();</span>
+<span class="fc" id="L168">		Integer accountId = account.getId();</span>
+<span class="fc" id="L169">		WatchListDetails watchDetails = getPaymentWatchListReasons(accountId, watchList);</span>
+		/**
+		 * changes done to update watchlist status for PaymentsIn and
+		 * PaymentsOut
+		 */
+<span class="fc" id="L174">		processWatchList(request, watchDetails);</span>
+
+<span class="fc" id="L176">	}</span>
+
+	private void processWatchList(RegistrationServiceRequest request, WatchListDetails watchDetails) {
+<span class="fc" id="L179">		String paymentInwatchlistStatus = ServiceStatus.PASS.name();</span>
+<span class="fc" id="L180">		String paymentOutwatchlistStatus = ServiceStatus.PASS.name();</span>
+
+<span class="pc bpc" id="L182" title="3 of 4 branches missed.">		if (watchDetails.isStopPaymentIn() &amp;&amp; watchDetails.getCategory().equals(1))</span>
+<span class="nc" id="L183">			paymentInwatchlistStatus = ServiceStatus.FAIL.name();</span>
+<span class="pc bpc" id="L184" title="3 of 4 branches missed.">		if (watchDetails.isStopPaymentIn() &amp;&amp; watchDetails.getCategory().equals(2))</span>
+<span class="nc" id="L185">			paymentInwatchlistStatus = ServiceStatus.WATCH_LIST.name();</span>
+
+<span class="pc bpc" id="L187" title="3 of 4 branches missed.">		if (watchDetails.isStopPaymentOut() &amp;&amp; watchDetails.getCategory().equals(1))</span>
+<span class="nc" id="L188">			paymentOutwatchlistStatus = ServiceStatus.FAIL.name();</span>
+<span class="pc bpc" id="L189" title="3 of 4 branches missed.">		if (watchDetails.isStopPaymentOut() &amp;&amp; watchDetails.getCategory().equals(2))</span>
+<span class="nc" id="L190">			paymentOutwatchlistStatus = ServiceStatus.WATCH_LIST.name();</span>
+
+<span class="fc" id="L192">		request.addAttribute(Constants.PAYMENTIN_WATCHLIST_STATUS, paymentInwatchlistStatus);</span>
+
+<span class="fc" id="L194">		request.addAttribute(Constants.PAYMENTOUT_WATCHLIST_STATUS, paymentOutwatchlistStatus);</span>
+<span class="fc" id="L195">	}</span>
+
+	/**
+	 * Made changes for AT-345 If status is SERVICE_FAILURE then watchlistReson
+	 * should be added Changes made by -Saylee
+	 */
+	private void handleFraugsterSignUp(List&lt;WatchListEnry&gt; watchList, FraugsterSignupResponse fResponse) {
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">		if (fResponse != null) {</span>
+<span class="fc" id="L203">			List&lt;FraugsterSignupContactResponse&gt; identityResponse = fResponse.getContactResponses();</span>
+<span class="pc bpc" id="L204" title="1 of 2 branches missed.">			for (FraugsterSignupContactResponse idResponse : identityResponse) {</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">				if (ServiceStatus.WATCH_LIST.name().equalsIgnoreCase(idResponse.getStatus())</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">						|| ServiceStatus.SERVICE_FAILURE.name().equalsIgnoreCase(idResponse.getStatus())) {</span>
+<span class="nc" id="L207">					addToWactchList(watchList, idResponse.getId(), WatchList.FRAUGSTER.getDescription());</span>
+				}
+<span class="nc" id="L209">			}</span>
+		}
+<span class="fc" id="L211">	}</span>
+
+	/**
+	 * Added condition for status is SERVICE_FAILURE -Saylee
+	 * 
+	 * @param deleteWatchList
+	 */
+	private void handleFraugsterOnUpdate(List&lt;WatchListEnry&gt; watchList, MessageExchangeWrapper exchange,
+			List&lt;WatchListEnry&gt; deleteWatchList) {
+<span class="nc" id="L220">		FraugsterOnUpdateResponse fResponse = (FraugsterOnUpdateResponse) exchange.getMessageExchange().getResponse();</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">		if (fResponse != null) {</span>
+<span class="nc" id="L222">			List&lt;FraugsterOnUpdateContactResponse&gt; identityResponse = fResponse.getContactResponses();</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">			for (FraugsterOnUpdateContactResponse idResponse : identityResponse) {</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">				if (ServiceStatus.WATCH_LIST.name().equalsIgnoreCase(idResponse.getStatus())</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">						|| ServiceStatus.SERVICE_FAILURE.name().equalsIgnoreCase(idResponse.getStatus())) {</span>
+<span class="nc" id="L226">					addToWactchList(watchList, idResponse.getId(), WatchList.FRAUGSTER.getDescription());</span>
+				} else {
+<span class="nc" id="L228">					deleteWactchList(deleteWatchList, idResponse.getId(), WatchList.FRAUGSTER.getDescription());</span>
+				}
+<span class="nc" id="L230">			}</span>
+		}
+<span class="nc" id="L232">	}</span>
+
+	private void updateInternaRulesWatchList(List&lt;WatchListEnry&gt; watchList, InternalServiceResponse iResponse,
+			List&lt;WatchListEnry&gt; deleteWatchList) {
+<span class="fc bfc" id="L236" title="All 2 branches covered.">		for (ContactResponse cResponse : iResponse.getContacts()) {</span>
+<span class="pc bpc" id="L237" title="1 of 2 branches missed.">			if (cResponse.getGlobalCheck() != null</span>
+<span class="pc bpc" id="L238" title="1 of 2 branches missed.">					&amp;&amp; ServiceStatus.WATCH_LIST.name().equalsIgnoreCase(cResponse.getGlobalCheck().getStatus())) {</span>
+
+<span class="nc" id="L240">				addToWactchList(watchList, cResponse.getId(), WatchList.USGLOBALCHECK.getDescription());</span>
+			} else {
+<span class="fc" id="L242">				deleteWactchList(deleteWatchList, cResponse.getId(), WatchList.USGLOBALCHECK.getDescription());</span>
+			}
+<span class="pc bpc" id="L244" title="2 of 4 branches missed.">			if (cResponse.getCountryCheck() != null &amp;&amp; null != cResponse.getId()</span>
+<span class="pc bpc" id="L245" title="1 of 2 branches missed.">					&amp;&amp; ServiceStatus.WATCH_LIST.name().equalsIgnoreCase(cResponse.getCountryCheck().getStatus())) {</span>
+<span class="nc" id="L246">				addToWactchList(watchList, cResponse.getId(), WatchList.COUNTRYCHECK.getDescription());</span>
+			} else {
+<span class="fc" id="L248">				deleteWactchList(deleteWatchList, cResponse.getId(), WatchList.COUNTRYCHECK.getDescription());</span>
+			}
+<span class="fc" id="L250">		}</span>
+<span class="fc" id="L251">	}</span>
+
+	private void addToWactchList(List&lt;WatchListEnry&gt; watchList, Integer contactId, String type) {
+<span class="nc" id="L254">		WatchListEnry entry = new WatchListEnry();</span>
+<span class="nc" id="L255">		entry.setContactID(contactId);</span>
+<span class="nc" id="L256">		entry.setWatchListName(type);</span>
+<span class="nc" id="L257">		watchList.add(entry);</span>
+<span class="nc" id="L258">	}</span>
+
+	private void deleteWactchList(List&lt;WatchListEnry&gt; deleteWatchList, Integer contactId, String type) {
+<span class="fc" id="L261">		WatchListEnry entry = new WatchListEnry();</span>
+<span class="fc" id="L262">		entry.setContactID(contactId);</span>
+<span class="fc" id="L263">		entry.setWatchListName(type);</span>
+<span class="fc" id="L264">		deleteWatchList.add(entry);</span>
+<span class="fc" id="L265">	}</span>
+
+	private void saveWatchList(List&lt;WatchListEnry&gt; watchList, Integer user) throws ComplianceException {
+<span class="pc bpc" id="L268" title="2 of 4 branches missed.">		if (watchList != null &amp;&amp; !watchList.isEmpty()) {</span>
+<span class="nc" id="L269">			Connection connection = null;</span>
+
+			try {
+<span class="nc" id="L272">				connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L273">				beginTransaction(connection);</span>
+<span class="nc" id="L274">				insertIntoWatchList(connection, watchList, user);</span>
+<span class="nc" id="L275">				commitTransaction(connection);</span>
+			} finally {
+<span class="nc" id="L277">				closeConnection(connection);</span>
+			}
+		}
+<span class="fc" id="L280">	}</span>
+
+	/**
+	 * Delete from contact watch list. if contact watch list changes from watch
+	 * list to any other status then remove previous entries from contact watch
+	 * list table.
+	 * 
+	 * @param deleteWatchList
+	 *            the delete watch list
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 * @author abhijeetg
+	 */
+	private void deleteFromContactWatchList(List&lt;WatchListEnry&gt; deleteWatchList) throws ComplianceException {
+<span class="pc bpc" id="L294" title="2 of 4 branches missed.">		if (deleteWatchList != null &amp;&amp; !deleteWatchList.isEmpty()) {</span>
+<span class="fc" id="L295">			Connection connection = null;</span>
+			try {
+<span class="fc" id="L297">				connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L298">				beginTransaction(connection);</span>
+<span class="fc" id="L299">				deleteFromWatchList(connection, deleteWatchList);</span>
+<span class="fc" id="L300">				commitTransaction(connection);</span>
+			} finally {
+<span class="fc" id="L302">				closeConnection(connection);</span>
+			}
+		}
+<span class="fc" id="L305">	}</span>
+
+	private void insertIntoWatchList(Connection connection, List&lt;WatchListEnry&gt; watchList, Integer userid)
+			throws ComplianceException {
+<span class="nc bnc" id="L309" title="All 2 branches missed.">		for (WatchListEnry details : watchList) {</span>
+<span class="nc" id="L310">			try (PreparedStatement statement = connection</span>
+<span class="nc" id="L311">					.prepareStatement(DBQueryConstant.INSERT_INTO_CONTACT_WATCHLIST.getQuery())) {</span>
+<span class="nc" id="L312">				statement.setString(1, details.getWatchListName());</span>
+<span class="nc" id="L313">				statement.setInt(2, details.getContactID());</span>
+<span class="nc" id="L314">				statement.setInt(3, userid);</span>
+<span class="nc" id="L315">				statement.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L316">				statement.executeUpdate();</span>
+<span class="nc" id="L317">			} catch (SQLException se) {</span>
+<span class="nc bnc" id="L318" title="All 2 branches missed.">				if (!se.getMessage().startsWith(&quot;Cannot insert duplicate key&quot;))</span>
+<span class="nc" id="L319">					LOG.warn(&quot;Can not insert multiple records for same watchlist reason : &quot;, se);</span>
+<span class="nc" id="L320">			} catch (Exception e) {</span>
+<span class="nc" id="L321">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+<span class="nc" id="L322">			}</span>
+<span class="nc" id="L323">		}</span>
+<span class="nc" id="L324">	}</span>
+
+	/**
+	 * Delete from watch list.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param deleteWatchList
+	 *            the delete watch list
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void deleteFromWatchList(Connection connection, List&lt;WatchListEnry&gt; deleteWatchList)
+			throws ComplianceException {
+<span class="fc bfc" id="L338" title="All 2 branches covered.">		for (WatchListEnry details : deleteWatchList) {</span>
+<span class="fc" id="L339">			try (PreparedStatement statement = connection</span>
+<span class="fc" id="L340">					.prepareStatement(DBQueryConstant.DELETE_FROM_CONTACT_WATCHLIST.getQuery())) {</span>
+<span class="fc" id="L341">				statement.setString(1, details.getWatchListName());</span>
+<span class="fc" id="L342">				statement.setInt(2, details.getContactID());</span>
+<span class="fc" id="L343">				statement.executeUpdate();</span>
+<span class="nc" id="L344">			} catch (Exception e) {</span>
+<span class="nc" id="L345">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+<span class="fc" id="L346">			}</span>
+<span class="fc" id="L347">		}</span>
+<span class="fc" id="L348">	}</span>
+
+	private static class WatchListEnry {
+
+		/** The contact ID. */
+		private int contactID;
+		private String watchListName;
+
+		/**
+		 * Gets the contact ID.
+		 *
+		 * @return the contact ID
+		 */
+		public int getContactID() {
+<span class="fc" id="L362">			return contactID;</span>
+		}
+
+		/**
+		 * Sets the contact ID.
+		 *
+		 * @param contactID
+		 *            the new contact ID
+		 */
+		public void setContactID(int contactID) {
+<span class="fc" id="L372">			this.contactID = contactID;</span>
+<span class="fc" id="L373">		}</span>
+
+		/**
+		 * Gets the watch list name.
+		 *
+		 * @return the watch list name
+		 */
+		public String getWatchListName() {
+<span class="fc" id="L381">			return watchListName;</span>
+		}
+
+		/**
+		 * Sets the watch list name.
+		 *
+		 * @param watchListName
+		 *            the new watch list name
+		 */
+		public void setWatchListName(String watchListName) {
+<span class="fc" id="L391">			this.watchListName = watchListName;</span>
+<span class="fc" id="L392">		}</span>
+
+		/*
+		 * (non-Javadoc)
+		 * 
+		 * @see java.lang.Object#toString()
+		 */
+		@Override
+		public String toString() {
+<span class="nc" id="L401">			return watchListName;</span>
+		}
+	}
+
+	/**
+	 * Gets the payment watch list reasons.
+	 *
+	 * @return the payment watch list reasons
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;squid:S2095&quot;)
+	private WatchListDetails getPaymentWatchListReasons(Integer accountId, List&lt;WatchListEnry&gt; watchLists)
+			throws ComplianceException {
+<span class="fc" id="L415">		Connection readOnlyConn = null;</span>
+<span class="fc" id="L416">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L417">		ResultSet resultSet = null;</span>
+<span class="fc" id="L418">		WatchListDetails watchlist = new WatchListDetails();</span>
+<span class="fc" id="L419">		StringBuilder watchListNames = new StringBuilder();</span>
+<span class="pc bpc" id="L420" title="1 of 2 branches missed.">		for (WatchListEnry e : watchLists) {</span>
+<span class="nc" id="L421">			watchListNames.append('\'').append(e.watchListName).append(&quot;',&quot;);</span>
+<span class="nc" id="L422">		}</span>
+
+<span class="fc" id="L424">		String filter = &quot;''&quot;;</span>
+<span class="pc bpc" id="L425" title="1 of 2 branches missed.">		if (watchListNames.length() &gt; 1) {</span>
+<span class="nc" id="L426">			watchListNames.deleteCharAt(watchListNames.length() - 1);</span>
+<span class="nc" id="L427">			filter = watchListNames.toString();</span>
+		}
+		
+		try {
+<span class="fc" id="L431">			readOnlyConn = getConnection(Boolean.TRUE);</span>
+
+			// the query check for new reasons added as well as old contacts on
+			// watchlist
+			// and inclusive of all watchlist reason, if anything stops payment
+			// In and Out
+			// also highet risk category
+<span class="fc" id="L438">			preparedStatement = readOnlyConn.prepareStatement(DBQueryConstant.GET_WATCHLIST_REASON_LIST_FOR_PAYMENTOUT_AND_PAYMENTIN.getQuery().replace(&quot;#&quot;,</span>
+					filter));
+<span class="fc" id="L440">			preparedStatement.setInt(1, accountId);</span>
+<span class="fc" id="L441">			resultSet = preparedStatement.executeQuery();</span>
+
+<span class="fc bfc" id="L443" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L444">				watchlist.setStopPaymentIn(resultSet.getBoolean(&quot;StopPaymentIn&quot;));</span>
+<span class="fc" id="L445">				watchlist.setStopPaymentOut(resultSet.getBoolean(&quot;StopPaymentOut&quot;));</span>
+<span class="fc" id="L446">				watchlist.setCategory(resultSet.getInt(&quot;Category&quot;));</span>
+			}
+
+<span class="nc" id="L449">		} catch (Exception e) {</span>
+<span class="nc" id="L450">			throw new ComplianceException(InternalProcessingCode.SERVICE_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L452">			closeResultset(resultSet);</span>
+<span class="fc" id="L453">			closePrepareStatement(preparedStatement);</span>
+<span class="fc" id="L454">			closeConnection(readOnlyConn);</span>
+		}
+<span class="fc" id="L456">		return watchlist;</span>
+	}
+
+	private void addKYCWatchList(List&lt;WatchListEnry&gt; watchList, MessageExchange messageExchange) {
+<span class="nc" id="L460">		RegistrationServiceRequest request = messageExchange.getRequest(RegistrationServiceRequest.class);</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">		if (request != null) {</span>
+			@SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L463">			List&lt;Contact&gt; identityResponse = (List&lt;Contact&gt;) request</span>
+<span class="nc" id="L464">					.getAdditionalAttribute(Constants.FIELD_OLD_CONTACTS);</span>
+<span class="nc bnc" id="L465" title="All 2 branches missed.">			for (Contact idResponse : identityResponse) {</span>
+
+<span class="nc" id="L467">				addToWactchList(watchList, idResponse.getId(), WatchList.ACCOUNTUPDATEDCHECK.getDescription());</span>
+
+<span class="nc" id="L469">			}</span>
+		}
+
+<span class="nc" id="L472">	}</span>
+
+	@SuppressWarnings(&quot;squid:S2095&quot;)
+	public List&lt;String&gt; getWatchlist(Integer accId) throws ComplianceException {
+<span class="nc" id="L476">		Connection conn = null;</span>
+<span class="nc" id="L477">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L478">		ResultSet rs = null;</span>
+<span class="nc" id="L479">		List&lt;String&gt; whitelists = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L481">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L482">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_WATCHLIST_REASONS.getQuery());</span>
+<span class="nc" id="L483">			preparedStatment.setInt(1, accId);</span>
+<span class="nc" id="L484">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L486" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L487" title="All 2 branches missed.">				if (null != rs.getString(&quot;reason&quot;))</span>
+<span class="nc" id="L488">					whitelists.add(rs.getString(&quot;reason&quot;));</span>
+			}
+
+<span class="nc" id="L491">		} catch (ComplianceException | SQLException e) {</span>
+<span class="nc" id="L492">			LOG.error(&quot; &quot;, e);</span>
+		} finally {
+<span class="nc" id="L494">			closeResultset(rs);</span>
+<span class="nc" id="L495">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L496">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L498">		return whitelists;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,555 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataAnonDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization</a> &gt; <span class="el_source">DataAnonDBServiceImpl.java</span></div><h1>DataAnonDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.dataanonymization;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.dataanonymization.DataAnonRequestFromES;
+import com.currenciesdirect.gtg.compliance.commons.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.AbstractDao;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+@Component(&quot;dataAnonDBServiceImpl&quot;)
+<span class="nc" id="L25">public class DataAnonDBServiceImpl extends AbstractDao implements IDataAnonDBService{</span>
+	
+	/** The Constant LOG. */
+<span class="nc" id="L28">	private static final Logger LOG = LoggerFactory.getLogger(DataAnonDBServiceImpl.class);</span>
+	
+	/**
+	 * Gets the account contact details.
+	 *
+	 * @param request the request
+	 * @return the account contact details
+	 * @throws ComplianceException the compliance exception
+	 */
+	@SuppressWarnings(&quot;squid:S2095&quot;)
+	public DataAnonRequestFromES getAccountContactDetails(DataAnonRequestFromES request) throws ComplianceException {
+<span class="nc" id="L39">		Connection connection = null;</span>
+<span class="nc" id="L40">		PreparedStatement statement = null;</span>
+<span class="nc" id="L41">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L43">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L44">			String query = DataAnonQueryConstant.GET_ACCOUT_CONTACTS_ID.getQuery();</span>
+<span class="nc" id="L45">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L46">			statement.setString(1, request.getAccount().getCrmId());</span>
+<span class="nc" id="L47">			rs = statement.executeQuery();</span>
+<span class="nc" id="L48">			int count = 1;</span>
+<span class="nc" id="L49">			Account oldAccount = new Account();</span>
+<span class="nc" id="L50">			String oldAccountAttribute = &quot;&quot;;</span>
+<span class="nc" id="L51">			String oldContactAttribute = &quot;&quot;;</span>
+<span class="nc" id="L52">			List&lt;Contact&gt; oldContacts = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L53" title="All 2 branches missed.">			while(rs.next()) {</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">				if(count == 1) {</span>
+<span class="nc" id="L55">					oldAccount.setId(rs.getInt(&quot;AccountID&quot;));</span>
+<span class="nc" id="L56">					oldAccount.setTradeAccountID(rs.getInt(&quot;TradeAccountID&quot;));</span>
+<span class="nc" id="L57">					oldAccount.setTradeAccountNumber(rs.getString(&quot;TradeAccountNumber&quot;));</span>
+<span class="nc" id="L58">					oldAccount.setCustType(rs.getString(&quot;type&quot;));</span>
+<span class="nc" id="L59">					oldAccount.setVersion(rs.getInt(&quot;AccountVersion&quot;));</span>
+<span class="nc" id="L60">					oldAccountAttribute = rs.getString(&quot;AccountAttributes&quot;);</span>
+<span class="nc" id="L61">					oldContactAttribute = rs.getString(&quot;ContactAttributes&quot;);</span>
+				}
+<span class="nc" id="L63">				Contact contact = new Contact();</span>
+<span class="nc" id="L64">				contact.setId(rs.getInt(&quot;ContactID&quot;));</span>
+<span class="nc" id="L65">				contact.setTradeContactID(rs.getInt(&quot;TradeContactID&quot;));</span>
+<span class="nc" id="L66">				contact.setVersion(rs.getInt(&quot;ContactVersion&quot;));</span>
+<span class="nc" id="L67">				oldContacts.add(contact);</span>
+<span class="nc" id="L68">				count++;</span>
+<span class="nc" id="L69">			}</span>
+<span class="nc" id="L70">			oldAccount.setContacts(oldContacts);</span>
+<span class="nc" id="L71">			request.addAttribute(Constants.FIELD_OLD_ACCOUNT, oldAccount);</span>
+<span class="nc" id="L72">			request.addAttribute(Constants.FIELD_OLD_ACCOUNT_ATTRIBUTE, oldAccountAttribute);</span>
+<span class="nc" id="L73">			request.addAttribute(Constants.FIELD_OLD_CONTACTS_ATTRIBUTE, oldContactAttribute);</span>
+<span class="nc" id="L74">		} catch(Exception e) {</span>
+<span class="nc" id="L75">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L77">			closeResultset(rs);</span>
+<span class="nc" id="L78">			closePrepareStatement(statement);</span>
+<span class="nc" id="L79">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L81">		return request;</span>
+	}
+	
+	/**
+	 * Check data anon request is in process queue.
+	 *
+	 * @param request the request
+	 * @return true, if successful
+	 * @throws ComplianceException the compliance exception
+	 */
+	@SuppressWarnings(&quot;squid:S2095&quot;)
+	public boolean checkDataAnonRequestIsInProcessQueue(DataAnonRequestFromES request) throws ComplianceException {
+<span class="nc" id="L93">		Connection connection = null;</span>
+<span class="nc" id="L94">		PreparedStatement statement = null;</span>
+<span class="nc" id="L95">		ResultSet rs = null;</span>
+<span class="nc" id="L96">		boolean isExisting = false;</span>
+		try {
+<span class="nc" id="L98">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L99">			String query = DataAnonQueryConstant.GET_EXISTING_PROCESS_FROM_PROCESSQUEUE.getQuery();</span>
+<span class="nc" id="L100">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L101">			statement.setInt(1, request.getNewReferenceId().intValue());</span>
+<span class="nc" id="L102">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">			if(rs.next()) {</span>
+<span class="nc" id="L104">				request.addAttribute(DataAnonConstants.EXISTING_ID_STATUS, rs.getString(&quot;status&quot;));</span>
+<span class="nc" id="L105">				rs.close();</span>
+<span class="nc" id="L106">				isExisting = true;</span>
+			}
+<span class="nc" id="L108">		}catch(Exception e) {</span>
+<span class="nc" id="L109">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L111">			closeResultset(rs);</span>
+<span class="nc" id="L112">			closePrepareStatement(statement);</span>
+<span class="nc" id="L113">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L115">		return isExisting;</span>
+	}
+	
+	/**
+	 * Save data anon request.
+	 *
+	 * @param request the request
+	 * @throws ComplianceException 
+	 */
+	@SuppressWarnings(&quot;squid:S2095&quot;)
+	public void saveDataAnonRequest(DataAnonRequestFromES request,UserProfile userProfile) throws ComplianceException {
+<span class="nc" id="L126">		Connection connection = null;</span>
+<span class="nc" id="L127">		PreparedStatement statement = null;</span>
+<span class="nc" id="L128">		ResultSet rs = null;</span>
+<span class="nc" id="L129">		Account oldAccount = (Account) request.getAdditionalAttribute(Constants.FIELD_OLD_ACCOUNT);</span>
+<span class="nc" id="L130">		String anonJson = JsonConverterUtil.convertToJsonWithNull(request);</span>
+		try {
+<span class="nc" id="L132">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L133">			String query = DataAnonQueryConstant.INSERT_INTO_DATA_ANON_PROCESSQUEUE.getQuery();</span>
+<span class="nc" id="L134">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L135">			statement.setFloat(1,request.getNewReferenceId());</span>
+<span class="nc" id="L136">			statement.setString(2,request.getAccount().getCustomerNumber());</span>
+<span class="nc" id="L137">			statement.setInt(3, oldAccount.getId());</span>
+<span class="nc" id="L138">			statement.setInt(4, 0);</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">			for(Contact oldContact : oldAccount.getContacts()) {</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">				if(oldContact.getTradeContactID().equals(request.getAccount().getContact().get(0).getTradeId().intValue())) {</span>
+<span class="nc" id="L141">					statement.setInt(4,oldContact.getId());</span>
+<span class="nc" id="L142">					break;</span>
+				}
+<span class="nc" id="L144">			}</span>
+<span class="nc" id="L145">			statement.setString(5,anonJson);</span>
+<span class="nc" id="L146">			statement.setString(6,DataAnonConstants.RECEIVED);</span>
+<span class="nc" id="L147">			statement.setInt(7,1);</span>
+<span class="nc" id="L148">			statement.setInt(8,0);</span>
+<span class="nc" id="L149">			statement.setInt(9,userProfile.getUserID());</span>
+<span class="nc" id="L150">			statement.setTimestamp(10, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L151">			statement.setInt(11,userProfile.getUserID());</span>
+<span class="nc" id="L152">			statement.setTimestamp(12, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L153">			statement.execute();</span>
+			
+<span class="nc" id="L155">		} catch(Exception e) {</span>
+<span class="nc" id="L156">		throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L158">			closeResultset(rs);</span>
+<span class="nc" id="L159">			closePrepareStatement(statement);</span>
+<span class="nc" id="L160">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L162">	}</span>
+
+	/**
+	 * Process data anonymization.
+	 *
+	 * @param request the request
+	 * @return true, if successful
+	 */
+	public boolean processDataAnonymization(DataAnonRequestFromES request,Account oldAccount) {
+<span class="nc" id="L171">		Connection connection = null;</span>
+<span class="nc" id="L172">		boolean isAnonymizationComplete = false;</span>
+<span class="nc" id="L173">		boolean anonymizationStatus = false;</span>
+<span class="nc" id="L174">		Integer accountId = oldAccount.getId();</span>
+		try {
+<span class="nc" id="L176">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L177">			beginTransaction(connection);</span>
+<span class="nc" id="L178">			isAnonymizationComplete = updateAccount(connection,request,oldAccount);</span>
+<span class="nc" id="L179">			isAnonymizationComplete = updateAccountAttribute(connection,request,oldAccount);</span>
+<span class="nc" id="L180">			isAnonymizationComplete = updateContact(connection,request,oldAccount);</span>
+<span class="nc" id="L181">			isAnonymizationComplete = updateContactAttribute(connection,request,accountId);</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">			if(oldAccount.getVersion() &gt; 1) {</span>
+<span class="nc" id="L183">				isAnonymizationComplete = updateAccountAttributeHistory(connection,request,oldAccount);</span>
+<span class="nc" id="L184">				isAnonymizationComplete = updateContactAttributeHistory(connection,request,accountId);</span>
+			}				
+<span class="nc" id="L186">			isAnonymizationComplete = updateActivityLog(connection,accountId);</span>
+<span class="nc" id="L187">			isAnonymizationComplete = updateEventServiceLog(connection,request,accountId);</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">			if(isAnonymizationComplete) {</span>
+<span class="nc" id="L189">				updateDataAnonProcessStatus(connection,request);</span>
+<span class="nc" id="L190">				commitTransaction(connection);</span>
+<span class="nc" id="L191">				anonymizationStatus = true;</span>
+			}
+			else {
+<span class="nc" id="L194">				transactionRolledBack(connection);</span>
+<span class="nc" id="L195">				deleteDataAnonProcess(connection,request);</span>
+			}
+<span class="nc" id="L197">		} catch (Exception e) {</span>
+			try {
+<span class="nc" id="L199">				transactionRolledBack(connection);</span>
+<span class="nc" id="L200">			} catch (ComplianceException e1) {</span>
+<span class="nc" id="L201">				LOG.error(&quot;Error in DataAnonDBServiceImpl for transaction rollback : {1}&quot;, e1);</span>
+<span class="nc" id="L202">			}</span>
+<span class="nc" id="L203">			LOG.error(&quot;Error in DataAnonDBServiceImpl for processDataAnonymization : {1}&quot;, e);</span>
+		} finally {
+			try {
+<span class="nc" id="L206">				closeConnection(connection);</span>
+<span class="nc" id="L207">			} catch (ComplianceException e) {</span>
+<span class="nc" id="L208">				LOG.error(&quot;Error in DataAnonDBServiceImpl for closing connection : {1}&quot;, e);</span>
+<span class="nc" id="L209">			}</span>
+		}
+<span class="nc" id="L211">		return anonymizationStatus;</span>
+	}
+	
+	/**
+	 * Update account.
+	 *
+	 * @param connection the connection
+	 * @param statement the statement
+	 * @param rs the rs
+	 * @param request the request
+	 * @return true, if successful
+	 * @throws ComplianceException 
+	 */
+	private boolean updateAccount(Connection connection,DataAnonRequestFromES request,Account oldAccount) throws ComplianceException {
+		int rs;
+<span class="nc" id="L226">		boolean status = false;</span>
+<span class="nc" id="L227">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L229">			String query = DataAnonQueryConstant.UPDATE_ACCOUNT.getQuery();</span>
+<span class="nc" id="L230">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L231">			statement.setString(1,request.getAccount().getAnonymizationDetails().getName());</span>
+<span class="nc" id="L232">			statement.setString(2, request.getAccount().getAnonymizationDetails().getCustomerNumber());</span>
+<span class="nc" id="L233">			statement.setInt(3, oldAccount.getId());</span>
+<span class="nc" id="L234">			rs = statement.executeUpdate();</span>
+<span class="nc bnc" id="L235" title="All 2 branches missed.">			if(rs &gt; 0)</span>
+<span class="nc" id="L236">				status = true;</span>
+<span class="nc" id="L237">		}catch(Exception e) {</span>
+<span class="nc" id="L238">			LOG.error(&quot;Error in DataAnonDBServiceImpl for updateAccount : {1}&quot;, e);</span>
+		}finally {
+<span class="nc" id="L240">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L242">		return status;</span>
+	}
+	
+	/**
+	 * Update account attribute.
+	 *
+	 * @param connection the connection
+	 * @param statement the statement
+	 * @param request the request
+	 * @param oldAccount the old account
+	 * @return true, if successful
+	 * @throws ComplianceException 
+	 */
+	private boolean updateAccountAttribute(Connection connection,DataAnonRequestFromES request,Account oldAccount) throws ComplianceException {
+		int rs;
+		String query;
+<span class="nc" id="L258">		boolean status = false;</span>
+<span class="nc" id="L259">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc bnc" id="L261" title="All 2 branches missed.">			if(Constants.PFX.equals(oldAccount.getCustType())) {</span>
+<span class="nc" id="L262">				query = DataAnonQueryConstant.UPDATE_ACCOUNT_ATTRIBUTE_PFX.getQuery();</span>
+<span class="nc" id="L263">				statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L264">				statement.setString(1,request.getAccount().getAnonymizationDetails().getName());</span>
+<span class="nc" id="L265">				statement.setString(2, request.getAccount().getAnonymizationDetails().getCustomerNumber());</span>
+<span class="nc" id="L266">				statement.setInt(3, oldAccount.getId());</span>
+			}
+			else {
+<span class="nc" id="L269">				query = DataAnonQueryConstant.UPDATE_ACCOUNT_ATTRIBUTE_CFX.getQuery();</span>
+<span class="nc" id="L270">				statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L271">				statement.setFloat(1, request.getAccount().getAnonymizationDetails().getNumber());</span>
+<span class="nc" id="L272">				statement.setString(2,request.getAccount().getAnonymizationDetails().getAddress().getAddressLine());</span>
+<span class="nc" id="L273">				statement.setString(3,request.getAccount().getAnonymizationDetails().getName());</span>
+<span class="nc" id="L274">				statement.setString(4, request.getAccount().getAnonymizationDetails().getCustomerNumber());</span>
+<span class="nc" id="L275">				statement.setInt(5, oldAccount.getId());</span>
+			}
+<span class="nc" id="L277">			rs = statement.executeUpdate();</span>
+<span class="nc bnc" id="L278" title="All 2 branches missed.">			if(rs &gt; 0)</span>
+<span class="nc" id="L279">				status = true;</span>
+<span class="nc" id="L280">		}catch(Exception e) {</span>
+<span class="nc" id="L281">			LOG.error(&quot;Error in DataAnonDBServiceImpl for updateAccountAttribute : {1}&quot;, e);</span>
+		}finally {
+<span class="nc" id="L283">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L285">		return status;</span>
+	}
+	
+	/**
+	 * Update account attribute history.
+	 *
+	 * @param connection the connection
+	 * @param statement the statement
+	 * @param request the request
+	 * @param oldAccount the old account
+	 * @return true, if successful
+	 * @throws ComplianceException 
+	 */
+	private boolean updateAccountAttributeHistory(Connection connection,DataAnonRequestFromES request,Account oldAccount) throws ComplianceException {
+		int rs;
+		String query;
+<span class="nc" id="L301">		boolean status = false;</span>
+<span class="nc" id="L302">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc bnc" id="L304" title="All 2 branches missed.">			if(Constants.PFX.equals(oldAccount.getCustType())) {</span>
+<span class="nc" id="L305">				query = DataAnonQueryConstant.UPDATE_ACCOUNT_ATTRIBUTE_HISTORY_PFX.getQuery();</span>
+<span class="nc" id="L306">				statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L307">				statement.setString(1,request.getAccount().getAnonymizationDetails().getName());</span>
+<span class="nc" id="L308">				statement.setString(2, request.getAccount().getAnonymizationDetails().getCustomerNumber());</span>
+<span class="nc" id="L309">				statement.setInt(3, oldAccount.getId());</span>
+			}
+			else {
+<span class="nc" id="L312">				query = DataAnonQueryConstant.UPDATE_ACCOUNT_ATTRIBUTE_HISTORY_CFX.getQuery();</span>
+<span class="nc" id="L313">				statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L314">				statement.setFloat(1, request.getAccount().getAnonymizationDetails().getNumber());</span>
+<span class="nc" id="L315">				statement.setString(2,request.getAccount().getAnonymizationDetails().getAddress().getAddressLine());</span>
+<span class="nc" id="L316">				statement.setString(3,request.getAccount().getAnonymizationDetails().getName());</span>
+<span class="nc" id="L317">				statement.setString(4, request.getAccount().getAnonymizationDetails().getCustomerNumber());</span>
+<span class="nc" id="L318">				statement.setInt(5, oldAccount.getId());</span>
+			}
+<span class="nc" id="L320">			rs = statement.executeUpdate();</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">			if(rs &gt; 0)</span>
+<span class="nc" id="L322">				status = true;</span>
+<span class="nc" id="L323">		} catch(Exception e) {</span>
+<span class="nc" id="L324">			LOG.error(&quot;Error in DataAnonDBServiceImpl for updateAccountAttributeHistory : {1}&quot;, e);</span>
+		}finally {
+<span class="nc" id="L326">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L328">		return status;</span>
+	}
+	
+	/**
+	 * Update contact.
+	 *
+	 * @param connection the connection
+	 * @param statement the statement
+	 * @param rs the rs
+	 * @param request the request
+	 * @return true, if successful
+	 * @throws ComplianceException 
+	 */
+	private boolean updateContact(Connection connection,DataAnonRequestFromES request,Account oldAccount) throws ComplianceException {
+		int rs;
+		String query;
+<span class="nc" id="L344">		boolean status = false;</span>
+<span class="nc" id="L345">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L347">			query = DataAnonQueryConstant.UPDATE_CONTACT.getQuery();</span>
+<span class="nc" id="L348">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L349">			statement.setString(1,request.getAccount().getContact().get(0).getAnonymizationDetails().getName());</span>
+<span class="nc" id="L350">			statement.setInt(2, oldAccount.getId());</span>
+<span class="nc" id="L351">			rs = statement.executeUpdate();</span>
+<span class="nc bnc" id="L352" title="All 2 branches missed.">			if(rs &gt; 0)</span>
+<span class="nc" id="L353">				status = true;</span>
+<span class="nc" id="L354">		}catch(Exception e) {</span>
+<span class="nc" id="L355">			LOG.error(&quot;Error in DataAnonDBServiceImpl for updateContact : {1}&quot;, e);</span>
+		}finally {
+<span class="nc" id="L357">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L359">		return status;</span>
+	}
+	
+	/**
+	 * Update contact attribute.
+	 *
+	 * @param connection the connection
+	 * @param statement the statement
+	 * @param request the request
+	 * @param oldAccount the old account
+	 * @return true, if successful
+	 * @throws ComplianceException 
+	 */
+	private boolean updateContactAttribute(Connection connection,DataAnonRequestFromES request,Integer accountId) throws ComplianceException {
+		int rs;
+		String query;
+<span class="nc" id="L375">		boolean status = false;</span>
+<span class="nc" id="L376">		PreparedStatement statement = null;</span>
+<span class="nc" id="L377">		String contactAttributes = (String) request.getAdditionalAttribute(DataAnonConstants.CONTACT_ATTRIBUTE_ANONDATA);</span>
+		try {
+<span class="nc" id="L379">			query = DataAnonQueryConstant.UPDATE_CONTACT_ATTRIBUTE.getQuery();</span>
+<span class="nc" id="L380">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L381">			statement.setString(1, contactAttributes);</span>
+<span class="nc" id="L382">			statement.setInt(2, accountId);</span>
+<span class="nc" id="L383">			rs = statement.executeUpdate();</span>
+<span class="nc bnc" id="L384" title="All 2 branches missed.">			if(rs &gt; 0)</span>
+<span class="nc" id="L385">				status = true;</span>
+<span class="nc" id="L386">		}catch(Exception e) {</span>
+<span class="nc" id="L387">			LOG.error(&quot;Error in DataAnonDBServiceImpl for updateContactAttribute : {1}&quot;, e);</span>
+		}finally {
+<span class="nc" id="L389">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L391">		return status;</span>
+	}
+	
+	/**
+	 * Update contact attribute history.
+	 *
+	 * @param connection the connection
+	 * @param statement the statement
+	 * @param request the request
+	 * @param oldAccount the old account
+	 * @return true, if successful
+	 * @throws ComplianceException 
+	 */
+	private boolean updateContactAttributeHistory(Connection connection,DataAnonRequestFromES request,Integer accountId) throws ComplianceException {
+		int rs;
+		String query;
+<span class="nc" id="L407">		PreparedStatement statement = null;</span>
+<span class="nc" id="L408">		String contactAttributes = (String) request.getAdditionalAttribute(DataAnonConstants.CONTACT_ATTRIBUTE_ANONDATA);</span>
+<span class="nc" id="L409">		boolean status = false;</span>
+		try {
+<span class="nc" id="L411">			query = DataAnonQueryConstant.UPDATE_CONTACT_ATTRIBUTE_HISTORY.getQuery();</span>
+<span class="nc" id="L412">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L413">			statement.setString(1, contactAttributes);</span>
+<span class="nc" id="L414">			statement.setInt(2, accountId);</span>
+<span class="nc" id="L415">			rs = statement.executeUpdate();</span>
+<span class="nc bnc" id="L416" title="All 2 branches missed.">			if(rs &gt; 0)</span>
+<span class="nc" id="L417">				status = true;</span>
+<span class="nc" id="L418">		}catch(Exception e) {</span>
+<span class="nc" id="L419">			LOG.error(&quot;Error in DataAnonDBServiceImpl for updateContactAttribute : {1}&quot;, e);</span>
+		}finally {
+<span class="nc" id="L421">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L423">		return status;</span>
+	}
+	
+	/**
+	 * Update activity log.
+	 *
+	 * @param connection the connection
+	 * @param statement the statement
+	 * @param rs the rs
+	 * @param request the request
+	 * @return true, if successful
+	 * @throws ComplianceException 
+	 */
+	private boolean updateActivityLog(Connection connection,Integer accountId) throws ComplianceException {
+		int rs;
+		String query;
+<span class="nc" id="L439">		boolean status = false;</span>
+<span class="nc" id="L440">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L442">			query = DataAnonQueryConstant.UPDATE_PROFILE_ACTIVITY_LOG_DETAIL.getQuery();</span>
+<span class="nc" id="L443">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L444">			statement.setString(1,&quot;----&quot;);</span>
+<span class="nc" id="L445">			statement.setInt(2, accountId);</span>
+<span class="nc" id="L446">			rs = statement.executeUpdate();</span>
+<span class="nc bnc" id="L447" title="All 2 branches missed.">			if(rs &gt; 0)</span>
+<span class="nc" id="L448">				status = true;</span>
+<span class="nc" id="L449">		}catch(Exception e) {</span>
+<span class="nc" id="L450">			LOG.error(&quot;Error in DataAnonDBServiceImpl for updateActivityLog : {1}&quot;, e);</span>
+		}finally {
+<span class="nc" id="L452">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L454">		return status;</span>
+	}
+	
+	/**
+	 * Update event service log.
+	 *
+	 * @param connection the connection
+	 * @param statement the statement
+	 * @param rs the rs
+	 * @param request the request
+	 * @return true, if successful
+	 */
+	@SuppressWarnings(&quot;squid:S2095&quot;)
+	private boolean updateEventServiceLog(Connection connection,DataAnonRequestFromES request,Integer accountId) {
+		int regRs;
+		int pInRs;
+		int pOutRs;
+<span class="nc" id="L471">		boolean status = true;</span>
+<span class="nc" id="L472">		PreparedStatement regStatement = null;</span>
+<span class="nc" id="L473">		PreparedStatement payInStatement = null;</span>
+<span class="nc" id="L474">		PreparedStatement payOutStatement = null;</span>
+		
+<span class="nc" id="L476">		String regProviderResponse = (String) request.getAdditionalAttribute(&quot;blacklistProviderResponse&quot;);</span>
+<span class="nc" id="L477">		String payInProviderResponse = (String) request.getAdditionalAttribute(&quot;blacklistPayInProviderResponse&quot;);</span>
+<span class="nc" id="L478">		String payOutProviderResponse = (String) request.getAdditionalAttribute(&quot;blacklistPayOutProviderResponse&quot;);</span>
+		try {
+<span class="nc" id="L480">			String regQuery = DataAnonQueryConstant.UPDATE_EVENT_SERVICE_LOG_FOR_REG_BLACKLIST.getQuery();</span>
+<span class="nc" id="L481">			regStatement = connection.prepareStatement(regQuery);</span>
+<span class="nc" id="L482">			regStatement.setString(1, regProviderResponse);</span>
+<span class="nc" id="L483">			regStatement.setInt(2,accountId);</span>
+<span class="nc" id="L484">			regRs = regStatement.executeUpdate();</span>
+			
+<span class="nc" id="L486">			String payInQuery = DataAnonQueryConstant.UPDATE_EVENT_SERVICE_LOG_FOR_PAYIN_BLACKLIST.getQuery();</span>
+<span class="nc" id="L487">			payInStatement = connection.prepareStatement(payInQuery);</span>
+<span class="nc" id="L488">			payInStatement.setString(1, payInProviderResponse);</span>
+<span class="nc" id="L489">			payInStatement.setInt(2,accountId);</span>
+<span class="nc" id="L490">			pInRs = payInStatement.executeUpdate();</span>
+			
+<span class="nc" id="L492">			String payOutQuery = DataAnonQueryConstant.UPDATE_EVENT_SERVICE_LOG_FOR_PAYOUT_BLACKLIST.getQuery();</span>
+<span class="nc" id="L493">			payOutStatement = connection.prepareStatement(payOutQuery);</span>
+<span class="nc" id="L494">			payOutStatement.setString(1, payOutProviderResponse);</span>
+<span class="nc" id="L495">			payOutStatement.setInt(2,accountId);</span>
+<span class="nc" id="L496">			pOutRs = payOutStatement.executeUpdate();</span>
+			
+<span class="nc bnc" id="L498" title="All 6 branches missed.">			if(regRs &lt; 0 || pInRs &lt; 0 || pOutRs &lt; 0)</span>
+<span class="nc" id="L499">				status = false;</span>
+			
+<span class="nc" id="L501">		}catch(Exception e) {</span>
+<span class="nc" id="L502">			LOG.error(&quot;Error in DataAnonDBServiceImpl for updateEventServiceLog : {1}&quot;, e);</span>
+<span class="nc" id="L503">			status = false;</span>
+<span class="nc" id="L504">		}</span>
+<span class="nc" id="L505">		return status;</span>
+	}
+	
+	/**
+	 * Update data anon process status.
+	 *
+	 * @param connection the connection
+	 * @param statement the statement
+	 * @param request the request
+	 * @throws ComplianceException 
+	 */
+	private void updateDataAnonProcessStatus(Connection connection,DataAnonRequestFromES request) throws ComplianceException {
+		String query;
+<span class="nc" id="L518">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L520">			query = DataAnonQueryConstant.UPDATE_DATAANON_STATUS.getQuery();</span>
+<span class="nc" id="L521">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L522">			statement.setString(1,DataAnonConstants.RECEIVED_AND_PROCESSED);</span>
+<span class="nc" id="L523">			statement.setInt(2,request.getNewReferenceId().intValue());</span>
+<span class="nc" id="L524">			statement.executeUpdate();</span>
+<span class="nc" id="L525">		}catch(Exception e) {</span>
+<span class="nc" id="L526">			LOG.error(&quot;Error in DataAnonDBServiceImpl for updateDataAnonProcessStatus : {1}&quot;, e);</span>
+		}finally {
+<span class="nc" id="L528">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L530">	}</span>
+	
+	/**
+	 * Delete data anon process.
+	 *
+	 * @param connection the connection
+	 * @param statement the statement
+	 * @param request the request
+	 * @throws ComplianceException 
+	 */
+	private void deleteDataAnonProcess(Connection connection,DataAnonRequestFromES request) throws ComplianceException {
+		String query;
+<span class="nc" id="L542">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L544">			query = DataAnonQueryConstant.DELETE_DATA_ANON_PROCESS.getQuery();</span>
+<span class="nc" id="L545">			statement = connection.prepareStatement(query);</span>
+<span class="nc" id="L546">			statement.setInt(1,request.getNewReferenceId().intValue());</span>
+<span class="nc" id="L547">			statement.execute();</span>
+<span class="nc" id="L548">		}catch(Exception e) {</span>
+<span class="nc" id="L549">			LOG.error(&quot;Error in DataAnonDBServiceImpl for deleteDataAnonProcess : {1}&quot;, e);</span>
+		}finally {
+<span class="nc" id="L551">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L553">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

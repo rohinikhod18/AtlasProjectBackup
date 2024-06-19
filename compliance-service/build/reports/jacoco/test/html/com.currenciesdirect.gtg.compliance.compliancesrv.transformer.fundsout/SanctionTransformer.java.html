@@ -1,0 +1,913 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SanctionTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout</a> &gt; <span class="el_source">SanctionTransformer.java</span></div><h1>SanctionTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessage;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.FundsInSanctionRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.FundsOutSanctionResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionSummary;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ExternalErrorCodes;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ProvideCacheLoader;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.sanctioncaching.ContactSanctionResponseCaching;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractSanctionTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class SanctionTransformer.
+ *  
+ * Responsibility : 
+ * 
+ * This is fundsOut Class used to 
+ * 1) This method is called from FundsOutCreate xml 
+ * 2) Transform fundsOut Request which comes from Payment system(I.e. Aurora) into Sanction request and returns
+ * 3) Also it fundsOut sanction Response is populates to eventservicelog object with ,provider response and summary and returns 
+ * 
+ * 
+ */
+<span class="nc" id="L58">public class SanctionTransformer extends AbstractSanctionTransformer{</span>
+<span class="nc" id="L59">	private static final Logger LOGGER = LoggerFactory.getLogger(SanctionTransformer.class);</span>
+<span class="nc" id="L60">	private ProvideCacheLoader cacheLoader = ProvideCacheLoader.getInstance();</span>
+	private static final String ERROR =&quot;ERROR&quot;;
+	
+	/** The contact sanction status caching. */
+	@Autowired
+	private ContactSanctionResponseCaching contactSanctionStatusCaching;
+	
+	/**
+	 * Business -- 
+	 * If Contact/Account is Inactive, Sanction request is not sent to provider 
+	 * else sanction can be performed on Contact/Bank/Beneficiary
+	 * in either case Event ServiceLog entry must be created.	 * 
+	 *  While sending sanction request, default status is assumed as NOT_PERFORMED
+	 * And when response is received from HTTPClient, appropriate response is updated	 * 
+	 * When sanction request is not sent, default status is set to NOT_REQUIRED
+	 * 
+	 * Implementation---
+	 * 1) Get the messageExchange,UserProfile,fundsOutRequest,contact,eventId from the message
+	 * 2) eventId, contact are already populated from data enricher so that we can use the same to insert records in to the table
+	 * 3) Create sanction request and default SanctionContactResponse with not performed status so that if we get any exception from micro service
+	 * this default object can be pushed to database
+	 * 4) Then check additional attributes ATT_DO_PERFORM_OTHER_CHECKS from fundsOutRequest which is populated in data enricher so that a decision 
+	 * is made as below
+	 * 		4.a)If additional attributes ATT_DO_PERFORM_OTHER_CHECKS is true (which means contact and account is Active in DB) then perform sanction check
+	 * 			by calling sanction micro service
+	 * 		4.b) If false then do not perform sanction check and default status is set to NOT_REQUIRED which will be set in eventservicelog object
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+		
+		try {
+<span class="nc" id="L91">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L92">			FundsOutRequest fundsOutRequest = (FundsOutRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L93">			Account account = (Account)fundsOutRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L94">			String custType = account.getCustType();</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">			if (custType!= null){</span>
+<span class="nc" id="L96">				custType = custType.trim();</span>
+			}
+<span class="nc bnc" id="L98" title="All 2 branches missed.">			if (Constants.CFX.equalsIgnoreCase(custType)) {</span>
+<span class="nc" id="L99">				transformCFXRequest(message);</span>
+<span class="nc bnc" id="L100" title="All 2 branches missed.">			}else if (Constants.PFX.equalsIgnoreCase(custType)){</span>
+<span class="nc" id="L101">				transformPFXRequest(message);</span>
+			}
+<span class="nc" id="L103">		} catch (Exception e) {</span>
+<span class="nc" id="L104">			LOGGER.error(ERROR, e);</span>
+<span class="nc" id="L105">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L106">		}</span>
+<span class="nc" id="L107">		return message;</span>
+	}
+	
+	/**
+	 * Transform CFX Request
+	 * 
+	 * @param message
+	 * @return
+	 * @throws ComplianceException 
+	 */
+	private Message&lt;MessageContext&gt; transformCFXRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+
+		try {
+<span class="nc" id="L120">			transformCommonRequest(message);</span>
+<span class="nc" id="L121">		} catch (Exception e) {</span>
+<span class="nc" id="L122">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L123">		}</span>
+<span class="nc" id="L124">		return message;</span>
+	}
+
+	/**
+	 * Transform PFX Request
+	 * 
+	 * @param message
+	 * @return
+	 * @throws ComplianceException 
+	 */
+	private Message&lt;MessageContext&gt; transformPFXRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+
+		try {
+<span class="nc" id="L137">			transformCommonRequest(message);</span>
+<span class="nc" id="L138">		} catch (Exception exception) {</span>
+<span class="nc" id="L139">			LOGGER.debug(Constants.ERROR, exception);</span>
+<span class="nc" id="L140">		}</span>
+<span class="nc" id="L141">		return message;</span>
+	}
+	
+	/**
+	 * Transform Common Request
+	 * 
+	 * @param message
+	 * @return
+	 * @throws Exception 
+	 */
+	public Message&lt;MessageContext&gt; transformCommonRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		
+		try {
+<span class="nc" id="L154">			FundsOutRequest fundsOutRequest = message.getPayload().getGatewayMessageExchange().getRequest(FundsOutRequest.class);</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">			if (fundsOutRequest.getAdditionalAttribute(Constants.PERFORM_CHECKS).equals(Boolean.TRUE)) {</span>
+<span class="nc" id="L156">				setSanctionResponseStatus(message, ServiceStatus.NOT_PERFORMED);</span>
+			} else {
+<span class="nc" id="L158">				setSanctionResponseStatus(message, ServiceStatus.NOT_REQUIRED);</span>
+			}
+
+<span class="nc" id="L161">		} catch (Exception e) {</span>
+<span class="nc" id="L162">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L163">		}</span>
+<span class="nc" id="L164">		return message;</span>
+	}
+	
+	/**Added SanctionId for Contact,Bank,Beneficiary while creating DefaultResponseStatus
+	 * Changes made by-Saylee
+	 * @throws Exception 
+	 */
+	private void setSanctionResponseStatus(Message&lt;MessageContext&gt; message, ServiceStatus serviceStatus) throws ComplianceException {
+		try{
+<span class="nc" id="L173">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L174">			OperationEnum operation = messageExchange.getOperation();</span>
+			
+<span class="nc" id="L176">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L177">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L178">					.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+			
+<span class="nc" id="L180">			FundsOutRequest fundsOutRequest = message.getPayload().getGatewayMessageExchange().getRequest(FundsOutRequest.class);</span>
+<span class="nc" id="L181">			Contact contact = (Contact) fundsOutRequest.getAdditionalAttribute(Constants.FIELD_CONTACT);</span>
+<span class="nc" id="L182">			List&lt;Contact&gt; contacts = new ArrayList&lt;&gt;(1);</span>
+<span class="nc" id="L183">			contacts.add(contact);</span>
+			
+			//FundsOut Sanction Request Creation
+<span class="nc" id="L186">			FundsInSanctionRequest sanctionRequest = createSanctionRequest(fundsOutRequest, contacts);</span>
+			
+<span class="nc" id="L188">			sanctionRequest.setCustomerNumber(fundsOutRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L189">			SanctionContactResponse defaultResponse = new SanctionContactResponse();</span>
+			
+<span class="nc" id="L191">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L192">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L193">			ccExchange.setRequest(sanctionRequest);</span>
+			
+			SanctionResponse fResponse ;
+			
+			//FundsOut Sanction Default Response Creation
+<span class="nc" id="L198">			fResponse = createServiceDeafaultResponse(fundsOutRequest, serviceStatus);</span>
+<span class="nc" id="L199">			defaultResponse.setStatus(serviceStatus.name());</span>
+			
+<span class="nc" id="L201">			String orgID = StringUtils.leftPadWithZero(3, fundsOutRequest.getOrgId());</span>
+			
+			//Creating EventServiceLog Default entry and storing it in FundsOutRequest to process after Service calls are finished.
+<span class="nc bnc" id="L204" title="All 2 branches missed.">			if(operation==OperationEnum.FUNDS_OUT)</span>
+<span class="nc" id="L205">				fundsOutRequest.setIsContactEligible(Boolean.TRUE);</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">			if (Boolean.TRUE.equals(fundsOutRequest.getIsContactEligible())) {</span>
+				/**Set SanctionId for contact - Saylee*/
+<span class="nc" id="L208">				String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_CONTACT, contact.getId().toString());</span>
+<span class="nc" id="L209">				SanctionSummary summary = new SanctionSummary();</span>
+<span class="nc" id="L210">				summary.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L211">				summary.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L212">				summary.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L213">				summary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L214">				summary.setSanctionId(providerRef);</span>
+<span class="nc" id="L215">				ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L216">						ServiceProviderEnum.SANCTION_SERVICE, contact.getId(), contact.getVersion(),</span>
+<span class="nc" id="L217">						EntityEnum.CONTACT.name(), token.getUserID(), defaultResponse, summary, serviceStatus));</span>
+			}
+<span class="nc bnc" id="L219" title="All 2 branches missed.">			if (Boolean.TRUE.equals(fundsOutRequest.getIsBeneficiaryEligible())) {</span>
+				/**Set SanctionId for Benificary - Saylee*/
+<span class="nc" id="L221">				String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_BENEFICIARY,</span>
+<span class="nc" id="L222">						fundsOutRequest.getBeneficiary().getBeneficiaryId().toString());</span>
+<span class="nc" id="L223">				SanctionSummary bSummary = new SanctionSummary();</span>
+<span class="nc" id="L224">				bSummary.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L225">				bSummary.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L226">				bSummary.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L227">				bSummary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L228">				bSummary.setSanctionId(providerRef);</span>
+<span class="nc" id="L229">				ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L230">						ServiceProviderEnum.SANCTION_SERVICE, fundsOutRequest.getBeneficiary().getBeneficiaryId(), fundsOutRequest.getVersion(),</span>
+<span class="nc" id="L231">						EntityEnum.BENEFICIARY.name(), token.getUserID(), defaultResponse, bSummary, serviceStatus));</span>
+			}
+<span class="nc bnc" id="L233" title="All 2 branches missed.">			if (Boolean.TRUE.equals(fundsOutRequest.getIsBankEligible())) {</span>
+				/**Set SanctionId for Bank - Saylee*/
+<span class="nc" id="L235">				String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_BANK,</span>
+<span class="nc" id="L236">						fundsOutRequest.getBeneficiary().getBeneficiaryBankid().toString());</span>
+<span class="nc" id="L237">				SanctionSummary bankSummary = new SanctionSummary();</span>
+<span class="nc" id="L238">				bankSummary.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L239">				bankSummary.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L240">				bankSummary.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L241">				bankSummary.setUpdatedOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L242">				bankSummary.setSanctionId(providerRef);</span>
+<span class="nc" id="L243">				ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L244">						ServiceProviderEnum.SANCTION_SERVICE, fundsOutRequest.getBeneficiary().getBeneficiaryBankid(), fundsOutRequest.getVersion(),</span>
+<span class="nc" id="L245">						EntityEnum.BANK.name(), token.getUserID(), defaultResponse, bankSummary, serviceStatus));</span>
+	
+			}
+<span class="nc" id="L248">			ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L249">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L250">		}catch(Exception ex){</span>
+<span class="nc" id="L251">			LOGGER.warn(ERROR, ex);</span>
+<span class="nc" id="L252">			throw new ComplianceException(InternalProcessingCode.SERVICE_ERROR,ex);</span>
+<span class="nc" id="L253">		}</span>
+		
+<span class="nc" id="L255">	}</span>
+
+	private SanctionResponse createServiceDeafaultResponse(FundsOutRequest fundsOutRequest,ServiceStatus status) {
+<span class="nc" id="L258">		Contact contact = (Contact) fundsOutRequest.getAdditionalAttribute(Constants.FIELD_CONTACT);</span>
+<span class="nc" id="L259">		List&lt;Contact&gt; contacts = new ArrayList&lt;&gt;(1);</span>
+<span class="nc" id="L260">		contacts.add(contact);</span>
+<span class="nc" id="L261">		SanctionResponse fResponse = new SanctionResponse();</span>
+<span class="nc" id="L262">		fResponse.setContactResponses(createContactResponse(contacts));</span>
+<span class="nc" id="L263">		fResponse.setBankResponses(createBankResponse(fundsOutRequest,status));</span>
+<span class="nc" id="L264">		fResponse.setBeneficiaryResponses(createBeneficiaryResponse(fundsOutRequest,status));</span>
+<span class="nc" id="L265">		return fResponse;</span>
+	}
+
+	protected List&lt;SanctionBankResponse&gt; createBankResponse(FundsOutRequest fundsOutRequest,ServiceStatus status) {
+<span class="nc" id="L269">		List&lt;SanctionBankResponse&gt; bankResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L270">		SanctionBankResponse bankResponse = new SanctionBankResponse();</span>
+<span class="nc" id="L271">		bankResponse.setSanctionId(fundsOutRequest.getBeneficiary().getBeneficiaryBankid().toString());</span>
+<span class="nc" id="L272">		bankResponse.setStatus(status.name());</span>
+<span class="nc" id="L273">		bankResponse.setBankID(fundsOutRequest.getBeneficiary().getBeneficiaryBankid());</span>
+<span class="nc" id="L274">		bankResponses.add(bankResponse);</span>
+<span class="nc" id="L275">		return bankResponses;</span>
+	}
+
+	protected List&lt;SanctionBeneficiaryResponse&gt; createBeneficiaryResponse(FundsOutRequest fundsOutRequest,ServiceStatus status) {
+<span class="nc" id="L279">		List&lt;SanctionBeneficiaryResponse&gt; beneResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L280">		SanctionBeneficiaryResponse beneResponse = new SanctionBeneficiaryResponse();</span>
+<span class="nc" id="L281">		beneResponse.setSanctionId(fundsOutRequest.getBeneficiary().getBeneficiaryId().toString());</span>
+<span class="nc" id="L282">		beneResponse.setStatus(status.name());</span>
+<span class="nc" id="L283">		beneResponse.setBeneficiaryId(fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L284">		beneResponses.add(beneResponse);</span>
+<span class="nc" id="L285">		return beneResponses;</span>
+	}
+
+	private FundsInSanctionRequest createSanctionRequest(FundsOutRequest fundsOutRequest, List&lt;Contact&gt; contacts) throws ComplianceException {
+<span class="nc" id="L289">		FundsInSanctionRequest sanctionRequest = new FundsInSanctionRequest();</span>
+<span class="nc" id="L290">		String orgID = StringUtils.leftPadWithZero(3, fundsOutRequest.getOrgId());</span>
+<span class="nc" id="L291">		String contactSanctionCategory =  getContactSanctionCategory();</span>
+<span class="nc" id="L292">		String bankSanctionCategory = getBankSanctionCategory();</span>
+<span class="nc" id="L293">		String beneficiarySanctionCategory = getBeneficiarySanctionCategory(fundsOutRequest.getBeneficiary().getBeneficiaryType());</span>
+		
+<span class="nc bnc" id="L295" title="All 2 branches missed.">		if(Boolean.TRUE.equals(fundsOutRequest.getIsContactEligible())){</span>
+<span class="nc" id="L296">			sanctionRequest.setContactrequests(createContactRequestForFundsOut(orgID, contacts,cacheLoader,fundsOutRequest,contactSanctionCategory));</span>
+		}
+<span class="nc bnc" id="L298" title="All 2 branches missed.">		if(Boolean.TRUE.equals(fundsOutRequest.getIsBeneficiaryEligible())){</span>
+<span class="nc" id="L299">			sanctionRequest.setBeneficiaryRequests(createBeneficiaryRequest(fundsOutRequest,beneficiarySanctionCategory));</span>
+		}
+<span class="nc bnc" id="L301" title="All 2 branches missed.">		if(Boolean.TRUE.equals(fundsOutRequest.getIsBankEligible())){</span>
+<span class="nc" id="L302">			sanctionRequest.setBankRequests(createBankRequest(fundsOutRequest,bankSanctionCategory));</span>
+		}
+<span class="nc" id="L304">		return sanctionRequest;</span>
+	}
+
+	protected List&lt;SanctionBeneficiaryRequest&gt; createBeneficiaryRequest(FundsOutRequest fundsOutRequest, String beneficiarySanctionCategory)
+			throws ComplianceException {
+<span class="nc" id="L309">		List&lt;SanctionBeneficiaryRequest&gt; beneRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L310">		StringBuilder sanctionID = new StringBuilder();</span>
+<span class="nc" id="L311">		sanctionID.append(StringUtils.leftPadWithZero(3, fundsOutRequest.getOrgId())).append(&quot;-P-&quot;)</span>
+<span class="nc" id="L312">				.append(StringUtils.leftPadWithZero(10, fundsOutRequest.getBeneficiary().getBeneficiaryId()));</span>
+<span class="nc" id="L313">		SanctionBeneficiaryRequest beneRequest = new SanctionBeneficiaryRequest();</span>
+<span class="nc" id="L314">		SanctionSummary summary = (SanctionSummary) fundsOutRequest.getAdditionalAttribute(Constants.PREVIOUS_BENEFICARY_SANCTION_SUMMARY+fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc bnc" id="L315" title="All 2 branches missed.">		if(null!=fundsOutRequest.getBeneficiary().getCountry()){</span>
+<span class="nc bnc" id="L316" title="All 2 branches missed.">		beneRequest.setCountry(null != cacheLoader.getCountryFullName(fundsOutRequest.getBeneficiary().getCountry())</span>
+<span class="nc" id="L317">				? cacheLoader.getCountryFullName(fundsOutRequest.getBeneficiary().getCountry()) : &quot;&quot;);</span>
+		}
+<span class="nc" id="L319">		beneRequest.setFullName(fundsOutRequest.getBeneficiary().getFullName());</span>
+<span class="nc" id="L320">		beneRequest.setGender(&quot;Male&quot;);</span>
+<span class="nc" id="L321">		beneRequest.setSanctionId(sanctionID.toString());</span>
+<span class="nc" id="L322">		beneRequest.setIsExisting(fundsOutRequest.isBeneficiarySanctionPerformed());</span>
+<span class="nc" id="L323">		beneRequest.setBeneficiaryId(fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L324">		beneRequest.setCategory(beneficiarySanctionCategory);</span>
+<span class="nc bnc" id="L325" title="All 6 branches missed.">		if(null != summary &amp;&amp; null != summary.getOfacList() &amp;&amp; null != summary.getWorldCheck()){</span>
+<span class="nc" id="L326">			beneRequest.setPreviousOfac(summary.getOfacList());</span>
+<span class="nc" id="L327">			beneRequest.setPreviousWorldCheck(summary.getWorldCheck());</span>
+<span class="nc" id="L328">			beneRequest.setPreviousStatus(summary.getStatus());</span>
+		}
+<span class="nc" id="L330">		beneRequests.add(beneRequest);</span>
+<span class="nc" id="L331">		return beneRequests;</span>
+	}
+
+	protected List&lt;SanctionBankRequest&gt; createBankRequest(FundsOutRequest fundsOutRequest, String bankSanctionCategory) throws ComplianceException {
+<span class="nc" id="L335">		List&lt;SanctionBankRequest&gt; bankRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L336">		StringBuilder sanctionID = new StringBuilder();</span>
+<span class="nc" id="L337">		sanctionID.append(StringUtils.leftPadWithZero(3, fundsOutRequest.getOrgId())).append(&quot;-B-&quot;)</span>
+<span class="nc" id="L338">				.append(StringUtils.leftPadWithZero(10, fundsOutRequest.getBeneficiary().getBeneficiaryBankid()));</span>
+<span class="nc" id="L339">		SanctionBankRequest bankRequest = new SanctionBankRequest();</span>
+<span class="nc" id="L340">		SanctionSummary summary = (SanctionSummary) fundsOutRequest.getAdditionalAttribute(Constants.PREVIOUS_BANK_SANCTION_SUMMARY+fundsOutRequest.getBeneficiary().getBeneficiaryBankid());</span>
+<span class="nc" id="L341">		bankRequest.setBankName(fundsOutRequest.getBeneficiary().getBeneficaryBankName());</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">		if(null!=fundsOutRequest.getBeneficiary().getCountry()){</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">		bankRequest.setCountry(null != cacheLoader.getCountryFullName(fundsOutRequest.getBeneficiary().getCountry())</span>
+<span class="nc" id="L344">				? cacheLoader.getCountryFullName(fundsOutRequest.getBeneficiary().getCountry()) : &quot;&quot;);</span>
+		}
+<span class="nc" id="L346">		bankRequest.setSanctionId(sanctionID.toString());</span>
+<span class="nc" id="L347">		bankRequest.setIsExisting(fundsOutRequest.isBankSanctionPerformed());</span>
+<span class="nc" id="L348">		bankRequest.setBankId(Integer.parseInt(fundsOutRequest.getBeneficiary().getBeneficiaryBankid().toString()));</span>
+<span class="nc" id="L349">		bankRequest.setCategory(bankSanctionCategory);</span>
+<span class="nc bnc" id="L350" title="All 6 branches missed.">		if(null != summary &amp;&amp; null != summary.getOfacList() &amp;&amp; null != summary.getWorldCheck()){</span>
+<span class="nc" id="L351">			bankRequest.setPreviousOfac(summary.getOfacList());</span>
+<span class="nc" id="L352">			bankRequest.setPreviousWorldCheck(summary.getWorldCheck());</span>
+<span class="nc" id="L353">			bankRequest.setPreviousStatus(summary.getStatus());</span>
+		}
+<span class="nc" id="L355">		bankRequests.add(bankRequest);</span>
+<span class="nc" id="L356">		return bankRequests;</span>
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer#transformResponse(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+		try{
+<span class="nc" id="L365">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L366">			FundsOutRequest fundsOutRequest = (FundsOutRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L367">			Account account = (Account)fundsOutRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L368">			String custType = account.getCustType();</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">			if (custType!= null){</span>
+<span class="nc" id="L370">				custType = custType.trim();</span>
+			}
+<span class="nc bnc" id="L372" title="All 2 branches missed.">			if (Constants.CFX.equalsIgnoreCase(custType)) {</span>
+<span class="nc" id="L373">				transformCFXResponse(message);</span>
+<span class="nc bnc" id="L374" title="All 2 branches missed.">			} else if (Constants.PFX.equalsIgnoreCase(custType)){</span>
+<span class="nc" id="L375">				transformPFXResponse(message);</span>
+			}
+<span class="nc" id="L377">		} catch(Exception e){</span>
+<span class="nc" id="L378">			LOGGER.error(&quot;Exception in transformResponse() of Sanction Transformer in FundsOut Flow &quot;, e);</span>
+<span class="nc" id="L379">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L380">		}</span>
+<span class="nc" id="L381">	return message;</span>
+		
+	}
+
+	/**
+	 * @param message
+	 * @return
+	 */
+	private Message&lt;MessageContext&gt; transformCFXResponse(Message&lt;MessageContext&gt; message) {
+		
+		try {
+<span class="nc" id="L392">			transformCommonResponse(message);</span>
+<span class="nc" id="L393">		} catch (Exception e) {</span>
+<span class="nc" id="L394">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L395">		}</span>
+<span class="nc" id="L396">		return message;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformPFXResponse(Message&lt;MessageContext&gt; message) {
+		
+		try {
+<span class="nc" id="L402">			transformCommonResponse(message);</span>
+<span class="nc" id="L403">		} catch (Exception exception) {</span>
+<span class="nc" id="L404">			LOGGER.debug(Constants.ERROR, exception);</span>
+<span class="nc" id="L405">		}</span>
+<span class="nc" id="L406">		return message;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; transformCommonResponse(Message&lt;MessageContext&gt; message) {
+		try{
+<span class="nc" id="L411">			MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L412">			FundsOutRequest fundsOutRequest = message.getPayload().getGatewayMessageExchange().getRequest(FundsOutRequest.class);</span>
+<span class="nc" id="L413">			SanctionSummary firstSummary = (SanctionSummary) fundsOutRequest.getAdditionalAttribute(Constants.PREVIOUS_CONTACT_SANCTION_SUMMARY);</span>
+<span class="nc" id="L414">			SanctionResponse fResponse = (SanctionResponse) exchange.getResponse();</span>
+<span class="nc" id="L415">			FundsInSanctionRequest sanctionRequest = exchange.getRequest(FundsInSanctionRequest.class);</span>
+<span class="nc bnc" id="L416" title="All 2 branches missed.">			if(fResponse == null){</span>
+<span class="nc" id="L417">				 fResponse = new SanctionResponse();</span>
+<span class="nc" id="L418">				 exchange.setResponse(createServiceFailureNullResponse(sanctionRequest, fResponse, exchange,fundsOutRequest));</span>
+<span class="nc" id="L419">				 return message;</span>
+			}
+<span class="nc bnc" id="L421" title="All 2 branches missed.">			if(OperationEnum.SANCTION_RESEND == message.getPayload().getGatewayMessageExchange().getOperation()){</span>
+<span class="nc" id="L422">				return setSanctionResendResponse(message); </span>
+			}
+<span class="nc bnc" id="L424" title="All 2 branches missed.">			if(fResponse.getErrorCode()==null){</span>
+<span class="nc" id="L425">				exchange.setResponse(handleValidSanctionResponse(fResponse, exchange, sanctionRequest, fundsOutRequest, firstSummary));</span>
+			}
+			else{
+<span class="nc" id="L428">				handleErrorSanctionResponse(message, fResponse);</span>
+			}
+<span class="nc" id="L430">		}catch(Exception e){</span>
+<span class="nc" id="L431">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L432">		}</span>
+<span class="nc" id="L433">		return message;</span>
+	}
+
+	/**
+	 * @param message
+	 * @param fResponse
+	 * @param logs
+	 */
+	private void handleErrorSanctionResponse(Message&lt;MessageContext&gt; message, SanctionResponse fResponse) {
+		try {
+<span class="nc" id="L443">			FundsOutRequest request = (FundsOutRequest)message.getPayload().getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L444">			SanctionResponse tmp =createServiceFailureResponse(request,fResponse);</span>
+<span class="nc" id="L445">			fResponse.setBankResponses(tmp.getBankResponses());</span>
+<span class="nc" id="L446">			fResponse.setBeneficiaryResponses(tmp.getBeneficiaryResponses());</span>
+<span class="nc" id="L447">			fResponse.setContactResponses(tmp.getContactResponses());</span>
+<span class="nc" id="L448">			MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+			
+<span class="nc" id="L450">			EventServiceLog contactServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L451">					EntityEnum.CONTACT.name(), tmp.getContactResponses().get(0).getContactId());</span>
+			
+			
+<span class="nc" id="L454">			SanctionSummary sanctionSummary = JsonConverterUtil.convertToObject(SanctionSummary.class, contactServiceLog.getSummary());</span>
+<span class="nc" id="L455">			sanctionSummary.setStatus(ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L456">			contactServiceLog.setStatus(tmp.getContactResponses().get(0).getStatus());</span>
+<span class="nc" id="L457">			contactServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(fResponse.getContactResponses().get(0)));</span>
+<span class="nc" id="L458">			contactServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(sanctionSummary));</span>
+			
+<span class="nc" id="L460">			EventServiceLog bankServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L461">					EntityEnum.BANK.name(), tmp.getBankResponses().get(0).getBankID());</span>
+<span class="nc" id="L462">			SanctionSummary bankSanctionSummary = JsonConverterUtil.convertToObject(SanctionSummary.class, bankServiceLog.getSummary());</span>
+<span class="nc" id="L463">			bankSanctionSummary.setStatus(ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L464">			bankServiceLog.setStatus(tmp.getBankResponses().get(0).getStatus());</span>
+<span class="nc" id="L465">			bankServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(fResponse.getBankResponses().get(0)));</span>
+<span class="nc" id="L466">			bankServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(bankSanctionSummary));</span>
+			
+<span class="nc" id="L468">			EventServiceLog beneServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L469">					EntityEnum.BENEFICIARY.name(), tmp.getBeneficiaryResponses().get(0).getBeneficiaryId());</span>
+<span class="nc" id="L470">			SanctionSummary beneSanctionSummary = JsonConverterUtil.convertToObject(SanctionSummary.class, beneServiceLog.getSummary());</span>
+<span class="nc" id="L471">			beneSanctionSummary.setStatus(ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L472">			beneServiceLog.setStatus(tmp.getBeneficiaryResponses().get(0).getStatus());</span>
+<span class="nc" id="L473">			beneServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(fResponse.getBeneficiaryResponses().get(0)));</span>
+<span class="nc" id="L474">			beneServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(beneSanctionSummary));</span>
+			
+<span class="nc" id="L476">		}catch (Exception e) {</span>
+<span class="nc" id="L477">			LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L478">		}</span>
+		
+<span class="nc" id="L480">	}</span>
+
+	/**
+	 * Create SanctionSummary for Contact,Bank,Beneficiary as per Required Status
+	 *  and update that entry into EventServiceLog.
+	 *  Changes made by- Saylee
+	 */
+	private SanctionResponse handleValidSanctionResponse(SanctionResponse fResponse, MessageExchange exchange,
+			FundsInSanctionRequest sanctionRequest, FundsOutRequest fundsOutRequest, SanctionSummary firstSummary) {
+		try {
+			//AT-3102
+<span class="nc" id="L491">			String sanctionContactCacheResponse = (String) fundsOutRequest.getAdditionalAttribute(&quot;contactSanctionCachedProviderResponse&quot;);</span>
+<span class="nc bnc" id="L492" title="All 2 branches missed.">			if(null != sanctionContactCacheResponse) {</span>
+<span class="nc" id="L493">				SanctionContactResponse sanctionContactResponse = JsonConverterUtil.convertToObject(SanctionContactResponse.class,</span>
+						sanctionContactCacheResponse);
+<span class="nc" id="L495">				EventServiceLog contactServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L496">						EntityEnum.CONTACT.name(), sanctionContactResponse.getContactId());</span>
+<span class="nc" id="L497">				createSanctionSummaryForContact(sanctionContactResponse, contactServiceLog,firstSummary);</span>
+<span class="nc" id="L498">				List&lt;SanctionContactResponse&gt; contactList = fResponse.getContactResponses();</span>
+<span class="nc" id="L499">				contactList.add(sanctionContactResponse);</span>
+<span class="nc" id="L500">				fResponse.setContactResponses(contactList);</span>
+<span class="nc" id="L501">			}else {</span>
+<span class="nc" id="L502">				List&lt;SanctionContactResponse&gt; contactList = fResponse.getContactResponses();</span>
+<span class="nc" id="L503">				SanctionContactResponse contactResponse = contactList.get(0);</span>
+<span class="nc" id="L504">				EventServiceLog contactServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L505">						EntityEnum.CONTACT.name(), contactResponse.getContactId());</span>
+<span class="nc" id="L506">				createSanctionSummaryForContact(contactResponse, contactServiceLog,firstSummary);</span>
+				
+<span class="nc bnc" id="L508" title="All 2 branches missed.">				if(!ServiceStatus.SERVICE_FAILURE.toString().equalsIgnoreCase(contactResponse.getStatus())) {</span>
+<span class="nc" id="L509">					contactSanctionStatusCaching.insertContactSacntionResponseInCache(contactResponse.getContactId(),contactResponse);</span>
+				}
+			}
+			
+<span class="nc" id="L513">			SanctionBankResponse bankResponse = fResponse.getBankResponses().get(0);</span>
+<span class="nc" id="L514">			SanctionBeneficiaryResponse beneResponse = fResponse.getBeneficiaryResponses().get(0);</span>
+			
+<span class="nc" id="L516">			EventServiceLog bankServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L517">					EntityEnum.BANK.name(), bankResponse.getBankID());</span>
+<span class="nc" id="L518">			EventServiceLog beneServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L519">					EntityEnum.BENEFICIARY.name(), beneResponse.getBeneficiaryId());</span>
+			
+<span class="nc" id="L521">			SanctionSummary bankSummary = createSanctionSummary(bankResponse.getOfacList(), bankResponse.getWorldCheck(),</span>
+<span class="nc" id="L522">					bankResponse.getSanctionId(), bankResponse.getStatus());</span>
+<span class="nc" id="L523">			bankSummary.setProviderName(bankResponse.getProviderName());</span>
+<span class="nc" id="L524">			bankSummary.setProviderMethod(bankResponse.getProviderMethod());</span>
+			
+<span class="nc" id="L526">			SanctionSummary beneSummary = createSanctionSummary(beneResponse.getOfacList(), beneResponse.getWorldCheck(),</span>
+<span class="nc" id="L527">					beneResponse.getSanctionId(), beneResponse.getStatus());</span>
+<span class="nc" id="L528">			beneSummary.setProviderName(beneResponse.getProviderName());</span>
+<span class="nc" id="L529">			beneSummary.setProviderMethod(beneResponse.getProviderMethod());</span>
+			
+<span class="nc bnc" id="L531" title="All 2 branches missed.">			if(bankServiceLog !=null){</span>
+<span class="nc" id="L532">			updateResponseInEventLog(bankServiceLog, JsonConverterUtil.convertToJsonWithoutNull(bankResponse), </span>
+<span class="nc" id="L533">					bankResponse.getStatus(), bankSummary);</span>
+			}
+			
+<span class="nc bnc" id="L536" title="All 2 branches missed.">			if(beneServiceLog !=null){</span>
+<span class="nc" id="L537">			updateResponseInEventLog(beneServiceLog, JsonConverterUtil.convertToJsonWithoutNull(beneResponse), </span>
+<span class="nc" id="L538">					beneResponse.getStatus(), beneSummary);	</span>
+			}
+			
+<span class="nc" id="L541">		} catch (Exception e) {</span>
+<span class="nc" id="L542">				LOGGER.error(&quot;Error in reading Sanction response&quot;, e);</span>
+				try {
+<span class="nc" id="L544">					createServiceFailureNullResponse(sanctionRequest, fResponse, exchange, fundsOutRequest);</span>
+<span class="nc" id="L545">				} catch (Exception ex){</span>
+<span class="nc" id="L546">					LOGGER.debug(Constants.ERROR, e);</span>
+<span class="nc" id="L547">					throw ex;</span>
+<span class="nc" id="L548">				}</span>
+<span class="nc" id="L549">		}</span>
+<span class="nc" id="L550">		return fResponse;</span>
+	}
+
+	private void createSanctionSummaryForContact(SanctionContactResponse contactResponse,
+			EventServiceLog contactServiceLog,SanctionSummary firstSummary) {
+<span class="nc" id="L555">		SanctionSummary contactSummary = createSanctionSummary(contactResponse.getOfacList(), contactResponse.getWorldCheck(),</span>
+<span class="nc" id="L556">				contactResponse.getSanctionId(), contactResponse.getStatus());</span>
+<span class="nc" id="L557">		contactSummary.setProviderName(contactResponse.getProviderName());</span>
+<span class="nc" id="L558">		contactSummary.setProviderMethod(contactResponse.getProviderMethod());</span>
+		
+<span class="nc bnc" id="L560" title="All 2 branches missed.">		if (null != firstSummary</span>
+<span class="nc bnc" id="L561" title="All 2 branches missed.">				&amp;&amp; (Constants.NOT_AVAILABLE.equalsIgnoreCase(contactResponse.getWorldCheck())</span>
+<span class="nc bnc" id="L562" title="All 2 branches missed.">						|| Constants.NOT_AVAILABLE.equalsIgnoreCase(contactResponse.getOfacList()))) {</span>
+<span class="nc" id="L563">		contactSummary.setOfacList(firstSummary.getOfacList());</span>
+<span class="nc" id="L564">		contactSummary.setWorldCheck(firstSummary.getWorldCheck());</span>
+		}
+<span class="nc" id="L566">		updateResponseInEventLog(contactServiceLog, JsonConverterUtil.convertToJsonWithoutNull(contactResponse), </span>
+<span class="nc" id="L567">				contactResponse.getStatus(), contactSummary);</span>
+<span class="nc" id="L568">	}</span>
+
+	private SanctionResponse createServiceFailureResponse(FundsOutRequest fundsOutRequest,SanctionResponse fResponse) {
+<span class="nc" id="L571">		Contact contact = (Contact) fundsOutRequest.getAdditionalAttribute(Constants.FIELD_CONTACT);</span>
+<span class="nc" id="L572">		List&lt;Contact&gt; contacts = new ArrayList&lt;&gt;(1);</span>
+<span class="nc" id="L573">		contacts.add(contact);</span>
+<span class="nc" id="L574">		fResponse.setContactResponses(createContactServiceFailureResponse(contacts,fResponse));</span>
+<span class="nc" id="L575">		fResponse.setBankResponses(createBankServiceFailureResponse(fundsOutRequest,fResponse));</span>
+<span class="nc" id="L576">		fResponse.setBeneficiaryResponses(createBeneficiaryServiceFailureResponse(fundsOutRequest,fResponse));</span>
+<span class="nc" id="L577">		return fResponse;</span>
+	}
+	
+	private SanctionResponse createServiceFailureNullResponse(FundsInSanctionRequest sanctionRequest,
+			SanctionResponse fResponse, MessageExchange exchange, FundsOutRequest fundsOutRequest) {
+<span class="nc" id="L582">		List&lt;SanctionContactResponse&gt; contactResponsesList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L583">		 List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponsesList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L584">		 List&lt;SanctionBankResponse&gt; bankResponsesList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L585">		 String status = null;</span>
+<span class="nc bnc" id="L586" title="All 2 branches missed.">		if (sanctionRequest.getContactrequests() != null) {</span>
+<span class="nc" id="L587">			contactResponsesList = createContactServiceFailureNullResponse(sanctionRequest, exchange,fundsOutRequest);</span>
+<span class="nc" id="L588">			status = contactResponsesList.get(0).getStatus();</span>
+		}
+
+<span class="nc bnc" id="L591" title="All 2 branches missed.">		if (sanctionRequest.getBankRequests() != null) {</span>
+<span class="nc" id="L592">			bankResponsesList = createBankServiceFailureNullResponse(sanctionRequest, exchange,fundsOutRequest);</span>
+<span class="nc" id="L593">			status = bankResponsesList.get(0).getStatus();</span>
+		}
+
+<span class="nc bnc" id="L596" title="All 2 branches missed.">		if (sanctionRequest.getBeneficiaryRequests() != null) {</span>
+<span class="nc" id="L597">			beneficiaryResponsesList = createBeneficiaryServiceFailureNullResponse(sanctionRequest, exchange,fundsOutRequest);</span>
+<span class="nc" id="L598">			status = beneficiaryResponsesList.get(0).getStatus();</span>
+		}
+		
+<span class="nc" id="L601">		fResponse.setBankResponses(bankResponsesList);</span>
+<span class="nc" id="L602">		fResponse.setBeneficiaryResponses(beneficiaryResponsesList);</span>
+<span class="nc" id="L603">		fResponse.setContactResponses(contactResponsesList);</span>
+<span class="nc" id="L604">		fResponse.addAttribute(&quot;sanctionOverallStatus&quot;, status);</span>
+<span class="nc" id="L605">		return fResponse;</span>
+	}
+	
+	protected List&lt;SanctionContactResponse&gt; createContactServiceFailureResponse(List&lt;Contact&gt; contacts,SanctionResponse fResponse) {
+<span class="nc" id="L609">		List&lt;SanctionContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L610" title="All 2 branches missed.">		for (Contact contact : contacts) {</span>
+<span class="nc" id="L611">			SanctionContactResponse response = new SanctionContactResponse();</span>
+<span class="nc" id="L612">			response.setContactId(contact.getId());</span>
+<span class="nc bnc" id="L613" title="All 2 branches missed.">			for(SanctionContactResponse cont :fResponse.getContactResponses()){</span>
+<span class="nc bnc" id="L614" title="All 4 branches missed.">				Boolean isErrorInResponse = cont != null &amp;&amp; cont.getErrorCode() != null;</span>
+<span class="nc bnc" id="L615" title="All 2 branches missed.">				if(Boolean.TRUE.equals(isErrorInResponse) </span>
+<span class="nc bnc" id="L616" title="All 2 branches missed.">						&amp;&amp; (Boolean.TRUE.equals(cont.getErrorCode().equals(ExternalErrorCodes.SANCTION_ERROR_WHILE_TRANSFORMATION_REQUEST.getErrorCode())) </span>
+<span class="nc bnc" id="L617" title="All 2 branches missed.">						|| Boolean.TRUE.equals(cont.getErrorCode().equals(ExternalErrorCodes.SANCTION_ERROR_WHILE_TRANSFORMATION_RESPONSE.getErrorCode()))</span>
+<span class="nc bnc" id="L618" title="All 2 branches missed.">						|| Boolean.TRUE.equals(cont.getErrorCode().equals(ExternalErrorCodes.SANCTION_VALIDATION_EXCEPTION.getErrorCode())))){</span>
+<span class="nc" id="L619">					response.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+				}else{
+<span class="nc" id="L621">					response.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+				}
+<span class="nc" id="L623">			}</span>
+<span class="nc" id="L624">			contactResponses.add(response);</span>
+<span class="nc" id="L625">		}</span>
+<span class="nc" id="L626">		return contactResponses;</span>
+	}
+
+	protected List&lt;SanctionBankResponse&gt; createBankServiceFailureResponse(FundsOutRequest fundsOutRequest,
+			SanctionResponse fResponse) {
+<span class="nc" id="L631">		List&lt;SanctionBankResponse&gt; bankResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L632">		SanctionBankResponse bankResponse = new SanctionBankResponse();</span>
+<span class="nc" id="L633">		bankResponse.setBankID(fundsOutRequest.getBeneficiary().getBeneficiaryBankid());</span>
+<span class="nc bnc" id="L634" title="All 2 branches missed.">		for (SanctionBankResponse bank : fResponse.getBankResponses()) {</span>
+<span class="nc bnc" id="L635" title="All 4 branches missed.">			Boolean isErrorinBankResponse = bank != null &amp;&amp; bank.getErrorCode() != null;</span>
+<span class="nc bnc" id="L636" title="All 2 branches missed.">			if (Boolean.TRUE.equals(isErrorinBankResponse) </span>
+<span class="nc bnc" id="L637" title="All 2 branches missed.">					&amp;&amp; (Boolean.TRUE.equals(bank.getErrorCode().equals(ExternalErrorCodes.SANCTION_ERROR_WHILE_TRANSFORMATION_REQUEST.getErrorCode())) </span>
+<span class="nc bnc" id="L638" title="All 2 branches missed.">					|| Boolean.TRUE.equals(bank.getErrorCode().equals(ExternalErrorCodes.SANCTION_ERROR_WHILE_TRANSFORMATION_RESPONSE.getErrorCode()))</span>
+<span class="nc bnc" id="L639" title="All 2 branches missed.">					|| Boolean.TRUE.equals(bank.getErrorCode().equals(ExternalErrorCodes.SANCTION_VALIDATION_EXCEPTION.getErrorCode())))) {</span>
+<span class="nc" id="L640">				bankResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+			} else {
+<span class="nc" id="L642">				bankResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+			}
+<span class="nc" id="L644">		}</span>
+<span class="nc" id="L645">		bankResponses.add(bankResponse);</span>
+<span class="nc" id="L646">		return bankResponses;</span>
+	}
+
+	protected List&lt;SanctionBeneficiaryResponse&gt; createBeneficiaryServiceFailureResponse(FundsOutRequest fundsOutRequest,
+			SanctionResponse fResponse) {
+<span class="nc" id="L651">		List&lt;SanctionBeneficiaryResponse&gt; beneResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L652">		SanctionBeneficiaryResponse beneResponse = new SanctionBeneficiaryResponse();</span>
+<span class="nc" id="L653">		beneResponse.setBeneficiaryId(fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc bnc" id="L654" title="All 2 branches missed.">		for (SanctionBeneficiaryResponse bene : fResponse.getBeneficiaryResponses()) {</span>
+<span class="nc bnc" id="L655" title="All 4 branches missed.">			Boolean isErrorInBeneResponse = bene != null &amp;&amp; bene.getErrorCode() != null;</span>
+<span class="nc bnc" id="L656" title="All 2 branches missed.">			if (Boolean.TRUE.equals(isErrorInBeneResponse) </span>
+<span class="nc bnc" id="L657" title="All 2 branches missed.">					&amp;&amp; (Boolean.TRUE.equals(bene.getErrorCode().equals(ExternalErrorCodes.SANCTION_ERROR_WHILE_TRANSFORMATION_REQUEST.getErrorCode())) </span>
+<span class="nc bnc" id="L658" title="All 2 branches missed.">					|| Boolean.TRUE.equals(bene.getErrorCode().equals(ExternalErrorCodes.SANCTION_ERROR_WHILE_TRANSFORMATION_RESPONSE.getErrorCode()))</span>
+<span class="nc bnc" id="L659" title="All 2 branches missed.">					|| Boolean.TRUE.equals(bene.getErrorCode().equals(ExternalErrorCodes.SANCTION_VALIDATION_EXCEPTION.getErrorCode())))) {</span>
+<span class="nc" id="L660">				beneResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+			} else {
+<span class="nc" id="L662">				beneResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+			}
+<span class="nc" id="L664">		}</span>
+<span class="nc" id="L665">		beneResponses.add(beneResponse);</span>
+<span class="nc" id="L666">		return beneResponses;</span>
+	}
+	
+	private Message&lt;MessageContext&gt; setSanctionResendResponse(Message&lt;MessageContext&gt; message){
+<span class="nc" id="L670">		FundsOutRequest fundsOutRequest = message.getPayload().getGatewayMessageExchange().getRequest(FundsOutRequest.class);</span>
+<span class="nc" id="L671">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L672">		SanctionResponse fResponse = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE).getResponse(SanctionResponse.class);</span>
+<span class="nc" id="L673">		MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+		
+<span class="nc" id="L675">		String newStatus= null;</span>
+<span class="nc bnc" id="L676" title="All 2 branches missed.">		if(Boolean.TRUE.equals(fundsOutRequest.getIsContactEligible())){</span>
+<span class="nc" id="L677">		SanctionContactResponse contactResponse = fResponse.getContactResponses().get(0);</span>
+<span class="nc" id="L678">		EventServiceLog contactServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.CONTACT.name(), contactResponse.getContactId());</span>
+<span class="nc" id="L679">		SanctionSummary contactSummary = createSanctionSummary(contactResponse.getOfacList(), contactResponse.getWorldCheck(),</span>
+<span class="nc" id="L680">				contactResponse.getSanctionId(), contactResponse.getStatus());</span>
+<span class="nc" id="L681">		contactSummary.setProviderName(contactResponse.getProviderName());</span>
+<span class="nc" id="L682">		contactSummary.setProviderMethod(contactResponse.getProviderMethod());</span>
+<span class="nc" id="L683">		 String providerResponse = contactResponse.getProviderResponse();</span>
+<span class="nc bnc" id="L684" title="All 4 branches missed.">		if(contactResponse.getProviderResponse() == null || contactResponse.getProviderResponse().isEmpty()){</span>
+<span class="nc" id="L685">			providerResponse = JsonConverterUtil.convertToJsonWithNull(contactSummary);</span>
+		}
+<span class="nc" id="L687">		updateResponseInEventLog(contactServiceLog, providerResponse, </span>
+<span class="nc" id="L688">				contactResponse.getStatus(), contactSummary);</span>
+		
+<span class="nc" id="L690">		newStatus = contactResponse.getStatus();</span>
+		}
+		
+<span class="nc bnc" id="L693" title="All 2 branches missed.">		if(Boolean.TRUE.equals(fundsOutRequest.getIsBankEligible())){</span>
+<span class="nc" id="L694">			SanctionBankResponse bankResponse = fResponse.getBankResponses().get(0);</span>
+<span class="nc" id="L695">			EventServiceLog bankServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.BANK.name(), bankResponse.getBankID());</span>
+<span class="nc" id="L696">			SanctionSummary bankSummary = createSanctionSummary(bankResponse.getOfacList(), bankResponse.getWorldCheck(),</span>
+<span class="nc" id="L697">					bankResponse.getSanctionId(), bankResponse.getStatus());</span>
+<span class="nc" id="L698">			bankSummary.setProviderName(bankResponse.getProviderName());</span>
+<span class="nc" id="L699">			bankSummary.setProviderMethod(bankResponse.getProviderMethod());</span>
+<span class="nc" id="L700">			String providerResponse = bankResponse.getProviderResponse();</span>
+<span class="nc bnc" id="L701" title="All 4 branches missed.">			if(bankResponse.getProviderResponse() == null || bankResponse.getProviderResponse().isEmpty()){</span>
+<span class="nc" id="L702">				providerResponse = JsonConverterUtil.convertToJsonWithNull(bankSummary);</span>
+			}
+<span class="nc" id="L704">			updateResponseInEventLog(bankServiceLog, providerResponse, </span>
+<span class="nc" id="L705">					bankResponse.getStatus(), bankSummary);</span>
+<span class="nc" id="L706">			newStatus =bankResponse.getStatus();</span>
+		}
+		
+<span class="nc bnc" id="L709" title="All 2 branches missed.">		if(Boolean.TRUE.equals(fundsOutRequest.getIsBeneficiaryEligible())){</span>
+<span class="nc" id="L710">			SanctionBeneficiaryResponse beneficiaryResponse = fResponse.getBeneficiaryResponses().get(0);</span>
+<span class="nc" id="L711">			EventServiceLog beneficiaryServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.BENEFICIARY.name(), beneficiaryResponse.getBeneficiaryId());</span>
+<span class="nc" id="L712">			SanctionSummary beneficiarySummary =  createSanctionSummary(beneficiaryResponse.getOfacList(), beneficiaryResponse.getWorldCheck(),</span>
+<span class="nc" id="L713">					beneficiaryResponse.getSanctionId(), beneficiaryResponse.getStatus());</span>
+<span class="nc" id="L714">			beneficiarySummary.setProviderName(beneficiaryResponse.getProviderName());</span>
+<span class="nc" id="L715">			beneficiarySummary.setProviderMethod(beneficiaryResponse.getProviderMethod());</span>
+<span class="nc" id="L716">			String providerResponse = beneficiaryResponse.getProviderResponse();</span>
+<span class="nc bnc" id="L717" title="All 4 branches missed.">			if(beneficiaryResponse.getProviderResponse() == null || beneficiaryResponse.getProviderResponse().isEmpty()){</span>
+<span class="nc" id="L718">				providerResponse = JsonConverterUtil.convertToJsonWithNull(beneficiarySummary);</span>
+			}
+<span class="nc" id="L720">			updateResponseInEventLog(beneficiaryServiceLog, providerResponse, </span>
+<span class="nc" id="L721">					beneficiaryResponse.getStatus(), beneficiarySummary);</span>
+<span class="nc" id="L722">			newStatus = beneficiaryResponse.getStatus();</span>
+		}
+<span class="nc" id="L724">		String status = determineSanctionStatus(messageExchange,newStatus);</span>
+<span class="nc" id="L725">		fResponse.addAttribute(Constants.SANCTION_OVERALLSTATUS, status);</span>
+<span class="nc" id="L726">		return message;</span>
+	}
+	
+	private List&lt;SanctionContactResponse&gt; createContactServiceFailureNullResponse(
+			FundsInSanctionRequest sanctionRequest, MessageExchange exchange, FundsOutRequest fundsOutRequest) {
+<span class="nc" id="L731">		 List&lt;SanctionContactResponse&gt; contactResponsesList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L732">		 String orgID = StringUtils.leftPadWithZero(3, fundsOutRequest.getOrgId());</span>
+<span class="nc bnc" id="L733" title="All 2 branches missed.">		 for (SanctionContactRequest contact : sanctionRequest.getContactrequests()) {</span>
+<span class="nc" id="L734">			String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_CONTACT, contact.getContactId() + &quot;&quot;);</span>
+			
+<span class="nc" id="L736">				SanctionContactResponse contactResponse=new SanctionContactResponse();</span>
+<span class="nc" id="L737">				contactResponse.setContactId(contact.getContactId());</span>
+<span class="nc" id="L738">				contactResponse.setSanctionId(providerRef);</span>
+<span class="nc" id="L739">				contactResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L740">				contactResponse.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L741">				contactResponse.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L742">				contactResponsesList.add(contactResponse);</span>
+<span class="nc" id="L743">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.CONTACT.name(), contact.getContactId());</span>
+<span class="nc bnc" id="L744" title="All 2 branches missed.">				if(eventServiceLog !=null)</span>
+<span class="nc" id="L745">					createEventServiceLogForServiceFailureWithSanctionID(eventServiceLog, contactResponse,providerRef);</span>
+<span class="nc" id="L746">			}</span>
+<span class="nc" id="L747">		 return contactResponsesList;</span>
+	}
+	 
+	 private List&lt;SanctionBeneficiaryResponse&gt;  createBeneficiaryServiceFailureNullResponse(FundsInSanctionRequest sanctionRequest, MessageExchange exchange, FundsOutRequest fundsOutRequest){
+<span class="nc" id="L751">		 List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponsesList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L752">		 String orgID = StringUtils.leftPadWithZero(3, fundsOutRequest.getOrgId());</span>
+<span class="nc bnc" id="L753" title="All 2 branches missed.">		 for (SanctionBeneficiaryRequest beneficiary : sanctionRequest.getBeneficiaryRequests()) {</span>
+<span class="nc" id="L754">			 String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_BENEFICIARY,</span>
+<span class="nc" id="L755">						fundsOutRequest.getBeneficiary().getBeneficiaryId() + &quot;&quot;);</span>
+<span class="nc" id="L756">				SanctionBeneficiaryResponse beneficiaryReesponse=new SanctionBeneficiaryResponse();</span>
+<span class="nc" id="L757">				beneficiaryReesponse.setBeneficiaryId(beneficiary.getBeneficiaryId());</span>
+<span class="nc" id="L758">				beneficiaryReesponse.setSanctionId(providerRef);</span>
+<span class="nc" id="L759">				beneficiaryReesponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L760">				beneficiaryReesponse.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L761">				beneficiaryReesponse.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L762">				beneficiaryResponsesList.add(beneficiaryReesponse);</span>
+<span class="nc" id="L763">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.BENEFICIARY.name(), beneficiary.getBeneficiaryId());</span>
+<span class="nc bnc" id="L764" title="All 2 branches missed.">				if(eventServiceLog !=null)</span>
+<span class="nc" id="L765">					createEventServiceLogForServiceFailureWithSanctionID(eventServiceLog, beneficiaryReesponse,providerRef);</span>
+<span class="nc" id="L766">			}</span>
+<span class="nc" id="L767">		 return beneficiaryResponsesList;</span>
+	}
+	 
+	 private  List&lt;SanctionBankResponse&gt;  createBankServiceFailureNullResponse(FundsInSanctionRequest sanctionRequest, MessageExchange exchange, FundsOutRequest fundsOutRequest){
+<span class="nc" id="L771">		 List&lt;SanctionBankResponse&gt; bankResponsesList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L772">		 String orgID = StringUtils.leftPadWithZero(3, fundsOutRequest.getOrgId());</span>
+<span class="nc bnc" id="L773" title="All 2 branches missed.">		 for (SanctionBankRequest bank : sanctionRequest.getBankRequests()) {</span>
+<span class="nc" id="L774">			 String providerRef = createReferenceId(orgID, Constants.ENTITY_TYPE_BANK,</span>
+<span class="nc" id="L775">						fundsOutRequest.getBeneficiary().getBeneficiaryBankid() + &quot;&quot;);</span>
+<span class="nc" id="L776">				SanctionBankResponse bankResponse=new SanctionBankResponse();</span>
+<span class="nc" id="L777">				bankResponse.setBankID(bank.getBankId());</span>
+<span class="nc" id="L778">				bankResponse.setSanctionId(providerRef);</span>
+<span class="nc" id="L779">				bankResponse.setOfacList(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L780">				bankResponse.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L781">				bankResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L782">				bankResponsesList.add(bankResponse);</span>
+<span class="nc" id="L783">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.BANK.name(), bank.getBankId());</span>
+<span class="nc bnc" id="L784" title="All 2 branches missed.">				if(eventServiceLog !=null)</span>
+<span class="nc" id="L785">					createEventServiceLogForServiceFailureWithSanctionID(eventServiceLog, bankResponse,providerRef);</span>
+<span class="nc" id="L786">			}</span>
+<span class="nc" id="L787">		 return bankResponsesList;</span>
+	}
+	
+	 /**
+	  *Implementation :-
+	  * 1.Get contact list and check the condition for SanctionEligible or not
+	  * 2.Get the firstSanctionSummary for particular contactId and 
+	  * 	set values for OfacList,WorldCheck and Status from that summary -Saylee
+	  * */
+	 private List&lt;SanctionContactRequest&gt; createContactRequestForFundsOut(String orgID, List&lt;Contact&gt; contacts,
+				ProvideCacheLoader cacheLoader,ServiceMessage request,String category) throws ComplianceException {
+<span class="nc" id="L798">			List&lt;SanctionContactRequest&gt; contactList = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L799" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L800" title="All 2 branches missed.">				if (contact.isSanctionEligible()) {</span>
+<span class="nc" id="L801">					SanctionSummary summary = (SanctionSummary) request.getAdditionalAttribute(Constants.PREVIOUS_CONTACT_SANCTION_SUMMARY +contact.getId());</span>
+<span class="nc" id="L802">					String countryName = cacheLoader</span>
+<span class="nc bnc" id="L803" title="All 2 branches missed.">							.getCountryFullName(null != contact.getCountry() ? contact.getCountry() : &quot;&quot;);</span>
+<span class="nc" id="L804">					SanctionContactRequest sanctionContact = new SanctionContactRequest();</span>
+<span class="nc bnc" id="L805" title="All 2 branches missed.">					if (null != countryName) {</span>
+<span class="nc" id="L806">						sanctionContact.setCountry(countryName);</span>
+					}
+					
+<span class="nc" id="L809">					sanctionContact.setDob(contact.getDob());</span>
+<span class="nc" id="L810">					sanctionContact.setFullName(contact.getFullName());</span>
+<span class="nc" id="L811">					sanctionContact.setGender(contact.getGender());</span>
+<span class="nc" id="L812">					StringBuilder sanctionID = new StringBuilder();</span>
+<span class="nc" id="L813">					sanctionID.append(orgID).append(&quot;-C-&quot;).append(StringUtils.leftPadWithZero(10, contact.getId()));</span>
+<span class="nc" id="L814">					sanctionContact.setSanctionId(sanctionID.toString());</span>
+<span class="nc" id="L815">					sanctionContact.setContactId(contact.getId());</span>
+<span class="nc" id="L816">					sanctionContact.setIsExisting(contact.isSanctionPerformed());</span>
+<span class="nc" id="L817">					sanctionContact.setCategory(category);</span>
+<span class="nc bnc" id="L818" title="All 6 branches missed.">					if(null != summary &amp;&amp; null != summary.getOfacList() &amp;&amp; null != summary.getWorldCheck()){</span>
+<span class="nc" id="L819">						sanctionContact.setPreviousOfac(summary.getOfacList());</span>
+<span class="nc" id="L820">						sanctionContact.setPreviousWorldCheck(summary.getWorldCheck());</span>
+<span class="nc" id="L821">						sanctionContact.setPreviousStatus(summary.getStatus());</span>
+					}
+<span class="nc" id="L823">					contactList.add(sanctionContact);</span>
+				}
+<span class="nc" id="L825">			}</span>
+<span class="nc" id="L826">			return contactList;</span>
+		}
+		
+		/** 
+		 *  Business :
+		 *  To update sanction status column value in payment out table we have compared
+		 *  Contact ,Bank ,Beneficiary Status into one newStatus value and putting it into sanction status column to show it on UI
+		 * 
+		 * Implementation :
+		 * 1)This method sets the sanction status to update sanction status column in payment out table.
+		 * 2)Method used for Sanction Repeat Check.
+		 * 3)NewStatus is based on Contact ,Bank ,Beneficiary Status.
+		 * 4)If Contact ,Bank ,Beneficiary Status is Pass then 'sanction status&quot; is 'PASS'
+		 * 5)Else 'sanction status&quot; is 'FAIL'
+		 * 
+		 */
+		private String determineSanctionStatus(MessageExchange messageExchange, String currentStatus) {
+			String newStatus;
+<span class="nc" id="L844">			FundsOutRequest fundsOutRequest = messageExchange.getRequest(FundsOutRequest.class);</span>
+<span class="nc" id="L845">			FundsOutSanctionResendRequest sanctionResendRequest= (FundsOutSanctionResendRequest)fundsOutRequest.getAdditionalAttribute(&quot;SANCTION_RESEND_REQUEST&quot;);</span>
+
+<span class="nc bnc" id="L847" title="All 2 branches missed.">			if (sanctionResendRequest.getEntityType().equalsIgnoreCase(EntityEnum.CONTACT.name())) {</span>
+				
+<span class="nc" id="L849">				newStatus = setSanctionStatus(currentStatus, sanctionResendRequest.getBankStatus(),</span>
+<span class="nc" id="L850">						sanctionResendRequest.getBeneficiaryStatus());</span>
+				
+<span class="nc bnc" id="L852" title="All 2 branches missed.">			} else if (sanctionResendRequest.getEntityType().equalsIgnoreCase(EntityEnum.BANK.name())) {</span>
+				
+<span class="nc" id="L854">				newStatus = setSanctionStatus(sanctionResendRequest.getContactStatus(), currentStatus,</span>
+<span class="nc" id="L855">						sanctionResendRequest.getBeneficiaryStatus());</span>
+			} else {
+<span class="nc" id="L857">				newStatus = setSanctionStatus(sanctionResendRequest.getContactStatus(),</span>
+<span class="nc" id="L858">						sanctionResendRequest.getBankStatus(), currentStatus);</span>
+			}
+<span class="nc" id="L860">			return newStatus;</span>
+		}
+
+		/** Check Contact ,Bank ,Beneficiary Status : If 'PASS' for all three status then SET 'PASS' else SET 'FAIL' 
+		 * or If any two are 'NOT_REQUIRED' and one is Pass then set status as 'PASS' */
+		private String setSanctionStatus(String sanctionContactStatus, String sanctionBankStatus,
+				String sanctionBeneficiaryStatus) {
+<span class="nc" id="L867">			String newStatus = null;</span>
+			try {
+<span class="nc bnc" id="L869" title="All 2 branches missed.">				Boolean onlyContactSanctionPasses = ServiceStatus.PASS.name().equalsIgnoreCase(sanctionContactStatus)</span>
+<span class="nc bnc" id="L870" title="All 2 branches missed.">						&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBankStatus) </span>
+<span class="nc bnc" id="L871" title="All 2 branches missed.">						&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBeneficiaryStatus);</span>
+<span class="nc bnc" id="L872" title="All 2 branches missed.">				Boolean onlyBankSanctionPassed = ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionContactStatus) </span>
+<span class="nc bnc" id="L873" title="All 2 branches missed.">						&amp;&amp; ServiceStatus.PASS.name().equalsIgnoreCase(sanctionBankStatus) </span>
+<span class="nc bnc" id="L874" title="All 2 branches missed.">						&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBeneficiaryStatus);</span>
+<span class="nc bnc" id="L875" title="All 2 branches missed.">				Boolean onlyBeneSanctionPassed = ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionContactStatus)</span>
+<span class="nc bnc" id="L876" title="All 2 branches missed.">						&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBankStatus)</span>
+<span class="nc bnc" id="L877" title="All 2 branches missed.">						&amp;&amp; ServiceStatus.PASS.name().equalsIgnoreCase(sanctionBeneficiaryStatus);</span>
+<span class="nc bnc" id="L878" title="All 2 branches missed.">				Boolean allSanctionPassed = ServiceStatus.PASS.name().equalsIgnoreCase(sanctionContactStatus)</span>
+<span class="nc bnc" id="L879" title="All 2 branches missed.">						&amp;&amp; ServiceStatus.PASS.name().equalsIgnoreCase(sanctionBankStatus)</span>
+<span class="nc bnc" id="L880" title="All 2 branches missed.">						&amp;&amp; ServiceStatus.PASS.name().equalsIgnoreCase(sanctionBeneficiaryStatus);</span>
+<span class="nc" id="L881">				newStatus = setNewSanctionStatusOnUpdate(sanctionContactStatus, sanctionBankStatus,</span>
+						sanctionBeneficiaryStatus, onlyContactSanctionPasses, onlyBankSanctionPassed,
+						onlyBeneSanctionPassed, allSanctionPassed);
+<span class="nc" id="L884">			} catch (Exception e) {</span>
+<span class="nc" id="L885">				LOGGER.error(&quot;Error while setting sanction status for repeat check :: setSanctionStatus() :: &quot;, e);</span>
+
+<span class="nc" id="L887">			}</span>
+
+<span class="nc" id="L889">			return newStatus;</span>
+		}
+
+		private String setNewSanctionStatusOnUpdate(String sanctionContactStatus, String sanctionBankStatus,
+				String sanctionBeneficiaryStatus, Boolean onlyContactSanctionPasses, Boolean onlyBankSanctionPassed,
+				Boolean onlyBeneSanctionPassed, Boolean allSanctionPassed) {
+			String newStatus;
+<span class="nc bnc" id="L896" title="All 6 branches missed.">			Boolean anyOneSanctionPassed = onlyContactSanctionPasses || onlyBankSanctionPassed || onlyBeneSanctionPassed; </span>
+<span class="nc bnc" id="L897" title="All 4 branches missed.">			if (allSanctionPassed || anyOneSanctionPassed) {</span>
+				
+<span class="nc" id="L899">				newStatus = ServiceStatus.PASS.name();</span>
+
+<span class="nc bnc" id="L901" title="All 2 branches missed.">			} else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionContactStatus)</span>
+<span class="nc bnc" id="L902" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBankStatus)</span>
+<span class="nc bnc" id="L903" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(sanctionBeneficiaryStatus)) {</span>
+				
+<span class="nc" id="L905">				newStatus = ServiceStatus.NOT_REQUIRED.name();</span>
+				
+			}else {
+<span class="nc" id="L908">				newStatus = ServiceStatus.FAIL.name();</span>
+			}
+<span class="nc" id="L910">			return newStatus;</span>
+		}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

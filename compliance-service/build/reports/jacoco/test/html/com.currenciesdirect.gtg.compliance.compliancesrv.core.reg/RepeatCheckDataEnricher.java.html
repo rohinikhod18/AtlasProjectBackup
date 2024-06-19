@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RepeatCheckDataEnricher.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.reg</a> &gt; <span class="el_source">RepeatCheckDataEnricher.java</span></div><h1>RepeatCheckDataEnricher.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.reg;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KycResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionSummary;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.AbstractDataEnricher;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.EntityDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+/**
+ * The Class RepeatCheckDataEnricher.
+ */
+<span class="nc" id="L33">public class RepeatCheckDataEnricher extends AbstractDataEnricher{</span>
+	
+	/** The event DB service impl. */
+	@Autowired
+	private IEventDBService eventDBServiceImpl;
+	
+	/**
+	 * Enrich data.
+	 *
+	 * @param message            the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; enrichData(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L47">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L48">		ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc" id="L49">		OperationEnum operation = messageExchange.getOperation();</span>
+<span class="nc" id="L50">		getUserTableId(message);</span>
+<span class="nc bnc" id="L51" title="All 4 branches missed.">		if (serviceInterfaceType == ServiceInterfaceType.PROFILE &amp;&amp; operation == OperationEnum.SANCTION_RESEND) {</span>
+<span class="nc" id="L52">			enrichDataSanctionResend(message);</span>
+		}
+
+<span class="nc bnc" id="L55" title="All 4 branches missed.">		if (serviceInterfaceType == ServiceInterfaceType.PROFILE &amp;&amp; operation == OperationEnum.KYC_RESEND) {</span>
+<span class="nc" id="L56">			enrichDataKycResend(message);</span>
+		}
+		
+<span class="nc bnc" id="L59" title="All 4 branches missed.">		if (serviceInterfaceType == ServiceInterfaceType.PROFILE &amp;&amp; operation == OperationEnum.BLACKLIST_RESEND) {</span>
+<span class="nc" id="L60">			enrichDataBlacklistResend(message);</span>
+		}
+
+<span class="nc" id="L63">		return message;</span>
+	}
+
+	/**
+	 * Gets the registration request.
+	 *
+	 * @param entityId the entity id
+	 * @param accountId the account id
+	 * @return the registration request
+	 * @throws ComplianceException the compliance exception
+	 */
+	private RegistrationServiceRequest getRegistrationRequest(Integer entityId, Integer accountId)
+			throws ComplianceException {
+<span class="nc" id="L76">			return newRegistrationDBServiceImpl.getRegistrationRequestByContactId(entityId, accountId);</span>
+	}
+	
+	/**
+	 * Gets the registration request.
+	 *
+	 * @param entityId the entity id
+	 * @param accountId the account id
+	 * @param orgCode the org code
+	 * @return the registration request
+	 * @throws ComplianceException the compliance exception
+	 */
+	private RegistrationServiceRequest getRegistrationRequest(Integer entityId, Integer accountId, String orgCode)
+			throws ComplianceException {
+<span class="nc" id="L90">			return newRegistrationDBServiceImpl.getRegistrationRequestByAccountID(entityId, accountId,orgCode);</span>
+	}
+
+	/**
+	 * Gets the service status.
+	 *
+	 * @param entityId the entity id
+	 * @param serviceName the service name
+	 * @param entityType the entity type
+	 * @return the service status
+	 * @throws ComplianceException the compliance exception
+	 */
+	private EntityDetails getServiceStatus(Integer entityId, String serviceName, String entityType)
+			throws ComplianceException {
+<span class="nc" id="L104">		EntityDetails entityDetails = new EntityDetails();</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">		if(ServiceTypeEnum.SANCTION_SERVICE.getShortName().equalsIgnoreCase(serviceName))</span>
+<span class="nc" id="L106">		 return eventDBServiceImpl.getPreviousSanctionDetails(entityId, entityType);</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">		else if(ServiceTypeEnum.KYC_SERVICE.getShortName().equalsIgnoreCase(serviceName))</span>
+<span class="nc" id="L108">		 return eventDBServiceImpl.isKycServicePerformed(entityId, entityType);</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">		else if(ServiceTypeEnum.FRAUGSTER_SERVICE.getShortName().equalsIgnoreCase(serviceName))</span>
+<span class="nc" id="L110">			 return eventDBServiceImpl.getPreviousFraugsterDetails(entityId, entityType);</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">		else if(ServiceTypeEnum.BLACK_LIST_SERVICE.getShortName().equalsIgnoreCase(serviceName))</span>
+<span class="nc" id="L112">			 return eventDBServiceImpl.getPreviousBlacklistDetails(entityId, entityType);</span>
+<span class="nc" id="L113">		else return entityDetails;</span>
+	}
+
+	/**
+	 * Enrich data sanction resend.
+	 *
+	 * @param message the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void enrichDataSanctionResend(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L123">		SanctionResendRequest request = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L124">				.getRequest(SanctionResendRequest.class);</span>
+		RegistrationServiceRequest regRequest;
+<span class="nc" id="L126">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+		
+<span class="nc bnc" id="L128" title="All 4 branches missed.">		if (null != request.getEntityType() &amp;&amp; (EntityEnum.ACCOUNT.name()).equalsIgnoreCase(request.getEntityType())) {</span>
+<span class="nc" id="L129">			regRequest = getRegistrationRequest(request.getEntityId(), request.getAccountId(),  request.getOrgCode());</span>
+<span class="nc" id="L130">			EntityDetails entityDetails = getServiceStatus(request.getEntityId(), ServiceTypeEnum.SANCTION_SERVICE.getShortName(), request.getEntityType());</span>
+<span class="nc" id="L131">			entityDetails.setAccountName(regRequest.getAccount().getAccountName());</span>
+<span class="nc" id="L132">			regRequest.addAttribute(Constants.ENTITY_TYPE, EntityEnum.ACCOUNT.name());</span>
+<span class="nc" id="L133">			regRequest.addAttribute(Constants.FIELD_ENTITY_DETAILS,entityDetails);</span>
+<span class="nc" id="L134">			regRequest.getAccount().getCompany().setSanctionPerformed(entityDetails.getIsExist());</span>
+<span class="nc" id="L135">		} else {</span>
+<span class="nc" id="L136">			regRequest = getRegistrationRequest(request.getEntityId(), request.getAccountId());</span>
+<span class="nc" id="L137">			EntityDetails entityDetails = getServiceStatus(request.getEntityId(), ServiceTypeEnum.SANCTION_SERVICE.getShortName(), request.getEntityType());</span>
+<span class="nc" id="L138">			entityDetails.setContactName(regRequest.getAccount().getContacts().get(0).getFullName());</span>
+<span class="nc" id="L139">			regRequest.addAttribute(Constants.FIELD_ENTITY_DETAILS,entityDetails);</span>
+<span class="nc" id="L140">			regRequest.addAttribute(Constants.ENTITY_TYPE, EntityEnum.CONTACT.name());</span>
+<span class="nc" id="L141">			regRequest.getAccount().getContacts().get(0).setSanctionPerformed(entityDetails.getIsExist());</span>
+		}
+		/*
+		 * We fetch user ID here by getting it from database according to user name
+		 * Changes done by Vishal J
+		 * */
+<span class="nc" id="L147">		Integer userID = newRegistrationDBServiceImpl.getUserIDFromSSOUserID(token.getPreferredUserName());</span>
+		//setting appropriate user id into UserProfile token
+<span class="nc" id="L149">		token.setUserID(userID);</span>
+<span class="nc" id="L150">		SanctionSummary sanctionSummary = newRegistrationDBServiceImpl.getFirstSanctionSummary(request.getEntityId(), request.getEntityType());</span>
+<span class="nc" id="L151">		regRequest.addAttribute(&quot;firstSanctionSummary&quot;, sanctionSummary);</span>
+<span class="nc bnc" id="L152" title="All 4 branches missed.">		if(null == regRequest.getOldOrgId() || 0 == regRequest.getOldOrgId()) {</span>
+<span class="nc" id="L153">			regRequest.setOrgId(request.getOrgId());</span>
+		} else {
+<span class="nc" id="L155">			regRequest.setOrgId(regRequest.getOldOrgId());</span>
+		}
+<span class="nc" id="L157">		message.getPayload().getGatewayMessageExchange().setRequest(regRequest);</span>
+<span class="nc" id="L158">		message.getPayload().getGatewayMessageExchange().getRequest().addAttribute(&quot;sanctionResendRequest&quot;, request);</span>
+<span class="nc" id="L159">	}</span>
+
+	/**
+	 * Enrich data kyc resend.
+	 *
+	 * @param message the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void enrichDataKycResend(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L168">		KycResendRequest request = message.getPayload().getGatewayMessageExchange().getRequest(KycResendRequest.class);</span>
+<span class="nc" id="L169">		RegistrationServiceRequest regRequest = getRegistrationRequest(request.getContactId(), request.getAccountId());</span>
+<span class="nc" id="L170">		EntityDetails entityDetails = getServiceStatus(request.getContactId(), &quot;KYC&quot;, EntityEnum.CONTACT.name());</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">		if(0 == regRequest.getOldOrgId()) {</span>
+<span class="nc" id="L172">			regRequest.setOrgId(request.getOrgId());</span>
+		} else {
+<span class="nc" id="L174">			regRequest.setOrgId(regRequest.getOldOrgId());</span>
+		}
+<span class="nc" id="L176">		regRequest.addAttribute(Constants.FIELD_ENTITY_DETAILS,entityDetails);</span>
+<span class="nc" id="L177">		message.getPayload().getGatewayMessageExchange().setRequest(regRequest);</span>
+<span class="nc" id="L178">		message.getPayload().getGatewayMessageExchange().getRequest().addAttribute(&quot;kycResendRequest&quot;, request);</span>
+<span class="nc" id="L179">	}</span>
+	
+	/**
+	 * Enrich data fraugster resend.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt;  enrichDataFraugsterResend(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L189">		FraugsterResendRequest request = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L190">				.getRequest(FraugsterResendRequest.class);</span>
+		RegistrationServiceRequest regRequest;
+<span class="nc" id="L192">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+		List&lt;Contact&gt; oldContacts;
+		
+<span class="nc bnc" id="L195" title="All 4 branches missed.">		if (null != request.getEntityType() &amp;&amp; (EntityEnum.ACCOUNT.name()).equalsIgnoreCase(request.getEntityType())) {</span>
+<span class="nc" id="L196">			regRequest = getRegistrationRequest(request.getEntityId(), request.getAccountId(),  request.getOrgCode());</span>
+<span class="nc" id="L197">			EntityDetails entityDetails = getServiceStatus(request.getEntityId(), ServiceTypeEnum.FRAUGSTER_SERVICE.getShortName(), request.getEntityType());</span>
+<span class="nc" id="L198">			entityDetails.setAccountName(regRequest.getAccount().getAccountName());</span>
+<span class="nc" id="L199">			regRequest.addAttribute(Constants.ENTITY_TYPE, EntityEnum.ACCOUNT.name());</span>
+<span class="nc" id="L200">			regRequest.addAttribute(Constants.FIELD_ENTITY_DETAILS,entityDetails);</span>
+<span class="nc" id="L201">			regRequest.getAccount().getCompany().setFraugsterPerformed(entityDetails.getIsExist());</span>
+<span class="nc" id="L202">		} else {</span>
+<span class="nc" id="L203">			regRequest = getRegistrationRequest(request.getEntityId(), request.getAccountId());</span>
+<span class="nc" id="L204">			EntityDetails entityDetails = getServiceStatus(request.getEntityId(), ServiceTypeEnum.FRAUGSTER_SERVICE.getShortName(), request.getEntityType());</span>
+<span class="nc" id="L205">			entityDetails.setContactName(regRequest.getAccount().getContacts().get(0).getFullName());</span>
+<span class="nc" id="L206">			regRequest.addAttribute(Constants.FIELD_ENTITY_DETAILS,entityDetails);</span>
+<span class="nc" id="L207">			regRequest.addAttribute(Constants.ENTITY_TYPE, EntityEnum.CONTACT.name());</span>
+<span class="nc" id="L208">			regRequest.getAccount().getContacts().get(0).setFraugsterPerformed(entityDetails.getIsExist());</span>
+		}
+	
+<span class="nc" id="L211">		Integer userID = newRegistrationDBServiceImpl.getUserIDFromSSOUserID(token.getPreferredUserName());</span>
+		//setting appropriate user id into UserProfile token
+<span class="nc" id="L213">		token.setUserID(userID);</span>
+<span class="nc" id="L214">		FraugsterSummary fraugsterSummary = newRegistrationDBServiceImpl.getFirstFraugsterSummary(request.getEntityId(), request.getEntityType());</span>
+<span class="nc" id="L215">		regRequest.addAttribute(&quot;firstFraugsterSummary&quot;, fraugsterSummary);</span>
+<span class="nc" id="L216">		regRequest.setOrgId(request.getOrgId());</span>
+<span class="nc" id="L217">		oldContacts = regRequest.getAccount().getContacts();</span>
+<span class="nc" id="L218">		regRequest.addAttribute(Constants.FIELD_OLD_CONTACTS, oldContacts);</span>
+<span class="nc" id="L219">		request.addAttribute(Constants.OLD_REQUEST, regRequest);</span>
+<span class="nc" id="L220">		return message;</span>
+	}
+	
+	
+	private void enrichDataBlacklistResend(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L225">		BlacklistResendRequest request = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L226">				.getRequest(BlacklistResendRequest.class);</span>
+		RegistrationServiceRequest regRequest;
+<span class="nc" id="L228">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+		
+<span class="nc bnc" id="L230" title="All 4 branches missed.">		if (null != request.getEntityType() &amp;&amp; (EntityEnum.ACCOUNT.name()).equalsIgnoreCase(request.getEntityType())) {</span>
+<span class="nc" id="L231">			regRequest = getRegistrationRequest(request.getEntityId(), request.getAccountId(),  request.getOrgCode());</span>
+<span class="nc" id="L232">			EntityDetails entityDetails = getServiceStatus(request.getEntityId(), ServiceTypeEnum.BLACK_LIST_SERVICE.getShortName(), request.getEntityType());</span>
+<span class="nc" id="L233">			entityDetails.setAccountName(regRequest.getAccount().getAccountName());</span>
+<span class="nc" id="L234">			regRequest.addAttribute(Constants.ENTITY_TYPE, EntityEnum.ACCOUNT.name());</span>
+<span class="nc" id="L235">			regRequest.addAttribute(Constants.FIELD_ENTITY_DETAILS,entityDetails);</span>
+<span class="nc" id="L236">		} else {</span>
+<span class="nc" id="L237">			regRequest = getRegistrationRequest(request.getEntityId(), request.getAccountId());</span>
+<span class="nc" id="L238">			EntityDetails entityDetails = getServiceStatus(request.getEntityId(), ServiceTypeEnum.BLACK_LIST_SERVICE.getShortName(), request.getEntityType());</span>
+<span class="nc" id="L239">			String contactName = regRequest.getAccount().getContacts().get(0).getFirstAndLastName();</span>
+<span class="nc" id="L240">			entityDetails.setContactName(contactName);</span>
+<span class="nc" id="L241">			regRequest.addAttribute(Constants.ENTITY_TYPE, EntityEnum.CONTACT.name());</span>
+<span class="nc" id="L242">			regRequest.addAttribute(Constants.FIELD_ENTITY_DETAILS,entityDetails);</span>
+		}
+		/*
+		 * We fetch user ID here by getting it from database according to user name
+		 * Changes done by Vishal J
+		 * */
+<span class="nc" id="L248">		Integer userID = newRegistrationDBServiceImpl.getUserIDFromSSOUserID(token.getPreferredUserName());</span>
+		//setting appropriate user id into UserProfile token
+<span class="nc" id="L250">		token.setUserID(userID);</span>
+<span class="nc" id="L251">		regRequest.setOrgId(request.getOrgId());</span>
+<span class="nc" id="L252">		message.getPayload().getGatewayMessageExchange().setRequest(regRequest);</span>
+<span class="nc" id="L253">		message.getPayload().getGatewayMessageExchange().getRequest().addAttribute(&quot;blacklistResendRequest&quot;, request);</span>
+<span class="nc" id="L254">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

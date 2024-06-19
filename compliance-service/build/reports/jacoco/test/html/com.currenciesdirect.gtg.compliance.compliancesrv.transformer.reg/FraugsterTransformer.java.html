@@ -1,0 +1,820 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FraugsterTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg</a> &gt; <span class="el_source">FraugsterTransformer.java</span></div><h1>FraugsterTransformer.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.DeviceInfo;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterBaseRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterProfileBaseRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSummary;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ProvideCacheLoader;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class FraugsterTransformer.
+ *
+ * @author manish
+ */
+<span class="nc" id="L51">public class FraugsterTransformer extends AbstractTransformer {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L54">	private static final Logger LOG = LoggerFactory.getLogger(FraugsterTransformer.class);</span>
+
+	/** The country cache. */
+<span class="nc" id="L57">	private ProvideCacheLoader countryCache = ProvideCacheLoader.getInstance();</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer#
+	 * transformRequest(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L67">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L68">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L69">		RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+		String jsonCxExchangeRequest;
+		try {
+			MessageExchange ccExchange;
+<span class="nc bnc" id="L73" title="All 2 branches missed.">			if ((OperationEnum.NEW_REGISTRATION)==message.getPayload().getGatewayMessageExchange().getOperation()</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">					|| (OperationEnum.ADD_CONTACT)==message.getPayload().getGatewayMessageExchange().getOperation()) {</span>
+
+<span class="nc" id="L76">				ccExchange = createSignUpExchange(registrationRequest, token,</span>
+<span class="nc" id="L77">						messageExchange.getServiceTypeEnum().name());</span>
+			} else {
+
+<span class="nc" id="L80">				ccExchange = createOnUpdateExchange(registrationRequest, token,</span>
+<span class="nc" id="L81">						messageExchange.getServiceTypeEnum().name());</span>
+			}
+<span class="nc" id="L83">			jsonCxExchangeRequest = JsonConverterUtil.convertToJsonWithoutNull(ccExchange.getRequest());</span>
+<span class="nc" id="L84">			LOG.debug(&quot;::::::::::::::: FrausterTransformer : {}&quot;,jsonCxExchangeRequest);</span>
+
+<span class="nc" id="L86">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L87">		} catch (Exception e) {</span>
+<span class="nc" id="L88">			LOG.error(&quot;Error in Fraugster transformer class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L89">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L90">		}</span>
+<span class="nc" id="L91">		return message;</span>
+	}
+
+	/**
+	 * Creates the sign up exchange.
+	 *
+	 * @param regRequest
+	 *            the reg request
+	 * @param token
+	 *            the token
+	 * @param serviceType
+	 *            the service type
+	 * @return the message exchange
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private MessageExchange createSignUpExchange(RegistrationServiceRequest regRequest, UserProfile token,
+			String serviceType) throws ComplianceException {
+<span class="nc" id="L109">		Integer eventId = (Integer) regRequest.getAdditionalAttribute(&quot;eventId&quot;);</span>
+<span class="nc" id="L110">		MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L111">		FraugsterSignupRequest request = new FraugsterSignupRequest();</span>
+<span class="nc" id="L112">		FraugsterSignupResponse fSignUpResponse = new FraugsterSignupResponse();</span>
+<span class="nc" id="L113">		List&lt;FraugsterSignupContactRequest&gt; fSingUpRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L114">		List&lt;FraugsterSignupContactResponse&gt; fSignUpResponses = new ArrayList&lt;&gt;();</span>
+
+		try {
+
+			/**
+			 * performRemainingCheck is added to create default EventServiceLog
+			 * entries for NOT_REQUIRED status in , changes done by Abhijit G
+			 **/
+			/**
+			 * Commented below code for AT-995: Allow to perform Fraugster even
+			 * blacklist check fails. i.e performRemainingCheck =true;
+			 */
+			/**
+			 * Code commented to remove SONAR critical issue.
+			 */
+<span class="nc" id="L129">			request.setOrgCode(regRequest.getOrgCode());</span>
+<span class="nc" id="L130">			request.setCorrelationID(regRequest.getCorrelationID());</span>
+<span class="nc" id="L131">			request.setSourceApplication(regRequest.getSourceApplication());</span>
+<span class="nc" id="L132">			request.setRequestType(serviceType);</span>
+<span class="nc" id="L133">			fSignUpResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">			for (Contact contact : regRequest.getAccount().getContacts()) {</span>
+				FraugsterSignupContactRequest fSingupContact;
+<span class="nc" id="L136">				fSingupContact = transformSignupRequest(contact, regRequest.getDeviceInfo(), regRequest.getAccount());</span>
+<span class="nc" id="L137">				fSingupContact.setAccountContactNum(regRequest.getAccount().getContacts().size());</span>
+<span class="nc" id="L138">				fSingUpRequests.add(fSingupContact);</span>
+
+<span class="nc" id="L140">				FraugsterSignupContactResponse response = new FraugsterSignupContactResponse();</span>
+<span class="nc" id="L141">				response.setId(contact.getId());</span>
+<span class="nc" id="L142">				response.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L143">				fSignUpResponses.add(response);</span>
+
+<span class="nc" id="L145">				FraugsterSummary summary = new FraugsterSummary();</span>
+<span class="nc" id="L146">				summary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+				// use this to update the FraugsterSchedularData table.
+<span class="nc" id="L148">				summary.setCdTrasId(fSingupContact.getTransactionID());</span>
+<span class="nc" id="L149">				ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId, ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L150">						ServiceProviderEnum.FRAUGSTER_SIGNUP_SERVICE, contact.getId(), contact.getVersion(),</span>
+<span class="nc" id="L151">						EntityEnum.CONTACT.name(), token.getUserID(), response, summary));</span>
+<span class="nc" id="L152">			}</span>
+<span class="nc" id="L153">			request.setContactRequests(fSingUpRequests);</span>
+<span class="nc" id="L154">			fSignUpResponse.setContactResponses(fSignUpResponses);</span>
+<span class="nc" id="L155">			ccExchange.setRequest(request);</span>
+<span class="nc" id="L156">			ccExchange.setResponse(fSignUpResponse);</span>
+<span class="nc" id="L157">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+
+<span class="nc" id="L159">		} catch (Exception e) {</span>
+<span class="nc" id="L160">			LOG.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L161">		}</span>
+<span class="nc" id="L162">		return ccExchange;</span>
+	}
+
+	/**
+	 * Creates the on update exchange.
+	 *
+	 * @param regRequest
+	 *            the reg request
+	 * @param token
+	 *            the token
+	 * @param serviceType
+	 *            the service type
+	 * @return the message exchange
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;unchecked&quot;)
+	private MessageExchange createOnUpdateExchange(RegistrationServiceRequest regRequest, UserProfile token,
+			String serviceType) throws ComplianceException {
+<span class="nc" id="L181">		Integer eventId = (Integer) regRequest.getAdditionalAttribute(&quot;eventId&quot;);</span>
+<span class="nc" id="L182">		MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L183">		FraugsterOnUpdateRequest fOnUpdateRequest = new FraugsterOnUpdateRequest();</span>
+<span class="nc" id="L184">		FraugsterOnUpdateResponse fResponse = new FraugsterOnUpdateResponse();</span>
+<span class="nc" id="L185">		List&lt;FraugsterOnUpdateContactRequest&gt; fOnUpdateRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L186">		List&lt;FraugsterOnUpdateContactResponse&gt; fOnUpdateResponses = new ArrayList&lt;&gt;();</span>
+		List&lt;Contact&gt; contacts;
+<span class="nc bnc" id="L188" title="All 2 branches missed.">		if(!regRequest.getAccount().getContacts().isEmpty()) {</span>
+<span class="nc" id="L189">			contacts = regRequest.getAccount().getContacts();</span>
+		} else {
+<span class="nc" id="L191">			contacts = (List&lt;Contact&gt;) regRequest.getAdditionalAttribute(Constants.FIELD_OLD_CONTACTS);</span>
+		}
+		try {
+			/**
+			 * performRemainingCheck is added to create default EventServiceLog
+			 * entries for NOT_REQUIRED status in , changes done by Abhijit G
+			 **/
+			/**
+			 * Commented below code for AT-995: Allow to perform Fraugster even
+			 * blacklist check fails. i.e performRemainingCheck =true;
+			 */
+
+<span class="nc" id="L203">			fOnUpdateRequest.setOrgCode(regRequest.getOrgCode());</span>
+<span class="nc" id="L204">			fOnUpdateRequest.setCorrelationID(regRequest.getCorrelationID());</span>
+<span class="nc" id="L205">			fOnUpdateRequest.setSourceApplication(regRequest.getSourceApplication());</span>
+<span class="nc" id="L206">			fOnUpdateRequest.setRequestType(serviceType);</span>
+
+<span class="nc" id="L208">			fResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc bnc" id="L209" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc" id="L210">				FraugsterOnUpdateContactRequest fOnUpdateContact = null;</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">				if (contact.isFraugsterEligible()) {</span>
+
+<span class="nc" id="L213">					fOnUpdateContact = transformOnUpdateRequest(contact, regRequest.getAccount(),</span>
+<span class="nc" id="L214">							regRequest.getDeviceInfo());</span>
+<span class="nc" id="L215">					fOnUpdateContact.setAccountContactNum(regRequest.getAccount().getContacts().size());</span>
+<span class="nc" id="L216">					fOnUpdateRequests.add(fOnUpdateContact);</span>
+
+<span class="nc" id="L218">					FraugsterOnUpdateContactResponse response = new FraugsterOnUpdateContactResponse();</span>
+<span class="nc" id="L219">					response.setId(contact.getId());</span>
+<span class="nc" id="L220">					response.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L221">					fOnUpdateResponses.add(response);</span>
+				}
+
+<span class="nc" id="L224">				FraugsterOnUpdateContactResponse defaultResponse = new FraugsterOnUpdateContactResponse();</span>
+<span class="nc" id="L225">				defaultResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+
+<span class="nc" id="L227">				FraugsterSummary summary = new FraugsterSummary();</span>
+<span class="nc" id="L228">				summary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+				// use this to update the FraugsterSchedularData table.
+<span class="nc bnc" id="L230" title="All 2 branches missed.">				if (null != fOnUpdateContact)</span>
+<span class="nc" id="L231">					summary.setCdTrasId(fOnUpdateContact.getTransactionID());</span>
+<span class="nc" id="L232">				ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId, ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L233">						ServiceProviderEnum.FRAUGSTER_ONUPDATE_SERVICE, contact.getId(), contact.getVersion(),</span>
+<span class="nc" id="L234">						EntityEnum.CONTACT.name(), token.getUserID(), defaultResponse, summary));</span>
+<span class="nc" id="L235">			}</span>
+
+<span class="nc" id="L237">			fOnUpdateRequest.setContactRequests(fOnUpdateRequests);</span>
+<span class="nc" id="L238">			fResponse.setContactResponses(fOnUpdateResponses);</span>
+<span class="nc" id="L239">			ccExchange.setRequest(fOnUpdateRequest);</span>
+<span class="nc" id="L240">			ccExchange.setResponse(fResponse);</span>
+<span class="nc" id="L241">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L242">		} catch (Exception e) {</span>
+<span class="nc" id="L243">			LOG.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L244">		}</span>
+<span class="nc" id="L245">		return ccExchange;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.ITransfomer#
+	 * transformResponse(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L256">		MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+		EventServiceLog eventServiceLog;
+
+		try {
+<span class="nc bnc" id="L260" title="All 2 branches missed.">			if ((OperationEnum.NEW_REGISTRATION)==message.getPayload().getGatewayMessageExchange().getOperation()</span>
+<span class="nc bnc" id="L261" title="All 2 branches missed.">					|| (OperationEnum.ADD_CONTACT)==message.getPayload().getGatewayMessageExchange().getOperation()) {</span>
+<span class="nc" id="L262">				transformSignUpResponse(exchange);</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">			} else if ((OperationEnum.UPDATE_ACCOUNT)==message.getPayload().getGatewayMessageExchange().getOperation()) {</span>
+<span class="nc" id="L264">				transformOnUpdateResponse(exchange);</span>
+			}
+<span class="nc" id="L266">			RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L267">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L268">			List&lt;Contact&gt; contacts = registrationRequest.getAccount().getContacts();</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">				if (!contact.isFraugsterEligible()) {</span>
+<span class="nc" id="L271">					eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L272">							EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L273">					eventServiceLog.setProviderResponse(&quot;&quot;);</span>
+<span class="nc" id="L274">					eventServiceLog.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L275">					eventServiceLog.setSummary(&quot;&quot;);</span>
+<span class="nc" id="L276">					eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+				}
+<span class="nc" id="L278">			}</span>
+<span class="nc" id="L279">		} catch (Exception e) {</span>
+<span class="nc" id="L280">			LOG.error(&quot;Error&quot;, e);</span>
+<span class="nc" id="L281">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L282">		}</span>
+<span class="nc" id="L283">		return message;</span>
+	}
+
+	/**
+	 * Left pad with zero.
+	 *
+	 * @param id
+	 *            the id
+	 * @return the string
+	 */
+	private String leftPadWithZero(Integer id) {
+<span class="nc" id="L294">		String pad = &quot;0000000000&quot;;</span>
+<span class="nc" id="L295">		return (pad + id).substring((pad + id).length() - 10);</span>
+	}
+
+	/**
+	 * Checks if is integer.
+	 *
+	 * @param s
+	 *            the s
+	 * @return true, if is integer
+	 */
+	private static boolean isInteger(String s) {
+<span class="nc" id="L306">		Integer val = null;</span>
+		try {
+<span class="nc bnc" id="L308" title="All 4 branches missed.">			if (s != null &amp;&amp; !&quot;&quot;.equals(s.trim())) {</span>
+<span class="nc" id="L309">				val = Integer.valueOf(s);</span>
+			}
+<span class="nc" id="L311">		} catch (NumberFormatException | NullPointerException e) {</span>
+<span class="nc" id="L312">			LOG.debug(&quot;Invalid Integer value&quot;, e);</span>
+<span class="nc" id="L313">		}</span>
+		// only got here if we didn't return false
+<span class="nc bnc" id="L315" title="All 2 branches missed.">		return null == val;</span>
+	}
+
+	/**
+	 * Transform device info and provider base request.
+	 *
+	 * @param request
+	 *            the request
+	 * @param contact
+	 *            the contact
+	 * @param deviceInfo
+	 *            the device info
+	 * @param account
+	 *            the account
+	 * @param eventType
+	 *            the event type
+	 */
+	private void transformDeviceInfoAndProviderBaseRequest(FraugsterBaseRequest request, Contact contact,
+			DeviceInfo deviceInfo,String eventType) {
+
+<span class="nc" id="L335">		request.setEventType(eventType);		</span>
+<span class="nc" id="L336">		request.setCustID(contact.getContactSFID());</span>
+		// Append version to the transaction id
+<span class="nc" id="L338">		request.setTransactionID(leftPadWithZero(contact.getId()) + contact.getVersion());</span>
+<span class="nc bnc" id="L339" title="All 2 branches missed.">		if (deviceInfo != null) {</span>
+<span class="nc" id="L340">			request.setUserAgent(deviceInfo.getUserAgent());</span>
+			// Added ScreenResolution instead of BrowserScreenResolution and
+			// DeviceResolution
+<span class="nc" id="L343">			request.setBrowserScreenResolution(deviceInfo.getScreenResolution());</span>
+<span class="nc" id="L344">			request.setBrowserName(deviceInfo.getBrowserName());</span>
+<span class="nc" id="L345">			request.setBrowserMajorVersion(deviceInfo.getBrowserMajorVersion());</span>
+<span class="nc" id="L346">			request.setDeviceType(deviceInfo.getDeviceType());</span>
+<span class="nc" id="L347">			request.setDeviceName(deviceInfo.getDeviceName());</span>
+<span class="nc" id="L348">			request.setDeviceVersion(deviceInfo.getDeviceVersion());</span>
+<span class="nc" id="L349">			request.setDeviceID(deviceInfo.getDeviceId());</span>
+<span class="nc" id="L350">			request.setDeviceManufacturer(deviceInfo.getDeviceManufacturer());</span>
+<span class="nc" id="L351">			request.setOsName(deviceInfo.getOsName());</span>
+<span class="nc" id="L352">			request.setBrowserLanguage(deviceInfo.getBrowserLanguage());</span>
+<span class="nc" id="L353">			request.setBrowserOnline(deviceInfo.getBrowserOnline());</span>
+<span class="nc" id="L354">			request.setOsDateAndTime(deviceInfo.getOsDateAndTime());</span>
+		}
+<span class="nc" id="L356">	}</span>
+
+	/**
+	 * Transform signup request.
+	 *
+	 * @param contact
+	 *            the contact
+	 * @param deviceInfo
+	 *            the device info
+	 * @param account
+	 *            the account
+	 * @return the fraugster signup contact request
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private FraugsterSignupContactRequest transformSignupRequest(Contact contact, DeviceInfo deviceInfo,
+			Account account) throws ComplianceException {
+<span class="nc" id="L373">		FraugsterSignupContactRequest requestData = new FraugsterSignupContactRequest();</span>
+
+		try {
+<span class="nc" id="L376">			transformDeviceInfoAndProviderBaseRequest(requestData, contact, deviceInfo, Constants.SIGN_UP);</span>
+<span class="nc" id="L377">			transformProfileBaseRequest(requestData, contact, account);</span>
+<span class="nc" id="L378">			requestData.setId(contact.getId());</span>
+<span class="nc bnc" id="L379" title="All 2 branches missed.">			if (null != contact.getPostCodeLongitude()) {</span>
+<span class="nc" id="L380">				requestData.setPostCodeLongitude(contact.getPostCodeLongitude());</span>
+			}
+<span class="nc bnc" id="L382" title="All 2 branches missed.">			if (null != contact.getPostCodeLatitude()) {</span>
+<span class="nc" id="L383">				requestData.setPostCodeLatitude(contact.getPostCodeLatitude());</span>
+			}
+<span class="nc" id="L385">			requestData.setRegistrationDateTime(account.getRegistrationDateTime());</span>
+<span class="nc" id="L386">			requestData.setSecondEmail(contact.getSecondEmail());</span>
+
+<span class="nc" id="L388">		} catch (Exception e) {</span>
+<span class="nc" id="L389">			LOG.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L390">		}</span>
+<span class="nc" id="L391">		return requestData;</span>
+	}
+
+	/**
+	 * Transform profile base request.
+	 *
+	 * @param requestData
+	 *            the request data
+	 * @param contact
+	 *            the contact
+	 * @param account
+	 *            the account
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void transformProfileBaseRequest(FraugsterProfileBaseRequest requestData, Contact contact, Account account)
+			throws ComplianceException {
+
+<span class="nc" id="L409">		requestData.setTitle(contact.getTitle());</span>
+<span class="nc" id="L410">		requestData.setPreferredName(contact.getPreferredName());</span>
+<span class="nc" id="L411">		requestData.setFirstName(contact.getFirstName());</span>
+<span class="nc" id="L412">		requestData.setLastName(contact.getLastName());</span>
+<span class="nc" id="L413">		requestData.setDob(contact.getDob());</span>
+<span class="nc" id="L414">		setAddressFields(requestData, contact);</span>
+<span class="nc" id="L415">		setPhoneDetails(requestData, contact);</span>
+<span class="nc" id="L416">		requestData.setNationality(contact.getNationality());</span>
+<span class="nc" id="L417">		requestData.setOccupation(contact.getOccupation());</span>
+<span class="nc" id="L418">		setPassportDetails(requestData, contact);</span>
+<span class="nc" id="L419">		requestData.setdLCardNumber(contact.getDlCardNumber());</span>
+<span class="nc" id="L420">		setDlDetails(requestData, contact);</span>
+<span class="nc" id="L421">		requestData.setMedicareCardNumber(contact.getMedicareCardNumber());</span>
+<span class="nc" id="L422">		requestData.setMedicareReferenceNumber(contact.getMedicareReferenceNumber());</span>
+<span class="nc" id="L423">		requestData.setMunicipalityOfBirth(contact.getCity()); // ?????</span>
+<span class="nc" id="L424">		requestData.setCustomerType(account.getCustType());</span>
+<span class="nc" id="L425">		requestData.setChannel(account.getChannel());</span>
+<span class="nc" id="L426">		requestData.setiPAddress(contact.getIpAddress());</span>
+<span class="nc bnc" id="L427" title="All 2 branches missed.">		if (null != contact.getIpAddressLatitude())</span>
+<span class="nc" id="L428">			requestData.setiPLatitude(Float.parseFloat(contact.getIpAddressLatitude()));</span>
+<span class="nc bnc" id="L429" title="All 2 branches missed.">		if (null != contact.getIpAddressLongitude())</span>
+<span class="nc" id="L430">			requestData.setiPLongitude(Float.parseFloat(contact.getIpAddressLongitude()));</span>
+<span class="nc" id="L431">		requestData.setCountriesOfOperation(account.getCountriesOfOperation());</span>
+<span class="nc" id="L432">		requestData.setSourceOfFund(account.getSourceOfFund());</span>
+<span class="nc" id="L433">		requestData.setSubSource(account.getSubSource());</span>
+<span class="nc" id="L434">		requestData.setReferral(account.getReferral());</span>
+<span class="nc" id="L435">		requestData.setReferralText(account.getReferralText());</span>
+<span class="nc" id="L436">		requestData.setKeywords(account.getKeywords());</span>
+<span class="nc" id="L437">		requestData.setSearchEngine(account.getSearchEngine());</span>
+<span class="nc" id="L438">		requestData.setWebsite(account.getWebsite());</span>
+<span class="nc" id="L439">		requestData.setMiddleName(contact.getMiddleName());</span>
+<span class="nc" id="L440">		requestData.setNationalId(contact.getNationalIdNumber());</span>
+<span class="nc" id="L441">		requestData.setCountryOfBirth(contact.getCountryOfBirth());</span>
+<span class="nc" id="L442">		requestData.setAza(contact.getAza());</span>
+<span class="nc" id="L443">		requestData.setAdCampaign(account.getAdCampaign());</span>
+<span class="nc" id="L444">		requestData.setResidentialStatus(contact.getResidentialStatus());</span>
+<span class="nc" id="L445">		requestData.setAffiliateName(account.getAffiliateName());</span>
+<span class="nc" id="L446">		requestData.setRegMode(account.getRegistrationMode());</span>
+<span class="nc" id="L447">		requestData.setBranch(account.getBranch());</span>
+<span class="nc" id="L448">		requestData.setTxnValue(account.getMaxTransactionAmount());</span>
+<span class="nc" id="L449">		requestData.setTxnValueRange(account.getValueOfTransaction());		</span>
+<span class="nc" id="L450">		requestData.setAddressType(contact.getAddressType());</span>
+<span class="nc" id="L451">		requestData.setTurnover(account.getTurnover());</span>
+<span class="nc" id="L452">		requestData.setRegionSuburb(contact.getRegion());</span>
+<span class="nc" id="L453">		requestData.setSource(account.getSource());</span>
+		
+<span class="nc bnc" id="L455" title="All 4 branches missed.">		if(null!=account.getCompany() &amp;&amp; null!=account.getCompany().getBillingAddress()) {</span>
+<span class="nc" id="L456">			requestData.setBillingAddress(account.getCompany().getBillingAddress());</span>
+		}
+		
+<span class="nc bnc" id="L459" title="All 2 branches missed.">		if(Constants.PFX.equals(account.getCustType())) {</span>
+<span class="nc" id="L460">			requestData.setOnQueue(contact.isOnQueue());</span>
+		} else {
+<span class="nc" id="L462">			requestData.setOnQueue(account.isOnQueue());</span>
+		}
+<span class="nc" id="L464">		requestData.setEidStatus(&quot;1&quot;);</span>
+<span class="nc" id="L465">		requestData.setSanctionStatus(&quot;1&quot;);</span>
+<span class="nc" id="L466">		requestData.setJobTitle(contact.getJobTitle());</span>
+<span class="nc" id="L467">	}</span>
+
+	/**
+	 * Sets the dl details.
+	 *
+	 * @param requestData
+	 *            the request data
+	 * @param contact
+	 *            the contact
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void setDlDetails(FraugsterProfileBaseRequest requestData, Contact contact) throws ComplianceException {
+<span class="nc bnc" id="L480" title="All 2 branches missed.">		if (null != contact.getDlCountryCode()) {</span>
+<span class="nc bnc" id="L481" title="All 2 branches missed.">			requestData.setDlCountryCode(null != countryCache.getCountryFullName(contact.getDlCountryCode())</span>
+<span class="nc" id="L482">					? countryCache.getCountryFullName(contact.getDlCountryCode()) : &quot;&quot;);</span>
+		}
+<span class="nc" id="L484">		requestData.setDlExpiryDate(contact.getDlExpiryDate());</span>
+<span class="nc" id="L485">		requestData.setDlLicenseNumber(contact.getDlLicenseNumber());</span>
+<span class="nc" id="L486">		requestData.setDlStateCode(contact.getDlStateCode());</span>
+<span class="nc" id="L487">	}</span>
+
+	/**
+	 * Sets the passport details.
+	 *
+	 * @param requestData
+	 *            the request data
+	 * @param contact
+	 *            the contact
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void setPassportDetails(FraugsterProfileBaseRequest requestData, Contact contact)
+			throws ComplianceException {
+<span class="nc bnc" id="L501" title="All 2 branches missed.">		if (null != contact.getPassportCountryCode()) {</span>
+<span class="nc bnc" id="L502" title="All 2 branches missed.">			requestData.setPassportCountryCode(null != countryCache.getCountryFullName(contact.getPassportCountryCode())</span>
+<span class="nc" id="L503">					? countryCache.getCountryFullName(contact.getPassportCountryCode()) : &quot;&quot;);</span>
+		}
+<span class="nc" id="L505">		requestData.setPassportFamilyNameAtBirth(contact.getPassportFamilyNameAtBirth());</span>
+<span class="nc" id="L506">		requestData.setPassportNameAtCitizenship(contact.getPassportNameAtCitizenship());</span>
+<span class="nc" id="L507">		requestData.setPassportNumber(contact.getPassportNumber());</span>
+<span class="nc" id="L508">		requestData.setPassportPlaceOfBirth(contact.getPassportPlaceOfBirth());</span>
+<span class="nc" id="L509">	}</span>
+
+	/**
+	 * Sets the phone details.
+	 *
+	 * @param requestData
+	 *            the request data
+	 * @param contact
+	 *            the contact
+	 */
+	private void setPhoneDetails(FraugsterProfileBaseRequest requestData, Contact contact) {
+<span class="nc" id="L520">		requestData.setPhoneWork(contact.getPhoneWork());</span>
+<span class="nc" id="L521">		requestData.setPhoneHome(contact.getPhoneHome());</span>
+<span class="nc" id="L522">		requestData.setPhoneMobile(contact.getPhoneMobile());</span>
+<span class="nc" id="L523">		requestData.setEmail(contact.getEmail());</span>
+<span class="nc" id="L524">		requestData.setPrimaryContact(contact.getPrimaryContact());</span>
+<span class="nc" id="L525">		requestData.setPrimaryPhone(contact.getPrimaryPhone());</span>
+<span class="nc" id="L526">	}</span>
+
+	/**
+	 * Sets the address fields.
+	 *
+	 * @param requestData
+	 *            the request data
+	 * @param contact
+	 *            the contact
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void setAddressFields(FraugsterProfileBaseRequest requestData, Contact contact) throws ComplianceException {
+<span class="nc" id="L539">		requestData.setAddressType(contact.getAddressType());</span>
+<span class="nc" id="L540">		requestData.setStreet(contact.getStreet());</span>
+<span class="nc" id="L541">		requestData.setCity(contact.getCity());</span>
+<span class="nc bnc" id="L542" title="All 2 branches missed.">		if (null != contact.getCountry()) {</span>
+<span class="nc bnc" id="L543" title="All 2 branches missed.">			requestData.setCountry(null != countryCache.getCountryFullName(contact.getCountry())</span>
+<span class="nc" id="L544">					? countryCache.getCountryFullName(contact.getCountry()) : &quot;&quot;);</span>
+<span class="nc" id="L545">			requestData.setCountryOfResidenceCode(contact.getCountry());</span>
+		}
+<span class="nc" id="L547">		requestData.setPostCode(contact.getPostCode());</span>
+<span class="nc" id="L548">		requestData.setSubBuildingorFlat(contact.getSubBuildingorFlat());</span>
+<span class="nc bnc" id="L549" title="All 2 branches missed.">		if (!isInteger(contact.getBuildingNumber()))</span>
+<span class="nc" id="L550">			requestData.setBuildingNumber(Integer.valueOf(contact.getBuildingNumber()));</span>
+<span class="nc bnc" id="L551" title="All 2 branches missed.">		if (!isInteger(contact.getUnitNumber()))</span>
+<span class="nc" id="L552">			requestData.setUnitNumber(Integer.valueOf(contact.getUnitNumber()));</span>
+<span class="nc" id="L553">		requestData.setSubCity(contact.getSubCity());</span>
+<span class="nc" id="L554">		requestData.setRegion(contact.getRegion());</span>
+<span class="nc" id="L555">		requestData.setState(contact.getState());</span>
+<span class="nc" id="L556">	}</span>
+
+	/**
+	 * Transform on update request.
+	 *
+	 * @param contact
+	 *            the contact
+	 * @param account
+	 *            the account
+	 * @param deviceInfo
+	 *            the device info
+	 * @return the fraugster on update contact request
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private FraugsterOnUpdateContactRequest transformOnUpdateRequest(Contact contact, Account account,
+			DeviceInfo deviceInfo) throws ComplianceException {
+<span class="nc" id="L573">		FraugsterOnUpdateContactRequest requestData = new FraugsterOnUpdateContactRequest();</span>
+		try {
+<span class="nc" id="L575">			requestData.setRegistrationDateTime(account.getRegistrationDateTime());</span>
+
+<span class="nc" id="L577">			transformDeviceInfoAndProviderBaseRequest(requestData, contact, deviceInfo,Constants.UPDATE);</span>
+<span class="nc" id="L578">			transformProfileBaseRequest(requestData, contact, account);</span>
+<span class="nc" id="L579">			requestData.setId(contact.getId());</span>
+<span class="nc bnc" id="L580" title="All 2 branches missed.">			if (null != contact.getPostCodeLatitude()) {</span>
+<span class="nc" id="L581">				requestData.setPostCodeLatitude(contact.getPostCodeLatitude());</span>
+			}
+<span class="nc bnc" id="L583" title="All 2 branches missed.">			if (null != contact.getPostCodeLongitude()) {</span>
+<span class="nc" id="L584">				requestData.setPostCodeLongitude(contact.getPostCodeLongitude());</span>
+			}
+<span class="nc" id="L586">			requestData.setUpdateMethod(contact.getUpdateMethod());</span>
+<span class="nc" id="L587">			requestData.setRecordUpdatedOn(contact.getRecordUpdatedOn());</span>
+<span class="nc" id="L588">			requestData.setAccountStatus(account.getAccountStatus());</span>
+<span class="nc" id="L589">			requestData.setContactStatus(contact.getContactStatus());</span>
+<span class="nc" id="L590">			requestData.setOnlineLoginStatus(contact.getOnlineLoginStatus());</span>
+<span class="nc" id="L591">			requestData.setSessionID(contact.getSessionID());</span>
+			/** input parameter start **/
+<span class="nc" id="L593">			requestData.setLastPINIssuedDateTime(contact.getLastPINIssuedDateTime());</span>
+<span class="nc" id="L594">			requestData.setLastLoginFailDateTime(contact.getLastLoginFailDateTime());</span>
+<span class="nc" id="L595">			requestData.setLastPasswordResetOn(contact.getLastPasswordResetOn());</span>
+<span class="nc" id="L596">			requestData.setListOfDevicesUsedByCustomer(contact.getListofDevicesUsedByCustomer());</span>
+<span class="nc" id="L597">			requestData.setSecondContactAddedLaterOnline(contact.getSecondContactAddedLaterOnline());</span>
+<span class="nc" id="L598">			requestData.setLastIPAddresses(contact.getLastIPAddresses());</span>
+<span class="nc" id="L599">			requestData.setLast5LoginDateTime(contact.getLast5LoginDateTime());</span>
+			/** input parameter end **/
+<span class="nc" id="L601">		} catch (Exception e) {</span>
+<span class="nc" id="L602">			LOG.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L603">		}</span>
+<span class="nc" id="L604">		return requestData;</span>
+	}
+
+	/**
+	 * Transform sign up response.
+	 *
+	 * @param exchange
+	 *            the exchange
+	 */
+	private void transformSignUpResponse(MessageExchange exchange) {
+<span class="nc" id="L614">		FraugsterSignupResponse fResponse = (FraugsterSignupResponse) exchange.getResponse();</span>
+<span class="nc" id="L615">		FraugsterSignupRequest fraugsterProviderRequest = exchange.getRequest(FraugsterSignupRequest.class);</span>
+		try {
+<span class="nc bnc" id="L617" title="All 4 branches missed.">			if (fResponse == null  || fResponse.getContactResponses().get(0).getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())</span>
+<span class="nc bnc" id="L618" title="All 2 branches missed.">					||fResponse.getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+				
+<span class="nc" id="L620">				fResponse = new FraugsterSignupResponse();</span>
+<span class="nc" id="L621">				List&lt;FraugsterSignupContactResponse&gt; conactResponseList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L623" title="All 2 branches missed.">				for (FraugsterSignupContactRequest contact : fraugsterProviderRequest.getContactRequests()) {</span>
+<span class="nc" id="L624">					FraugsterSignupContactResponse conactResponse = new FraugsterSignupContactResponse();</span>
+<span class="nc" id="L625">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L626">							EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L627">					FraugsterSummary fraugsterSummary = JsonConverterUtil.convertToObject(FraugsterSummary.class,</span>
+<span class="nc" id="L628">							eventServiceLog.getSummary());</span>
+<span class="nc" id="L629">					conactResponse.setId(contact.getId());</span>
+<span class="nc" id="L630">					conactResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L631">					fResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L632">					conactResponseList.add(conactResponse);</span>
+<span class="nc" id="L633">					fResponse.setContactResponses(null);</span>
+<span class="nc" id="L634">					fraugsterSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L635">					fraugsterSummary.setFrgTransId(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L636">					fraugsterSummary.setScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L637">					eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L638">					eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(fraugsterSummary));</span>
+<span class="nc" id="L639">					eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(conactResponse));</span>
+<span class="nc" id="L640">				}</span>
+<span class="nc" id="L641">				fResponse.setContactResponses(conactResponseList);</span>
+<span class="nc" id="L642">				exchange.setResponse(fResponse);</span>
+<span class="nc" id="L643">		  }</span>
+
+	else {
+<span class="nc" id="L646">			List&lt;FraugsterSignupContactResponse&gt; identityResponse = fResponse.getContactResponses();	</span>
+<span class="nc bnc" id="L647" title="All 4 branches missed.">			if (identityResponse != null &amp;&amp; !fResponse.getStatus().equals(ServiceStatus.SERVICE_FAILURE.name()) ) {</span>
+<span class="nc bnc" id="L648" title="All 2 branches missed.">				for (FraugsterSignupContactResponse response : identityResponse) {</span>
+<span class="nc" id="L649">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L650">							EntityEnum.CONTACT.name(), response.getId());</span>
+<span class="nc" id="L651">					readResponse(eventServiceLog, response);</span>
+<span class="nc" id="L652">				}</span>
+			}
+		}
+			
+<span class="nc" id="L656">	}catch (Exception e) {</span>
+<span class="nc" id="L657">		LOG.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L658">	}</span>
+<span class="nc" id="L659">	}</span>
+
+	/**
+	 * Transform on update response.
+	 *
+	 * @param exchange
+	 *            the exchange
+	 */
+	private void transformOnUpdateResponse(MessageExchange exchange) {
+<span class="nc" id="L668">		FraugsterOnUpdateResponse fResponse = (FraugsterOnUpdateResponse) exchange.getResponse();</span>
+<span class="nc" id="L669">		FraugsterOnUpdateRequest fraugsterProviderRequest = exchange.getRequest(FraugsterOnUpdateRequest.class);</span>
+		try {
+
+<span class="nc bnc" id="L672" title="All 4 branches missed.">			if (null==fResponse || !fResponse.getContactResponses().isEmpty() &amp;&amp; fResponse.getContactResponses().get(0).getStatus()</span>
+<span class="nc bnc" id="L673" title="All 2 branches missed.">					.equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+
+<span class="nc" id="L675">				fResponse = new FraugsterOnUpdateResponse();</span>
+
+<span class="nc" id="L677">				List&lt;FraugsterOnUpdateContactResponse&gt; conactResponseList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L679" title="All 2 branches missed.">				for (FraugsterOnUpdateContactRequest contact : fraugsterProviderRequest.getContactRequests()) {</span>
+<span class="nc" id="L680">					FraugsterOnUpdateContactResponse contactResponse = new FraugsterOnUpdateContactResponse();</span>
+<span class="nc" id="L681">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L682">							EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L683">					FraugsterSummary fraugsterSummary = JsonConverterUtil.convertToObject(FraugsterSummary.class,</span>
+<span class="nc" id="L684">							eventServiceLog.getSummary());</span>
+<span class="nc" id="L685">					fResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L686">					fResponse.setContactResponses(null);</span>
+<span class="nc" id="L687">					contactResponse.setId(contact.getId());</span>
+<span class="nc" id="L688">					conactResponseList.add(contactResponse);</span>
+<span class="nc" id="L689">					contactResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L690">					fraugsterSummary.setFrgTransId(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L691">					fraugsterSummary.setScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L692">					fraugsterSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L693">					eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L694">					eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(fraugsterSummary));</span>
+<span class="nc" id="L695">					eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(contactResponse));</span>
+<span class="nc" id="L696">				}</span>
+<span class="nc" id="L697">				fResponse.setContactResponses(conactResponseList);</span>
+<span class="nc" id="L698">				exchange.setResponse(fResponse);</span>
+
+			}
+<span class="nc" id="L701">			List&lt;FraugsterOnUpdateContactResponse&gt; identityResponse = fResponse.getContactResponses();</span>
+
+<span class="nc bnc" id="L703" title="All 4 branches missed.">			if (identityResponse != null &amp;&amp; !fResponse.getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc bnc" id="L704" title="All 2 branches missed.">				for (FraugsterOnUpdateContactResponse response : identityResponse) {</span>
+<span class="nc" id="L705">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L706">							EntityEnum.CONTACT.name(), response.getId());</span>
+<span class="nc" id="L707">					readResponse(eventServiceLog, response);</span>
+<span class="nc" id="L708">				}</span>
+			}
+
+<span class="nc" id="L711">		} catch (Exception e) {</span>
+<span class="nc" id="L712">			LOG.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L713">		}</span>
+<span class="nc" id="L714">	}</span>
+
+	/**
+	 * Transform request for fraugster repeat check.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; transformRequestForFraugsterRepeatCheck(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L724">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L725">		FraugsterResendRequest resendRequest = messageExchange.getRequest(FraugsterResendRequest.class);</span>
+<span class="nc" id="L726">		RegistrationServiceRequest oldRequest = resendRequest.getAdditionalAttribute(Constants.OLD_REQUEST,</span>
+				RegistrationServiceRequest.class);
+<span class="nc" id="L728">		oldRequest.addAttribute(Constants.FIELD_EVENTID, resendRequest.getAdditionalAttribute(Constants.FIELD_EVENTID));</span>
+<span class="nc" id="L729">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L730">		MessageExchange ccExchange = null;</span>
+		try {
+<span class="nc" id="L732">			ccExchange = createOnUpdateExchange(oldRequest, token, messageExchange.getServiceTypeEnum().name());</span>
+<span class="nc" id="L733">		} catch (Exception e) {</span>
+<span class="nc" id="L734">			LOG.error(&quot;Error in Fraugster transformer class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L735">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L736">		}</span>
+<span class="nc" id="L737">		message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L738">		return message;</span>
+	}
+
+	/**
+	 * Transform response for fraugster repeat check.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; transformResponseForFraugsterRepeatCheck(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L749">		MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L750">		FraugsterResendRequest request = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L751">				.getRequest(FraugsterResendRequest.class);</span>
+<span class="nc" id="L752">		RegistrationServiceRequest oldRequest = request.getAdditionalAttribute(Constants.OLD_REQUEST,</span>
+				RegistrationServiceRequest.class);
+		EventServiceLog eventServiceLog;
+		try {
+<span class="nc" id="L756">			transformOnUpdateResponseForFraugsterRepeatCheck(exchange);</span>
+<span class="nc" id="L757">			List&lt;Contact&gt; contacts = oldRequest.getAccount().getContacts();</span>
+<span class="nc bnc" id="L758" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L759" title="All 2 branches missed.">				if (!contact.isFraugsterEligible()) {</span>
+<span class="nc" id="L760">					eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L761">							EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L762">					eventServiceLog.setProviderResponse(&quot;&quot;);</span>
+<span class="nc" id="L763">					eventServiceLog.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L764">					eventServiceLog.setSummary(&quot;&quot;);</span>
+<span class="nc" id="L765">					eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+				}
+<span class="nc" id="L767">			}</span>
+<span class="nc" id="L768">		} catch (Exception e) {</span>
+<span class="nc" id="L769">			LOG.error(&quot;Error&quot;, e);</span>
+<span class="nc" id="L770">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L771">		}</span>
+<span class="nc" id="L772">		return message;</span>
+	}
+
+	private void transformOnUpdateResponseForFraugsterRepeatCheck(MessageExchange exchange) {
+<span class="nc" id="L776">		FraugsterOnUpdateResponse fResponse = (FraugsterOnUpdateResponse) exchange.getResponse();</span>
+<span class="nc" id="L777">		FraugsterOnUpdateRequest fraugsterProviderRequest = exchange.getRequest(FraugsterOnUpdateRequest.class);</span>
+		try {
+<span class="nc bnc" id="L779" title="All 4 branches missed.">			if (fResponse == null  || fResponse.getContactResponses().get(0).getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L780">				fResponse = new FraugsterOnUpdateResponse();</span>
+
+<span class="nc" id="L782">				List&lt;FraugsterOnUpdateContactResponse&gt; conactResponseList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L784" title="All 2 branches missed.">				for (FraugsterOnUpdateContactRequest contact : fraugsterProviderRequest.getContactRequests()) {</span>
+<span class="nc" id="L785">					FraugsterOnUpdateContactResponse contactResponse = new FraugsterOnUpdateContactResponse();</span>
+<span class="nc" id="L786">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L787">							EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L788">					FraugsterSummary fraugsterSummary = JsonConverterUtil.convertToObject(FraugsterSummary.class,</span>
+<span class="nc" id="L789">							eventServiceLog.getSummary());</span>
+<span class="nc" id="L790">					fResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L791">					fResponse.setContactResponses(null);</span>
+<span class="nc" id="L792">					contactResponse.setId(contact.getId());</span>
+<span class="nc" id="L793">					conactResponseList.add(contactResponse);</span>
+<span class="nc" id="L794">					contactResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L795">					fraugsterSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L796">					fraugsterSummary.setFrgTransId(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L797">					fraugsterSummary.setScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L798">					eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L799">					eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(fraugsterSummary));</span>
+<span class="nc" id="L800">					eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(contactResponse));</span>
+<span class="nc" id="L801">				}</span>
+<span class="nc" id="L802">				fResponse.setContactResponses(conactResponseList);</span>
+<span class="nc" id="L803">				exchange.setResponse(fResponse);</span>
+			}
+<span class="nc" id="L805">			List&lt;FraugsterOnUpdateContactResponse&gt; identityResponse = fResponse.getContactResponses();</span>
+
+<span class="nc bnc" id="L807" title="All 4 branches missed.">			if (identityResponse != null &amp;&amp; !fResponse.getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc bnc" id="L808" title="All 2 branches missed.">				for (FraugsterOnUpdateContactResponse response : identityResponse) {</span>
+<span class="nc" id="L809">					EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L810">							EntityEnum.CONTACT.name(), response.getId());</span>
+<span class="nc" id="L811">					readResponse(eventServiceLog, response);</span>
+<span class="nc" id="L812">				}</span>
+			}
+<span class="nc" id="L814">		} catch (Exception e) {</span>
+<span class="nc" id="L815">			LOG.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L816">		}</span>
+<span class="nc" id="L817">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

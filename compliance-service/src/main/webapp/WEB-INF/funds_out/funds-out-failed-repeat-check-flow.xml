@@ -1,0 +1,371 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	
+	<int:channel id="FUNDSOUT.RECHECK_FAILURES.in.channel" />
+	<int:channel id="FUNDS_OUT.RECHECK_FAILURES.DATA_ENRICHMENT" />
+	<int:channel id="FUNDS_OUT.RECHECK_FAILURES.PERFORM.FRAUGSTER" />
+	<int:channel id="FUNDS.OUT.RECHECK_FAILURES.FRAUGSTER.TRANSFORMER" />
+	<int:channel id="FUNDS_OUT.RECHECK_FAILURES.PERFORM.SANCTION" />
+	<int:channel id="FUNDS.OUT.RECHECK_FAILURES.SANCTION.TRANSFORMER" />
+	<int:channel id="FUNDS_OUT.RECHECK_FAILURES.RULES.IN" />
+	<int:channel id="FUNDS_OUT.RESPONSE" />
+	<int:channel id="FUNDS_OUT.RECHECK.SAVETOBROADCAST.IN" />
+	<int:channel id="FUNDS_OUT.RECHECK_FAILURES.PERFORM.InternalRuleService" />
+	<int:channel id="FUNDS.OUT.RECHECK_FAILURES.INTERNALRULE.TRANSFORMER" />
+	<int:channel id="FUNDS_OUT.RECHECK_FAILURES.PERFORM.CustomCheck" />
+	<int:channel id="FUNDS.OUT.RECHECK_FAILURES.CUSTOMCHECK.TRANSFORMER" />
+	<int:channel id="FUNDS_OUT.RECHECK.TRANSACTIONMONITORINGSTATUS" />
+	
+	
+	<int:chain
+		id="fundsout.recheck.initChain"
+		input-channel="FUNDSOUT.RECHECK_FAILURES.in.channel"
+		output-channel="FUNDS_OUT.RECHECK_FAILURES.DATA_ENRICHMENT">
+		<int:header-enricher id="fundsout.recheck.HeaderEnricher">
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header
+				name="username"
+				expression="headers['username']" />
+		</int:header-enricher>		
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.recheck.dataEnrichChain"
+		input-channel="FUNDS_OUT.RECHECK_FAILURES.DATA_ENRICHMENT"
+		output-channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.InternalRuleService">
+		<int:service-activator
+			id="fundsout.recheck.UPDATERECHECKSTATUS.INPROGRESS"
+			ref="fundsout.recheck.RecheckDBServiceImpl"
+			method="updateFailedRecheckStatusToInProgress"/>		
+		<int:service-activator
+			id="fundsout.recheck.dataEnrich"
+			ref="fundsout.recheckdataEnricher"
+			method="enrichDataForFailedFundsOut" />
+		<int:service-activator
+			id="fundsout.recheck.createEvent"
+			ref="eventDBServiceImpl" 
+			method="createEvent" />
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.internalRule.decideCheck"
+		input-channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.InternalRuleService">
+		
+		<int:router
+			default-output-channel="FUNDS_OUT.ERROR.CHANNEL"
+			resolution-required="false"
+			expression="payload.isInternalRuleServiceEligible()">
+			<int:mapping
+				value="true"
+				channel="FUNDS.OUT.RECHECK_FAILURES.INTERNALRULE.TRANSFORMER" />
+			<int:mapping
+				value="false"
+				channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.CustomCheck" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.internalRuleRepeatCheck"
+		input-channel="FUNDS.OUT.RECHECK_FAILURES.INTERNALRULE.TRANSFORMER"
+		output-channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.CustomCheck">
+	
+		<int:transformer
+			id="fundsout.recheck.trans.internalRule"
+			ref="fundsout.internalRuleBulkRecheckTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsout.InternalRules"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('INTERNAL_RULE_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).INTERNAL_RULE_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.internalRuleBulkRecheckTransformer"
+			method="transformResponse" />
+		
+		<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.customCheck.decideCheck"
+		input-channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.CustomCheck">
+		
+		<int:router
+			default-output-channel="FUNDS_OUT.ERROR.CHANNEL"
+			resolution-required="false"
+			expression="payload.isCustomCheckEligible()">
+			<int:mapping
+				value="true"
+				channel="FUNDS.OUT.RECHECK_FAILURES.CUSTOMCHECK.TRANSFORMER" />
+			<int:mapping
+				value="false"
+				channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.FRAUGSTER" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.customCheckRepeatCheck"
+		input-channel="FUNDS.OUT.RECHECK_FAILURES.CUSTOMCHECK.TRANSFORMER"
+		output-channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.FRAUGSTER">
+	
+		<int:transformer
+			id="fundsout.recheck.trans.customCheck"
+			ref="fundsout.customCheckBulkRecheckTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsout.recheck.CustomChecks"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('VELOCITY_PERFORM_CHECK')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).CUSTOM_CHECKS_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.CustomChecksRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.customCheckBulkRecheckTransformer"
+			method="transformResponse" />
+		
+		<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.fraugster.decideCheck"
+		input-channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.FRAUGSTER">
+		
+		<int:router
+			default-output-channel="FUNDS_OUT.ERROR.CHANNEL"
+			resolution-required="false"
+			expression="payload.isFraugsterEligible()">
+			<int:mapping
+				value="true"
+				channel="FUNDS.OUT.RECHECK_FAILURES.FRAUGSTER.TRANSFORMER" />
+			<int:mapping
+				value="false"
+				channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.SANCTION" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.fraugsterRepeatCheck"
+		input-channel="FUNDS.OUT.RECHECK_FAILURES.FRAUGSTER.TRANSFORMER"
+		output-channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.SANCTION">
+	
+		<int:transformer
+			id="fundsout.recheck.trans.fraugster"
+			ref="fundsout.fraugsterBulkRecheckTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsout.recheck.FRAUDCHECK"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('FRAUGSTER_FUNDSOUT_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).FRAUGSTER_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.fraugsterBulkRecheckTransformer"
+			method="transformResponse" />
+		
+		<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.recheck.sanction.decideCheck"
+		input-channel="FUNDS_OUT.RECHECK_FAILURES.PERFORM.SANCTION">
+		
+		<int:router
+			default-output-channel="FUNDS_OUT.ERROR.CHANNEL"
+			resolution-required="false"
+			expression="payload.isSanctionEligible()">
+			<int:mapping
+				value="true"
+				channel="FUNDS.OUT.RECHECK_FAILURES.SANCTION.TRANSFORMER" />
+			<int:mapping
+				value="false"
+				channel="FUNDS_OUT.RECHECK_FAILURES.RULES.IN" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.recheck.sanctionRepeatCheck"
+		input-channel="FUNDS.OUT.RECHECK_FAILURES.SANCTION.TRANSFORMER"
+		output-channel="FUNDS_OUT.RECHECK_FAILURES.RULES.IN">
+	
+		<int:transformer
+			id="fundsout.recheck.trans.sanction"
+			ref="fundsout.sanctionBulkRecheckTransformer"
+			method="transformRequest"
+		/>
+		<int:service-activator
+			id="fundsout.recheck.SANCTION"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('SANCTION_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).SANCTION_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.ContactRegSanctionRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.sanctionBulkRecheckTransformer"
+			method="transformResponse" />
+		
+		<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.recheck.RuleServiceChain"
+		input-channel="FUNDS_OUT.RECHECK_FAILURES.RULES.IN"
+		output-channel="FUNDS_OUT.RECHECK.INTUITIONSTATUS">
+		
+		<int:transformer
+			ref="fundsout.transactionMonitoringTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsout.recheck.TRANSACTIONMONITORING"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_FUNDSOUT_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.transactionMonitoringTransformer"
+			method="transformResponse" />
+			
+		<!-- <int:service-activator
+			id="fundsout.recheck.SAVE.EVENT.SERVICE.LOG"
+			ref="eventDBServiceImpl"
+			method="createTransactionMonitoringEventSerivceLog">
+		</int:service-activator> -->
+		
+		<int:service-activator
+			id="fundsout.recheck.SAVE.EVENT.SERVICE"
+			ref="eventDBServiceImpl"
+			method="createEventSerivceLogForServiceFailedFundsOut">
+		</int:service-activator>
+		
+		<int:service-activator
+			id="fundsout.recheck.Exec.Rules"
+			ref="fundsout.RulesService"
+			method="process">
+		</int:service-activator>
+		
+		<int:service-activator
+			id="fundsout.recheck.updateStatus"
+			ref="fundsOutDBService"
+			method="updatePaymentOutStatus" />
+		
+		<int:service-activator
+			ref="fundsOutDBService"
+			method="updateAccountIntuitionClientRiskLevel">
+		</int:service-activator>
+		
+		
+		<int:service-activator
+			id="fundsout.recheck.activitylog"
+			ref="activityDBServiceImpl"
+			method="createServiceFailedRecheckPaymentOutActivity" />
+		<int:service-activator id="fundsout.kafkaTxExecutor" ref="kafkaTxExecutorServiceImpl" method="executeKafkaTx" />
+		<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain
+		input-channel="FUNDS_OUT.RECHECK.INTUITIONSTATUS"> <!-- AT-4716 -->
+		<int:router
+			default-output-channel="FUNDS_OUT.RECHECK.SAVETOBROADCAST.IN"
+			resolution-required="false"
+			expression="payload.isIntuitionFundsOutStatusHold()">
+			<int:mapping
+				value="true"
+				channel="FUNDS_OUT.RECHECK.TRANSACTIONMONITORINGSTATUS" />
+			<int:mapping
+				value="false"
+				channel="FUNDS_OUT.RECHECK.SAVETOBROADCAST.IN" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain input-channel="FUNDS_OUT.RECHECK.TRANSACTIONMONITORINGSTATUS"
+	output-channel="FUNDS_OUT.RECHECK.SAVETOBROADCAST.IN"> <!-- AT-4716 -->
+		<int:service-activator
+			id="fundsout.recheck.TRANSACTIONMONITORINGSTATUS"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_FUNDSOUT_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse" />
+		</int:service-activator>
+	</int:chain>
+	
+	<int:chain
+		id="fundsOutRecheckBroadCastChain"
+		input-channel="FUNDS_OUT.RECHECK.SAVETOBROADCAST.IN"
+		output-channel="FUNDS_OUT.RESPONSE">
+		
+		<int:transformer
+			id="fundsout.recheck.BROADCAST.TRANSFORM"
+			ref="fundsout.recheck.saveToBroadCastTransformer"
+			method="transformRequestForFailedFundOut" />
+		<int:service-activator
+			id="fundsout.recheck.SAVETOBROADCAST"
+			ref="fundsout.recheck.BroadCastQueueDBServiceImpl"
+			method="saveIntoBroadcastQueue">
+		</int:service-activator>
+		<int:service-activator
+			id="fundsout.recheck.UPDATERECHECKSTATUS.DONE"
+			ref="fundsout.recheck.RecheckDBServiceImpl"
+			method="updateFailedFundsOutStatusToDone">
+		</int:service-activator>
+		<int:filter discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	
+
+	<bean id="fundsout.recheckdataEnricher" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.DataEnricher" />
+	<bean id="fundsout.fraugsterBulkRecheckTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.FraugsterBulkRecheckTransformer" />
+	<bean id="fundsout.sanctionBulkRecheckTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.SanctionBulkRecheckTransformer" />
+	<bean id="fundsout.internalRuleBulkRecheckTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.InternalRuleBulkRecheckTransformer" />
+	<bean id="fundsout.customCheckBulkRecheckTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.CustomCheckBulkRecheckTransformer" />
+	<bean id="fundsout.recheck.BroadCastQueueDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.BroadCastQueueDBServiceImpl" />
+	<bean id="fundsout.recheck.saveToBroadCastTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.mqbroadcast.SaveToBroadCastTransformer" />
+	<bean id="fundsout.recheck.RecheckDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.RecheckDBServiceImpl" />
+</beans>

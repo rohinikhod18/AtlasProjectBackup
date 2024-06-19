@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MessageValidator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsout</a> &gt; <span class="el_source">MessageValidator.java</span></div><h1>MessageValidator.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsout;
+
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.Header;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.DeviceInfo;
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterResendResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FundsOutFruagsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.Beneficiary;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.Trade;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistResendResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsOutBlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsOutPaymentReferenceResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.PaymentReferenceResendResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.FundsOutSanctionResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResendResponse;
+import com.currenciesdirect.gtg.compliance.commons.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.commons.util.StringUtils;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ProvideCacheLoader;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.BaseMessageValidator;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.FieldValidator;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.customchecks.request.FundsOutCustomCheckResendRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.customchecks.response.CustomCheckResendResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.FundsOutResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+/**
+ * @author bnt
+ *
+ */
+<span class="nc" id="L47">public class MessageValidator extends BaseMessageValidator {</span>
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L50">	private static final Logger LOGGER = LoggerFactory.getLogger(MessageValidator.class);</span>
+	
+	private static final String SOURCE_APPLICATION = &quot;source_application&quot;;
+
+	private static final String PAYMENT_FUNDSOUT_ID = &quot;payment_fundsout_id&quot;;
+
+	private static final String MATURITY_DATE = &quot;maturity_date&quot;;
+
+	private static final String VALUE_DATE = &quot;value_date&quot;;
+
+	private static final String DEAL_DATE = &quot;deal_date&quot;;
+
+	private static final String PAYMENTOUT_EVENTTYPE = &quot;PAYMENTOUT&quot;;
+	
+	//added for AT-3658
+	private static final String PAYMENT_REFERENCE = &quot;PAYMENTREFERENCE&quot;;
+	
+	/** The Constant FUNDS_OUT_ID. */
+	private static final String FUNDS_OUT_ID = &quot;fundsOutId&quot;;
+	
+	/** The Constant TRADE_ACCOUNT_NUMBER. */
+	private static final String TRADE_ACCOUNT_NUMBER = &quot;tradeaccountNumber&quot;;
+
+	/**
+	 * @param message
+	 * @param correlationID
+	 * @return
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+<span class="nc" id="L80">		FundsOutResponse response = new FundsOutResponse();</span>
+
+<span class="nc" id="L82">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L83">		response.setOsrID(message.getHeaders().get(MessageContextHeaders.OSR_ID).toString());</span>
+		try {
+
+<span class="nc" id="L86">			ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc" id="L87">			OperationEnum operation = messageExchange.getOperation();</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">			if (serviceInterfaceType == ServiceInterfaceType.FUNDSOUT) {</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">				if (operation == OperationEnum.FUNDS_OUT) {</span>
+					FundsOutRequest fundsOutRequest;
+<span class="nc" id="L91">					fundsOutRequest = (FundsOutRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L92">					FieldValidator fv = validateCreateReuqest(fundsOutRequest);</span>
+<span class="nc" id="L93">					createBaseResponse(response, fv, FundsInReasonCode.MISSINGINFO.getReasonCode(),</span>
+							Constants.MSG_MISSING_INFO, PAYMENTOUT_EVENTTYPE);
+<span class="nc" id="L95">					messageExchange.setResponse(response);</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">				} else if (operation == OperationEnum.UPDATE_OPI) {</span>
+
+<span class="nc" id="L98">					FundsOutUpdateRequest fRequest = (FundsOutUpdateRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L99">					FieldValidator fv = validateUpdateReuqest(fRequest);</span>
+<span class="nc" id="L100">					createBaseResponse(response, fv, FundsInReasonCode.MISSINGINFO.getReasonCode(),</span>
+							Constants.MSG_MISSING_INFO, PAYMENTOUT_EVENTTYPE);
+<span class="nc" id="L102">					messageExchange.setResponse(response);</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">				} else if (operation == OperationEnum.DELETE_OPI) {</span>
+<span class="nc" id="L104">					FundsOutDeleteRequest fRequest = (FundsOutDeleteRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L105">					FieldValidator fv = validateDeleteReuqest(fRequest);</span>
+<span class="nc" id="L106">					createBaseResponse(response, fv, FundsInReasonCode.MISSINGINFO.getReasonCode(),</span>
+							Constants.MSG_MISSING_INFO, PAYMENTOUT_EVENTTYPE);
+<span class="nc" id="L108">					messageExchange.setResponse(response);</span>
+
+<span class="nc bnc" id="L110" title="All 2 branches missed.">				} else if (operation == OperationEnum.SANCTION_RESEND) {</span>
+<span class="nc" id="L111">					SanctionResendResponse sanctionResendResponse = new SanctionResendResponse();</span>
+<span class="nc" id="L112">					FundsOutSanctionResendRequest fundsOutRequest = messageExchange</span>
+<span class="nc" id="L113">							.getRequest(FundsOutSanctionResendRequest.class);</span>
+<span class="nc" id="L114">					FieldValidator fv = validateResendReuqest(fundsOutRequest);</span>
+<span class="nc" id="L115">					createBaseResponse(sanctionResendResponse, fv, FundsInReasonCode.MISSINGINFO.getReasonCode(),</span>
+							Constants.MSG_MISSING_INFO, &quot;&quot;);
+<span class="nc" id="L117">					messageExchange.setResponse(sanctionResendResponse);</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">				} else if (operation == OperationEnum.CUSTOMCHECK_RESEND) {</span>
+<span class="nc" id="L119">					CustomCheckResendResponse checkResendResponse = new CustomCheckResendResponse();</span>
+<span class="nc" id="L120">					FundsOutCustomCheckResendRequest fundsOutRequest = messageExchange</span>
+<span class="nc" id="L121">							.getRequest(FundsOutCustomCheckResendRequest.class);</span>
+<span class="nc" id="L122">					FieldValidator fv = fundsOutRequest.validateResendRequest(ServiceInterfaceType.FUNDSOUT);</span>
+<span class="nc" id="L123">					createBaseResponse(checkResendResponse, fv, FundsInReasonCode.MISSINGINFO.getReasonCode(),</span>
+							Constants.MSG_MISSING_INFO, &quot;&quot;);
+<span class="nc" id="L125">					messageExchange.setResponse(checkResendResponse);</span>
+				}
+			}
+<span class="nc" id="L128">		} catch (Exception e) {</span>
+<span class="nc" id="L129">			LOGGER.error(REQUEST_IS_NOT_VALID, e);</span>
+<span class="nc" id="L130">			response.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L131">			response.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L132">			response.setResponseReason(FundsOutReasonCode.MISSINGINFO);</span>
+<span class="nc" id="L133">			messageExchange.setResponse(response);</span>
+<span class="nc" id="L134">		}</span>
+<span class="nc" id="L135">		response.setCorrelationID(correlationID);</span>
+
+<span class="nc" id="L137">		return message;</span>
+	}
+
+	/**
+	 * Validate create reuqest.
+	 *
+	 * @return the field validator
+	 */
+	private FieldValidator validateCreateReuqest(FundsOutRequest fundsOutRequest) {
+<span class="nc" id="L146">		ProvideCacheLoader countryCache = ProvideCacheLoader.getInstance();</span>
+<span class="nc" id="L147">		FieldValidator fv = new FieldValidator();</span>
+		try {
+<span class="nc" id="L149">			Trade trade = fundsOutRequest.getTrade();</span>
+<span class="nc" id="L150">			Beneficiary beneficiary = fundsOutRequest.getBeneficiary();</span>
+
+<span class="nc" id="L152">			fv.isValidObject(</span>
+<span class="nc" id="L153">					new Object[] { fundsOutRequest.getOrgCode(), fundsOutRequest.getSourceApplication(),</span>
+<span class="nc" id="L154">							/* fundsOutRequest.getCustType(), */ trade.getTradeAccountNumber(),</span>
+<span class="nc" id="L155">							trade.getTradeContactId(), trade.getCustType(), trade.getPurposeOfTrade(),</span>
+<span class="nc" id="L156">							beneficiary.getPaymentFundsoutId(), trade.getDealDate(), trade.getValueDate(),</span>
+<span class="nc" id="L157">							trade.getSellingAmount(), trade.getBuyingAmount(), trade.getSellCurrency(),</span>
+<span class="nc" id="L158">							trade.getBuyCurrency(), beneficiary.getCountry(), beneficiary.getFirstName(),</span>
+<span class="nc" id="L159">							beneficiary.getAccountNumber(), beneficiary.getBeneficaryBankName(),</span>
+<span class="nc" id="L160">							beneficiary.getBeneficiaryBankid(), beneficiary.getBeneficiaryId(),</span>
+<span class="nc" id="L161">							trade.getBuyingAmountBaseValue(), trade.getMaturityDate(), trade.getCustLegalEntity() },</span>
+					new String[] { ORG_CODE, SOURCE_APPLICATION, CUST_TYPE, &quot;trade_account_number&quot;, &quot;trade_contact_id&quot;,
+							&quot;purpose_of_trade&quot;, PAYMENT_FUNDSOUT_ID, DEAL_DATE, VALUE_DATE, &quot;selling_amount&quot;,
+							&quot;buying_amount&quot;, &quot;sell_currency&quot;, &quot;buy_currency&quot;, &quot;country&quot;, &quot;first_name&quot;, &quot;account_number&quot;,
+							&quot;beneficary_bank_name&quot;, &quot;beneficiary_bankid&quot;, &quot;beneficiary_id&quot;, &quot;buying_amount_base_value&quot;,
+							MATURITY_DATE, &quot;customer_legal_entity&quot; });
+
+<span class="nc" id="L168">			validateDates(fv, trade);</span>
+<span class="nc" id="L169">			DeviceInfo deviceInfo = fundsOutRequest.getDeviceInfo();</span>
+<span class="nc bnc" id="L170" title="All 4 branches missed.">			if (null != deviceInfo &amp;&amp; !StringUtils.isNullOrEmpty(deviceInfo.getOsDateAndTime())) {</span>
+<span class="nc" id="L171">				deviceInfo.setOsDateAndTime(DateTimeFormatter.getDateTimeInRFC3339(deviceInfo.getOsDateAndTime()));</span>
+			}
+
+<span class="nc bnc" id="L174" title="All 2 branches missed.">			if (beneficiary.getPaymentFundsoutId() &lt;= 0)</span>
+<span class="nc" id="L175">				fv.addError(Constants.ERR_PAYMENT_ID_INVALID, PAYMENT_FUNDSOUT_ID);</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">			if (null == countryCache.getCountryFullName(beneficiary.getCountry())) {</span>
+<span class="nc" id="L177">				fv.addError(Constants.ERR_COUNTRY_INVALID, &quot;country&quot;);</span>
+			}
+
+<span class="nc" id="L180">		} catch (Exception e) {</span>
+<span class="nc" id="L181">			LOGGER.debug(&quot;Cannot validate request&quot;, e);</span>
+<span class="nc" id="L182">			fv.addError(Constants.MSG_MISSING_INFO, &quot;something went wrong&quot;);</span>
+<span class="nc" id="L183">		}</span>
+<span class="nc" id="L184">		return fv;</span>
+	}
+
+	private FieldValidator validateDates(FieldValidator fv, Trade trade) {
+<span class="nc bnc" id="L188" title="All 4 branches missed.">		if (null != trade.getMaturityDate() &amp;&amp; !trade.getMaturityDate().isEmpty()) {</span>
+<span class="nc" id="L189">			fv.isDateInFormat(new String[] { trade.getMaturityDate() }, new String[] { MATURITY_DATE },</span>
+					Constants.RFC_DATE_FORMAT);
+<span class="nc bnc" id="L191" title="All 2 branches missed.">			if (Boolean.TRUE.equals(fv.isFieldValid(MATURITY_DATE))) {</span>
+<span class="nc" id="L192">				trade.setMaturityDate(formatDate(trade.getMaturityDate()));</span>
+			}
+		}
+
+<span class="nc bnc" id="L196" title="All 4 branches missed.">		if (null != trade.getDealDate() &amp;&amp; !trade.getDealDate().isEmpty()) {</span>
+<span class="nc" id="L197">			fv.validateDate(trade.getDealDate(), Constants.RFC_DATE_FORMAT, DEAL_DATE);</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">			if (Boolean.TRUE.equals(fv.isFieldValid(DEAL_DATE))) {</span>
+<span class="nc" id="L199">				trade.setDealDate(formatDate(trade.getDealDate()));</span>
+			}
+		}
+
+<span class="nc bnc" id="L203" title="All 4 branches missed.">		if (null != trade.getValueDate() &amp;&amp; !trade.getValueDate().isEmpty()) {</span>
+<span class="nc" id="L204">			fv.validateDate(trade.getValueDate(), Constants.RFC_DATE_FORMAT, VALUE_DATE);</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">			if (Boolean.TRUE.equals(fv.isFieldValid(VALUE_DATE))) {</span>
+<span class="nc" id="L206">				trade.setValueDate(formatDate(trade.getValueDate()));</span>
+			}
+		}
+<span class="nc" id="L209">		return fv;</span>
+	}
+
+	/**
+	 * Format date.
+	 *
+	 * @param date
+	 *            the date
+	 * @return the string
+	 */
+	/*
+	 * This formating for elastic search to parse date fields
+	 */
+	private String formatDate(String date) {
+<span class="nc" id="L223">		String[] splitDate = date.split(&quot;-&quot;);</span>
+<span class="nc" id="L224">		StringBuilder formattedDate = new StringBuilder();</span>
+<span class="nc" id="L225">		formattedDate.append(splitDate[0]);</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">		for (int i = 1; i &lt; splitDate.length; i++) {</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">			if (splitDate[i].length() &lt; 2) {</span>
+<span class="nc" id="L228">				formattedDate.append(&quot;-0&quot;).append(splitDate[i]);</span>
+			} else {
+<span class="nc" id="L230">				formattedDate.append(&quot;-&quot;).append(splitDate[i]);</span>
+			}
+		}
+
+<span class="nc" id="L234">		return formattedDate.toString();</span>
+	}
+
+	private FieldValidator validateUpdateReuqest(FundsOutUpdateRequest fRequest) {
+
+<span class="nc" id="L239">		FieldValidator fv = new FieldValidator();</span>
+
+<span class="nc" id="L241">		fv.isValidObject(</span>
+<span class="nc" id="L242">				new Object[] { fRequest.getOrgCode(), fRequest.getSourceApplication(), fRequest.getAmount(),</span>
+<span class="nc" id="L243">						fRequest.getPaymentFundsoutId() },</span>
+				new String[] { ORG_CODE, SOURCE_APPLICATION, &quot;amount&quot;, PAYMENT_FUNDSOUT_ID });
+
+<span class="nc bnc" id="L246" title="All 2 branches missed.">		if (!StringUtils.isNullOrTrimEmpty(fRequest.getValueDate())) {</span>
+<span class="nc" id="L247">			fv.isDateInFormat(new String[] { fRequest.getValueDate() }, new String[] { VALUE_DATE },</span>
+					Constants.RFC_DATE_FORMAT);
+		}
+<span class="nc" id="L250">		return fv;</span>
+	}
+
+	private FieldValidator validateDeleteReuqest(FundsOutDeleteRequest fRequest) {
+
+<span class="nc" id="L255">		FieldValidator fv = new FieldValidator();</span>
+
+<span class="nc" id="L257">		fv.isValidObject(</span>
+<span class="nc" id="L258">				new Object[] { fRequest.getOrgCode(), fRequest.getSourceApplication(),</span>
+<span class="nc" id="L259">						fRequest.getPaymentFundsoutId() },</span>
+				new String[] { ORG_CODE, SOURCE_APPLICATION, PAYMENT_FUNDSOUT_ID });
+<span class="nc" id="L261">		return fv;</span>
+	}
+
+	/**
+	 * Validate resend reuqest.
+	 *
+	 * @return the field validator
+	 */
+	public FieldValidator validateResendReuqest(FundsOutSanctionResendRequest fundsOutRequest) {
+
+<span class="nc" id="L271">		FieldValidator fv = new FieldValidator();</span>
+
+<span class="nc" id="L273">		fv.isValidObject(new Object[] { fundsOutRequest.getTradePaymentId().toString() },</span>
+				new String[] { &quot;tradePaymentId&quot; });
+<span class="nc" id="L275">		fv.isValidObject(new Object[] { fundsOutRequest.getContactStatus() }, new String[] { &quot;contactStatus&quot; });</span>
+<span class="nc" id="L276">		fv.isValidObject(new Object[] { fundsOutRequest.getBankStatus() }, new String[] { &quot;bankStatus&quot; });</span>
+<span class="nc" id="L277">		fv.isValidObject(new Object[] { fundsOutRequest.getBeneficiaryStatus() }, new String[] { &quot;beneficiaryStatus&quot; });</span>
+<span class="nc" id="L278">		return fv;</span>
+	}
+
+	/**
+	 * Validate resend reuqest.
+	 *
+	 * @param message
+	 *            the message
+	 * @param correlationID
+	 *            the correlation ID
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; validateFraugsterResendReuqest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L291">		MessageExchange msgExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L292">		FundsOutFruagsterResendRequest request = msgExchange.getRequest(FundsOutFruagsterResendRequest.class);</span>
+<span class="nc" id="L293">		FieldValidator fv = new FieldValidator();</span>
+<span class="nc" id="L294">		fv.isValidObject(</span>
+<span class="nc" id="L295">				new Object[] { request.getPaymentFundsoutId(), request.getTradeAccountNumber(), request.getOrgCode(),</span>
+<span class="nc" id="L296">						request.getCustType() },</span>
+				new String[] { FUNDS_OUT_ID, TRADE_ACCOUNT_NUMBER, ORG_CODE, CUST_TYPE });
+
+<span class="nc" id="L299">		FraugsterResendResponse response = new FraugsterResendResponse();</span>
+<span class="nc" id="L300">		createBaseResponse(response, fv, FundsInReasonCode.MISSINGINFO.getReasonCode(), Constants.MSG_MISSING_INFO, &quot;&quot;);</span>
+<span class="nc" id="L301">		msgExchange.setResponse(response);</span>
+<span class="nc" id="L302">		return message;</span>
+	}
+
+	/**
+	 * Validate resend reuqest.
+	 *
+	 * @param message
+	 *            the message
+	 * @param correlationID
+	 *            the correlation ID
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; validateBlacklistResendReuqest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L315">		MessageExchange msgExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L316">		FundsOutBlacklistResendRequest request = msgExchange.getRequest(FundsOutBlacklistResendRequest.class);</span>
+<span class="nc" id="L317">		FieldValidator fv = new FieldValidator();</span>
+<span class="nc" id="L318">		fv.isValidObject(</span>
+<span class="nc" id="L319">				new Object[] { request.getPaymentFundsoutId(), request.getTradeAccountNumber(), request.getOrgCode(),</span>
+<span class="nc" id="L320">						request.getCustType() },</span>
+				new String[] { FUNDS_OUT_ID, TRADE_ACCOUNT_NUMBER, ORG_CODE, CUST_TYPE });
+
+<span class="nc" id="L323">		BlacklistResendResponse response = new BlacklistResendResponse();</span>
+<span class="nc" id="L324">		createBaseResponse(response, fv, FundsOutReasonCode.MISSINGINFO.getFundsOutReasonCode(),</span>
+				Constants.MSG_MISSING_INFO, &quot;&quot;);
+<span class="nc" id="L326">		msgExchange.setResponse(response);</span>
+<span class="nc" id="L327">		return message;</span>
+	}
+	
+	/**
+	 * Validate resend reuqest.
+	 *
+	 * @param message
+	 *            the message
+	 * @param correlationID
+	 *            the correlation ID
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; validatePaymentReferenceResendReuqest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L340">		MessageExchange msgExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L341">		FundsOutPaymentReferenceResendRequest request = msgExchange.getRequest(FundsOutPaymentReferenceResendRequest.class);</span>
+<span class="nc" id="L342">		FieldValidator fv = new FieldValidator();</span>
+<span class="nc" id="L343">		fv.isValidObject(</span>
+<span class="nc" id="L344">				new Object[] { request.getPaymentFundsoutId(), request.getTradeAccountNumber(), request.getOrgCode(),</span>
+<span class="nc" id="L345">						request.getCustType()},</span>
+				new String[] { FUNDS_OUT_ID, TRADE_ACCOUNT_NUMBER, ORG_CODE, CUST_TYPE });
+
+<span class="nc" id="L348">		PaymentReferenceResendResponse response = new PaymentReferenceResendResponse();</span>
+<span class="nc" id="L349">		createBaseResponse(response, fv, FundsOutReasonCode.MISSINGINFO.getFundsOutReasonCode(),</span>
+				Constants.MSG_MISSING_INFO, &quot;&quot;);
+<span class="nc" id="L351">		msgExchange.setResponse(response);</span>
+<span class="nc" id="L352">		return message;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

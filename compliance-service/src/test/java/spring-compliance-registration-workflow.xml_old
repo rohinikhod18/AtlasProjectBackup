@@ -1,0 +1,128 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:task="http://www.springframework.org/schema/task" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+	<context:component-scan base-package="com.currenciesdirect.compliancesrv" />
+
+
+	<int:channel id="REGISTRATION.in.channel">
+		<int:dispatcher task-executor="REGISTRATION.in.channel.executor" />
+	</int:channel>
+
+	<task:executor id="REGISTRATION.in.channel.executor"
+		pool-size="15-25" queue-capacity="5000" keep-alive="15"
+		rejection-policy="CALLER_RUNS" />
+
+	<int:channel id="REGISTRATION.out.channel">
+		<int:dispatcher task-executor="REGISTRATION.out.channel.executor" />
+	</int:channel>
+
+	<task:executor id="REGISTRATION.out.channel.executor"
+		pool-size="15-25" queue-capacity="5000" keep-alive="15"
+		rejection-policy="CALLER_RUNS" />
+	<!-- <int:header-value-router input-channel="REGISTRATION.in.channel" header-name="GATEWAY_OPERATION"> 
+		<int:mapping value="REG_NEW" channel="REGISTRATION.reg.createOrUpdate" /> 
+		<int:mapping value="REG_UPDATE" channel="REGISTRATION.reg.createOrUpdate" 
+		/> <int:mapping value="REG_ENQUIRY" channel="REGISTRATION.enq" /> </int:header-value-router> 
+		<int:chain input-channel="REGISTRATION.reg.createOrUpdate" output-channel="REGISTRATION.out.channel"> 
+		<int:header-enricher> <int:error-channel ref="failed-registrations" /> </int:header-enricher> 
+		<int:service-activator ref="messageValidator" /> <int:service-activator 
+		ref="userAuthClient"/> <int:service-activator ref="blackListClient"/> <int:service-activator 
+		ref="kycClient"/> </int:chain> -->
+	<int:recipient-list-router input-channel="REGISTRATION.in.channel">
+		<int:recipient channel="regMsgValidatorChannel" />
+		<int:recipient channel="userAuthClientChannel" />
+		<int:recipient channel="blackListClientChannel" />
+		<int:recipient channel="kycClientChannel" />
+	</int:recipient-list-router>
+
+	<int:channel id="regMsgValidatorChannel">
+		<int:dispatcher task-executor="REGISTRATION.in.channel.executor" />
+	</int:channel>
+	<int:chain input-channel="regMsgValidatorChannel"
+		output-channel="REGISTRATION.out.channel">
+		<int:header-enricher>
+			<int:error-channel ref="failed-registrations" />
+		</int:header-enricher>
+		<int:service-activator ref="messageValidator" />
+	</int:chain>
+
+	<int:channel id="userAuthClientChannel">
+		<int:dispatcher task-executor="REGISTRATION.in.channel.executor" />
+	</int:channel>
+	<int:chain input-channel="userAuthClientChannel"
+		output-channel="REGISTRATION.out.channel">
+		<int:header-enricher>
+			<int:error-channel ref="failed-registrations" />
+		</int:header-enricher>
+		<int:service-activator ref="userAuthClient" />
+	</int:chain>
+
+
+	<int:channel id="blackListClientChannel">
+		<int:dispatcher task-executor="REGISTRATION.in.channel.executor" />
+	</int:channel>
+	<int:chain input-channel="blackListClientChannel"
+		output-channel="REGISTRATION.out.channel">
+		<int:header-enricher>
+			<int:error-channel ref="failed-registrations" />
+		</int:header-enricher>
+		<int:service-activator ref="blackListClient" />
+	</int:chain>
+
+	<int:channel id="kycClientChannel">
+		<int:dispatcher task-executor="REGISTRATION.in.channel.executor" />
+	</int:channel>
+	<int:chain input-channel="kycClientChannel" output-channel="REGISTRATION.out.channel">
+		<int:header-enricher>
+			<int:error-channel ref="failed-registrations" />
+		</int:header-enricher>
+		<int:service-activator ref="kycClient" />
+	</int:chain>
+
+
+	<int:chain input-channel="REGISTRATION.enq" output-channel="REGISTRATION.out.channel">
+		<int:header-enricher>
+			<int:error-channel ref="failed-registrations" />
+		</int:header-enricher>
+		<int:service-activator ref="messageValidator" />
+	</int:chain>
+
+	<int:chain input-channel="REGISTRATION.out.channel"
+		output-channel="nullChannel">
+		<int:service-activator ref="prepareResponseHandler" />
+		<int:service-activator ref="messageReplyHandler" />
+	</int:chain>
+
+	<int:chain input-channel="failed-registrations">
+		<int:service-activator ref="messageReplyHandler"
+			method="onFail" />
+	</int:chain>
+
+	<bean id="messageValidator"
+		class="com.currenciesdirect.compliancesrv.service.reg.MessageValidator">
+	</bean>
+
+	<bean id="prepareResponseHandler"
+		class="com.currenciesdirect.compliancesrv.service.reg.PrepareResponseHandler">
+	</bean>
+
+	<bean id="messageReplyHandler"
+		class="com.currenciesdirect.compliancesrv.service.reg.ReplyHandler">
+	</bean>
+	<bean id="kycClient"
+		class="com.currenciesdirect.compliancesrv.service.kyc.KYCClient">
+	</bean>
+	<bean id="blackListClient"
+		class="com.currenciesdirect.compliancesrv.service.blacklist.BlackListClient">
+	</bean>
+	<bean id="userAuthClient"
+		class="com.currenciesdirect.compliancesrv.service.userauth.UserAuthClient">
+	</bean>
+</beans>

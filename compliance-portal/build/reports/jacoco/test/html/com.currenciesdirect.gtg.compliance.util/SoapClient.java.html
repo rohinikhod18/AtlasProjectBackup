@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SoapClient.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.util</a> &gt; <span class="el_source">SoapClient.java</span></div><h1>SoapClient.java</h1><pre class="source lang-java linenums">
+package com.currenciesdirect.gtg.compliance.util;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.Serializable;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.xml.namespace.QName;
+import javax.xml.ws.BindingProvider;
+import javax.xml.ws.Holder;
+import javax.xml.ws.Service;
+import javax.xml.ws.soap.SOAPBinding;
+
+import org.apache.cxf.endpoint.Client;
+import org.apache.cxf.frontend.ClientProxy;
+import org.apache.cxf.transport.http.HTTPConduit;
+import org.apache.cxf.transports.http.configuration.HTTPClientPolicy;
+import org.apache.cxf.ws.security.wss4j.WSS4JOutInterceptor;
+import org.apache.ws.security.WSConstants;
+import org.apache.ws.security.WSPasswordCallback;
+import org.apache.ws.security.handler.WSHandlerConstants;
+
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+
+import communicationapi.CommunicationAPI;
+import communicationapi.CommunicationAPI_Service;
+import communicationapi.EmailMessage;
+import communicationapi.RequestHeader;
+import communicationapi.ResponseStatusHeader;
+import communicationapi.SmsMessage;
+
+
+<span class="nc" id="L40">public class SoapClient implements Serializable {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L43">	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory</span>
+<span class="nc" id="L44">			.getLogger(SoapClient.class);</span>
+	
+	/** The Constant serialVersionUID. */
+	private static final long serialVersionUID = 1L;
+	
+<span class="nc" id="L49">	private static SoapClient soapClient = null;</span>
+
+	/** The wss out. */
+	private static WSS4JOutInterceptor wssOut;
+	
+	/** The Constant SERVICE NAME*/
+<span class="nc" id="L55">	private static final QName SERVICE_NAME = new QName(&quot;urn:CommunicationAPI&quot;, &quot;CommunicationAPI&quot;);</span>
+	
+	
+	public static SoapClient getInstance() {
+<span class="nc" id="L59">		synchronized (SoapClient.class) {</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">			if (soapClient == null) {</span>
+<span class="nc" id="L61">				soapClient = new SoapClient();</span>
+			}
+<span class="nc" id="L63">		}</span>
+<span class="nc" id="L64">		return soapClient;</span>
+	}
+	
+    /**
+     * @param serializable 
+     * @param requestHeader 
+     * @param isSent 
+     * @param responseHead 
+     * @param port 
+     * @return result 
+     */
+    public Boolean sendEmail(Serializable serializable, 
+    		RequestHeader requestHeader, Holder&lt;java.lang.Boolean&gt;
+    isSent, Holder&lt;ResponseStatusHeader&gt; responseHead, CommunicationAPI port) {
+	   Boolean result;
+<span class="nc" id="L79">	   EmailMessage message = (EmailMessage) serializable;</span>
+	   try {
+<span class="nc" id="L81">			afterPropertiesSet();</span>
+<span class="nc" id="L82">			addSecurityHeader(port);</span>
+<span class="nc" id="L83">			port.sendSynchronousEmail(requestHeader, message,</span>
+					isSent, responseHead);
+<span class="nc" id="L85">			result = isSent.value;</span>
+			
+<span class="nc" id="L87">		} catch (Exception e) {</span>
+<span class="nc" id="L88">			result = Boolean.FALSE; </span>
+<span class="nc" id="L89">			LOG.error(&quot;Exception in sendEmail &quot;, e);</span>
+<span class="nc" id="L90">		}</span>
+<span class="nc" id="L91">	   return result;</span>
+   }
+   /**
+ * @param serializable 
+ * @param requestHeader 
+ * @param isSent 
+ * @param responseHead 
+ * @param port 
+ * @return result 
+ */
+public Boolean sendSms(Serializable serializable,
+		RequestHeader requestHeader, Holder&lt;java.lang.Boolean&gt; isSent ,
+		Holder&lt;ResponseStatusHeader&gt; responseHead, CommunicationAPI port) {
+		boolean result;
+<span class="nc" id="L105">		SmsMessage message = (SmsMessage) serializable;</span>
+		try {
+<span class="nc" id="L107">			afterPropertiesSet();</span>
+<span class="nc" id="L108">			addSecurityHeader(port);</span>
+<span class="nc" id="L109">			port.sendSynchronousSMS(requestHeader, message, </span>
+					isSent, responseHead);
+<span class="nc" id="L111">			result = isSent.value;</span>
+			
+			
+<span class="nc" id="L114">		}  catch (Exception e) {</span>
+<span class="nc" id="L115">			result = false;</span>
+<span class="nc" id="L116">			LOG.error(&quot;Exception in sendSms &quot;, e);</span>
+<span class="nc" id="L117">		}</span>
+<span class="nc" id="L118">		return result;</span>
+	}
+	/* (non-Javadoc)
+	 * @see org.springframework.beans.factory.InitializingBean#afterPropertiesSet()
+	 */
+	/**
+	 * @throws Exception
+	 */
+	@SuppressWarnings({ &quot;unchecked&quot;, &quot;rawtypes&quot; })
+	public static void afterPropertiesSet() {
+		
+<span class="nc" id="L129">		ClientPasswordCallback.password =System.getenv(Constants.EAMIL_PWD);</span>
+		
+<span class="nc" id="L131">		Map ctx = new HashMap();</span>
+<span class="nc" id="L132">			ctx.put(WSHandlerConstants.ACTION, WSHandlerConstants.USERNAME_TOKEN);</span>
+<span class="nc" id="L133">			ctx.put(WSHandlerConstants.PASSWORD_TYPE, WSConstants.PW_TEXT);</span>
+<span class="nc" id="L134">			ctx.put(WSHandlerConstants.USER, System.getenv(Constants.EAMIL_PWD));</span>
+<span class="nc" id="L135">			ctx.put(WSHandlerConstants.PW_CALLBACK_CLASS, ClientPasswordCallback.class.getName());</span>
+<span class="nc" id="L136">			ctx.put(WSHandlerConstants.MUST_UNDERSTAND, &quot;false&quot;);</span>
+<span class="nc" id="L137">		wssOut = new WSS4JOutInterceptor(ctx);</span>
+<span class="nc" id="L138">	}</span>
+
+	
+
+	/**
+	 * The Class ClientPasswordCallback.
+	 */
+<span class="nc" id="L145">	public static class ClientPasswordCallback implements CallbackHandler {</span>
+		
+		/** The password. */
+		private static String password;
+
+		/* (non-Javadoc)
+		 * @see javax.security.auth.callback.CallbackHandler#handle(javax.security.auth.callback.Callback[])
+		 */
+		@Override
+		public void handle(Callback[] callbacks) throws IOException,
+				UnsupportedCallbackException {
+<span class="nc" id="L156">			WSPasswordCallback pc = (WSPasswordCallback) callbacks[0];</span>
+<span class="nc" id="L157">			pc.setPassword(password);</span>
+<span class="nc" id="L158">		}</span>
+	}
+
+	/**
+	 * Adds the security header.
+	 *
+	 * @param port the port
+	 * @throws Exception the exception
+	 */
+	private void addSecurityHeader(CommunicationAPI port){
+<span class="nc" id="L168">		LOG.debug(&quot;addSecurityHeader() STARTED&quot;);</span>
+		try {
+<span class="nc" id="L170">			Client proxy = ClientProxy.getClient(port);</span>
+<span class="nc" id="L171">			proxy.getOutInterceptors().add(wssOut);</span>
+<span class="nc" id="L172">			HTTPConduit conduit = (HTTPConduit) proxy.getConduit();</span>
+<span class="nc" id="L173">			HTTPClientPolicy httpClientPolicy = new HTTPClientPolicy();</span>
+<span class="nc" id="L174">			httpClientPolicy.setConnectionTimeout(150000);</span>
+<span class="nc" id="L175">			httpClientPolicy.setReceiveTimeout(150000);</span>
+<span class="nc" id="L176">			conduit.setClient(httpClientPolicy);</span>
+<span class="nc" id="L177">		} catch (Exception e) {</span>
+<span class="nc" id="L178">			LOG.error(&quot; Error In addSecurityHeader()&quot;, e);</span>
+<span class="nc" id="L179">		}</span>
+<span class="nc" id="L180">	}</span>
+	
+	
+	/**
+	 * @param serializable 
+	 * @param requestHeader 
+	 * @param flowName 
+	 * @return response 
+	 * @throws MalformedURLException 
+	 * @throws Exception 
+	 */
+	@SuppressWarnings(&quot;unchecked&quot;)
+	public &lt;K&gt; K execute(Serializable serializable, RequestHeader
+			requestHeader, String flowName){		
+<span class="nc" id="L194"> 		LOG.debug(&quot;CommHubRequestDispatcher.execute() STARTED&quot;);</span>
+		
+<span class="nc" id="L196">		String baseUrl = System.getProperty(&quot;baseEnterpriseUrl&quot;);</span>
+		 
+<span class="nc" id="L198">		String urlForCommHubService = baseUrl+&quot;/es-interface/CommunicationAPI/CommunicationAPI?WSDL&quot;;</span>
+
+<span class="nc" id="L200">		K response = null;</span>
+		
+<span class="nc" id="L202">		URL url = null;</span>
+		try {
+<span class="nc" id="L204">			url = new URL(urlForCommHubService);</span>
+<span class="nc" id="L205">		} catch (MalformedURLException e1) {</span>
+<span class="nc" id="L206">			LOG.error(&quot; Error In execute()&quot;, e1);</span>
+<span class="nc" id="L207">		}</span>
+		
+<span class="nc" id="L209">  		CommunicationAPI_Service commAPIService = new CommunicationAPI_Service(url, SERVICE_NAME);</span>
+<span class="nc" id="L210">		CommunicationAPI port = null;</span>
+		
+<span class="nc" id="L212">		Service service = Service.create(url, SERVICE_NAME);</span>
+<span class="nc" id="L213">		CommunicationAPI communicationAPI = service.getPort(CommunicationAPI.class);</span>
+		 
+<span class="nc" id="L215">		Holder&lt;ResponseStatusHeader&gt; responseHead = new Holder&lt;&gt;();</span>
+<span class="nc" id="L216">		Holder&lt;java.lang.Boolean&gt; isSent = new Holder&lt;&gt;();</span>
+		
+		try {
+<span class="nc" id="L219">			port = commAPIService.getCommunicationAPIPort();</span>
+<span class="nc" id="L220">			BindingProvider bp = (BindingProvider) communicationAPI;</span>
+<span class="nc" id="L221">			SOAPBinding binding = (SOAPBinding) bp.getBinding();</span>
+<span class="nc" id="L222">			binding.setMTOMEnabled(true);</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">			if (flowName.equals(Constants.SERVICE_FLOWNAME_SMS)) {</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">				if (serializable != null) {</span>
+<span class="nc" id="L225">					 response = (K) sendSms(serializable, requestHeader, isSent, responseHead, port);</span>
+				}
+<span class="nc bnc" id="L227" title="All 2 branches missed.">			} else if (flowName.equals(Constants.SERVICE_FLOWNAME_EMAIL)) {</span>
+<span class="nc" id="L228">				 response = sendSynchronousEmail(serializable, requestHeader, communicationAPI, responseHead, isSent);</span>
+			}
+<span class="nc" id="L230">		} catch (Exception e) {</span>
+<span class="nc" id="L231">			LOG.error(&quot;Error in CommHubRequestDispatcher.execute()&quot;, e);</span>
+		} finally {
+			try {
+<span class="nc bnc" id="L234" title="All 2 branches missed.">				if (port instanceof Closeable) {</span>
+<span class="nc" id="L235">					((Closeable) port).close();</span>
+				}
+<span class="nc" id="L237">			} catch (Exception ex) {</span>
+<span class="nc" id="L238">				LOG.error(&quot;Error in CommHubRequestDispatcher.execute()&quot;, ex);</span>
+<span class="nc" id="L239">			}</span>
+		}
+<span class="nc" id="L241">		return response;</span>
+	}
+	/**
+	 * @param serializable
+	 * @param requestHeader
+	 * @param communicationAPI
+	 * @param responseHead
+	 * @param isSent
+	 * @return
+	 */
+	private &lt;K&gt; K sendSynchronousEmail(Serializable serializable, RequestHeader requestHeader,
+			CommunicationAPI communicationAPI, Holder&lt;ResponseStatusHeader&gt; responseHead,
+			Holder&lt;java.lang.Boolean&gt; isSent) {
+		K response;
+		 try{
+<span class="nc" id="L256">				afterPropertiesSet();</span>
+<span class="nc" id="L257">				communicationAPI.sendSynchronousEmail(requestHeader,</span>
+		             (EmailMessage) serializable, isSent, responseHead);
+<span class="nc" id="L259">				response = (K) isSent.value;</span>
+				
+<span class="nc" id="L261">			}  catch (Exception e) {</span>
+<span class="nc" id="L262">				response =  (K) Boolean.FALSE; </span>
+<span class="nc" id="L263">				LOG.error(&quot;Exception in sendEmail &quot;, e);</span>
+<span class="nc" id="L264">			}</span>
+<span class="nc" id="L265">		return response;</span>
+	}
+	
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

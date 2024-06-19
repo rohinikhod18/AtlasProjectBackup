@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegQueueContactFilterQueryBuilder.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">RegQueueContactFilterQueryBuilder.java</span></div><h1>RegQueueContactFilterQueryBuilder.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import com.currenciesdirect.gtg.compliance.core.domain.BaseFilter;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.KeywordConstants;
+import com.currenciesdirect.gtg.compliance.dbport.enums.ServiceStatusEnum;
+
+/**
+ * The Class RegQueueFilterQueryBuilder.
+ */
+public class RegQueueContactFilterQueryBuilder extends AbstractFilterQueryBuilder {
+
+	private BaseFilter filter;
+	
+<span class="fc" id="L15">	private boolean filterAppliedForAccountAndContact=false;</span>
+	
+<span class="fc" id="L17">	private boolean countryOfResidenceFilterApplied=false;</span>
+
+	
+	/**
+	 * Instantiates a new reg queue contact filter query builder.
+	 *
+	 * @param filter the filter
+	 * @param query the query
+	 * @param isFilterApply the is filter apply
+	 * @param addWhereCluase the add where cluase
+	 */
+	public RegQueueContactFilterQueryBuilder(BaseFilter filter, String query, boolean addWhereCluase) {
+<span class="fc" id="L29">		super(query, addWhereCluase);</span>
+<span class="fc" id="L30">		this.filter = filter;</span>
+<span class="fc" id="L31">	}</span>
+
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.dbport.FilterQueryBuilder#addFiler()
+	 */
+	@Override
+	protected void addFilter() {
+		
+<span class="fc" id="L40">		addSerivesCriteria();</span>
+		
+<span class="fc" id="L42">		String key = filter.getKeyword();</span>
+		/**
+		 * Validation for keyword not equal to null then match the Keyword with regularExpression and return type
+		 * If type is not eqaul to null then search the record for that keyword
+		 */
+<span class="pc bpc" id="L47" title="5 of 6 branches missed.">		if (key != null &amp;&amp; !key.trim().isEmpty() &amp;&amp; !KeywordConstants.COLON.equals(key)) {</span>
+<span class="nc" id="L48">			String keyword = key.trim();</span>
+<span class="nc" id="L49">			String type = parseKeyword(keyword);</span>
+<span class="nc bnc" id="L50" title="All 2 branches missed.">			if (type != null) {</span>
+<span class="nc bnc" id="L51" title="All 2 branches missed.">				if (!KeywordConstants.CLIENT_NAME.equals(type)) {</span>
+<span class="nc" id="L52">					searchKeyword(type, keyword);</span>
+				}
+				// Checking for ClientName only
+				else {
+<span class="nc" id="L56">					addLikeCriteria(KeywordConstants.CONTACT_NAME, keyword, CriteriaBuilder.AND);</span>
+<span class="nc" id="L57">					filterAppliedForAccountAndContact =true;</span>
+				}
+			}
+		}
+		
+<span class="fc" id="L62">		String registeredFrom = filter.getDateFrom();</span>
+<span class="fc" id="L63">		String registeredTo = filter.getDateTo();</span>
+		
+<span class="fc" id="L65">	  	addDateTimeCriteria(RegQueDBColumns.CONTACT_UPDATEDON.getName(),registeredFrom,registeredTo,CriteriaBuilder.AND);</span>
+	  	
+<span class="fc" id="L67">	}</span>
+	
+	private void addSerivesCriteria(){
+<span class="fc" id="L70">		addBlacklistCriteria();</span>
+<span class="fc" id="L71">		addKycCriteria();</span>
+<span class="fc" id="L72">		addSanctionCriteria();</span>
+<span class="fc" id="L73">		addFraugsterCriteria();</span>
+<span class="fc" id="L74">		addCustomCheckCriteria();</span>
+<span class="fc" id="L75">	}</span>
+	
+	/**
+	 * Adds the custom check criteria.
+	 */
+	private void addCustomCheckCriteria() {
+<span class="fc" id="L81">		String[] customCheckStatus = filter.getCustomCheckStatus();</span>
+<span class="pc bpc" id="L82" title="3 of 4 branches missed.">		if (customCheckStatus != null &amp;&amp; customCheckStatus.length &lt; 2 ) {</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">			if(ServiceStatusEnum.PASS.getStatus().equals(customCheckStatus[0])) {</span>
+<span class="nc" id="L84">				addEqualCriteria(RegQueDBColumns.CUSOMCHECKSTATUS.getName(), ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			} else {
+<span class="nc" id="L86">				addNotEqualCriteria(RegQueDBColumns.CUSOMCHECKSTATUS.getName(), ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+<span class="nc" id="L87">				addNotEqualCriteria(RegQueDBColumns.CUSOMCHECKSTATUS.getName(), ServiceStatusEnum.NOT_REQUIRED.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			}
+		}
+<span class="fc" id="L90">	}</span>
+	
+	private void addBlacklistCriteria(){
+<span class="fc" id="L93">		String[] blacklistStatus = filter.getBlacklistStatus();</span>
+<span class="pc bpc" id="L94" title="3 of 4 branches missed.">		if (blacklistStatus != null &amp;&amp; blacklistStatus.length &lt; 2 ) {</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">			if(Constants.PASS.equals(blacklistStatus[0])) {</span>
+<span class="nc" id="L96">				addEqualCriteria(RegQueDBColumns.BLACKLISTSTATUS.getName(), ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			} else {
+<span class="nc" id="L98">				addNotEqualCriteria(RegQueDBColumns.BLACKLISTSTATUS.getName(), ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+<span class="nc" id="L99">				addNotEqualCriteria(RegQueDBColumns.BLACKLISTSTATUS.getName(), ServiceStatusEnum.NOT_REQUIRED.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			}
+<span class="nc" id="L101">			filterAppliedForAccountAndContact = true;</span>
+		}
+<span class="fc" id="L103">	}</span>
+	
+	private void addKycCriteria(){
+<span class="fc" id="L106">		String[] kycStatus = filter.getKycStatus();</span>
+<span class="pc bpc" id="L107" title="1 of 2 branches missed.">		if (kycStatus != null) {</span>
+<span class="nc bnc" id="L108" title="All 4 branches missed.">			if(Constants.PASS.equals(kycStatus[0]) &amp;&amp; kycStatus.length &lt; 2) {</span>
+<span class="nc" id="L109">				addEqualCriteria(RegQueDBColumns.KYCSTATUS.getName(), ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			} else {
+<span class="nc" id="L111">				addNotEqualCriteria(RegQueDBColumns.KYCSTATUS.getName(), ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+<span class="nc" id="L112">				addNotEqualCriteria(RegQueDBColumns.KYCSTATUS.getName(), ServiceStatusEnum.NOT_REQUIRED.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			}
+		}
+<span class="fc" id="L115">	}</span>
+	
+	private void addSanctionCriteria(){
+<span class="fc" id="L118">		String[] sanctionStatus = filter.getSanctionStatus();</span>
+<span class="pc bpc" id="L119" title="3 of 4 branches missed.">		if (sanctionStatus != null &amp;&amp; sanctionStatus.length &lt; 2) {</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">			if(Constants.PASS.equals(sanctionStatus[0])) {</span>
+<span class="nc" id="L121">				addEqualCriteria(RegQueDBColumns.SANCTIONSTATUS.getName(), ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			} else {
+<span class="nc" id="L123">				addNotEqualCriteria(RegQueDBColumns.SANCTIONSTATUS.getName(), ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+<span class="nc" id="L124">				addNotEqualCriteria(RegQueDBColumns.SANCTIONSTATUS.getName(), ServiceStatusEnum.NOT_REQUIRED.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			}
+<span class="nc" id="L126">			filterAppliedForAccountAndContact = true;</span>
+		}
+<span class="fc" id="L128">	}</span>
+	
+	private void addFraugsterCriteria(){
+<span class="fc" id="L131">		String[] fraugsterStatus = filter.getFraugsterStatus();</span>
+<span class="pc bpc" id="L132" title="3 of 4 branches missed.">		if (fraugsterStatus != null &amp;&amp; fraugsterStatus.length &lt; 2) {</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">			if(Constants.PASS.equals(fraugsterStatus[0])) {</span>
+<span class="nc" id="L134">				addEqualCriteria(RegQueDBColumns.FRAUGSTERSTATUS.getName(), ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			} else {
+<span class="nc" id="L136">				addNotEqualCriteria(RegQueDBColumns.FRAUGSTERSTATUS.getName(), ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+<span class="nc" id="L137">				addNotEqualCriteria(RegQueDBColumns.FRAUGSTERSTATUS.getName(), ServiceStatusEnum.NOT_REQUIRED.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			}
+<span class="nc" id="L139">			filterAppliedForAccountAndContact = true;</span>
+		}
+<span class="fc" id="L141">	}</span>
+
+	/**
+	 * The method searchKeyword
+	 * @param type
+	 * @param keyword
+	 * Business:
+	 * 1.Get the type of the keyword and search value of that keyword
+	 * Implementation:
+	 * 1.Check type of keyword and apply criteria on column according to type
+	 * 2.Search record according to value of that keyword
+	 */	
+	public void searchKeyword(String type, String keyword) {
+<span class="nc" id="L154">		String[] keyValue = keyword.split(KeywordConstants.COLON);</span>
+
+<span class="nc bnc" id="L156" title="All 2 branches missed.">		if (keyValue.length &gt;= 2) {</span>
+<span class="nc bnc" id="L157" title="All 5 branches missed.">			switch (type) {</span>
+			case KeywordConstants.COUNTRY_OF_RESIDENCE:
+<span class="nc" id="L159">				addCountryOfResidenceCriteria(keyValue[1]);</span>
+<span class="nc" id="L160">				countryOfResidenceFilterApplied = true;</span>
+<span class="nc" id="L161">				break;</span>
+			case KeywordConstants.ADDRESS:
+<span class="nc" id="L163">				addContainsCriteria(Constants.ATTRIBUTES, Constants.ADDRESS_1,&quot;\&quot;&quot;+keyValue[1]+&quot;\&quot;&quot;, Integer.MAX_VALUE, false, CriteriaBuilder.AND);</span>
+<span class="nc" id="L164">				break;</span>
+			case KeywordConstants.OCCUPATION:
+<span class="nc" id="L166">				addContainsCriteria(Constants.ATTRIBUTES, Constants.OCCUPATION, &quot;\&quot;&quot;+keyValue[1]+&quot;\&quot;&quot;, 0, true, CriteriaBuilder.AND);</span>
+<span class="nc" id="L167">				break;</span>
+			case KeywordConstants.TELEPHONE:  
+<span class="nc" id="L169">				String searchValue = getSearchValue(keyValue);</span>
+<span class="nc" id="L170">				addContainsCriteria(Constants.ATTRIBUTES, Constants.PHONE, searchValue, 10, false, CriteriaBuilder.AND);</span>
+<span class="nc" id="L171">				break;</span>
+			default:
+<span class="nc" id="L173">				break;</span>
+			}
+		} else {
+<span class="nc bnc" id="L176" title="All 2 branches missed.">			if (keyValue[0] != null) {</span>
+<span class="nc" id="L177">				addEmailCriteria(type, keyword);</span>
+			}
+		}
+
+<span class="nc" id="L181">	}</span>
+	
+	private void addCountryOfResidenceCriteria(String countryName) {
+<span class="nc bnc" id="L184" title="All 2 branches missed.">		if(countryName != null) {</span>
+<span class="nc" id="L185">			addEqualCriteria(Constants.COUNTRY_DISPLAY_NAME, countryName, CriteriaBuilder.AND);</span>
+		}
+<span class="nc" id="L187">	}</span>
+
+
+	/**
+	 * @param type
+	 * @param keyword
+	 */
+	private void addEmailCriteria(String type, String keyword) {
+<span class="nc bnc" id="L195" title="All 2 branches missed.">		if (KeywordConstants.EMAIL.equals(type)) {</span>
+<span class="nc" id="L196">			addEqualCriteria(Constants.EMAIL_DB_COLUMN, keyword, CriteriaBuilder.AND);</span>
+		}
+<span class="nc" id="L198">	}</span>
+
+	/**
+	 * @param keyValue
+	 * @return
+	 */
+	private String getSearchValue(String[] keyValue) {
+		// Search in all types of phone numbers,
+		// Also search for matching last nine digits
+		String searchValue;
+<span class="nc bnc" id="L208" title="All 2 branches missed.">		if(keyValue[1].length()&gt;9)</span>
+<span class="nc" id="L209">			searchValue = &quot;\&quot;*&quot; + keyValue[1].substring(0, 9) + &quot;*\&quot;&quot;;</span>
+		else
+<span class="nc" id="L211">			searchValue = &quot;\&quot;*&quot; + keyValue[1] + &quot;*\&quot;&quot;;</span>
+<span class="nc" id="L212">		return searchValue;</span>
+	}
+	
+	/**
+	 * @return the filterAppliedForAccountAndContact
+	 */
+	public boolean isFilterAppliedForAccountAndContact() {
+<span class="fc" id="L219">		return filterAppliedForAccountAndContact;</span>
+	}
+
+
+	/**
+	 * @param filterAppliedForAccountAndContact the filterAppliedForAccountAndContact to set
+	 */
+	public void setFilterAppliedForAccountAndContact(boolean filterAppliedForAccountAndContact) {
+<span class="nc" id="L227">		this.filterAppliedForAccountAndContact = filterAppliedForAccountAndContact;</span>
+<span class="nc" id="L228">	}</span>
+
+
+	/**
+	 * Gets is country of residence filter applied 
+	 * 
+	 * @return the isCountryOfResidenceFilterApplied
+	 */
+	public boolean isCountryOfResidenceFilterApplied() {
+<span class="fc" id="L237">		return countryOfResidenceFilterApplied;</span>
+	}
+
+
+	/**
+	 * Sets country of residence filter applied 
+	 * 
+	 * @param countryOfResidenceFilterApplied
+	 */
+	public void setCountryOfResidenceFilterApplied(boolean countryOfResidenceFilterApplied) {
+<span class="nc" id="L247">		this.countryOfResidenceFilterApplied = countryOfResidenceFilterApplied;</span>
+<span class="nc" id="L248">	}</span>
+	
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

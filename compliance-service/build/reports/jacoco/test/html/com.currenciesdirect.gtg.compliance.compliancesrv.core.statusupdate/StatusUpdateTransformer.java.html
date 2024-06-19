@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>StatusUpdateTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate</a> &gt; <span class="el_source">StatusUpdateTransformer.java</span></div><h1>StatusUpdateTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate;
+
+import java.sql.Timestamp;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.onfido.OnfidoReport;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.onfido.OnfidoSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.statusupdate.StatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+<span class="nc" id="L28">public class StatusUpdateTransformer extends AbstractTransformer{</span>
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L31">	private static final Logger LOGGER = LoggerFactory.getLogger(StatusUpdateTransformer.class);</span>
+	
+	/** The Constant RESPONSE_SUMMARY. */
+	private static final String ONFIDO_RESPONSE = &quot;ONFIDO_RESPONSE&quot;;
+	
+	/**
+	 * Transform response.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L44">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L45">		StatusUpdateRequest statusUpdateRequest = messageExchange.getRequest(StatusUpdateRequest.class);</span>
+<span class="nc" id="L46">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L47">		EventServiceLog eventStatusUpdateLog = new EventServiceLog();</span>
+<span class="nc" id="L48">		Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest().getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+<span class="nc" id="L49">		RegistrationResponse profileUpdateResponse = (RegistrationResponse) statusUpdateRequest</span>
+<span class="nc" id="L50">				.getAdditionalAttribute(Constants.FIELD_BROADCAST_RESPONSE);</span>
+<span class="nc" id="L51">		ComplianceAccount caccount = profileUpdateResponse.getAccount();</span>
+<span class="nc" id="L52">		String status = statusUpdateRequest.getAdditionalAttribute(Constants.ONFIDO_RESULT).toString();</span>
+<span class="nc" id="L53">		Integer orgId = (Integer) statusUpdateRequest.getAdditionalAttribute(&quot;OrganizationId&quot;);</span>
+
+		try {
+<span class="nc" id="L56">			Account account = (Account) statusUpdateRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L57">			ComplianceContact oldContact = new ComplianceContact();</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">			for (ComplianceContact contact : caccount.getContacts()) {</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">				if (contact.getContactSFID().equals(statusUpdateRequest.getCrmContactId())) {</span>
+<span class="nc" id="L60">					oldContact = contact;</span>
+<span class="nc" id="L61">					break;</span>
+				}
+<span class="nc" id="L63">			}</span>
+<span class="nc" id="L64">			List&lt;OnfidoReport&gt; reports = statusUpdateRequest.getReports();</span>
+			//Creating Summary for showing on UI - AT-2050
+<span class="nc" id="L66">			String modifiedOrgID = StringUtils.leftPadWithZero(3, orgId);</span>
+<span class="nc" id="L67">			OnfidoSummary summary = new OnfidoSummary();</span>
+<span class="nc" id="L68">			summary.setEventServiceLogId(eventId);</span>
+<span class="nc" id="L69">			summary.setStatus(status);</span>
+			
+<span class="nc" id="L71">			StringBuilder onfidoId = new StringBuilder();</span>
+<span class="nc" id="L72">			onfidoId.append(modifiedOrgID).append(&quot;-C-&quot;).append(StringUtils.leftPadWithZero(10, oldContact.getId()));</span>
+<span class="nc" id="L73">			summary.setOnfidoId(onfidoId.toString());</span>
+			
+<span class="nc bnc" id="L75" title="All 2 branches missed.">			for(OnfidoReport report : reports) {</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">				if(Constants.DOCUMENT.equalsIgnoreCase(report.getName())) {</span>
+<span class="nc" id="L77">					summary.setOnfidoReport(report);</span>
+				}
+<span class="nc" id="L79">			}</span>
+<span class="nc" id="L80">			statusUpdateRequest.addAttribute(ONFIDO_RESPONSE,reports);</span>
+			
+<span class="nc" id="L82">			eventStatusUpdateLog.setEventId(eventId);</span>
+<span class="nc" id="L83">			eventStatusUpdateLog.setEntityType(EntityEnum.CONTACT.getEntityTypeAsString());</span>
+<span class="nc" id="L84">			eventStatusUpdateLog.setEntityId(oldContact.getId());</span>
+<span class="nc" id="L85">			eventStatusUpdateLog.setEntityVersion(account.getVersion());</span>
+<span class="nc" id="L86">			eventStatusUpdateLog.setServiceName(ServiceTypeEnum.ONFIDO_SERVICE.getShortName());</span>
+<span class="nc" id="L87">			eventStatusUpdateLog.setServiceProviderName(ServiceTypeEnum.ONFIDO_SERVICE.getShortName());</span>
+<span class="nc" id="L88">			eventStatusUpdateLog.setCratedBy(token.getUserID());</span>
+<span class="nc" id="L89">			eventStatusUpdateLog.setCreatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L90">			eventStatusUpdateLog.setUpdatedBy(token.getUserID());</span>
+<span class="nc" id="L91">			updateEventServiceLogEntry(eventStatusUpdateLog,summary,statusUpdateRequest.getAdditionalAttribute(ONFIDO_RESPONSE),status);</span>
+			
+<span class="nc" id="L93">			statusUpdateRequest.addAttribute(Constants.EVENT_SERVICE_LOG,eventStatusUpdateLog);</span>
+		}
+<span class="nc" id="L95">		catch(Exception e) {</span>
+<span class="nc" id="L96">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L97">			LOGGER.error(&quot;Error in StatusUpdateTransformer transformResponse mapping {1}&quot;, e);</span>
+<span class="nc" id="L98">		}</span>
+<span class="nc" id="L99">		return message;</span>
+	}
+
+	/**
+	 * Transform request.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L110">		return null;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

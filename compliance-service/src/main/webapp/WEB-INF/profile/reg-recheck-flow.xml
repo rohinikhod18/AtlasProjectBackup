@@ -1,0 +1,326 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+	<context:component-scan base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="PROFILE.RECHECK_FAILURES.in.channel" />
+	<int:channel id="REG.RECHECK_FAILURES.DATA_ENRICHMENT" />
+	<int:channel id="REG.RECHECK_FAILURES.PERFORM.INTERNAL_RULE" />
+	<int:channel id="REG.RECHECK_FAILURES.INTERNAL_RULE.TRANSFORMER" />
+	<int:channel id="REG.RECHECK_FAILURES.PERFORM.KYC" />
+	<int:channel id="REG.RECHECK_FAILURES.KYC.TRANSFORMER" />
+	<int:channel id="REG.RECHECK_FAILURES.PERFORM.FRAUGSTER" />
+	<int:channel id="REG.RECHECK_FAILURES.FRAUGSTER.TRANSFORMER" />
+	<int:channel id="REG.RECHECK_FAILURES.PERFORM.SANCTION" />
+	<int:channel id="REG.RECHECK_FAILURES.SANCTION.TRANSFORMER" />
+	<int:channel id="REG.RECHECK_FAILURES.RULES.IN" />
+	<int:channel id="REGISTRATION.out.channel" />
+	<int:channel id="REG.RECHECK.SAVETOBROADCAST.IN" />
+	
+	<int:chain
+		id="reg.recheck.initChain"
+		input-channel="PROFILE.RECHECK_FAILURES.in.channel"
+		output-channel="REG.RECHECK_FAILURES.DATA_ENRICHMENT">
+		<int:header-enricher id="reg.recheck.HeaderEnricher">
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+				<int:header
+				name="username"
+				expression="headers['username']" />
+		</int:header-enricher>		
+	</int:chain>
+	
+	<int:chain
+		id="reg.recheck.dataEnrichChain"
+		input-channel="REG.RECHECK_FAILURES.DATA_ENRICHMENT"
+		output-channel="REG.RECHECK_FAILURES.PERFORM.INTERNAL_RULE">
+		<int:service-activator
+			id="reg.recheck.UPDATERECHECKSTATUS.INPROGRESS"
+			ref="reg.recheck.RecheckDBServiceImpl"
+			method="updateFailedRecheckStatusToInProgress"/>
+		<int:service-activator
+			id="reg.recheck.dataEnrich"
+			ref="reg.recheckdataEnricher"
+			method="enrichDataForFailedRegistrations" />
+		<int:service-activator
+			id="reg.recheck.createEvent"
+			ref="eventDBServiceImpl" 
+			method="createEvent" />
+	</int:chain>
+	<int:chain
+		id="reg.internalRule.decideCheck"
+		input-channel="REG.RECHECK_FAILURES.PERFORM.INTERNAL_RULE">
+		<int:router
+			default-output-channel="REGISTRATION.ERRORHANDLER"
+			resolution-required="false"
+			expression="payload.isInternalRuleServiceEligibleForReg()">
+			<int:mapping
+				value="true"
+				channel="REG.RECHECK_FAILURES.INTERNAL_RULE.TRANSFORMER" />
+			<int:mapping
+				value="false"
+				channel="REG.RECHECK_FAILURES.PERFORM.KYC" />
+		</int:router>
+	</int:chain>
+	<int:chain
+		id="reg.internalRuleRepeatCheck"
+		input-channel="REG.RECHECK_FAILURES.INTERNAL_RULE.TRANSFORMER"
+		output-channel="REG.RECHECK_FAILURES.PERFORM.KYC">
+		<int:transformer
+			ref="reg.internalRuleServiceTransformer"
+			method="transformRequest" />
+		<int:service-activator 
+		id="reg.recheck.INTERNALRULECHECK"
+		method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('INTERNAL_RULE_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).INTERNAL_RULE_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="reg.internalRuleServiceTransformer"
+			method="transformResponse" />
+		<int:filter  discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />
+	</int:chain>
+	<int:chain
+		id="reg.kyc.decideCheck"
+		input-channel="REG.RECHECK_FAILURES.PERFORM.KYC">
+		<int:router
+			default-output-channel="REGISTRATION.ERRORHANDLER"
+			resolution-required="false"
+			expression="payload.isEidEligible()">
+			<int:mapping
+				value="true"
+				channel="REG.RECHECK_FAILURES.KYC.TRANSFORMER" />
+			<int:mapping
+				value="false"
+				channel="REG.RECHECK_FAILURES.PERFORM.FRAUGSTER" />
+		</int:router>
+	</int:chain>
+	<int:chain
+		id="reg.KYCRepeatCheck"
+		input-channel="REG.RECHECK_FAILURES.KYC.TRANSFORMER"
+		output-channel="REG.RECHECK_FAILURES.PERFORM.FRAUGSTER">
+		<int:transformer
+			ref="reg.kycTransformer"
+			method="transformRequest" />
+		<int:service-activator
+		id="reg.recheck.KYCCHECK"
+		 method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('KYC_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).KYC_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="reg.kycTransformer"
+			method="transformResponse" />
+		<int:filter  discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />
+	</int:chain>	
+	<int:chain
+		id="reg.fraugster.decideCheck"
+		input-channel="REG.RECHECK_FAILURES.PERFORM.FRAUGSTER">
+		<int:router
+			default-output-channel="REGISTRATION.ERRORHANDLER"
+			resolution-required="false"
+			expression="payload.isFraugsterEligible()">
+			<int:mapping
+				value="true"
+				channel="REG.RECHECK_FAILURES.FRAUGSTER.TRANSFORMER" />
+			<int:mapping
+				value="false"
+				channel="REG.RECHECK_FAILURES.PERFORM.SANCTION" />
+		</int:router>
+	</int:chain>
+	<int:chain
+		id="reg.fraugsterRepeatCheck"
+		input-channel="REG.RECHECK_FAILURES.FRAUGSTER.TRANSFORMER"
+		output-channel="REG.RECHECK_FAILURES.PERFORM.SANCTION">
+		<int:transformer
+			id="reg.recheck.trans.fraugster"
+			ref="reg.fraugsterBulkRecheckTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="reg.recheck.FRAUDCHECK"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('FRAUGSTER_ONUPDATE_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).FRAUGSTER_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="reg.fraugsterBulkRecheckTransformer"
+			method="transformResponse" />
+		<int:filter  discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />
+	</int:chain>
+	<int:chain
+		id="reg.recheck.sanction.decideCheck"
+		input-channel="REG.RECHECK_FAILURES.PERFORM.SANCTION">
+		<int:router
+			default-output-channel="REGISTRATION.ERRORHANDLER"
+			resolution-required="false"
+			expression="payload.isSanctionEligible()">
+			<int:mapping
+				value="true"
+				channel="REG.RECHECK_FAILURES.SANCTION.TRANSFORMER" />
+			<int:mapping
+				value="false"
+				channel="REG.RECHECK_FAILURES.RULES.IN" />
+		</int:router>
+	</int:chain>
+	 <int:chain
+		id="reg.recheck.sanctionRepeatCheck"
+		input-channel="REG.RECHECK_FAILURES.SANCTION.TRANSFORMER"
+		output-channel="REG.RECHECK_FAILURES.RULES.IN">
+	
+		<int:transformer
+			id="reg.recheck.trans.sanction"
+			ref="reg.sanctionBulkRecheckTransformer"
+			method="transformRequest"
+		/>
+		<int:service-activator
+			id="reg.recheck.SANCTION"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('SANCTION_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).SANCTION_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.ContactRegSanctionRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="reg.sanctionBulkRecheckTransformer"
+			method="transformResponse" />
+		<int:filter  discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain
+		id="reg.recheck.RuleServiceChain"
+		input-channel="REG.RECHECK_FAILURES.RULES.IN"
+		output-channel="REG.RECHECK.INTUITION.IN">
+		<!-- output-channel="REG.RECHECK.SAVETOBROADCAST.IN"> --> 
+		<!-- <int:service-activator
+			id="reg.recheck.SAVE.EVENT.SERVICE"
+			ref="eventDBServiceImpl"
+			method="createEventSerivceLogForServiceFailedRegistration">
+		</int:service-activator> -->
+		<int:service-activator
+			id="reg.recheck.Exec.Rules"
+			ref="reg.RulesService"
+			method="process">
+		</int:service-activator>
+		
+		<int:service-activator
+			id="reg.recheck.SAVE.EVENT.SERVICE"
+			ref="eventDBServiceImpl"
+			method="createEventSerivceLogForServiceFailedRegistration">
+		</int:service-activator>
+		<int:service-activator
+			id="reg.recheck.updateStatus"
+			ref="reg.updateRegistrationDBServiceImpl"
+			method="updateComplianceStatusForRegUpdate" />
+		<int:service-activator
+			id="reg.recheck.activitylog"
+			ref="activityDBServiceImpl"
+			method="createServiceFailedRecheckRegistrationActivity" />
+		<int:filter  discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<!-- AT-4288 Part A and AT-4289 Part B -->
+	<int:chain
+		id="RegRepeatIntuitionServiceChain"
+		input-channel="REG.RECHECK.INTUITION.IN"
+		output-channel="REG.RECHECK.SAVETOBROADCAST.IN">
+		
+		<int:transformer
+			ref="transactionMonitoringTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="REG.TRANSACTIONMONITORING"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="transactionMonitoringTransformer"
+			method="transformResponse" />
+			
+		<int:service-activator
+			ref="eventDBServiceImpl"
+			method="createTransactionMonitoringEventSerivceLog">
+		</int:service-activator>
+		
+		<int:service-activator
+			ref="newRegistrationDBServiceImpl"
+			method="updateAccountTMFlag">
+		</int:service-activator>
+	</int:chain>
+	
+	<int:chain
+		id="regRecheckBroadCastChain"
+		input-channel="REG.RECHECK.SAVETOBROADCAST.IN"
+		output-channel="REGISTRATION.out.channel">
+		
+		<int:transformer
+			id="reg.recheck.BROADCAST.TRANSFORM"
+			ref="reg.recheck.saveToBroadCastTransformer"
+			method="transformRequestForServiceFailedRegistration" />
+		<int:service-activator
+			id="reg.recheck.SAVETOBROADCAST"
+			ref="reg.recheck.BroadCastQueueDBServiceImpl"
+			method="saveIntoBroadcastQueue">
+		</int:service-activator>
+		<int:service-activator
+			id="reg.recheck.UPDATERECHECKSTATUS.DONE"
+			ref="reg.recheck.RecheckDBServiceImpl"
+			method="updateFailedRegistrationStatusToDone">
+		</int:service-activator>
+		<int:filter discard-channel="REGISTRATION.ERRORHANDLER" expression="!payload.isFailed()" />
+	</int:chain>
+	<bean id="reg.recheckdataEnricher" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.reg.DataEnricher" />
+	<bean id="eventDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.EventDBServiceImpl"/>
+	<bean id="reg.fraugsterBulkRecheckTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.FraugsterBulkRecheckTransformer" />
+	<bean id="reg.sanctionBulkRecheckTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.SanctionBulkRecheckTransformer" />
+	<bean id="newRegistrationDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl" />
+	<bean id="activityDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl"/>
+	<bean id="reg.updateRegistrationDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.UpdateRegistrationDBServiceImpl" />
+	<bean id="reg.RulesService" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.rules.RegistrationUpdateRulesService"/>
+	<bean id="reg.internalRuleServiceTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.InternalRuleServiceBulkRecheckTransformer" />
+	<bean id="reg.kycTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.KYCBulkRecheckTransformer" />
+	<bean id="reg.recheck.BroadCastQueueDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.BroadCastQueueDBServiceImpl" />
+	<bean id="reg.recheck.saveToBroadCastTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.mqbroadcast.SaveToBroadCastTransformer" />
+	<bean id="reg.recheck.RecheckDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.RecheckDBServiceImpl" />
+	<bean id="transactionMonitoringTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.TransactionMonitoringTransformer"/>
+</beans>

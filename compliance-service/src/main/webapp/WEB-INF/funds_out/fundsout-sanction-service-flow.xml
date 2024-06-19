@@ -1,0 +1,119 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="FUNDSOUT.SANCTION_RESEND.in.channel"/>
+	<int:channel id="FUNDSOUT.SANCTIONRESEND.out.channel"/>
+	<int:channel id="FUNDSOUT.SANCTIONRESEND.RESPONSE"/>
+	<int:channel id="FUNDSOUT.SANCTIONRESEND.ACTIVITY.LOG"/>
+	<int:channel id="FUNDS_OUT.SANCTION.RESEND.ERROR.CHANNEL"/>
+	<int:chain id="resendFundsOutSanctionService" input-channel="FUNDSOUT.SANCTION_RESEND.in.channel">
+	<int:header-enricher>
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header
+				name="username"
+				expression="headers['username']" />
+			<int:header
+				name="password"
+				expression="headers['password']" />
+	</int:header-enricher>
+	<int:service-activator ref="fundsout.MsgValidator" />	
+		<int:router
+			id="fundsoutSanctionResendValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDSOUT.SANCTIONRESEND.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDSOUT.SANCTION.RESEND.CHANNEL" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain id="fundsOutsanctionDataEnrich" input-channel="FUNDSOUT.SANCTION.RESEND.CHANNEL" output-channel="FUNDSOUT.SANCTIONRESEND.out.channel">
+		<int:service-activator
+			id="FUNDSOUT.SanctionResend.ENRICH"
+			ref="fundsout.dataEnricher"
+			method="enrichData" />
+		<int:service-activator
+			id="SANCTIONRESEND.CREATE.EVENT"
+			method="createEvent" ref ="eventDBServiceImpl">
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.sanctionTransformer"
+			method="transformRequest" />
+	<int:service-activator
+			id="fundsout.SANCTION.RESEND"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('SANCTION_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).SANCTION_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.ContactRegSanctionRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.sanctionTransformer"
+			method="transformResponse" />
+			<int:filter  discard-channel="FUNDS_OUT.SANCTION.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	 <int:chain input-channel="FUNDSOUT.SANCTIONRESEND.out.channel" output-channel="FUNDSOUT.SANCTIONRESEND.ACTIVITY.LOG">
+		<int:service-activator id="fundsout.SANCTIONRESEND.SAVE.EVENT.SERVICE"
+			method="createEventSerivceLog" ref = "eventDBServiceImpl">
+		</int:service-activator>
+		<int:filter  discard-channel="FUNDS_OUT.SANCTION.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain> 
+	
+	<int:chain id="fundsout.sanctionRepeatcreateActivity" input-channel="FUNDSOUT.SANCTIONRESEND.ACTIVITY.LOG" output-channel="FUNDSOUT.SANCTIONRESEND.RESPONSE">
+		<int:service-activator id="fundsout.sanctionResendActivityBuilder" ref="sanctionResendActivityBuilder"  method="buildActivityLogs" />
+		<int:service-activator id="fundsout.sanctionResendSetServiceStatus" ref="fundsOutDBService"  method="updateServiceStatusIntoPaymetOut" />
+	    <int:service-activator id="fundsout.sanctionResendActivity"  method="createPaymentOutActivity" >
+	    <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl" />
+	    </int:service-activator>
+		<int:service-activator id="fundsout.kafkaTxExecutor" ref="kafkaTxExecutorServiceImpl" method="executeKafkaTx" />		 
+	    <int:filter  discard-channel="FUNDS_OUT.SANCTION.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain input-channel="FUNDSOUT.SANCTIONRESEND.RESPONSE" output-channel="nullChannel">
+	<int:service-activator id="fundsout.SANCTIONRESEND.RES" ref="sanctionResendResponse" method="process" />
+	<int:filter  discard-channel="FUNDS_OUT.SANCTION.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	<int:chain
+		id="fundsout.sanction.resend.errorchain"
+		input-channel="FUNDS_OUT.SANCTION.RESEND.ERROR.CHANNEL"
+		output-channel="nullChannel">
+		<int:service-activator id="fundsout.resend.sanction"
+			method="logError" ref="sanction.resend.errorhandler">
+		</int:service-activator>
+	</int:chain>
+	<bean id="sanction.resend.errorhandler" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanction.SanctionRepeatErrorHandler"/>
+	<bean id="sanctionResendResponse" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanction.PrepareSanctionResendResponse"/>
+	<bean id="sanctionResendMessageValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanction.SanctionResendMessageValidator" />
+	<bean
+		id="sanctionResendRegistratioDataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.reg.RepeatCheckDataEnricher" />
+	<!-- <bean
+		id="sanctionTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.SanctionTransformer" /> -->
+	<bean id="sanctionResendActivityBuilder" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanction.SanctionRepeatCheckAtivityLogBuilder"/>
+</beans>

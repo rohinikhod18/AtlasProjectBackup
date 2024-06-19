@@ -1,0 +1,368 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PaymentInController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.httpport</a> &gt; <span class="el_source">PaymentInController.java</span></div><h1>PaymentInController.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.httpport;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.ModelAndView;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.Contact;
+import com.currenciesdirect.gtg.compliance.core.IPaymentInService;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.core.domain.PaymentInViewMoreRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ViewMoreResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInFilter;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInUpdateRequest;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.FunctionsAllowed;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.UserPermissionFilterBuilder;
+
+/**
+ * The Class PaymentInController.
+ */
+@Controller
+<span class="fc" id="L41">public class PaymentInController extends BaseController {</span>
+
+	@Autowired
+	@Qualifier(&quot;paymentInServiceImpl&quot;)
+	private IPaymentInService ipaymentInService;
+
+<span class="fc" id="L47">	private Logger log = LoggerFactory.getLogger(PaymentInController.class);</span>
+
+	/**
+	 * Gets the paymentIn queue .
+	 *
+	 * @param user
+	 *            the user
+	 * @return the paymentIn queue
+	 */
+
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTIN_QUQUE })
+	@GetMapping(value = &quot;/paymentInQueue&quot;)
+	public ModelAndView getPaymentInQueue(@RequestAttribute(&quot;user&quot;) UserProfile user) {
+
+<span class="fc" id="L61">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="fc" id="L62">		PaymentInQueueDto paymentInQueueDto = new PaymentInQueueDto();</span>
+<span class="fc" id="L63">		modelAndView.setViewName(ViewNameEnum.PAYMENT_IN_QUEUE.getViewName());</span>
+		try {
+<span class="fc" id="L65">			PaymentInSearchCriteria searchCriteria = new PaymentInSearchCriteria();</span>
+<span class="fc" id="L66">			PaymentInFilter filter = UserPermissionFilterBuilder.getFilterFromUserPermission(user.getPermissions(),</span>
+					PaymentInFilter.class);
+<span class="fc" id="L68">			filter.setUserProfile(user);</span>
+<span class="fc" id="L69">			searchCriteria.setFilter(filter);</span>
+<span class="fc" id="L70">			paymentInQueueDto = ipaymentInService.getPaymentInQueueWithCriteria(searchCriteria);</span>
+<span class="fc" id="L71">			paymentInQueueDto.setUser(user);</span>
+<span class="fc" id="L72">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L73">			log.debug(&quot;error in getPaymentInQueue method paymentIncontroller class {1}&quot;, e);</span>
+<span class="fc" id="L74">			paymentInQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L75">			paymentInQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L76">		}</span>
+<span class="fc" id="L77">		modelAndView.addObject(&quot;paymentInQueueDto&quot;, paymentInQueueDto);</span>
+<span class="fc" id="L78">		return modelAndView;</span>
+	}
+	
+	/**
+	 * Gets the payment in queue.
+	 *
+	 * @param user the user
+	 * @param searchCriteria the search criteria
+	 * @return the payment in queue
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTIN_QUQUE })
+	@PostMapping(value = &quot;/paymentInQueue&quot;)
+	public ModelAndView getPaymentInQueue(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria) {
+
+<span class="nc" id="L93">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="nc" id="L94">		PaymentInQueueDto paymentInQueueDto = new PaymentInQueueDto();</span>
+<span class="nc" id="L95">		modelAndView.setViewName(ViewNameEnum.PAYMENT_IN_QUEUE.getViewName());</span>
+		try {
+<span class="nc" id="L97">			PaymentInSearchCriteria searchCriteriaobj = JsonConverterUtil.convertToObject(PaymentInSearchCriteria.class,</span>
+					searchCriteria);
+<span class="nc" id="L99">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L100">					user.getPermissions());</span>
+<span class="nc" id="L101">			searchCriteriaobj.getFilter().setUserProfile(user);</span>
+<span class="nc" id="L102">			paymentInQueueDto = ipaymentInService.getPaymentInQueueWithCriteria(searchCriteriaobj);</span>
+<span class="nc" id="L103">			paymentInQueueDto.setUser(user);</span>
+<span class="nc" id="L104">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L105">			log.debug(&quot;error in getPaymentInQueue method paymentIncontroller class {1}&quot;, e);</span>
+<span class="nc" id="L106">			paymentInQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L107">			paymentInQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L108">		}</span>
+<span class="nc" id="L109">		modelAndView.addObject(&quot;paymentInQueueDto&quot;, paymentInQueueDto);</span>
+<span class="nc" id="L110">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the payment in queue with criteria.
+	 *
+	 * @param searchCriteria
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return the payment in queue with criteria
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_PAYMENTIN_QUQUE })
+	@PostMapping(value = &quot;/payInQueue&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public PaymentInQueueDto getPaymentInQueueWithCriteria(@RequestBody PaymentInSearchCriteria searchCriteria,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L129">		PaymentInQueueDto paymentInQueueDto = new PaymentInQueueDto();</span>
+		try {
+<span class="fc" id="L131">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteria.getFilter(), user.getPermissions());</span>
+<span class="fc" id="L132">			searchCriteria.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L133">			paymentInQueueDto = ipaymentInService.getPaymentInQueueWithCriteria(searchCriteria);</span>
+<span class="fc" id="L134">			paymentInQueueDto.setUser(user);</span>
+<span class="fc" id="L135">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L136">			log.debug(&quot;error in getPaymentInQueueWithCriteria method paymentIncontroller class {1}&quot;,e);</span>
+<span class="fc" id="L137">			paymentInQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L138">			paymentInQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L139">		}</span>
+
+<span class="fc" id="L141">		return paymentInQueueDto;</span>
+
+	}
+
+	/**
+	 * Gets the payment in details.
+	 *
+	 * @param paymentInId            the payment in id
+	 * @param custType            the cust type
+	 * @param searchCriteria            the search criteria
+	 * @param source the source
+	 * @param user            the user
+	 * @return the payment in details
+	 * @throws CompliancePortalException             the compliance portal exception
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION, 
+			ViewControllerConstant.CAN_MANAGE_SANCTION,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1, 
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2, 
+			ViewControllerConstant.CAN_MANAGE_CUSTOM }, allRequired = false)
+	@PostMapping(value = &quot;/paymentInDetail&quot;)
+	public ModelAndView getPaymentInDetails(@RequestParam(value = &quot;paymentInId&quot;, required = false) Integer paymentInId,
+			@RequestParam(value = &quot;custType&quot;, required = false) String custType,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria,
+			@RequestParam(value = &quot;source&quot;, required = false) String source,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) throws CompliancePortalException {
+
+<span class="nc" id="L169">		ModelAndView modelAndView = new ModelAndView();</span>
+
+<span class="nc bnc" id="L171" title="All 2 branches missed.">		if ((&quot;PFX&quot;).equals(custType)) {</span>
+<span class="nc" id="L172">			modelAndView.setViewName(ViewNameEnum.PAYMENT_IN_DETAILS.getViewName());</span>
+		} else {
+<span class="nc" id="L174">			modelAndView.setViewName(ViewNameEnum.CFX_PAYMENT_IN_DETAILS.getViewName());</span>
+		}
+<span class="nc" id="L176">		PaymentInSearchCriteria searchCriteriaobj = JsonConverterUtil.convertToObject(PaymentInSearchCriteria.class,</span>
+				searchCriteria);
+<span class="nc" id="L178">		UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L179">				user.getPermissions());</span>
+<span class="nc" id="L180">		searchCriteriaobj.getFilter().setUserProfile(user);</span>
+		PaymentInDetailsDto paymentInDetailsDto;
+<span class="nc" id="L182">		paymentInDetailsDto = ipaymentInService.getPaymentInDetails(paymentInId, custType, searchCriteriaobj);</span>
+<span class="nc" id="L183">		paymentInDetailsDto.setIsPagenationRequired(Boolean.TRUE);</span>
+<span class="nc" id="L184">		paymentInDetailsDto.setSearchCriteria(searchCriteria);</span>
+<span class="nc" id="L185">		paymentInDetailsDto.setUser(user);</span>
+<span class="nc" id="L186">		paymentInDetailsDto.setSource(source);</span>
+<span class="nc" id="L187">		modelAndView.addObject(&quot;paymentInDetails&quot;, paymentInDetailsDto);</span>
+<span class="nc" id="L188">		return modelAndView;</span>
+	}
+
+	/**
+	 * Update payment in.
+	 *
+	 * @param paymentInUpdateRequest
+	 *            the payment in update request
+	 * @param user
+	 *            the user
+	 * @return the activity logs
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION, 
+			ViewControllerConstant.CAN_MANAGE_SANCTION, 
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1, 
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2, 
+			ViewControllerConstant.CAN_MANAGE_CUSTOM }, allRequired = false)
+	@PostMapping(value = &quot;/paymentInUpdate&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ActivityLogs updatePaymentIn(@RequestBody PaymentInUpdateRequest paymentInUpdateRequest,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L212">		paymentInUpdateRequest.setUser(user);</span>
+<span class="fc" id="L213">		ActivityLogs activityLogs = null;</span>
+		try {
+<span class="fc" id="L215">			paymentInUpdateRequest.setUser(user);</span>
+<span class="fc" id="L216">			activityLogs = ipaymentInService.updatePaymentIn(paymentInUpdateRequest);</span>
+<span class="fc" id="L217">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L218">			log.error(&quot;Error in updatePaymentIn method of PaymentIncontroller class&quot;,e);</span>
+<span class="fc" id="L219">			activityLogs = new ActivityLogs();</span>
+<span class="fc" id="L220">			activityLogs.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L221">			activityLogs.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L222">		}</span>
+<span class="fc" id="L223">		activityLogs.setUser(user);</span>
+<span class="fc" id="L224">		return activityLogs;</span>
+	}
+
+	/**
+	 * Gets the activites.
+	 *
+	 * @param request
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return the activites
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION, 
+			ViewControllerConstant.CAN_MANAGE_SANCTION,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1, 
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2, 
+			ViewControllerConstant.CAN_MANAGE_CUSTOM }, allRequired = false)	
+	@PostMapping(value = &quot;/paymentInActivites&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ActivityLogs getActivites(@RequestBody ActivityLogRequest request,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+
+<span class="nc" id="L249">		ActivityLogs activityLogs = null;</span>
+		try {
+<span class="nc" id="L251">			request.setUser(user);</span>
+<span class="nc" id="L252">			activityLogs = ipaymentInService.getActivityLogs(request);</span>
+<span class="nc" id="L253">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L254">			log.error(&quot;Error in getActivites method of PaymentIncontroller class&quot;,e);</span>
+<span class="nc" id="L255">			activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L256">			activityLogs.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L257">			activityLogs.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L258">		}</span>
+<span class="nc" id="L259">		return activityLogs;</span>
+	}
+
+	/**
+	 * View More Details.
+	 *
+	 * @param viewMoreRequest
+	 *            the view more request
+	 * @param user
+	 *            the user
+	 * @return viewMoreResponse
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION, 
+			ViewControllerConstant.CAN_MANAGE_SANCTION,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1, 
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2, 
+			ViewControllerConstant.CAN_MANAGE_CUSTOM }, allRequired = false)
+	@PostMapping(value = &quot;/getPaymentInViewMoreDetails&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ViewMoreResponse getPaymentInViewMoreDetails(@RequestBody PaymentInViewMoreRequest viewMoreRequest) {
+
+<span class="fc" id="L283">		ViewMoreResponse viewMoreResponse = null;</span>
+		try {
+<span class="fc" id="L285">			viewMoreResponse = ipaymentInService.viewMoreDetails(viewMoreRequest);</span>
+<span class="fc" id="L286">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L287">			log.error(&quot;Error in getPaymentInViewMoreDetails method of PaymentIncontroller class&quot;,e);</span>
+<span class="fc" id="L288">			viewMoreResponse = new ViewMoreResponse();</span>
+<span class="fc" id="L289">			viewMoreResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L290">			viewMoreResponse.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L291">		}</span>
+<span class="fc" id="L292">		return viewMoreResponse;</span>
+	}
+
+	/**
+	 * Gets the payment in dashboard details.
+	 *
+	 * @param paymentInId
+	 *            the payment in id
+	 * @param custType
+	 *            the cust type
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @param user
+	 *            the user
+	 * @return the payment in dashboard details
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_BLACKLIST, 
+			ViewControllerConstant.CAN_MANAGE_FRAUD, ViewControllerConstant.CAN_MANAGE_SANCTION, 
+			ViewControllerConstant.CAN_MANAGE_SANCTION,
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_1, 
+			ViewControllerConstant.CAN_MANAGE_WATCHLIST_CATEGORY_2, 
+			ViewControllerConstant.CAN_MANAGE_CUSTOM }, allRequired = false)
+	@PostMapping(value = &quot;/paymentInDashboardDetails&quot;)
+	public ModelAndView getPaymentInDashboardDetails(
+			@RequestParam(value = &quot;paymentInId&quot;, required = false) Integer paymentInId,
+			@RequestParam(value = &quot;custType&quot;, required = false) String custType,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) throws CompliancePortalException {
+
+<span class="nc" id="L323">		ModelAndView modelAndView = new ModelAndView();</span>
+
+<span class="nc bnc" id="L325" title="All 2 branches missed.">		if ((&quot;PFX&quot;).equals(custType)) {</span>
+<span class="nc" id="L326">			modelAndView.setViewName(ViewNameEnum.PAYMENT_IN_DETAILS.getViewName());</span>
+		} else {
+<span class="nc" id="L328">			modelAndView.setViewName(ViewNameEnum.CFX_PAYMENT_IN_DETAILS.getViewName());</span>
+		}
+		
+<span class="nc" id="L331">		PaymentInSearchCriteria searchCriteriaobj = JsonConverterUtil.convertToObject(PaymentInSearchCriteria.class,</span>
+				searchCriteria);
+<span class="nc bnc" id="L333" title="All 2 branches missed.">		if(searchCriteriaobj == null){</span>
+<span class="nc" id="L334">			   searchCriteriaobj = new PaymentInSearchCriteria();</span>
+<span class="nc" id="L335">			   searchCriteriaobj.setFilter(new PaymentInFilter());</span>
+		      }
+<span class="nc" id="L337">		UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L338">				user.getPermissions());</span>
+<span class="nc" id="L339">		searchCriteriaobj.getFilter().setUserProfile(user);</span>
+		PaymentInDetailsDto paymentInDetailsDto;	
+<span class="nc" id="L341">		paymentInDetailsDto = ipaymentInService.getPaymentInDetails(paymentInId, custType, searchCriteriaobj);</span>
+<span class="nc" id="L342">		paymentInDetailsDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteriaobj));</span>
+<span class="nc" id="L343">		paymentInDetailsDto.setIsPagenationRequired(Boolean.FALSE);</span>
+<span class="nc" id="L344">		paymentInDetailsDto.setUser(user);</span>
+
+<span class="nc" id="L346">		modelAndView.addObject(&quot;paymentInDetails&quot;, paymentInDetailsDto);</span>
+
+<span class="nc" id="L348">		return modelAndView;</span>
+	}
+	
+	@PostMapping(value=&quot;/setPoiExistsFlagForPaymentIn&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public boolean setPoiExistsFlagForPaymentIn(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestBody Contact contact) {
+<span class="nc" id="L357">		boolean poiExists = false;</span>
+		try {
+<span class="nc" id="L359">			poiExists = ipaymentInService.setPoiExistsFlagForPaymentIn(user, contact);</span>
+		}
+<span class="nc" id="L361">		catch(Exception e) {</span>
+<span class="nc" id="L362">			log.debug(&quot;Exception in PaymentInController in setPoiExistsFlagForPaymentIn() {1}&quot;, e);</span>
+<span class="nc" id="L363">		}</span>
+<span class="nc" id="L364">		return poiExists;</span>
+	}
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

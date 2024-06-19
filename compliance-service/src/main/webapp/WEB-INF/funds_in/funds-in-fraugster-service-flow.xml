@@ -1,0 +1,129 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="FUNDSIN.FRAUGSTER_RESEND.in.channel"/>
+	<int:channel id="FUNDSIN.FRAUGSTER_RESEND.process"/>
+	<int:channel id="FUNDSIN.FRAUGSTERRESEND.out.channel"/>
+	<int:channel id="FUNDSIN.FRAUGSTER.RESEND.CHANNEL"/>
+	<int:channel id="FUNDSIN.FRAUGSTERRESEND.CREATE.EVENT"/>
+	<int:channel id="FUNDSIN.FRAUGSTERRESEND.REQUEST.SENDER"/>
+	<int:channel id="FUNDSIN.FRAUGSTERRESEND.RESPONSE"/>
+	<int:channel id="FUNDSIN.FRAUGSTERRESEND.ACTIVITY.LOG"/>
+	<int:channel id="FUNDSIN.FRAUGSTER_RESEND.ERROR.CHANNEL"/>
+	
+	<int:chain id="resendFundsInFraugsterService" 
+		input-channel="FUNDSIN.FRAUGSTER_RESEND.in.channel">
+		<int:service-activator 
+			ref="fundsin.MsgValidator"
+			method="validateFraugsterResendReuqest" />	
+		<int:router
+			id="fundsinFraugsterResendValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDSIN.FRAUGSTERRESEND.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDSIN.FRAUGSTER_RESEND.process" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain id="fundsInfraugsterDataEnrich" input-channel="FUNDSIN.FRAUGSTER_RESEND.process" output-channel="FUNDSIN.FRAUGSTERRESEND.CREATE.EVENT">
+		<int:service-activator
+			id="FUNDSIN.FraugsterResend.ENRICH"
+			ref="fundsin.DataEnrich"
+			method="enrichData" />
+	</int:chain>
+	
+	<int:chain id="fundsInfraugsterEventCreater" input-channel="FUNDSIN.FRAUGSTERRESEND.CREATE.EVENT" output-channel="FUNDSIN.FRAUGSTERRESEND.REQUEST.SENDER">
+		<int:service-activator
+			id="fundsin.FRAUGSTERRESEND.event"
+			method="createEvent" ref="eventDBServiceImpl">
+		</int:service-activator>
+	</int:chain>
+	
+		<int:chain id="fundsInfraugsterRequestSender" input-channel="FUNDSIN.FRAUGSTERRESEND.REQUEST.SENDER" output-channel="FUNDSIN.FRAUGSTERRESEND.out.channel">
+		<int:transformer
+			ref="fundsin.fraugsterTransformer"
+			method="transformFraugsterResendRequest" />
+		<int:service-activator
+			id="fundsin.FRAUGSTER.RESEND"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('FRAUGSTER_FUNDSIN_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).FRAUGSTER_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsin.fraugsterTransformer"
+			method="transformResponse" />
+			<int:filter discard-channel="FUNDSIN.FRAUGSTER_RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	 <int:chain input-channel="FUNDSIN.FRAUGSTERRESEND.out.channel" output-channel="FUNDSIN.FRAUGSTERRESEND.ACTIVITY.LOG">
+		<int:service-activator id="fundsin.FRAUGSTERRESEND.SAVE.EVENT.SERVICE"
+			method="createEventSerivceLog" ref= "eventDBServiceImpl">
+		</int:service-activator>
+		<int:filter  discard-channel="FUNDSIN.FRAUGSTER_RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain> 
+	
+	<int:chain id="fundsin.fraugsterRepeatcreateActivity" input-channel="FUNDSIN.FRAUGSTERRESEND.ACTIVITY.LOG" output-channel="FUNDSIN.FRAUGSTERRESEND.RESPONSE">
+		<int:service-activator id="fundsin.fraugsterResendActivityBuilder" ref="fraugsterResendActivityBuilder"  method="buildActivityLogs" />
+		<int:service-activator id="fundsin.fraugsterResendSetServiceStatus" ref="fundsInDBService"  method="updateServiceStatusIntoPaymentIn" />
+		<int:service-activator
+			id="fundsin.kafkaTxExecutor"
+			ref="kafkaTxExecutorServiceImpl"
+			method="executeKafkaTx" />	   
+		<int:service-activator id="fundsin.fraugsterResendActivity"  method="createPaymentInActivity" >
+	    <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl" />
+	    </int:service-activator>
+	    <int:filter discard-channel="FUNDSIN.FRAUGSTER_RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain input-channel="FUNDSIN.FRAUGSTERRESEND.RESPONSE" output-channel="nullChannel">
+	<int:service-activator id="fundsin.FRAUGSTERRESEND.RES" ref="fraugsterResendResponse" method="process" />
+	<int:filter discard-channel="FUNDSIN.FRAUGSTER_RESEND.ERROR.CHANNEL"
+			expression="!payload.isFailed()" />
+	</int:chain>
+	
+	
+	<int:chain
+		id="fundsin.fraugsterResendErrorChain"
+		input-channel="FUNDSIN.FRAUGSTER_RESEND.ERROR.CHANNEL"
+		output-channel="nullChannel">
+		<int:service-activator 
+			id="fundsin.resend.fraugster"
+			ref="fraugster.resend.errorhandler"
+			method="logError" />	
+	</int:chain>
+	
+	
+	<bean id="fundsin.MsgValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsin.MessageValidator"/>
+	<bean id="fraugsterResendResponse" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fraugster.PrepareFraugsterResendResponse"/>
+	<bean id="fraugsterResendActivityBuilder" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fraugster.ResendActivityLogBuilder"/>
+	<bean id="eventDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.EventDBServiceImpl"/>
+	<bean id="fundsin.DataEnrich" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.DataEnricher"/>	
+	<bean id="fundsin.fraugsterTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsin.FraugsterTransformer"/>	
+	<bean id="fundsInDBService" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsInDBServiceImpl"/>
+	
+</beans>

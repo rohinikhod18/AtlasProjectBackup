@@ -1,0 +1,1032 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TransactionMonitoringTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg</a> &gt; <span class="el_source">TransactionMonitoringTransformer.java</span></div><h1>TransactionMonitoringTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg;
+
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.apache.commons.lang.BooleanUtils;
+import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.ordercardsrv.SecondaryAddressDelivery;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailHeaderForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailPayloadForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.SendEmailRequestForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.CardDetails;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.Company;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.ConversionPrediction;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.CorperateCompliance;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IPAddressDetails;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.RiskProfile;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.externalservice.commhubport.ICommHubServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.enterprise.EnterpriseServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.CardDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.enterprise.EnterpriseIPAddressDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Card;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class TransactionMonitoringTransformer.
+ */
+<span class="nc" id="L66">public class TransactionMonitoringTransformer extends AbstractTransformer {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L69">	private static final Logger LOG = LoggerFactory.getLogger(TransactionMonitoringTransformer.class);</span>
+	
+<span class="nc" id="L71">	private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern(&quot;yyyy-MM-dd&quot;);</span>
+
+	/** The new registration DB service impl. */
+	@Autowired
+	protected NewRegistrationDBServiceImpl newRegistrationDBServiceImpl;
+	
+	@Autowired
+	private ICommHubServiceImpl iCommHubServiceImpl;
+	
+	@Autowired	
+	protected EnterpriseServiceImpl enterpriseServiceImpl;
+	
+	@Autowired
+	protected CardDBServiceImpl cardDBServiceImpl; 	
+	
+	private static final String ERROR = &quot;Error in reading TM response&quot;;
+	
+	private static final String EVENTID = &quot;eventId&quot;;
+	
+	private static final String TMFLAG = &quot;AccountTMFlag&quot;;
+	
+
+	/**
+	 * Transform request.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L101">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L102">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L103">		RegistrationServiceRequest registrationRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+		String jsonCxExchangeRequest;
+		try {
+<span class="nc" id="L106">			LOG.info(&quot;::::::::::::::: Transforming request in TransactionMonitoringTransformer : {1}&quot;);</span>
+			
+<span class="nc" id="L108">			MessageExchange ccExchange = createSignUpExchange(message, registrationRequest, token);</span>
+
+<span class="nc" id="L110">			jsonCxExchangeRequest = JsonConverterUtil.convertToJsonWithoutNull(ccExchange.getRequest());</span>
+<span class="nc" id="L111">			LOG.warn(&quot;::::::::::::::: TransactionMonitoringTransformer : {}&quot;, jsonCxExchangeRequest);//Added for AT-5230</span>
+
+<span class="nc" id="L113">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L114">		} catch (Exception e) {</span>
+<span class="nc" id="L115">			LOG.error(&quot;Error in TransactionMonitoringTransformer class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L116">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L117">		}</span>
+<span class="nc" id="L118">		return message;</span>
+	}
+
+	/**
+	 * Creates the sign up exchange.
+	 *
+	 * @param message     the message
+	 * @param incomingRegistrationRequest the incoming registration request
+	 * @param token       the token
+	 * @return the message exchange
+	 * @throws ComplianceException the compliance exception
+	 */
+	private MessageExchange createSignUpExchange(Message&lt;MessageContext&gt; message, RegistrationServiceRequest incomingRegistrationRequest,
+			UserProfile token) throws ComplianceException {
+<span class="nc" id="L132">		Integer eventId = (Integer) incomingRegistrationRequest.getAdditionalAttribute(EVENTID);</span>
+<span class="nc" id="L133">		MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L134">		TransactionMonitoringSignupRequest request = new TransactionMonitoringSignupRequest();</span>
+<span class="nc" id="L135">		TransactionMonitoringSignupResponse tmSignUpResponse = new TransactionMonitoringSignupResponse();</span>
+<span class="nc" id="L136">		TransactionMonitoringAccountRequest tmSignUpAccountRequest = new TransactionMonitoringAccountRequest();</span>
+<span class="nc" id="L137">		TransactionMonitoringAccountSignupResponse tmSignUpAccountResponse = new TransactionMonitoringAccountSignupResponse();</span>
+<span class="nc" id="L138">		List&lt;TransactionMonitoringContactRequest&gt; tmSignUpContactRequests = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L139">		EnterpriseIPAddressDetails enterpriseIpAdd = new EnterpriseIPAddressDetails();</span>
+<span class="nc" id="L140">		Card cardInfo = new Card();</span>
+<span class="nc" id="L141">		IPAddressDetails ipAddress = new IPAddressDetails();</span>
+<span class="nc" id="L142">		RegistrationResponse regResponse = (RegistrationResponse) message.getPayload().getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L143">		String accNum = null;</span>
+
+		try {
+			
+<span class="nc bnc" id="L147" title="All 2 branches missed.">			if((OperationEnum.ADD_CONTACT) == message.getPayload().getGatewayMessageExchange().getOperation()) {</span>
+<span class="nc" id="L148">				Account account1 = (Account) incomingRegistrationRequest.getAdditionalAttribute(&quot;oldAccount&quot;);</span>
+<span class="nc" id="L149">				accNum =account1.getTradeAccountNumber();</span>
+<span class="nc" id="L150">				request.setRequestType(Constants.ADD_CONTACT);</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">			}else if((OperationEnum.NEW_REGISTRATION) == message.getPayload().getGatewayMessageExchange().getOperation()){</span>
+<span class="nc" id="L152">				accNum = incomingRegistrationRequest.getAccount().getTradeAccountNumber();</span>
+<span class="nc" id="L153">				request.setRequestType(Constants.SIGN_UP);</span>
+			}else {
+<span class="nc" id="L155">				accNum = incomingRegistrationRequest.getAccount().getTradeAccountNumber();</span>
+<span class="nc" id="L156">				request.setRequestType(Constants.UPDATE);</span>
+			}
+			
+			
+<span class="nc" id="L160">			RegistrationServiceRequest existingRegistrationRequest = newRegistrationDBServiceImpl.getAccountContacDetailsForIntuition(accNum);</span>
+<span class="nc" id="L161">			Integer accTMFlag  = (Integer) existingRegistrationRequest.getAdditionalAttribute(TMFLAG);</span>
+<span class="nc" id="L162">			Account account = existingRegistrationRequest.getAccount();</span>
+<span class="nc" id="L163">			request.setCreatedBy(token.getUserID());</span>
+<span class="nc" id="L164">			request.setAccountTMFlag(accTMFlag);</span>
+<span class="nc" id="L165">			tmSignUpAccountRequest.setCardDeliveryToSecondaryAddress(Optional.ofNullable(incomingRegistrationRequest)</span>
+<span class="nc" id="L166">					.map(RegistrationServiceRequest::getAccount)</span>
+<span class="nc" id="L167">					.map(Account::getCardDeliveryToSecondaryAddress)</span>
+<span class="nc" id="L168">					.orElse(SecondaryAddressDelivery.NO.name()));</span>
+<span class="nc" id="L169">			tmSignUpAccountRequest.setId(account.getId());</span>
+<span class="nc" id="L170">			String cardApplyType = incomingRegistrationRequest.getIsCardApply();</span>
+			
+			
+<span class="nc bnc" id="L173" title="All 6 branches missed.">			if (accTMFlag == 1 || accTMFlag == 2 || accTMFlag == 4 || (OperationEnum.NEW_REGISTRATION) == message</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">					.getPayload().getGatewayMessageExchange().getOperation()) {</span>
+
+<span class="nc" id="L176">				transformAccountRequest(tmSignUpAccountRequest, account);</span>
+<span class="nc" id="L177">				transformComplianceLog(account.getId(), tmSignUpAccountRequest);</span>
+<span class="nc" id="L178">				tmSignUpAccountRequest.setAccountStatus(account.getAccountStatus());</span>
+<span class="nc" id="L179">				 SimpleDateFormat myFormat = new SimpleDateFormat(&quot;yyyy-MM-dd HH:mm:ss&quot;); </span>
+<span class="nc" id="L180">				 tmSignUpAccountRequest.setCreatedOn(myFormat.format(existingRegistrationRequest.getAdditionalAttribute(&quot;CreatedOn&quot;)));//Add for AT-4763</span>
+				 /*
+					 * request.setTransactionMonitoringAccountRequest(tmSignUpAccountRequest);
+					 */
+<span class="nc" id="L184">					request.setOrgCode(incomingRegistrationRequest.getOrgCode());</span>
+					
+					//AT-5127
+<span class="nc" id="L187">					String registrationLoadCriteria = (String) incomingRegistrationRequest.getAdditionalAttribute(&quot;registrationLoadCriteria&quot;);</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">					if(StringUtils.isNotBlank(registrationLoadCriteria))</span>
+<span class="nc" id="L189">						request.setRegistrationLoadCriteria(registrationLoadCriteria); </span>
+<span class="nc bnc" id="L190" title="All 4 branches missed.">					if (account.getCustType().equalsIgnoreCase(&quot;CFX&quot;) || account.getCustType().equalsIgnoreCase(Constants.CFXETAILER)) {</span>
+<span class="nc" id="L191">						tmSignUpAccountRequest.setBlacklist(account.getPreviousBlacklistStatus());</span>
+<span class="nc" id="L192">						tmSignUpAccountRequest.setSanctionResult(account.getPreviousSanctionStatus());</span>
+					}
+
+<span class="nc" id="L195">					List&lt;Contact&gt; existingContacts = existingRegistrationRequest.getAccount().getContacts();</span>
+
+					
+<span class="nc bnc" id="L198" title="All 2 branches missed.">					if (StringUtils.isNotBlank(cardApplyType)) {</span>
+<span class="nc" id="L199">						request.setIsCardApply(cardApplyType);</span>
+
+<span class="nc bnc" id="L201" title="All 3 branches missed.">						switch (cardApplyType) {</span>
+							case &quot;A&quot;:
+<span class="nc bnc" id="L203" title="All 2 branches missed.">								for (Contact contact : existingContacts) {</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">									if (contact.getTradeContactID().equals(Integer.valueOf(incomingRegistrationRequest.getTradeContractId()))) {</span>
+<span class="nc" id="L205">										TransactionMonitoringContactRequest tmSignupContact =</span>
+<span class="nc" id="L206">												buildTransactionMonitoringContactRequest(account, contact);</span>
+<span class="nc bnc" id="L207" title="All 4 branches missed.">										if(incomingRegistrationRequest.getLastPasswordChangeDate() != null &amp;&amp;!incomingRegistrationRequest.getLastPasswordChangeDate().isEmpty()) {</span>
+<span class="nc" id="L208">											tmSignupContact.setLastPasswordChangeDate(getFormattedDate(incomingRegistrationRequest.getLastPasswordChangeDate()));</span>
+										}
+<span class="nc bnc" id="L210" title="All 4 branches missed.">										if(incomingRegistrationRequest.getAppInstallDate() != null &amp;&amp;!incomingRegistrationRequest.getAppInstallDate().isEmpty()) {</span>
+<span class="nc" id="L211">											tmSignupContact.setAppInstallDate(getFormattedDate(incomingRegistrationRequest.getAppInstallDate()));</span>
+										}
+<span class="nc" id="L213">										tmSignupContact.setDeviceId(incomingRegistrationRequest.getDeviceId());</span>
+<span class="nc" id="L214">										tmSignUpContactRequests.add(tmSignupContact);</span>
+									}
+<span class="nc" id="L216">								}</span>
+<span class="nc" id="L217">								enterpriseIpAdd = enterpriseServiceImpl.getIPAddressDetails(incomingRegistrationRequest.getIpAddress());</span>
+<span class="nc" id="L218">								ipAddress.setContactIp(Optional.ofNullable(incomingRegistrationRequest.getTradeContractId())</span>
+<span class="nc" id="L219">										.orElse(null));</span>
+<span class="nc" id="L220">								break;</span>
+							case &quot;U&quot;:
+								/**
+								 * 
+								 * CardDetails set on the account request as per IPAddressDetails
+								 */
+<span class="nc" id="L226">								CardDetails cardDetails = transformCardDetails(incomingRegistrationRequest.getCard());</span>
+<span class="nc" id="L227">								tmSignUpAccountRequest.setCardDetails(Optional.ofNullable(cardDetails).orElse(null));</span>
+<span class="nc" id="L228">								transformAllContacts(tmSignUpContactRequests, account, existingContacts);</span>
+<span class="nc" id="L229">								enterpriseIpAdd = getEnterpriseIPAddressDetails(message, ipAddress, existingContacts);</span>
+<span class="nc" id="L230">								ipAddress.setContactIp(Optional.ofNullable(incomingRegistrationRequest.getTradeContractId())</span>
+<span class="nc" id="L231">										.orElse(null));</span>
+<span class="nc" id="L232">								break;</span>
+							default:
+<span class="nc" id="L234">								break;</span>
+						}
+					} else {
+<span class="nc" id="L237">						transformAllContacts(tmSignUpContactRequests, account, existingContacts);</span>
+<span class="nc" id="L238">						enterpriseIpAdd = getEnterpriseIPAddressDetails(message, ipAddress, existingContacts);</span>
+						
+<span class="nc bnc" id="L240" title="All 2 branches missed.">						if(OperationEnum.NEW_REGISTRATION != message.getPayload().getGatewayMessageExchange().getOperation()) {</span>
+<span class="nc" id="L241">							 cardInfo = cardDBServiceImpl.getCardDetailsByAccountId(account.getId()); </span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">							 if(cardInfo != null) {</span>
+<span class="nc" id="L243">								 CardDetails cardDetails = transformCardDetails(cardInfo);</span>
+<span class="nc" id="L244">								 tmSignUpAccountRequest.setCardDetails(Optional.ofNullable(cardDetails).orElse(null));</span>
+							}	
+						}
+					}
+
+<span class="nc" id="L249">					transformMailingStreet(existingContacts, tmSignUpAccountRequest);</span>
+				}
+
+<span class="nc bnc" id="L252" title="All 2 branches missed.">				if(enterpriseIpAdd != null) {</span>
+<span class="nc" id="L253">					transformAccountIpRequest(enterpriseIpAdd, tmSignUpAccountRequest, ipAddress);</span>
+				}
+
+<span class="nc bnc" id="L256" title="All 2 branches missed.">				if(existingRegistrationRequest.getAdditionalAttribute(&quot;IntuitionRiskLevel&quot;) != null) {</span>
+<span class="nc" id="L257">					regResponse.getAccount().setIntuitionRiskLevel(existingRegistrationRequest.getAdditionalAttribute(&quot;IntuitionRiskLevel&quot;).toString());</span>
+				}
+				
+<span class="nc bnc" id="L260" title="All 4 branches missed.">				if (StringUtils.isNotBlank(cardApplyType) &amp;&amp; cardApplyType.equalsIgnoreCase(&quot;A&quot;)) {</span>
+<span class="nc" id="L261">					ipAddress.setIpAddress(incomingRegistrationRequest.getIpAddress());</span>
+				}
+			
+<span class="nc" id="L264">			tmSignUpAccountRequest.setiPAddressDetails(ipAddress);</span>
+<span class="nc" id="L265">			tmSignUpAccountResponse.setAccountId(account.getId());</span>
+<span class="nc" id="L266">			tmSignUpAccountResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+
+<span class="nc" id="L268">			TransactionMonitoringAccountSummary accSummary = new TransactionMonitoringAccountSummary();</span>
+<span class="nc" id="L269">			accSummary.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+			
+<span class="nc" id="L271">			ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId,</span>
+					ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE,
+<span class="nc" id="L273">					ServiceProviderEnum.TRANSACTION_MONITORING_SIGN_UP_ACCOUNT, account.getId(), account.getVersion(),</span>
+<span class="nc" id="L274">					EntityEnum.ACCOUNT.name(), token.getUserID(), tmSignUpAccountResponse, accSummary));</span>
+
+			
+<span class="nc" id="L277">			request.setTransactionMonitoringContactRequests(tmSignUpContactRequests);</span>
+<span class="nc" id="L278">			request.setTransactionMonitoringAccountRequest(tmSignUpAccountRequest);</span>
+			
+<span class="nc" id="L280">			ccExchange.setRequest(request);</span>
+<span class="nc" id="L281">			tmSignUpResponse.setTransactionMonitoringAccountSignupResponse(tmSignUpAccountResponse);</span>
+<span class="nc" id="L282">			ccExchange.setResponse(tmSignUpResponse);</span>
+<span class="nc" id="L283">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+
+<span class="nc" id="L285">		} catch (Exception e) {</span>
+<span class="nc" id="L286">			LOG.error(&quot;{1}&quot;, e);</span>
+<span class="nc" id="L287">		}</span>
+<span class="nc" id="L288">		return ccExchange;</span>
+	}
+		
+	private void transformAllContacts(List&lt;TransactionMonitoringContactRequest&gt; tmSignUpContactRequests,
+			Account account, List&lt;Contact&gt; existingContacts) throws ComplianceException, ParseException {
+<span class="nc bnc" id="L293" title="All 2 branches missed.">		for (Contact contact : existingContacts) {</span>
+<span class="nc" id="L294">			TransactionMonitoringContactRequest tmSignupContact =</span>
+<span class="nc" id="L295">					buildTransactionMonitoringContactRequest(account, contact);</span>
+<span class="nc" id="L296">			tmSignUpContactRequests.add(tmSignupContact);</span>
+<span class="nc" id="L297">		}</span>
+<span class="nc" id="L298">	}</span>
+
+	private TransactionMonitoringContactRequest buildTransactionMonitoringContactRequest(Account account, Contact contact) throws ComplianceException, ParseException {
+		TransactionMonitoringContactRequest tmSignupContact;
+<span class="nc" id="L302">		tmSignupContact = transformContactRequest(contact, account);</span>
+<span class="nc" id="L303">		tmSignupContact.setContactStatus(contact.getContactStatus());</span>
+<span class="nc" id="L304">		tmSignupContact.setBlacklist(contact.getPreviousBlacklistStatus());</span>
+<span class="nc" id="L305">		tmSignupContact.setSanctionResult(contact.getPreviousSanctionStatus());</span>
+<span class="nc" id="L306">		tmSignupContact.setCustomCheck(contact.getPreviousCountryGlobalCheckStatus()); //Add for AT-5393</span>
+<span class="nc" id="L307">		tmSignupContact.seteIDVStatus(contact.getPreviousKycStatus());</span>
+<span class="nc" id="L308">		List&lt;String&gt; fraudPredict = newRegistrationDBServiceImpl.getFraugsterContactStatusFromDB(contact.getId());</span>
+<span class="nc bnc" id="L309" title="All 4 branches missed.">		if (fraudPredict != null &amp;&amp; !fraudPredict.isEmpty()) {</span>
+<span class="nc" id="L310">			tmSignupContact.setFraudPredictScore(fraudPredict.get(0));</span>
+<span class="nc" id="L311">			tmSignupContact.setFraudPredictDate(getFormattedDate(fraudPredict.get(1)));</span>
+		}
+<span class="nc" id="L313">		String onfidoStatus = newRegistrationDBServiceImpl.getOnfidoContactStatusFromDB(contact.getId());</span>
+<span class="nc" id="L314">		tmSignupContact.setOnfido(onfidoStatus);</span>
+<span class="nc" id="L315">		transformContactRequestSetWatchlist(contact.getId(), tmSignupContact);</span>
+<span class="nc" id="L316">		transformStatusUpdateReason(contact.getId(), tmSignupContact);</span>
+
+<span class="nc" id="L318">		return tmSignupContact;</span>
+	}
+
+	/**
+	 * Existing logic is only last contact Ip Address used and also to set ContactIp
+	 */
+	private EnterpriseIPAddressDetails getEnterpriseIPAddressDetails(
+			Message&lt;MessageContext&gt; message,
+			IPAddressDetails ipAddress,
+			List&lt;Contact&gt; existingContacts) throws ComplianceException {
+
+<span class="nc" id="L329">		Contact lastContact = existingContacts.stream()</span>
+<span class="nc" id="L330">				.reduce((first,second) -&gt; second)</span>
+<span class="nc" id="L331">				.orElse(null);</span>
+<span class="nc" id="L332">		ipAddress.setContactIp(lastContact.getTradeContactID().toString());</span>
+<span class="nc" id="L333">		return getEnterpriseIPAddressDetailsForContact(message, lastContact);</span>
+	}
+
+	private EnterpriseIPAddressDetails getEnterpriseIPAddressDetailsForContact(Message&lt;MessageContext&gt; message,
+			Contact contact) throws ComplianceException {
+<span class="nc" id="L338">		EnterpriseIPAddressDetails enterpriseIpAdd = null;</span>
+<span class="nc bnc" id="L339" title="All 2 branches missed.">		if(Boolean.TRUE.equals(</span>
+<span class="nc bnc" id="L340" title="All 2 branches missed.">				contact.getPrimaryContact()) &amp;&amp; OperationEnum.NEW_REGISTRATION  == message.getPayload().getGatewayMessageExchange().getOperation()) {</span>
+<span class="nc" id="L341">			enterpriseIpAdd = enterpriseServiceImpl.getIPAddressDetails(contact.getIpAddress());</span>
+		}
+<span class="nc bnc" id="L343" title="All 2 branches missed.">		if(OperationEnum.NEW_REGISTRATION != message.getPayload().getGatewayMessageExchange().getOperation()) {</span>
+<span class="nc" id="L344">			enterpriseIpAdd = enterpriseServiceImpl.getIPAddressDetails(contact.getIpAddress());</span>
+		}
+<span class="nc" id="L346">		return enterpriseIpAdd;</span>
+	}
+
+	//AT-4744
+	private void transformAccountIpRequest(EnterpriseIPAddressDetails enterpriseIpAdd,
+			TransactionMonitoringAccountRequest tmSignUpAccountRequest, IPAddressDetails ipAddress) {
+<span class="nc" id="L352">		ipAddress.setContinent(enterpriseIpAdd.getContinent());</span>
+<span class="nc" id="L353">		ipAddress.setLongitude(enterpriseIpAdd.getLongitude());</span>
+<span class="nc" id="L354">		ipAddress.setLatitiude(enterpriseIpAdd.getLatitiude());</span>
+<span class="nc" id="L355">		ipAddress.setRegion(enterpriseIpAdd.getRegion());</span>
+<span class="nc" id="L356">		ipAddress.setCity(enterpriseIpAdd.getCity());</span>
+<span class="nc" id="L357">		ipAddress.setTimezone(enterpriseIpAdd.getTimezone());</span>
+<span class="nc" id="L358">		ipAddress.setOrganization(enterpriseIpAdd.getOrganization());</span>
+<span class="nc" id="L359">		ipAddress.setCarrier(enterpriseIpAdd.getCarrier());</span>
+<span class="nc" id="L360">		ipAddress.setConnectionType(enterpriseIpAdd.getConnectionType());</span>
+<span class="nc" id="L361">		ipAddress.setLineSpeed(enterpriseIpAdd.getLineSpeed());</span>
+<span class="nc" id="L362">		ipAddress.setIpRoutingType(enterpriseIpAdd.getIpRoutingType());</span>
+<span class="nc" id="L363">		ipAddress.setCountryName(enterpriseIpAdd.getCountryName());</span>
+<span class="nc" id="L364">		ipAddress.setCountryCode(enterpriseIpAdd.getCountryCode());</span>
+<span class="nc" id="L365">		ipAddress.setStateName(enterpriseIpAdd.getStateName());</span>
+<span class="nc" id="L366">		ipAddress.setStateCode(enterpriseIpAdd.getStateCode());</span>
+<span class="nc" id="L367">		ipAddress.setPostalCode(enterpriseIpAdd.getPostalCode());</span>
+<span class="nc" id="L368">		ipAddress.setAreaCode(enterpriseIpAdd.getAreaCode());</span>
+<span class="nc" id="L369">		ipAddress.setAnonymizerStatus(enterpriseIpAdd.getAnonymizerStatus());</span>
+<span class="nc" id="L370">		ipAddress.setIpAddress(enterpriseIpAdd.getIpAddress());</span>
+<span class="nc" id="L371">		tmSignUpAccountRequest.setiPAddressDetails(ipAddress);</span>
+<span class="nc" id="L372">	}</span>
+
+	private CardDetails transformCardDetails(Card card) throws ParseException {
+<span class="nc" id="L375">		CardDetails cardDetails = new CardDetails();</span>
+		
+<span class="nc" id="L377">		cardDetails.setCardID(card.getCardID());</span>
+<span class="nc" id="L378">		cardDetails.setCardStatusFlag(card.getCardStatusFlag());</span>
+<span class="nc" id="L379">		cardDetails.setDateCardDispatched(getFormattedDate(card.getDateCardDispatched()));</span>
+<span class="nc" id="L380">		cardDetails.setDateCardActivated(getFormattedDate(card.getDateCardActivated()));</span>
+<span class="nc" id="L381">		cardDetails.setDateCardFrozen(getFormattedDate(card.getDateCardFrozen()));</span>
+<span class="nc" id="L382">		cardDetails.setFreezeReason(card.getFreezeReason());</span>
+<span class="nc" id="L383">		cardDetails.setDateCardUnfrozen(getFormattedDate(card.getDateCardUnfrozen()));</span>
+<span class="nc" id="L384">		cardDetails.setDateCardBlocked(getFormattedDate(card.getDateCardBlocked()));</span>
+<span class="nc" id="L385">		cardDetails.setReasonForBlock(card.getReasonForBlock());</span>
+<span class="nc" id="L386">		cardDetails.setDateCardUnblocked(getFormattedDate(card.getDateCardUnblocked()));</span>
+<span class="nc" id="L387">		cardDetails.setDateLastCardPinView(getFormattedDate(card.getDateLastCardPinView()));</span>
+<span class="nc" id="L388">		cardDetails.setDateLastCardPanView(getFormattedDate(card.getDateLastCardPanView()));</span>
+		
+<span class="nc" id="L390">		return cardDetails;</span>
+	}
+
+
+	/**
+	 * Transform account request.
+	 *
+	 * @param requestData the request data
+	 * @param account     the account
+	 * @throws ParseException 
+	 */
+	private void transformAccountRequest(TransactionMonitoringAccountRequest requestData, Account account) throws ParseException {
+
+<span class="nc" id="L403">		requestData.setAccSFID(account.getAccSFID());</span>
+<span class="nc" id="L404">		requestData.setTradeAccountID(account.getTradeAccountID());</span>
+<span class="nc" id="L405">		requestData.setTradeAccountNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L406">		requestData.setBranch(account.getBranch());</span>
+<span class="nc" id="L407">		requestData.setChannel(account.getChannel());</span>
+<span class="nc" id="L408">		requestData.setCustType(account.getCustType());</span>
+<span class="nc" id="L409">		requestData.setAccountName(account.getAccountName());</span>
+<span class="nc" id="L410">		requestData.setCountryOfInterest(account.getCountryOfInterest());</span>
+<span class="nc" id="L411">		requestData.setTradingName(account.getTradingName());</span>
+<span class="nc" id="L412">		requestData.setPurposeOfTran(account.getPurposeOfTran());</span>
+<span class="nc" id="L413">		requestData.setCountriesOfOperation(account.getCountriesOfOperation());</span>
+<span class="nc bnc" id="L414" title="All 4 branches missed.">		if (account.getTurnover()!=null &amp;&amp; !account.getTurnover().isEmpty()) {</span>
+			//Changes add for AT-4862
+<span class="nc" id="L416">			 requestData.setTurnover(getIntegerTurnOver(account.getTurnover())); //updated for AT-5029</span>
+		}
+
+<span class="nc" id="L419">		requestData.setServiceRequired(account.getServiceRequired());</span>
+<span class="nc" id="L420">		requestData.setBuyingCurrency(account.getBuyingCurrency());</span>
+<span class="nc" id="L421">		requestData.setSellingCurrency(account.getSellingCurrency());</span>
+<span class="nc" id="L422">		requestData.setValueOfTransaction(account.getValueOfTransaction());</span>
+<span class="nc" id="L423">		requestData.setSourceOfFund(account.getSourceOfFund());</span>
+<span class="nc" id="L424">		requestData.setAverageTransactionValue(account.getAverageTransactionValue());</span>
+<span class="nc" id="L425">		requestData.setSource(account.getSource());</span>
+<span class="nc" id="L426">		requestData.setSubSource(account.getSubSource());</span>
+<span class="nc" id="L427">		requestData.setReferral(account.getReferral());</span>
+<span class="nc" id="L428">		requestData.setReferralText(account.getReferralText());</span>
+<span class="nc" id="L429">		requestData.setExtendedReferral(account.getExtendedReferral());</span>
+<span class="nc" id="L430">		requestData.setAdCampaign(account.getAdCampaign());</span>
+<span class="nc" id="L431">		requestData.setKeywords(account.getKeywords());</span>
+<span class="nc" id="L432">		requestData.setSearchEngine(account.getSearchEngine());</span>
+<span class="nc" id="L433">		requestData.setWebsite(account.getWebsite());</span>
+<span class="nc" id="L434">		requestData.setAffiliateName(account.getAffiliateName());</span>
+<span class="nc" id="L435">		requestData.setAffiliateNumber(account.getAffiliateNumber());</span>
+<span class="nc" id="L436">		requestData.setRegistrationMode(account.getRegistrationMode());</span>
+<span class="nc" id="L437">		requestData.setRegistrationDateTime(account.getRegistrationDateTime());</span>
+		//Add for AT-5318
+<span class="nc" id="L439">		requestData.setParentSfAccId(account.getParentSfAccId());</span>
+<span class="nc" id="L440">		requestData.setParentTitanAccNum(account.getParentTitanAccNum());</span>
+<span class="nc" id="L441">		requestData.setParentType(account.getParentType());</span>
+<span class="nc" id="L442">		requestData.setVulnerabilityCharacteristic(account.getVulnerabilityCharacteristic());</span>
+<span class="nc" id="L443">		requestData.setMetInPerson(StringUtils.capitalize(BooleanUtils.toStringYesNo(account.getMetInPerson())));</span>
+<span class="nc" id="L444">		requestData.setSelfieOnFile(StringUtils.capitalize(BooleanUtils.toStringYesNo(account.getSelfieOnFile())));</span>
+		//Add for AT-5376
+<span class="nc" id="L446">		requestData.setNumberOfChilds(account.getNumberOfChilds());</span>
+<span class="nc" id="L447">		requestData.setLegacyTradeAccountNumber(account.getLegacyTradeAccountNumber());//Add for AT-5393</span>
+		
+<span class="nc bnc" id="L449" title="All 2 branches missed.">		if(account.getCompany() != null) {</span>
+<span class="nc" id="L450">			Company company = new Company();</span>
+<span class="nc" id="L451">			company.setBillingAddress(account.getCompany().getBillingAddress());</span>
+<span class="nc" id="L452">			company.setCcj(account.getCompany().getCcj());</span>
+<span class="nc" id="L453">			company.setCompanyPhone(account.getCompany().getCompanyPhone());</span>
+<span class="nc" id="L454">			company.setCorporateType(account.getCompany().getCorporateType());</span>
+<span class="nc" id="L455">			company.setCountryOfEstablishment(account.getCompany().getCountryOfEstablishment());</span>
+<span class="nc" id="L456">			company.setCountryRegion(account.getCompany().getCountryRegion());</span>
+<span class="nc" id="L457">			company.setEstNoTransactionsPcm(account.getCompany().getEstNoTransactionsPcm());</span>
+<span class="nc" id="L458">			company.setEtailer(account.getCompany().getEtailer());</span>
+<span class="nc bnc" id="L459" title="All 4 branches missed.">			if(account.getCompany().getIncorporationDate() != null &amp;&amp; !account.getCompany().getIncorporationDate().isEmpty()) {</span>
+<span class="nc" id="L460">				company.setIncorporationDate(account.getCompany().getIncorporationDate());</span>
+			}
+<span class="nc" id="L462">			company.setIndustry(account.getCompany().getIndustry());</span>
+			//Add for AT-5393
+<span class="nc bnc" id="L464" title="All 2 branches missed.">			if (account.getCompany().getOngoingDueDiligenceDate() != null</span>
+<span class="nc bnc" id="L465" title="All 2 branches missed.">					&amp;&amp; !account.getCompany().getOngoingDueDiligenceDate().isEmpty()) {</span>
+<span class="nc bnc" id="L466" title="All 2 branches missed.">				if (account.getCompany().getOngoingDueDiligenceDate().length() &gt; 10)</span>
+<span class="nc" id="L467">					company.setOngoingDueDiligenceDate(getFormattedDate(account.getCompany().getOngoingDueDiligenceDate()));</span>
+				else
+<span class="nc" id="L469">					company.setOngoingDueDiligenceDate(account.getCompany().getOngoingDueDiligenceDate());</span>
+			}
+<span class="nc" id="L471">			company.setOption(account.getCompany().getOption());</span>
+<span class="nc" id="L472">			company.setRegistrationNo(account.getCompany().getRegistrationNo());</span>
+<span class="nc" id="L473">			company.setShippingAddress(account.getCompany().getShippingAddress());</span>
+<span class="nc bnc" id="L474" title="All 4 branches missed.">			if (account.getCompany().gettAndcSignedDate() != null&amp;&amp; !account.getCompany().gettAndcSignedDate().isEmpty()) {</span>
+<span class="nc bnc" id="L475" title="All 2 branches missed.">				if (account.getCompany().gettAndcSignedDate().length() &gt; 10)</span>
+<span class="nc" id="L476">					company.settAndcSignedDate(getFormattedDate(account.getCompany().gettAndcSignedDate())); //AT-5180</span>
+				else
+<span class="nc" id="L478">					company.settAndcSignedDate(account.getCompany().gettAndcSignedDate());</span>
+				}
+<span class="nc" id="L480">			company.setTypeOfFinancialAccount(account.getCompany().getTypeOfFinancialAccount());</span>
+<span class="nc" id="L481">			company.setVatNo(account.getCompany().getVatNo());</span>
+<span class="nc" id="L482">			requestData.setCompany(company);</span>
+		}
+				
+<span class="nc bnc" id="L485" title="All 2 branches missed.">		if(account.getCorperateCompliance() != null) {</span>
+<span class="nc" id="L486">			CorperateCompliance corperateCompliance = transformCorperateComplianceData(account);</span>
+<span class="nc" id="L487">			requestData.setCorperateCompliance(corperateCompliance);</span>
+			
+		}
+				
+<span class="nc bnc" id="L491" title="All 2 branches missed.">		if(account.getRiskProfile() != null) {</span>
+<span class="nc" id="L492">			RiskProfile riskProfile = transformRiskProfileData(account);</span>
+<span class="nc" id="L493">			requestData.setRiskProfile(riskProfile);</span>
+		}
+		
+<span class="nc bnc" id="L496" title="All 2 branches missed.">		if (account.getConversionPrediction() != null) {</span>
+<span class="nc" id="L497">			ConversionPrediction conversionPrediction = new ConversionPrediction();</span>
+<span class="nc" id="L498">			conversionPrediction.setAccountId(account.getConversionPrediction().getAccountId());</span>
+<span class="nc" id="L499">			conversionPrediction.setConversionFlag(account.getConversionPrediction().getConversionFlag());</span>
+<span class="nc" id="L500">			conversionPrediction.setConversionProbability(account.getConversionPrediction().getConversionProbability());</span>
+<span class="nc" id="L501">			conversionPrediction.seteTVBand(account.getConversionPrediction().geteTVBand());</span>
+<span class="nc" id="L502">			requestData.setConversionPrediction(conversionPrediction);</span>
+		}
+		
+<span class="nc" id="L505">		requestData.setCustLegalEntity(account.getCustLegalEntity());</span>
+<span class="nc" id="L506">		requestData.setId(account.getId());</span>
+<span class="nc" id="L507">		requestData.setCurrencyPair(null);</span>
+
+<span class="nc" id="L509">		requestData.setClientType(null);</span>
+<span class="nc" id="L510">		requestData.setOtherCurrencyPurpose(account.getOtherCurrencyPurpose());</span>
+<span class="nc" id="L511">		requestData.setAdKeywordPhrases(account.getAdKeywordPhrases());</span>
+<span class="nc" id="L512">		requestData.setPhoneReg(null);</span>
+<span class="nc" id="L513">		requestData.setEnquiryDate(null);</span>
+<span class="nc" id="L514">		requestData.setOnlineAccountStatus(account.getAccountStatus());</span>
+		
+		//AT-5457
+<span class="nc bnc" id="L517" title="All 4 branches missed.">		if(account.getConsumerDutyScope() != null &amp;&amp; Boolean.TRUE.equals(account.getConsumerDutyScope()))</span>
+<span class="nc" id="L518">			requestData.setConsumerDutyScope(&quot;Yes&quot;);</span>
+		else
+<span class="nc" id="L520">			requestData.setConsumerDutyScope(&quot;No&quot;);</span>
+<span class="nc" id="L521">	}</span>
+
+	/**
+	 * Transform risk profile data.
+	 *
+	 * @param account the account
+	 * @return the risk profile
+	 */
+	private RiskProfile transformRiskProfileData(Account account) {
+<span class="nc" id="L530">		RiskProfile riskProfile = new RiskProfile();</span>
+<span class="nc" id="L531">		riskProfile.setAnnualSales(account.getRiskProfile().getAnnualSales());</span>
+<span class="nc" id="L532">		riskProfile.setContinent(account.getRiskProfile().getContinent());</span>
+<span class="nc" id="L533">		riskProfile.setCountry(account.getRiskProfile().getCountry());</span>
+<span class="nc" id="L534">		riskProfile.setCountryRiskIndicator(account.getRiskProfile().getCountryRiskIndicator());</span>
+<span class="nc" id="L535">		riskProfile.setCreditLimit(account.getRiskProfile().getCreditLimit());</span>
+<span class="nc" id="L536">		riskProfile.setDelinquencyFailureScore(account.getRiskProfile().getDelinquencyFailureScore());</span>
+<span class="nc" id="L537">		riskProfile.setDomesticUltimateParentDetails(account.getRiskProfile().getDomesticUltimateParentDetails());</span>
+<span class="nc" id="L538">		riskProfile.setDomesticUltimateRecord(account.getRiskProfile().getDomesticUltimateRecord());</span>
+<span class="nc" id="L539">		riskProfile.setDunsNumber(account.getRiskProfile().getDunsNumber());</span>
+<span class="nc" id="L540">		riskProfile.setFailureScore(account.getRiskProfile().getFailureScore());</span>
+<span class="nc" id="L541">		riskProfile.setFinancialFiguresMonth(account.getRiskProfile().getFinancialFiguresMonth());</span>
+<span class="nc" id="L542">		riskProfile.setFinancialFiguresYear(account.getRiskProfile().getFinancialFiguresYear());</span>
+<span class="nc" id="L543">		riskProfile.setFinancialYearEndDate(account.getRiskProfile().getFinancialYearEndDate());</span>
+<span class="nc" id="L544">		riskProfile.setGlobalUltimateParentDetails(account.getRiskProfile().getGlobalUltimateParentDetails());</span>
+<span class="nc" id="L545">		riskProfile.setGlobalUltimateRecord(account.getRiskProfile().getGlobalUltimateRecord());</span>
+<span class="nc" id="L546">		riskProfile.setGroupStructureNumberOfLevels(account.getRiskProfile().getGroupStructureNumberOfLevels());</span>
+<span class="nc" id="L547">		riskProfile.setHeadquarterDetails(account.getRiskProfile().getHeadquarterDetails());</span>
+<span class="nc" id="L548">		riskProfile.setImmediateParentDetails(account.getRiskProfile().getImmediateParentDetails());</span>
+<span class="nc" id="L549">		riskProfile.setImportExportIndicator(account.getRiskProfile().getImportExportIndicator());</span>
+<span class="nc" id="L550">		riskProfile.setLocationType(account.getRiskProfile().getLocationType());</span>
+<span class="nc" id="L551">		riskProfile.setModelledAnnualSales(account.getRiskProfile().getModelledAnnualSales());</span>
+<span class="nc" id="L552">		riskProfile.setModelledNetWorth(account.getRiskProfile().getModelledNetWorth());</span>
+<span class="nc" id="L553">		riskProfile.setNetWorthAmount(account.getRiskProfile().getNetWorthAmount());</span>
+<span class="nc" id="L554">		riskProfile.setProfitLoss(account.getRiskProfile().getProfitLoss());</span>
+<span class="nc" id="L555">		riskProfile.setRiskDirection(account.getRiskProfile().getRiskDirection());</span>
+<span class="nc" id="L556">		riskProfile.setRiskRating(account.getRiskProfile().getRiskRating());</span>
+<span class="nc" id="L557">		riskProfile.setRiskTrend(account.getRiskProfile().getRiskTrend());</span>
+<span class="nc" id="L558">		riskProfile.setStateCountry(account.getRiskProfile().getStateCountry());</span>
+<span class="nc" id="L559">		riskProfile.setTradingStyles(account.getRiskProfile().getTradingStyles());</span>
+<span class="nc" id="L560">		riskProfile.setUpdatedRisk(account.getRiskProfile().getUpdatedRisk());</span>
+<span class="nc" id="L561">		riskProfile.setUs1987PrimarySic4Digit(account.getRiskProfile().getUs1987PrimarySic4Digit());</span>
+<span class="nc" id="L562">		return riskProfile;</span>
+	}
+
+	/**
+	 * Transform corperate compliance data.
+	 *
+	 * @param account the account
+	 * @return the corperate compliance
+	 */
+	private CorperateCompliance transformCorperateComplianceData(Account account) {
+<span class="nc" id="L572">		CorperateCompliance corperateCompliance = new CorperateCompliance();</span>
+<span class="nc" id="L573">		corperateCompliance.setFinancialStrength(account.getCorperateCompliance().getFinancialStrength());</span>
+<span class="nc" id="L574">		corperateCompliance.setFixedAssets(account.getCorperateCompliance().getFixedAssets());</span>
+<span class="nc" id="L575">		corperateCompliance.setForeignOwnedCompany(account.getCorperateCompliance().getForeignOwnedCompany());</span>
+<span class="nc" id="L576">		corperateCompliance.setFormerName(account.getCorperateCompliance().getFormerName());</span>
+<span class="nc" id="L577">		corperateCompliance.setGlobalUltimateCountry(account.getCorperateCompliance().getGlobalUltimateCountry());</span>
+<span class="nc" id="L578">		corperateCompliance.setGlobalUltimateDuns(account.getCorperateCompliance().getGlobalUltimateDuns());</span>
+<span class="nc" id="L579">		corperateCompliance.setGlobalUltimateName(account.getCorperateCompliance().getGlobalUltimateName());</span>
+<span class="nc" id="L580">		corperateCompliance.setGrossIncome(account.getCorperateCompliance().getGrossIncome());</span>
+<span class="nc" id="L581">		corperateCompliance.setIsoCountryCode2Digit(account.getCorperateCompliance().getIsoCountryCode2Digit());</span>
+<span class="nc" id="L582">		corperateCompliance.setIsoCountryCode3Digit(account.getCorperateCompliance().getIsoCountryCode3Digit());</span>
+<span class="nc" id="L583">		corperateCompliance.setLegalForm(account.getCorperateCompliance().getLegalForm());</span>
+<span class="nc" id="L584">		corperateCompliance.setMatchName(account.getCorperateCompliance().getMatchName());</span>
+<span class="nc" id="L585">		corperateCompliance.setNetIncome(account.getCorperateCompliance().getNetIncome());</span>
+<span class="nc" id="L586">		corperateCompliance.setNetWorth(account.getCorperateCompliance().getNetWorth());</span>
+<span class="nc bnc" id="L587" title="All 4 branches missed.">		if(account.getCorperateCompliance().getRegistrationDate() != null &amp;&amp; !account.getCorperateCompliance().getRegistrationDate().isEmpty()) {</span>
+<span class="nc" id="L588">			corperateCompliance.setRegistrationDate(account.getCorperateCompliance().getRegistrationDate());</span>
+		}
+		
+<span class="nc" id="L591">		corperateCompliance.setRegistrationNumber(account.getCorperateCompliance().getRegistrationNumber());</span>
+<span class="nc" id="L592">		corperateCompliance.setSic(account.getCorperateCompliance().getSic());</span>
+<span class="nc" id="L593">		corperateCompliance.setSicDesc(account.getCorperateCompliance().getSicDesc());</span>
+<span class="nc" id="L594">		corperateCompliance.setStatementDate(account.getCorperateCompliance().getStatementDate());</span>
+<span class="nc" id="L595">		corperateCompliance.setTotalAssets(account.getCorperateCompliance().getTotalAssets());</span>
+<span class="nc" id="L596">		corperateCompliance.setTotalCurrentAssets(account.getCorperateCompliance().getTotalCurrentAssets());</span>
+<span class="nc" id="L597">		corperateCompliance.setTotalCurrentLiabilities(account.getCorperateCompliance().getTotalCurrentLiabilities());</span>
+<span class="nc" id="L598">		corperateCompliance</span>
+<span class="nc" id="L599">				.setTotalLiabilitiesAndEquities(account.getCorperateCompliance().getTotalLiabilitiesAndEquities());</span>
+<span class="nc" id="L600">		corperateCompliance.setTotalLongTermLiabilities(account.getCorperateCompliance().getTotalLongTermLiabilities());</span>
+<span class="nc" id="L601">		corperateCompliance.setTotalMatchedShareholders(account.getCorperateCompliance().getTotalMatchedShareholders());</span>
+<span class="nc" id="L602">		corperateCompliance.setTotalShareHolders(account.getCorperateCompliance().getTotalShareHolders());</span>
+<span class="nc" id="L603">		return corperateCompliance;</span>
+	}
+
+	/**
+	 * Transform contact request.
+	 *
+	 * @param contact the contact
+	 * @param account the account
+	 * @return the transaction monitoring contact request
+	 * @throws ComplianceException the compliance exception
+	 */
+	private TransactionMonitoringContactRequest transformContactRequest(Contact contact, Account account) {
+
+<span class="nc" id="L616">		TransactionMonitoringContactRequest requestData = new TransactionMonitoringContactRequest();</span>
+
+<span class="nc" id="L618">		requestData.setId(contact.getId());</span>
+<span class="nc" id="L619">		requestData.setTradeAccNumber(account.getTradeAccountNumber());</span>
+<span class="nc" id="L620">		requestData.setContactSFID(contact.getContactSFID());</span>
+<span class="nc" id="L621">		requestData.setTradeContactID(contact.getTradeContactID());</span>
+<span class="nc" id="L622">		requestData.setTitle(contact.getTitle());</span>
+<span class="nc" id="L623">		requestData.setPreferredName(contact.getPreferredName());</span>
+<span class="nc" id="L624">		requestData.setFirstName(contact.getFirstName());</span>
+<span class="nc" id="L625">		requestData.setLastName(contact.getLastName());</span>
+<span class="nc bnc" id="L626" title="All 4 branches missed.">		if(contact.getDob() != null &amp;&amp; !contact.getDob().isEmpty()) {</span>
+<span class="nc" id="L627">			requestData.setDob(contact.getDob());</span>
+		}
+<span class="nc" id="L629">		requestData.setAddressType(contact.getAddressType());</span>
+<span class="nc" id="L630">		requestData.setStreet(contact.getStreet());</span>
+<span class="nc" id="L631">		requestData.setCity(contact.getCity());</span>
+<span class="nc" id="L632">		requestData.setAddress1(contact.getAddress1());</span>
+
+<span class="nc" id="L634">		requestData.setPostCode(contact.getPostCode());</span>
+<span class="nc" id="L635">		requestData.setSubBuildingorFlat(contact.getSubBuildingorFlat());</span>
+<span class="nc" id="L636">		requestData.setUnitNumber(contact.getUnitNumber());</span>
+<span class="nc" id="L637">		requestData.setSubCity(contact.getSubCity());</span>
+<span class="nc" id="L638">		requestData.setRegion(contact.getRegion());</span>
+<span class="nc" id="L639">		requestData.setState(contact.getState());</span>
+
+<span class="nc" id="L641">		requestData.setPhoneWork(contact.getPhoneWork());</span>
+<span class="nc" id="L642">		requestData.setPhoneHome(contact.getPhoneHome());</span>
+<span class="nc" id="L643">		requestData.setPhoneMobile(contact.getPhoneMobile());</span>
+<span class="nc" id="L644">		requestData.setEmail(contact.getEmail());</span>
+<span class="nc" id="L645">		requestData.setPrimaryContact(contact.getPrimaryContact());</span>
+<span class="nc" id="L646">		requestData.setPrimaryPhone(contact.getPrimaryPhone());</span>
+
+<span class="nc" id="L648">		requestData.setGender(contact.getGender());</span>
+<span class="nc" id="L649">		requestData.setNationality(contact.getNationality());</span>
+<span class="nc" id="L650">		requestData.setOccupation(contact.getOccupation());</span>
+<span class="nc" id="L651">		requestData.setPositionOfSignificance(contact.getPositionOfSignificance());</span>
+
+<span class="nc bnc" id="L653" title="All 2 branches missed.">		if (null != contact.getPassportCountryCode()) {</span>
+<span class="nc" id="L654">			requestData.setPassportCountryCode(contact.getPassportCountryCode());</span>
+		}
+<span class="nc" id="L656">		requestData.setPassportFamilyNameAtBirth(contact.getPassportFamilyNameAtBirth());</span>
+<span class="nc" id="L657">		requestData.setPassportNameAtCitizenship(contact.getPassportNameAtCitizenship());</span>
+<span class="nc" id="L658">		requestData.setPassportNumber(contact.getPassportNumber());</span>
+<span class="nc" id="L659">		requestData.setPassportPlaceOfBirth(contact.getPassportPlaceOfBirth());</span>
+		
+<span class="nc bnc" id="L661" title="All 4 branches missed.">		if(null != contact.getPassportExiprydate() &amp;&amp; !contact.getPassportExiprydate().isEmpty()) {</span>
+<span class="nc" id="L662">			requestData.setPassportExiprydate(contact.getPassportExiprydate());</span>
+		}
+		
+<span class="nc" id="L665">		requestData.setPassportFullName(contact.getPassportFullName());</span>
+<span class="nc" id="L666">		requestData.setPassportMRZLine1(contact.getPassportMRZLine1());</span>
+<span class="nc" id="L667">		requestData.setPassportMRZLine2(contact.getPassportMRZLine2());</span>
+
+<span class="nc" id="L669">		requestData.setDlCardNumber(contact.getDlCardNumber());</span>
+
+<span class="nc bnc" id="L671" title="All 2 branches missed.">		if (null != contact.getDlCountryCode()) {</span>
+<span class="nc" id="L672">			requestData.setDlCountryCode(contact.getDlCountryCode());</span>
+		}
+		
+<span class="nc bnc" id="L675" title="All 4 branches missed.">		if(null != contact.getDlExpiryDate() &amp;&amp; !contact.getDlExpiryDate().isEmpty()) {</span>
+<span class="nc" id="L676">			requestData.setDlExpiryDate(contact.getDlExpiryDate());</span>
+		}
+		
+<span class="nc" id="L679">		requestData.setDlLicenseNumber(contact.getDlLicenseNumber());</span>
+<span class="nc" id="L680">		requestData.setDlStateCode(contact.getDlStateCode());</span>
+<span class="nc" id="L681">		requestData.setDlVersionNumber(contact.getDlVersionNumber());</span>
+
+<span class="nc" id="L683">		requestData.setMedicareCardNumber(contact.getMedicareCardNumber());</span>
+<span class="nc" id="L684">		requestData.setMedicareReferenceNumber(contact.getMedicareReferenceNumber());</span>
+<span class="nc" id="L685">		requestData.setMunicipalityOfBirth(contact.getMunicipalityOfBirth());</span>
+<span class="nc" id="L686">		requestData.setIpAddress(contact.getIpAddress());</span>
+
+<span class="nc" id="L688">		requestData.setMiddleName(contact.getMiddleName());</span>
+<span class="nc" id="L689">		requestData.setCountryOfBirth(contact.getCountryOfBirth());</span>
+<span class="nc" id="L690">		requestData.setPrefecture(contact.getPrefecture());</span>
+<span class="nc" id="L691">		requestData.setAza(contact.getAza());</span>
+<span class="nc" id="L692">		requestData.setResidentialStatus(contact.getResidentialStatus());</span>
+
+<span class="nc" id="L694">		requestData.setAddressType(contact.getAddressType());</span>
+<span class="nc" id="L695">		requestData.setRegion(contact.getRegion());</span>
+
+<span class="nc" id="L697">		requestData.setUpdateStatus(null);</span>
+		
+		//Added for AT-4077
+<span class="nc" id="L700">		requestData.setCountry(contact.getCountry());</span>
+<span class="nc" id="L701">		requestData.setBuildingName(contact.getBuildingName());</span>
+<span class="nc" id="L702">		requestData.setSubBuildingorFlat(contact.getSubBuildingorFlat());</span>
+<span class="nc" id="L703">		requestData.setHouseBuildingNumber(contact.getBuildingNumber());</span>
+		
+		//Added for AT-4079
+<span class="nc" id="L706">		requestData.setStreetNumber(contact.getStreetNumber());</span>
+<span class="nc" id="L707">		requestData.setStreetType(contact.getStreetType());</span>
+		
+<span class="nc" id="L709">		requestData.setAuthorisedSignatory(contact.getAuthorisedSignatory());</span>
+<span class="nc" id="L710">		requestData.setJobTitle(contact.getJobTitle());</span>
+<span class="nc" id="L711">		requestData.setDesignation(contact.getDesignation());</span>
+<span class="nc" id="L712">		requestData.setYearsInAddress(contact.getYearsInAddress());</span>
+<span class="nc" id="L713">		requestData.setAustraliaRTACardNumber(contact.getAustraliaRTACardNumber());</span>
+
+<span class="nc" id="L715">		return requestData;</span>
+
+	}
+
+	/**
+	 * Transform contact request set watchlist.
+	 *
+	 * @param contactID       the contact ID
+	 * @param tmSingupContact the tm singup contact
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void transformContactRequestSetWatchlist(Integer contactID,
+			TransactionMonitoringContactRequest tmSingupContact) throws ComplianceException {
+
+<span class="nc" id="L729">		List&lt;String&gt; watchList = newRegistrationDBServiceImpl.getContactWatchlist(contactID);</span>
+<span class="nc" id="L730">		tmSingupContact.setWatchlist(watchList);</span>
+
+<span class="nc" id="L732">	}</span>
+	
+	/**
+	 * Transform status update reason.
+	 *
+	 * @param contactID the contact ID
+	 * @param tmSingupContact the tm singup contact
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void transformStatusUpdateReason(Integer contactID,
+			TransactionMonitoringContactRequest tmSingupContact) throws ComplianceException {
+
+<span class="nc" id="L744">		List&lt;String&gt; statusReason = newRegistrationDBServiceImpl.getContactStatusUpdateReason(contactID);</span>
+<span class="nc" id="L745">		tmSingupContact.setStatusUpdateReason(statusReason);</span>
+
+<span class="nc" id="L747">	}</span>
+	
+	/**
+	 * Transform compliance log.
+	 *
+	 * @param accountID the account ID
+	 * @param tmSingupContact the tm singup contact
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void transformComplianceLog(Integer accountID,
+			TransactionMonitoringAccountRequest tmSignUpAccountRequest) throws ComplianceException {
+
+<span class="nc" id="L759">		String complianceLog = newRegistrationDBServiceImpl.getComplianceLogForIntuition(accountID);</span>
+<span class="nc" id="L760">		tmSignUpAccountRequest.setComplianceLog(complianceLog);</span>
+
+<span class="nc" id="L762">	}</span>
+	
+	private void transformMailingStreet(List&lt;Contact&gt; existingContacts,
+			TransactionMonitoringAccountRequest tmSignUpAccountRequest) {
+<span class="nc" id="L766">		boolean isSecondaryAddressPresent = existingContacts.stream()</span>
+<span class="nc" id="L767">				.map(Contact::getMaddress2Street)</span>
+<span class="nc" id="L768">				.anyMatch(address -&gt; StringUtils.isNotBlank(address));</span>
+
+<span class="nc bnc" id="L770" title="All 2 branches missed.">		if (isSecondaryAddressPresent) {</span>
+<span class="nc" id="L771">			tmSignUpAccountRequest.setSecondaryAddressPresent(SecondaryAddressDelivery.YES.name());</span>
+		} else {
+<span class="nc" id="L773">			tmSignUpAccountRequest.setSecondaryAddressPresent(SecondaryAddressDelivery.NO.name());</span>
+		}
+<span class="nc" id="L775">	}</span>
+	
+	/**
+	 * Transform response.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L785">		MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L786">				.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+
+		try {
+<span class="nc" id="L789">			RegistrationResponse signUpResponse = (RegistrationResponse) message.getPayload()</span>
+<span class="nc" id="L790">					.getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L791">			transformSignUpResponse(exchange, signUpResponse);</span>
+<span class="nc" id="L792">		} catch (Exception e) {</span>
+<span class="nc" id="L793">			LOG.error(&quot;Error&quot;, e);</span>
+<span class="nc" id="L794">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L795">		}</span>
+<span class="nc" id="L796">		return message;</span>
+	}
+
+	/**
+	 * Transform sign up response.
+	 *
+	 * @param exchange the exchange
+	 */
+	private void transformSignUpResponse(MessageExchange exchange, RegistrationResponse signUpResponse) {
+<span class="nc" id="L805">		TransactionMonitoringSignupResponse response = (TransactionMonitoringSignupResponse) exchange.getResponse();</span>
+<span class="nc" id="L806">		TransactionMonitoringAccountSignupResponse tmSingUpAccountResponse = new TransactionMonitoringAccountSignupResponse();</span>
+<span class="nc" id="L807">		TransactionMonitoringAccountProviderResponse tmAccountProviderResponse = new TransactionMonitoringAccountProviderResponse();</span>
+		
+		try {
+
+<span class="nc bnc" id="L811" title="All 4 branches missed.">			if (response != null &amp;&amp; !response.getTransactionMonitoringAccountSignupResponse().getStatus().equalsIgnoreCase(Constants.SERVICE_FAILURE)) {</span>
+
+<span class="nc" id="L813">				tmSingUpAccountResponse = response.getTransactionMonitoringAccountSignupResponse();</span>
+
+<span class="nc" id="L815">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L816">						ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L817">						tmSingUpAccountResponse.getAccountId());</span>
+
+<span class="nc" id="L819">				TransactionMonitoringAccountSummary accSummary = JsonConverterUtil</span>
+<span class="nc" id="L820">						.convertToObject(TransactionMonitoringAccountSummary.class, eventServiceLog.getSummary());</span>
+
+<span class="nc" id="L822">				setAccountSignUpResponse(tmSingUpAccountResponse, eventServiceLog, accSummary);</span>
+				
+<span class="nc" id="L824">				response.setTransactionMonitoringAccountSignupResponse(tmSingUpAccountResponse);</span>
+				
+<span class="nc" id="L826">				signUpResponse.getAccount().setTransactionMonitoringStatus(tmSingUpAccountResponse.getStatus());</span>
+				
+<span class="nc bnc" id="L828" title="All 2 branches missed.">				if(accSummary.getRiskLevel() != null) {</span>
+<span class="nc" id="L829">					signUpResponse.getAccount().setIntuitionRiskLevel(accSummary.getRiskLevel());</span>
+				}
+				
+<span class="nc bnc" id="L832" title="All 2 branches missed.">				if(accSummary.getCardDecision() != null) {</span>
+<span class="nc" id="L833">					signUpResponse.getAccount().setCardDecision(accSummary.getCardDecision());</span>
+				}
+				
+<span class="nc bnc" id="L836" title="All 4 branches missed.">			} else if(response != null &amp;&amp; response.getTransactionMonitoringAccountSignupResponse().getHttpStatus() == 400 ) {</span>
+				
+<span class="nc" id="L838">				TransactionMonitoringSignupRequest request = (TransactionMonitoringSignupRequest) exchange.getRequest();</span>
+<span class="nc" id="L839">				tmSingUpAccountResponse = response.getTransactionMonitoringAccountSignupResponse();</span>
+				
+<span class="nc" id="L841">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L842">						ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L843">						request.getTransactionMonitoringAccountRequest().getId());</span>
+
+<span class="nc" id="L845">				TransactionMonitoringAccountSummary accSummary = JsonConverterUtil</span>
+<span class="nc" id="L846">						.convertToObject(TransactionMonitoringAccountSummary.class, eventServiceLog.getSummary());</span>
+				
+<span class="nc" id="L848">				 tmAccountProviderResponse = tmSingUpAccountResponse.getTransactionMonitoringAccountProviderResponse();</span>
+				 
+<span class="nc" id="L850">					accSummary.setStatus(tmSingUpAccountResponse.getStatus());</span>
+<span class="nc" id="L851">					accSummary.setCorrelationId(tmAccountProviderResponse.getCorrelationId());</span>
+<span class="nc" id="L852">					accSummary.setAccountId(tmSingUpAccountResponse.getAccountId());</span>
+<span class="nc" id="L853">					accSummary.setHttpStatus(tmSingUpAccountResponse.getHttpStatus());</span>
+
+<span class="nc" id="L855">					eventServiceLog</span>
+<span class="nc" id="L856">							.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmAccountProviderResponse));</span>
+<span class="nc" id="L857">					eventServiceLog.setStatus(tmSingUpAccountResponse.getStatus());</span>
+<span class="nc" id="L858">					eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(accSummary));</span>
+<span class="nc" id="L859">					eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+				 
+<span class="nc" id="L861">					sendAlertEmailForInvalidRequest(request.getTransactionMonitoringAccountRequest().getTradeAccountNumber(), &quot;Signup&quot;, tmSingUpAccountResponse);</span>
+				
+<span class="nc" id="L863">			} else {</span>
+<span class="nc" id="L864">				TransactionMonitoringSignupRequest request = (TransactionMonitoringSignupRequest) exchange.getRequest();</span>
+<span class="nc" id="L865">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L866">						ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L867">						request.getTransactionMonitoringAccountRequest().getId());</span>
+
+<span class="nc" id="L869">				TransactionMonitoringAccountSummary accSummary = JsonConverterUtil</span>
+<span class="nc" id="L870">						.convertToObject(TransactionMonitoringAccountSummary.class, eventServiceLog.getSummary());</span>
+
+<span class="nc" id="L872">				tmSingUpAccountResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L873">				accSummary.setAccountId(tmSingUpAccountResponse.getAccountId());	</span>
+<span class="nc" id="L874">				accSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L875">				accSummary.setHttpStatus(tmSingUpAccountResponse.getHttpStatus());	</span>
+
+<span class="nc" id="L877">				tmAccountProviderResponse.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L878">				eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmAccountProviderResponse));</span>
+<span class="nc" id="L879">				eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L880">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(accSummary));</span>
+<span class="nc" id="L881">				eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L883">				TransactionMonitoringSignupResponse responseServiceFailure =new TransactionMonitoringSignupResponse();</span>
+<span class="nc" id="L884">				responseServiceFailure.setTransactionMonitoringAccountSignupResponse(tmSingUpAccountResponse);</span>
+				
+<span class="nc" id="L886">				signUpResponse.getAccount().setTransactionMonitoringStatus(tmSingUpAccountResponse.getStatus());</span>
+				
+<span class="nc" id="L888">				exchange.setResponse(responseServiceFailure);</span>
+
+			}
+			
+
+<span class="nc" id="L893">		} catch (Exception e) {</span>
+
+<span class="nc" id="L895">			LOG.error(ERROR, e);</span>
+
+<span class="nc" id="L897">		}</span>
+
+<span class="nc" id="L899">	}</span>
+
+	private void setAccountSignUpResponse(TransactionMonitoringAccountSignupResponse tmSingUpAccountResponse,
+			EventServiceLog eventServiceLog, TransactionMonitoringAccountSummary accSummary) {
+<span class="nc" id="L903">		TransactionMonitoringAccountProviderResponse tmAccountProviderResponse = tmSingUpAccountResponse.getTransactionMonitoringAccountProviderResponse();</span>
+		try {
+<span class="nc bnc" id="L905" title="All 2 branches missed.">			if(tmSingUpAccountResponse.getStatus().equalsIgnoreCase(Constants.NOT_REQUIRED)) {</span>
+<span class="nc" id="L906">				accSummary.setStatus(tmSingUpAccountResponse.getStatus());</span>
+<span class="nc" id="L907">				accSummary.setAccountId(tmSingUpAccountResponse.getAccountId());</span>
+				
+<span class="nc" id="L909">				tmAccountProviderResponse = new TransactionMonitoringAccountProviderResponse();</span>
+<span class="nc" id="L910">				tmAccountProviderResponse.setStatus(Constants.NOT_REQUIRED);</span>
+				
+<span class="nc" id="L912">				eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmAccountProviderResponse));	</span>
+<span class="nc" id="L913">				eventServiceLog.setStatus(tmSingUpAccountResponse.getStatus());	</span>
+<span class="nc" id="L914">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(accSummary));	</span>
+<span class="nc" id="L915">				eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+			}
+			else {
+<span class="nc" id="L918">				accSummary.setStatus(tmSingUpAccountResponse.getStatus());</span>
+<span class="nc" id="L919">				accSummary.setCorrelationId(tmAccountProviderResponse.getCorrelationId());	</span>
+<span class="nc" id="L920">				accSummary.setProfileScore(tmAccountProviderResponse.getProfileScore());	</span>
+<span class="nc" id="L921">				accSummary.setRuleScore(tmAccountProviderResponse.getRuleScore());	</span>
+<span class="nc" id="L922">				accSummary.setRulesTriggered(tmAccountProviderResponse.getRulesTriggered());</span>
+<span class="nc" id="L923">				accSummary.setRiskLevel(tmAccountProviderResponse.getRiskLevel());</span>
+<span class="nc" id="L924">				accSummary.setAccountId(tmSingUpAccountResponse.getAccountId());	</span>
+<span class="nc" id="L925">				accSummary.setHttpStatus(tmSingUpAccountResponse.getHttpStatus());	</span>
+<span class="nc" id="L926">				accSummary.setCardDecision(tmAccountProviderResponse.getCardDecision());</span>
+					
+<span class="nc" id="L928">				eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithNull(tmAccountProviderResponse));	</span>
+<span class="nc" id="L929">				eventServiceLog.setStatus(tmSingUpAccountResponse.getStatus());	</span>
+<span class="nc" id="L930">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithNull(accSummary));	</span>
+<span class="nc" id="L931">				eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+			}
+<span class="nc" id="L933">		} catch (Exception e) {</span>
+<span class="nc" id="L934">			LOG.error(&quot;Error in reading TM Account response&quot;, e);</span>
+<span class="nc" id="L935">			tmSingUpAccountResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L936">			accSummary.setAccountId(tmSingUpAccountResponse.getAccountId());	</span>
+<span class="nc" id="L937">			accSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L938">			accSummary.setHttpStatus(tmSingUpAccountResponse.getHttpStatus());	</span>
+			
+<span class="nc" id="L940">			tmAccountProviderResponse = new TransactionMonitoringAccountProviderResponse();</span>
+			
+<span class="nc" id="L942">			tmAccountProviderResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L943">			eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmAccountProviderResponse));</span>
+<span class="nc" id="L944">			eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L945">			eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(accSummary));</span>
+<span class="nc" id="L946">			eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L947">		}</span>
+
+<span class="nc" id="L949">	}</span>
+	
+	
+	/**
+	 * Send alert email for invalid request.
+	 *
+	 * @param tradeAccNumber the trade acc number
+	 * @param type the type
+	 */
+	private void sendAlertEmailForInvalidRequest(String tradeAccNumber, String type, TransactionMonitoringAccountSignupResponse response) {
+		
+<span class="nc" id="L960">		SendEmailRequestForTM sendTMEmailRequest = new SendEmailRequestForTM(); </span>
+<span class="nc" id="L961">		EmailHeaderForTM header = new EmailHeaderForTM();</span>
+<span class="nc" id="L962">		EmailPayloadForTM payload = new EmailPayloadForTM();</span>
+
+<span class="nc" id="L964">		header.setSourceSystem(&quot;Atlas&quot;);</span>
+<span class="nc" id="L965">		header.setOrgCode(&quot;Currencies Direct&quot;);</span>
+<span class="nc" id="L966">		header.setLegalEntity(&quot;CDLGB&quot;);</span>
+		
+<span class="nc" id="L968">		String email = System.getProperty(&quot;intuition.sendTo&quot;);</span>
+<span class="nc" id="L969">		List&lt;String&gt; list = Arrays.asList(email.split(&quot;,&quot;));</span>
+
+<span class="nc" id="L971">		payload.setEmailId(list);</span>
+<span class="nc" id="L972">		payload.setSubject(&quot;Intuition request failed&quot;);</span>
+<span class="nc" id="L973">		payload.setEmailContent(type +&quot; request for Customer Number &quot;+ tradeAccNumber +&quot; to Intuition failed, due to intuition error desc : &quot;+</span>
+<span class="nc" id="L974">				response.getErrorDesc() +&quot;. &lt;BR&gt;&quot;+response.getErrorDescription()+&quot;. &lt;br&gt; Please alert dev team.&quot;);</span>
+<span class="nc" id="L975">		payload.setFromEmilId(System.getProperty(&quot;intuition.sendFrom&quot;));</span>
+<span class="nc" id="L976">		payload.setReplyToEmailId(System.getProperty(&quot;intuition.sendFrom&quot;));</span>
+
+<span class="nc" id="L978">		sendTMEmailRequest.setTmHeader(header);</span>
+<span class="nc" id="L979">		sendTMEmailRequest.setTmPayload(payload);</span>
+		
+<span class="nc" id="L981">		iCommHubServiceImpl.sendEmailForTMAlert(sendTMEmailRequest,true);</span>
+		
+<span class="nc" id="L983">	}</span>
+	
+	/**
+	 * Format date.
+	 *
+	 * @param date the date
+	 * @return the string
+	 */
+	private String formatDate(LocalDate date) {
+<span class="nc bnc" id="L992" title="All 2 branches missed.">		if (date != null) {</span>
+<span class="nc" id="L993">			return formatter.format(date);</span>
+		}
+<span class="nc" id="L995">		return null;</span>
+	}
+
+	/**
+	 * Gets the formatted date.
+	 *
+	 * @param date the date
+	 * @return the formatted date
+	 * @throws ParseException the parse exception
+	 */
+	public static String getFormattedDate(String date) throws ParseException {
+<span class="nc bnc" id="L1006" title="All 2 branches missed.">		if (date != null) {</span>
+<span class="nc" id="L1007">			SimpleDateFormat formatter=new SimpleDateFormat(&quot;yyyy-MM-dd&quot;);</span>
+<span class="nc" id="L1008">			Date fDate=formatter.parse(date);</span>
+<span class="nc" id="L1009">			return formatter.format(fDate);</span>
+		}
+<span class="nc" id="L1011">		return null;</span>
+	}
+	
+	/** Add For AT-5029
+	 * Gets the integer turn over.
+	 *
+	 * @param turnOver the turn over
+	 * @return the integer turn over
+	 */
+	public static Integer getIntegerTurnOver(String turnOver) {
+<span class="nc bnc" id="L1021" title="All 2 branches missed.">		if(turnOver.contains(&quot;-&quot;)) {</span>
+<span class="nc" id="L1022">			return null;</span>
+		 } else {
+<span class="nc bnc" id="L1024" title="All 2 branches missed.">			if(turnOver.contains(&quot;.&quot;)) {</span>
+<span class="nc" id="L1025">				return (int) Math.round(Double.parseDouble(turnOver));</span>
+			}else {
+<span class="nc" id="L1027">				return Integer.parseInt(turnOver);</span>
+			}
+		 }
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

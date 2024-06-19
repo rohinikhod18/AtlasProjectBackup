@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TitanServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.core</a> &gt; <span class="el_source">TitanServiceImpl.java</span></div><h1>TitanServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.core;
+
+import java.util.UUID;
+
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.ITokenizer;
+import com.currenciesdirect.gtg.compliance.core.domain.cardpilot.CardPilotRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.cardpilot.CardPilotResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.fxtickets.FXTicketDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.fxtickets.FXTicketResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.fxtickets.FxTicketDetailsRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.fxtickets.FxTicketPortalRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletTransactionDetailsResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletTransactionRequest;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.util.HttpClientPool;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+
+/**
+ * The Class TitanServiceImpl.
+ */
+@Component(&quot;titanServiceImpl&quot;)
+<span class="nc" id="L34">public class TitanServiceImpl implements ITitanService {</span>
+	
+	/** The Constant BASE_TITAN_URL. */
+	private static final String BASE_TITAN_URL = &quot;baseTitanUrl&quot;;
+
+	/** The Constant AUTHORIZATION. */
+	public static final String AUTHORIZATION = &quot;Authorization&quot;;
+
+	/** The Constant CONTENT_TYPE. */
+	public static final String CONTENT_TYPE = &quot;Content-Type&quot;;
+	
+	/** The Constant RETRY_COUNT. */
+	public static final int RETRY_COUNT=3;
+	
+	public static final String TITAN = &quot;titan&quot;;
+	
+
+	/** The i tokenizer. */
+	@Autowired
+	@Qualifier(&quot;tokenizer&quot;)
+	private ITokenizer iTokenizer;
+	
+	/** The log. */
+<span class="nc" id="L57">	private Logger log = LoggerFactory.getLogger(TitanServiceImpl.class);</span>
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.ITitanService#getCustomerAllWalletDetails(com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletRequest)
+	 */
+	@Override
+	public WalletResponse getCustomerAllWalletDetails(WalletRequest walletRequest) throws CompliancePortalException {
+		
+<span class="nc" id="L65">		WalletResponse walletResponse = null;</span>
+		
+		try {
+<span class="nc" id="L68">			walletResponse = fetchCustomerAllWalletDetails(walletRequest);			</span>
+<span class="nc" id="L69">		} catch (Exception e) {</span>
+<span class="nc" id="L70">			logError(e);</span>
+<span class="nc" id="L71">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L72">		}</span>
+<span class="nc" id="L73">		return walletResponse;</span>
+	}
+
+	/**
+	 * Fetch customer all wallet details.
+	 *
+	 * @param walletRequest the wallet request
+	 * @return the wallet response
+	 * @throws Exception 
+	 */
+	private WalletResponse fetchCustomerAllWalletDetails(WalletRequest walletRequest) throws Exception {
+<span class="nc" id="L84">		WalletResponse response = null;</span>
+<span class="nc" id="L85">		walletRequest.setOsrId(UUID.randomUUID().toString().replace(&quot;-&quot;, &quot;&quot;));</span>
+<span class="nc" id="L86">		HttpClientPool clientPool = HttpClientPool.getInstance();</span>
+<span class="nc" id="L87">		MultivaluedHashMap&lt;String, Object&gt; headers = new MultivaluedHashMap&lt;&gt;();</span>
+<span class="nc" id="L88">		headers.putSingle(CONTENT_TYPE, MediaType.APPLICATION_JSON_TYPE);</span>
+<span class="nc" id="L89">		String baseUrl = System.getProperty(BASE_TITAN_URL);</span>
+<span class="nc" id="L90">		boolean breakFlag = false;</span>
+<span class="nc" id="L91">		int count=0;</span>
+		String token;
+		do {
+<span class="nc bnc" id="L94" title="All 2 branches missed.">			if(breakFlag)</span>
+<span class="nc" id="L95">				break;</span>
+			try {
+<span class="nc" id="L97">				token = iTokenizer.getAuthToken(TITAN,false);</span>
+<span class="nc" id="L98">				headers.putSingle(AUTHORIZATION, token);</span>
+
+<span class="nc" id="L100">				response = clientPool.sendRequest(</span>
+						baseUrl + &quot;/titan-wrapper/services/wallet/getCustomerAllWalletBalance&quot;, &quot;POST&quot;,
+<span class="nc" id="L102">						JsonConverterUtil.convertToJsonWithNull(walletRequest), WalletResponse.class, headers,</span>
+						MediaType.APPLICATION_JSON_TYPE);
+<span class="nc" id="L104">				breakFlag = true;</span>
+<span class="nc" id="L105">			} catch (CompliancePortalException e) {</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">				if (e.getCompliancePortalErrors()==CompliancePortalErrors.UNAUTHORISED_USER) {</span>
+<span class="nc" id="L107">					iTokenizer.setAuthToken(null,TITAN);</span>
+<span class="nc" id="L108">					count++;</span>
+				} else {
+<span class="nc" id="L110">					breakFlag = true;</span>
+				}
+<span class="nc" id="L112">			}</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">		}while (count&lt;RETRY_COUNT);</span>
+<span class="nc" id="L114">		return response;</span>
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.ITitanService#getCustomerWalletTransactionDetails(com.currenciesdirect.gtg.compliance.core.domain.WalletTransactionRequest)
+	 */
+	@Override
+	public WalletTransactionDetailsResponse getCustomerWalletTransactionDetails(WalletTransactionRequest walletTransactionRequest) throws CompliancePortalException {
+		
+<span class="nc" id="L123">		WalletTransactionDetailsResponse walletTransactionDetailsResponse = null;</span>
+		
+		try {
+<span class="nc" id="L126">			walletTransactionDetailsResponse = fetchWalletTransactionsDetails(walletTransactionRequest);			</span>
+<span class="nc" id="L127">		} catch (Exception e) {</span>
+<span class="nc" id="L128">			logError(e);</span>
+<span class="nc" id="L129">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L130">		}</span>
+<span class="nc" id="L131">		return walletTransactionDetailsResponse;</span>
+	}
+	
+	/**
+	 * Fetch wallet transactions details.
+	 *
+	 * @param walletTransactionRequest the wallet transaction request
+	 * @return the wallet transaction details response
+	 * @throws Exception 
+	 */
+	private WalletTransactionDetailsResponse fetchWalletTransactionsDetails(
+			WalletTransactionRequest walletTransactionRequest) throws Exception {
+<span class="nc" id="L143">		WalletTransactionDetailsResponse response = null;</span>
+<span class="nc" id="L144">		walletTransactionRequest.setOsrId(UUID.randomUUID().toString().replace(&quot;-&quot;, &quot;&quot;));</span>
+<span class="nc" id="L145">		HttpClientPool clientPool = HttpClientPool.getInstance();</span>
+<span class="nc" id="L146">		MultivaluedHashMap&lt;String, Object&gt; headers = new MultivaluedHashMap&lt;&gt;();</span>
+<span class="nc" id="L147">		headers.putSingle(CONTENT_TYPE, MediaType.APPLICATION_JSON_TYPE);</span>
+<span class="nc" id="L148">		String baseUrl = System.getProperty(BASE_TITAN_URL);</span>
+<span class="nc" id="L149">		boolean breakFlag = false;</span>
+
+<span class="nc" id="L151">		int count = 0;</span>
+		String token;
+		do {
+<span class="nc bnc" id="L154" title="All 2 branches missed.">			if(breakFlag)</span>
+<span class="nc" id="L155">				break;</span>
+			try {
+<span class="nc" id="L157">				token = iTokenizer.getAuthToken(TITAN,false);</span>
+<span class="nc" id="L158">				headers.putSingle(AUTHORIZATION, token);</span>
+<span class="nc" id="L159">				response = clientPool.sendRequest(</span>
+						baseUrl + &quot;/titan-wrapper/services/wallet/getCustomerWalletTransactions&quot;, &quot;POST&quot;,
+<span class="nc" id="L161">						JsonConverterUtil.convertToJsonWithNull(walletTransactionRequest),</span>
+						WalletTransactionDetailsResponse.class, headers, MediaType.APPLICATION_JSON_TYPE);
+<span class="nc" id="L163">				breakFlag = true;</span>
+<span class="nc" id="L164">			} catch (CompliancePortalException e) {</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">				if (e.getCompliancePortalErrors()==CompliancePortalErrors.UNAUTHORISED_USER) {</span>
+<span class="nc" id="L166">					iTokenizer.setAuthToken(null,TITAN);</span>
+<span class="nc" id="L167">					count++;</span>
+				} else {
+<span class="nc" id="L169">					breakFlag = true;</span>
+				}
+<span class="nc" id="L171">			}</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">		} while (count &lt; RETRY_COUNT);</span>
+<span class="nc" id="L173">		return response;</span>
+	}
+	
+	/**
+	 * Log error.
+	 *
+	 * @param t the t
+	 */
+	private void logError(Throwable t) {
+<span class="nc" id="L182">		log.error(&quot;Exception: &quot;, t);</span>
+<span class="nc" id="L183">	}</span>
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.ITitanService#getCustomerFXTicketList(com.currenciesdirect.gtg.compliance.core.domain.fxtickets.FxTicketPortalRequest)
+	 */
+	@Override
+	public FXTicketResponse getCustomerFXTicketList(FxTicketPortalRequest fxTicketPortalRequest) throws CompliancePortalException {
+		
+<span class="nc" id="L191">		FXTicketResponse fxTicketResponse = null;</span>
+		
+		try {
+<span class="nc" id="L194">			fxTicketResponse = fetchCustomerFXTicketList(fxTicketPortalRequest);			</span>
+<span class="nc" id="L195">		} catch (Exception e) {</span>
+<span class="nc" id="L196">			logError(e);</span>
+<span class="nc" id="L197">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L198">		}</span>
+<span class="nc" id="L199">		return fxTicketResponse;</span>
+	}
+	
+	/**
+	 * Fetch customer FX ticket list.
+	 *
+	 * @param fxTicketPortalRequest the fx ticket portal request
+	 * @return the FX ticket response
+	 * @throws Exception 
+	 */
+	private FXTicketResponse fetchCustomerFXTicketList(FxTicketPortalRequest fxTicketPortalRequest) throws Exception {
+<span class="nc" id="L210">		FXTicketResponse response = null;</span>
+<span class="nc" id="L211">		fxTicketPortalRequest.setOsrId(UUID.randomUUID().toString().replace(&quot;-&quot;, &quot;&quot;));</span>
+<span class="nc" id="L212">		HttpClientPool clientPool = HttpClientPool.getInstance();</span>
+<span class="nc" id="L213">		MultivaluedHashMap&lt;String, Object&gt; headers = new MultivaluedHashMap&lt;&gt;();</span>
+<span class="nc" id="L214">		headers.putSingle(CONTENT_TYPE, MediaType.APPLICATION_JSON_TYPE);</span>
+<span class="nc" id="L215">		boolean breakFlag = false;</span>
+<span class="nc" id="L216">		String baseUrl = System.getProperty(BASE_TITAN_URL);</span>
+<span class="nc" id="L217">		int count=0;</span>
+		String token;
+		do {
+<span class="nc bnc" id="L220" title="All 2 branches missed.">			if(breakFlag)</span>
+<span class="nc" id="L221">				break;</span>
+			try {
+<span class="nc" id="L223">				token = iTokenizer.getAuthToken(TITAN,false);</span>
+<span class="nc" id="L224">				headers.putSingle(AUTHORIZATION, token);</span>
+<span class="nc" id="L225">				response = clientPool.sendRequest(baseUrl + &quot;/titan-wrapper/services/fxTicket/getFxTicketList&quot;, &quot;POST&quot;,</span>
+<span class="nc" id="L226">						JsonConverterUtil.convertToJsonWithNull(fxTicketPortalRequest), FXTicketResponse.class, headers,</span>
+						MediaType.APPLICATION_JSON_TYPE);
+<span class="nc" id="L228">				breakFlag = true;</span>
+<span class="nc" id="L229">			} catch (CompliancePortalException e) {</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">				if (e.getCompliancePortalErrors()==CompliancePortalErrors.UNAUTHORISED_USER) {</span>
+<span class="nc" id="L231">					iTokenizer.setAuthToken(null,TITAN);</span>
+<span class="nc" id="L232">					count++;</span>
+				} else {
+<span class="nc" id="L234">					breakFlag = true;</span>
+				}
+<span class="nc" id="L236">			}</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">		}while (count&lt;RETRY_COUNT);</span>
+		
+<span class="nc" id="L239">		return response;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.ITitanService#getCustomerFXTicketDetails(com.currenciesdirect.gtg.compliance.core.domain.fxtickets.FxTicketDetailsRequest)
+	 */
+	@Override
+	public FXTicketDetails getCustomerFXTicketDetails(FxTicketDetailsRequest fxTicketDetailsRequest)
+			throws CompliancePortalException {
+		
+<span class="nc" id="L249">		FXTicketDetails fxTicketDetailResponse = null;</span>
+		try {
+<span class="nc" id="L251">			fxTicketDetailResponse = fetchCustomerFXTicketDetails(fxTicketDetailsRequest);</span>
+<span class="nc" id="L252">		} catch (Exception e) {</span>
+<span class="nc" id="L253">			logError(e);</span>
+<span class="nc" id="L254">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L255">		}</span>
+<span class="nc" id="L256">		return fxTicketDetailResponse;</span>
+	}
+	
+	/**
+	 * Fetch customer FX ticket details.
+	 *
+	 * @param fxTicketDetailsRequest the fx ticket details request
+	 * @return the FX ticket details
+	 * @throws Exception 
+	 */
+	private FXTicketDetails fetchCustomerFXTicketDetails(FxTicketDetailsRequest fxTicketDetailsRequest) throws Exception {
+<span class="nc" id="L267">		FXTicketDetails response = null;</span>
+<span class="nc" id="L268">		fxTicketDetailsRequest.setOsrId(UUID.randomUUID().toString().replace(&quot;-&quot;, &quot;&quot;));</span>
+<span class="nc" id="L269">		HttpClientPool clientPool = HttpClientPool.getInstance();</span>
+<span class="nc" id="L270">		MultivaluedHashMap&lt;String, Object&gt; headers = new MultivaluedHashMap&lt;&gt;();</span>
+<span class="nc" id="L271">		headers.putSingle(CONTENT_TYPE, MediaType.APPLICATION_JSON_TYPE);</span>
+<span class="nc" id="L272">		String baseUrl = System.getProperty(BASE_TITAN_URL);</span>
+<span class="nc" id="L273">		boolean breakFlag = false;</span>
+<span class="nc" id="L274">		int count=0;</span>
+		String token;
+		do {
+<span class="nc bnc" id="L277" title="All 2 branches missed.">			if(breakFlag)</span>
+<span class="nc" id="L278">				break;</span>
+			try {
+<span class="nc" id="L280">				token = iTokenizer.getAuthToken(TITAN,false);</span>
+<span class="nc" id="L281">				headers.putSingle(AUTHORIZATION, token);</span>
+<span class="nc" id="L282">				response = clientPool.sendRequest(baseUrl + &quot;/titan-wrapper/services/fxTicket/getFxTicketDetails&quot;,</span>
+<span class="nc" id="L283">						&quot;POST&quot;, JsonConverterUtil.convertToJsonWithNull(fxTicketDetailsRequest), FXTicketDetails.class,</span>
+						headers, MediaType.APPLICATION_JSON_TYPE);
+<span class="nc" id="L285">				breakFlag = true;</span>
+<span class="nc" id="L286">			} catch (CompliancePortalException e) {</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">				if (e.getCompliancePortalErrors()==CompliancePortalErrors.UNAUTHORISED_USER) {</span>
+<span class="nc" id="L288">					iTokenizer.setAuthToken(null,TITAN);</span>
+<span class="nc" id="L289">					count++;</span>
+				} else {
+<span class="nc" id="L291">					breakFlag = true;</span>
+				}
+<span class="nc" id="L293">			}</span>
+<span class="nc bnc" id="L294" title="All 2 branches missed.">		}while (count&lt;RETRY_COUNT);</span>
+<span class="nc" id="L295">		return response;</span>
+	}
+
+	/**
+	 * Gets the card pilot list.
+	 *
+	 * @param cardPilotRequest the card pilot request
+	 * @return the card pilot list
+	 * @throws CompliancePortalException the compliance portal exception
+	 * 
+	 * AT-4625
+	 */
+	@Override
+	public CardPilotResponse getCardPilotList(CardPilotRequest cardPilotRequest) throws CompliancePortalException {
+<span class="nc" id="L309">		CardPilotResponse cardPilotResponse = null;</span>
+		
+		try {
+<span class="nc" id="L312">			cardPilotResponse = fetchCardPilotList(cardPilotRequest);			</span>
+<span class="nc" id="L313">		} catch (Exception e) {</span>
+<span class="nc" id="L314">			logError(e);</span>
+<span class="nc" id="L315">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L316">		}</span>
+<span class="nc" id="L317">		return cardPilotResponse;</span>
+	}
+	
+	/**
+	 * Fetch card pilot list.
+	 *
+	 * @param cardPilotRequest the card pilot request
+	 * @return the card pilot response
+	 * @throws Exception the exception
+	 * 
+	 * AT-4625
+	 */
+	private CardPilotResponse fetchCardPilotList(CardPilotRequest cardPilotRequest) throws Exception {
+<span class="nc" id="L330">		CardPilotResponse response = null;</span>
+		//cardPilotRequest.setOsrId(UUID.randomUUID().toString().replace(&quot;-&quot;, &quot;&quot;));
+<span class="nc" id="L332">		HttpClientPool clientPool = HttpClientPool.getInstance();</span>
+<span class="nc" id="L333">		MultivaluedHashMap&lt;String, Object&gt; headers = new MultivaluedHashMap&lt;&gt;();</span>
+<span class="nc" id="L334">		headers.putSingle(CONTENT_TYPE, MediaType.APPLICATION_JSON_TYPE);</span>
+<span class="nc" id="L335">		boolean breakFlag = false;</span>
+<span class="nc" id="L336">		String baseUrl = System.getProperty(BASE_TITAN_URL);</span>
+<span class="nc" id="L337">		int count=0;</span>
+		String token;
+		do {
+<span class="nc bnc" id="L340" title="All 2 branches missed.">			if(breakFlag)</span>
+<span class="nc" id="L341">				break;</span>
+			try {
+<span class="nc" id="L343">				token = iTokenizer.getAuthToken(TITAN,false);</span>
+<span class="nc" id="L344">				headers.putSingle(AUTHORIZATION, token);</span>
+<span class="nc" id="L345">				response = clientPool.sendRequest(baseUrl + &quot;/titan-wrapper/services/CardPreAlpha/getCardActivityHistory&quot;, &quot;POST&quot;,</span>
+<span class="nc" id="L346">						JsonConverterUtil.convertToJsonWithNull(cardPilotRequest), CardPilotResponse.class, headers,</span>
+						MediaType.APPLICATION_JSON_TYPE);
+<span class="nc" id="L348">				breakFlag = true;</span>
+<span class="nc" id="L349">			} catch (CompliancePortalException e) {</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">				if (e.getCompliancePortalErrors()==CompliancePortalErrors.UNAUTHORISED_USER) {</span>
+<span class="nc" id="L351">					iTokenizer.setAuthToken(null,TITAN);</span>
+<span class="nc" id="L352">					count++;</span>
+				} else {
+<span class="nc" id="L354">					breakFlag = true;</span>
+				}
+<span class="nc" id="L356">			}</span>
+<span class="nc bnc" id="L357" title="All 2 branches missed.">		}while (count&lt;RETRY_COUNT);</span>
+		
+<span class="nc" id="L359">		return response;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

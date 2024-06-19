@@ -1,0 +1,1027 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CarbonServiceTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">kyc-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.kyc.lexisnexisport</a> &gt; <span class="el_source">CarbonServiceTransformer.java</span></div><h1>CarbonServiceTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.kyc.lexisnexisport;
+
+import java.math.BigInteger;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.Identification;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.Phone;
+import com.currenciesdirect.gtg.compliance.commons.util.StringUtils;
+import com.currenciesdirect.gtg.compliance.kyc.core.IKYCDBService;
+import com.currenciesdirect.gtg.compliance.kyc.core.domain.KYCProviderProperty;
+import com.currenciesdirect.gtg.compliance.kyc.dbport.KYCDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCErrors;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCException;
+import com.currenciesdirect.gtg.compliance.kyc.util.Constants;
+import com.verid.carbon.integration.AccountCategoryType;
+import com.verid.carbon.integration.AccountOriginationType;
+import com.verid.carbon.integration.AccountType;
+import com.verid.carbon.integration.AccountVerificationType;
+import com.verid.carbon.integration.AddressContextType;
+import com.verid.carbon.integration.AddressType;
+import com.verid.carbon.integration.BirthdateType;
+import com.verid.carbon.integration.CredentialMethodType;
+import com.verid.carbon.integration.CredentialType;
+import com.verid.carbon.integration.IdentityVerificationSettingsType;
+import com.verid.carbon.integration.ModeType;
+import com.verid.carbon.integration.OnlineType;
+import com.verid.carbon.integration.Passport;
+import com.verid.carbon.integration.PersonType;
+import com.verid.carbon.integration.PhoneNumberContextType;
+import com.verid.carbon.integration.PhoneNumberType;
+import com.verid.carbon.integration.TaskType;
+import com.verid.carbon.integration.TransactionIdentityVerification;
+import com.verid.carbon.integration.TransactionType;
+import com.verid.carbon.integration.VenueType;
+
+/**
+ * The Class CarbonServiceTransformer.
+ */
+public class CarbonServiceTransformer {
+
+	/** The carbon service transformer. */
+<span class="nc" id="L48">	private static CarbonServiceTransformer carbonServiceTransformer = null;</span>
+
+	/** The ikyc dao. */
+<span class="nc" id="L51">	private IKYCDBService ikycDao = KYCDBServiceImpl.getInstance();</span>
+
+	/**
+	 * Instantiates a new carbon service transformer.
+	 */
+<span class="nc" id="L56">	private CarbonServiceTransformer() {</span>
+
+<span class="nc" id="L58">	}</span>
+
+	/**
+	 * Gets the single instance of CarbonServiceTransformer.
+	 *
+	 * @return single instance of CarbonServiceTransformer
+	 */
+	public static CarbonServiceTransformer getInstance() {
+<span class="nc bnc" id="L66" title="All 2 branches missed.">		if (carbonServiceTransformer == null) {</span>
+<span class="nc" id="L67">			carbonServiceTransformer = new CarbonServiceTransformer();</span>
+		}
+<span class="nc" id="L69">		return carbonServiceTransformer;</span>
+	}
+
+	/**
+	 * Transform request object.
+	 *
+	 * @param request
+	 *            the request
+	 * @param property
+	 *            the property
+	 * @return the transaction identity verification
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	public TransactionIdentityVerification transformRequestObject(KYCContactRequest request,
+			KYCProviderProperty property) throws KYCException {
+<span class="nc" id="L85">		TransactionIdentityVerification transactionIdentityVerification = new TransactionIdentityVerification();</span>
+<span class="nc" id="L86">		Date date = null;</span>
+<span class="nc" id="L87">		Calendar c1 = null;</span>
+<span class="nc" id="L88">		SimpleDateFormat formatter = new SimpleDateFormat(&quot;yyyy-MM-dd&quot;);</span>
+<span class="nc" id="L89">		Boolean foundSupportedCoutry = Boolean.FALSE;</span>
+		try {
+<span class="nc" id="L91">			String country = request.getAddress().getCountry().toUpperCase();</span>
+<span class="nc" id="L92">			String countryShortCode = ikycDao.getCountryShortCode(country);</span>
+<span class="nc" id="L93">			date = formatter.parse(request.getPersonalDetails().getDob());</span>
+<span class="nc" id="L94">			c1 = Calendar.getInstance();</span>
+<span class="nc" id="L95">			c1.setTime(date);</span>
+<span class="nc" id="L96">			setIdentityVerificationSettingsType(property, transactionIdentityVerification);</span>
+
+<span class="nc" id="L98">			setAdditionalDetailsForService(property, transactionIdentityVerification);</span>
+
+<span class="nc" id="L100">			foundSupportedCoutry = createNorthCountryWiseRequests(request, transactionIdentityVerification, c1, country,</span>
+					countryShortCode);
+
+<span class="nc bnc" id="L103" title="All 2 branches missed.">			if (Boolean.FALSE.equals(foundSupportedCoutry))</span>
+<span class="nc" id="L104">				createSouthCountryWiseRequests(request, transactionIdentityVerification, c1, country, countryShortCode);</span>
+
+<span class="nc" id="L106">		} catch (KYCException e) {</span>
+<span class="nc" id="L107">			throw e;</span>
+<span class="nc" id="L108">		} catch (Exception e) {</span>
+<span class="nc" id="L109">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L110">		}</span>
+<span class="nc" id="L111">		return transactionIdentityVerification;</span>
+	}
+
+	/**
+	 * Sets the additional details for service.
+	 *
+	 * @param property
+	 *            the property
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 */
+	private void setAdditionalDetailsForService(KYCProviderProperty property,
+			TransactionIdentityVerification transactionIdentityVerification) {
+
+<span class="nc" id="L125">		CredentialType credentialType = new CredentialType();</span>
+<span class="nc" id="L126">		credentialType.getCredentialMethod().add(CredentialMethodType.PIN);</span>
+<span class="nc" id="L127">		credentialType.setUsername(property.getCredentialTypeUserName());</span>
+<span class="nc" id="L128">		credentialType.setDomain(property.getCredentialTypeDomain());</span>
+<span class="nc" id="L129">		credentialType.setIpAddress(property.getCredentialTypeIpAddress());</span>
+
+<span class="nc" id="L131">		OnlineType onlineType = new OnlineType();</span>
+<span class="nc" id="L132">		onlineType.setCredential(credentialType);</span>
+
+<span class="nc" id="L134">		VenueType venueType = new VenueType();</span>
+<span class="nc" id="L135">		venueType.setOnline(onlineType);</span>
+
+<span class="nc" id="L137">		AccountOriginationType accountOriginationType = new AccountOriginationType();</span>
+<span class="nc" id="L138">		accountOriginationType.setAccountCategory(AccountCategoryType.BROKERAGE);</span>
+
+<span class="nc" id="L140">		AccountType accountType = new AccountType();</span>
+<span class="nc" id="L141">		accountType.getCustomerId().add(property.getAccountTypeCustomerId());</span>
+<span class="nc" id="L142">		accountOriginationType.setAccount(accountType);</span>
+
+<span class="nc" id="L144">		AccountVerificationType accountVerificationType = new AccountVerificationType();</span>
+<span class="nc" id="L145">		accountVerificationType.setAccountOrigination(accountOriginationType);</span>
+<span class="nc" id="L146">		accountVerificationType.setVenue(venueType);</span>
+
+<span class="nc" id="L148">		TransactionType tt = new TransactionType();</span>
+<span class="nc" id="L149">		tt.setAccountVerification(accountVerificationType);</span>
+
+<span class="nc" id="L151">		transactionIdentityVerification.setTransaction(tt);</span>
+<span class="nc" id="L152">	}</span>
+
+	/**
+	 * Sets the identity verification settings type.
+	 *
+	 * @param property
+	 *            the property
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 */
+	private void setIdentityVerificationSettingsType(KYCProviderProperty property,
+			TransactionIdentityVerification transactionIdentityVerification) {
+
+<span class="nc" id="L165">		IdentityVerificationSettingsType identityVerificationSettingsType = new IdentityVerificationSettingsType();</span>
+<span class="nc" id="L166">		identityVerificationSettingsType.setAccountName(property.getIdentityVerificationAccountName());</span>
+<span class="nc" id="L167">		identityVerificationSettingsType.setRuleset(property.getIdentityVerificationRuleset());</span>
+<span class="nc" id="L168">		identityVerificationSettingsType.setTask(TaskType.IAUTH);</span>
+<span class="nc" id="L169">		identityVerificationSettingsType.setMode(ModeType.valueOf(property.getModeType()));</span>
+<span class="nc" id="L170">		transactionIdentityVerification.setSettings(identityVerificationSettingsType);</span>
+<span class="nc" id="L171">	}</span>
+
+	/**
+	 * Creates the north country wise requests.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param country
+	 *            the country
+	 * @param countryShortCode
+	 *            the country short code
+	 * @return true, if successful
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private boolean createNorthCountryWiseRequests(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String country,
+			String countryShortCode) throws KYCException {
+<span class="nc" id="L193">		Boolean countryFound = Boolean.FALSE;</span>
+<span class="nc bnc" id="L194" title="All 5 branches missed.">		switch (country) {</span>
+		case Constants.COUNTRY_JAPAN:
+<span class="nc" id="L196">			createRequestForJapan(request, transactionIdentityVerification, c1, countryShortCode);</span>
+<span class="nc" id="L197">			countryFound = Boolean.TRUE;</span>
+<span class="nc" id="L198">			break;</span>
+		case Constants.COUNTRY_AUSTRIA:
+		case Constants.COUNTRY_LUXEMBOURG:
+<span class="nc" id="L201">			createRequestForAustriaLuxembourg(request, transactionIdentityVerification, c1, countryShortCode);</span>
+<span class="nc" id="L202">			countryFound = Boolean.TRUE;</span>
+<span class="nc" id="L203">			break;</span>
+		case Constants.COUNTRY_CANADA:
+<span class="nc" id="L205">			createRequestForCanada(request, transactionIdentityVerification, c1, countryShortCode);</span>
+<span class="nc" id="L206">			countryFound = Boolean.TRUE;</span>
+<span class="nc" id="L207">			break;</span>
+		case Constants.COUNTRY_CHINA:
+<span class="nc" id="L209">			createRequestForChina(request, transactionIdentityVerification, c1, countryShortCode);</span>
+<span class="nc" id="L210">			countryFound = Boolean.TRUE;</span>
+<span class="nc" id="L211">			break;</span>
+		default:
+			break;
+		}
+<span class="nc" id="L215">		return countryFound;</span>
+	}
+
+	/**
+	 * Creates the south country wise requests.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param country
+	 *            the country
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createSouthCountryWiseRequests(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String country,
+			String countryShortCode) throws KYCException {
+<span class="nc bnc" id="L237" title="All 7 branches missed.">		switch (country) {</span>
+		case Constants.COUNTRY_AUSTRALIA:
+<span class="nc" id="L239">			createRequestForAustralia(request, transactionIdentityVerification, c1, countryShortCode);</span>
+<span class="nc" id="L240">			break;</span>
+
+		case Constants.COUNTRY_NEWZEALAND:
+<span class="nc" id="L243">			createRequestForNewZealand(request, transactionIdentityVerification, c1, countryShortCode);</span>
+<span class="nc" id="L244">			break;</span>
+
+		case Constants.COUNTRY_MEXICO:
+<span class="nc" id="L247">			createRequestForMexico(request, transactionIdentityVerification, c1, countryShortCode);</span>
+<span class="nc" id="L248">			break;</span>
+
+		case Constants.COUNTRY_SOUTHAFRICA:
+<span class="nc" id="L251">			createRequestForSouthAfrica(request, transactionIdentityVerification, c1, countryShortCode);</span>
+<span class="nc" id="L252">			break;</span>
+
+		case Constants.COUNTRY_BRAZIL:
+<span class="nc" id="L255">			createRequestForBrazil(request, transactionIdentityVerification, c1, countryShortCode);</span>
+<span class="nc" id="L256">			break;</span>
+
+		case Constants.COUNTRY_HONGKONG:
+<span class="nc" id="L259">			createRequestForHonKong(request, transactionIdentityVerification, c1, countryShortCode);</span>
+<span class="nc" id="L260">			break;</span>
+
+		default:
+<span class="nc" id="L263">			throw new KYCException(KYCErrors.COUNTRY_IS_NOT_SUPPORTED);</span>
+		}
+<span class="nc" id="L265">	}</span>
+
+	/**
+	 * Creates the request for australia.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createRequestForAustralia(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String countryShortCode)
+			throws KYCException {
+<span class="nc" id="L284">		PersonType person = new PersonType();</span>
+<span class="nc" id="L285">		BirthdateType birthdate = new BirthdateType();</span>
+<span class="nc" id="L286">		AddressType address = new AddressType();</span>
+<span class="nc" id="L287">		List&lt;AddressType&gt; addressList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L288">		SimpleDateFormat formatter = new SimpleDateFormat(&quot;yyyy-MM-dd&quot;);</span>
+
+		try {
+<span class="nc" id="L291">			setPersonalDetails(request, c1, person, birthdate);</span>
+
+<span class="nc" id="L293">			setAddressForAustraliaBrazilSouthafricaMexicoNewzealand(request, countryShortCode, address);</span>
+
+<span class="nc" id="L295">			fillIdentityDetailsForAustralia(request, person, formatter);</span>
+
+<span class="nc" id="L297">			addressList.add(address);</span>
+<span class="nc" id="L298">			person.getAddress().addAll(addressList);</span>
+<span class="nc" id="L299">			fillPhoneDetailsForAustraliaLuxembourgAustriaJapan(request, person);</span>
+<span class="nc" id="L300">			transactionIdentityVerification.setPerson(person);</span>
+<span class="nc" id="L301">		} catch (Exception e) {</span>
+<span class="nc" id="L302">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L303">		}</span>
+<span class="nc" id="L304">	}</span>
+
+	/**
+	 * Fill identity details for australia.
+	 *
+	 * @param request
+	 *            the request
+	 * @param person
+	 *            the person
+	 * @param formatter
+	 *            the formatter
+	 * @throws ParseException
+	 *             the parse exception
+	 */
+	private void fillIdentityDetailsForAustralia(KYCContactRequest request, PersonType person,
+			SimpleDateFormat formatter) throws ParseException {
+
+<span class="nc bnc" id="L321" title="All 2 branches missed.">		if (request.getIdentification() != null) {</span>
+<span class="nc bnc" id="L322" title="All 2 branches missed.">			for (Identification identity : request.getIdentification()) {</span>
+<span class="nc bnc" id="L323" title="All 5 branches missed.">				switch (identity.getType().toUpperCase().replaceAll(&quot;\\s+&quot;, &quot;&quot;)) {</span>
+				case Constants.KYC_RTA_CARD_NUMBER:
+<span class="nc" id="L325">					person.setNationalId(identity.getNumber());</span>
+<span class="nc" id="L326">					break;</span>
+				case Constants.KYC_PASSPORT:
+<span class="nc" id="L328">					fillPassportDetailsForAustralia(person, formatter, identity);</span>
+<span class="nc" id="L329">					break;</span>
+				case Constants.KYC_DRIVING_LICENSE:
+<span class="nc" id="L331">					person.setDriversLicenseNumber(identity.getNumber());</span>
+<span class="nc" id="L332">					person.setDriversLicenseState(identity.getStateOfIssue());</span>
+
+<span class="nc" id="L334">					break;</span>
+				case Constants.KYC_MEDICARE:
+<span class="nc" id="L336">					person.setNationalId(identity.getNumber());</span>
+<span class="nc" id="L337">					break;</span>
+				default:
+					break;
+				}
+<span class="nc" id="L341">			}</span>
+		}
+<span class="nc" id="L343">	}</span>
+
+	/**
+	 * Fill passport details for australia.
+	 *
+	 * @param person
+	 *            the person
+	 * @param formatter
+	 *            the formatter
+	 * @param identity
+	 *            the identity
+	 * @throws ParseException
+	 *             the parse exception
+	 */
+	private void fillPassportDetailsForAustralia(PersonType person, SimpleDateFormat formatter, Identification identity)
+			throws ParseException {
+		Calendar c1;
+		Date date;
+<span class="nc" id="L361">		Passport passport = new Passport();</span>
+<span class="nc" id="L362">		com.verid.carbon.integration.Date carbonDate = new com.verid.carbon.integration.Date();</span>
+<span class="nc" id="L363">		passport.setNumber(identity.getNumber());</span>
+<span class="nc bnc" id="L364" title="All 2 branches missed.">		if (!(identity.getExiprydate().isEmpty())) {</span>
+<span class="nc" id="L365">			date = formatter.parse(identity.getExiprydate());</span>
+<span class="nc" id="L366">			c1 = Calendar.getInstance();</span>
+<span class="nc" id="L367">			c1.setTime(date);</span>
+<span class="nc" id="L368">			carbonDate.setDay((short) c1.get(Calendar.DAY_OF_MONTH));</span>
+<span class="nc" id="L369">			carbonDate.setMonth((short) (c1.get(Calendar.MONTH) + 1));</span>
+<span class="nc" id="L370">			carbonDate.setYear((short) c1.get(Calendar.YEAR));</span>
+<span class="nc" id="L371">			passport.setExpirationDate(carbonDate);</span>
+
+		}
+<span class="nc" id="L374">		passport.setCountry(identity.getCountryOfIssue());</span>
+<span class="nc" id="L375">		person.setPassport(passport);</span>
+<span class="nc" id="L376">	}</span>
+
+	/**
+	 * Creates the request for hon kong.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createRequestForHonKong(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String countryShortCode)
+			throws KYCException {
+
+<span class="nc" id="L396">		PersonType person = new PersonType();</span>
+<span class="nc" id="L397">		BirthdateType birthdate = new BirthdateType();</span>
+<span class="nc" id="L398">		AddressType address = new AddressType();</span>
+<span class="nc" id="L399">		List&lt;AddressType&gt; addressList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L402">			setPersonalDetails(request, c1, person, birthdate);</span>
+
+<span class="nc" id="L404">			address.setAddressStreet1(request.getAddress().getAddress1());</span>
+<span class="nc" id="L405">			address.setAddressStreet2(request.getAddress().getBuildingName());</span>
+
+<span class="nc bnc" id="L407" title="All 2 branches missed.">			if (!StringUtils.isNullOrTrimEmpty(request.getAddress().getCity())) {</span>
+<span class="nc" id="L408">				address.setAddressLocality(request.getAddress().getCity());</span>
+			}
+
+<span class="nc" id="L411">			address.setAddressCountry(countryShortCode);</span>
+<span class="nc" id="L412">			address.setAddressContext(AddressContextType.PRIMARY);</span>
+
+<span class="nc" id="L414">			fillIndentityPhoneDetailsForHongkong(request, person);</span>
+
+<span class="nc" id="L416">			addressList.add(address);</span>
+<span class="nc" id="L417">			person.getAddress().addAll(addressList);</span>
+<span class="nc" id="L418">			transactionIdentityVerification.setPerson(person);</span>
+
+<span class="nc" id="L420">		} catch (Exception e) {</span>
+<span class="nc" id="L421">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L422">		}</span>
+<span class="nc" id="L423">	}</span>
+
+	/**
+	 * Fill indentity phone details for hongkong.
+	 *
+	 * @param request
+	 *            the request
+	 * @param person
+	 *            the person
+	 */
+	private void fillIndentityPhoneDetailsForHongkong(KYCContactRequest request, PersonType person) {
+<span class="nc" id="L434">		PhoneNumberType phoneNumberType = new PhoneNumberType();</span>
+<span class="nc" id="L435">		List&lt;PhoneNumberType&gt; phoneNumberTypeList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L437" title="All 2 branches missed.">		if (request.getIdentification() != null) {</span>
+<span class="nc bnc" id="L438" title="All 2 branches missed.">			for (Identification identity : request.getIdentification()) {</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">				if (Constants.KYC_HK_ID_NUMBER.equalsIgnoreCase(identity.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L440">					person.setNationalId(identity.getNumber());</span>
+				}
+<span class="nc" id="L442">			}</span>
+		}
+<span class="nc bnc" id="L444" title="All 2 branches missed.">		if (request.getPhone() != null) {</span>
+<span class="nc bnc" id="L445" title="All 2 branches missed.">			for (Phone phone : request.getPhone()) {</span>
+<span class="nc bnc" id="L446" title="All 2 branches missed.">				if (Constants.KYC_PHONE_TYPE_HOME.equalsIgnoreCase(phone.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L447">					phoneNumberType.setPhoneNumberContext(PhoneNumberContextType.HOME);</span>
+<span class="nc" id="L448">					phoneNumberType.setPhoneNumber(phone.getNumber());</span>
+				}
+<span class="nc" id="L450">			}</span>
+		}
+<span class="nc" id="L452">		phoneNumberTypeList.add(phoneNumberType);</span>
+<span class="nc" id="L453">		person.getPhoneNumber().addAll(phoneNumberTypeList);</span>
+<span class="nc" id="L454">	}</span>
+
+	/**
+	 * Creates the request for brazil.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createRequestForBrazil(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String countryShortCode)
+			throws KYCException {
+<span class="nc" id="L473">		PersonType person = new PersonType();</span>
+<span class="nc" id="L474">		BirthdateType birthdate = new BirthdateType();</span>
+<span class="nc" id="L475">		AddressType address = new AddressType();</span>
+<span class="nc" id="L476">		List&lt;AddressType&gt; addressList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L477">		Passport passport = new Passport();</span>
+		try {
+<span class="nc" id="L479">			setPersonalDetails(request, c1, person, birthdate);</span>
+
+<span class="nc" id="L481">			setAddressForAustraliaBrazilSouthafricaMexicoNewzealand(request, countryShortCode, address);</span>
+
+<span class="nc" id="L483">			passport.setGender(request.getPersonalDetails().getGender());</span>
+<span class="nc" id="L484">			person.setPassport(passport);</span>
+
+<span class="nc" id="L486">			fillIdentityPhoneDetailsForBrazil(request, person);</span>
+
+<span class="nc bnc" id="L488" title="All 4 branches missed.">			if (person.getNationalId() == null || person.getNationalId().isEmpty()) {</span>
+<span class="nc" id="L489">				person.setNationalId(&quot; &quot;);</span>
+			}
+
+<span class="nc" id="L492">			addressList.add(address);</span>
+<span class="nc" id="L493">			person.getAddress().addAll(addressList);</span>
+<span class="nc" id="L494">			transactionIdentityVerification.setPerson(person);</span>
+<span class="nc" id="L495">		} catch (Exception e) {</span>
+<span class="nc" id="L496">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L497">		}</span>
+<span class="nc" id="L498">	}</span>
+
+	/**
+	 * Fill identity phone details for brazil.
+	 *
+	 * @param request
+	 *            the request
+	 * @param person
+	 *            the person
+	 */
+	private void fillIdentityPhoneDetailsForBrazil(KYCContactRequest request, PersonType person) {
+
+<span class="nc" id="L510">		PhoneNumberType phoneNumberType = new PhoneNumberType();</span>
+<span class="nc" id="L511">		List&lt;PhoneNumberType&gt; phoneNumberTypeList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L513" title="All 2 branches missed.">		if (request.getIdentification() != null) {</span>
+<span class="nc bnc" id="L514" title="All 2 branches missed.">			for (Identification identity : request.getIdentification()) {</span>
+<span class="nc bnc" id="L515" title="All 2 branches missed.">				if (Constants.KYC_NATIONAL_ID_NUMBER.equalsIgnoreCase(identity.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L516">					person.setNationalId(identity.getNumber());</span>
+				}
+<span class="nc" id="L518">			}</span>
+		}
+
+<span class="nc bnc" id="L521" title="All 2 branches missed.">		if (request.getPhone() != null) {</span>
+<span class="nc bnc" id="L522" title="All 2 branches missed.">			for (Phone phone : request.getPhone()) {</span>
+<span class="nc bnc" id="L523" title="All 2 branches missed.">				if (Constants.KYC_PHONE_TYPE_HOME.equalsIgnoreCase(phone.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L524">					phoneNumberType.setPhoneNumberContext(PhoneNumberContextType.HOME);</span>
+<span class="nc" id="L525">					phoneNumberType.setPhoneNumber(phone.getNumber());</span>
+				}
+<span class="nc" id="L527">			}</span>
+		}
+<span class="nc" id="L529">		phoneNumberTypeList.add(phoneNumberType);</span>
+<span class="nc" id="L530">		person.getPhoneNumber().addAll(phoneNumberTypeList);</span>
+<span class="nc" id="L531">	}</span>
+
+	/**
+	 * Creates the request for south africa.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createRequestForSouthAfrica(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String countryShortCode)
+			throws KYCException {
+<span class="nc" id="L550">		PersonType person = new PersonType();</span>
+<span class="nc" id="L551">		BirthdateType birthdate = new BirthdateType();</span>
+<span class="nc" id="L552">		AddressType address = new AddressType();</span>
+<span class="nc" id="L553">		List&lt;AddressType&gt; addressList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L555">			setPersonalDetails(request, c1, person, birthdate);</span>
+
+<span class="nc" id="L557">			setAddressForAustraliaBrazilSouthafricaMexicoNewzealand(request, countryShortCode, address);</span>
+
+<span class="nc" id="L559">			addressList.add(address);</span>
+<span class="nc" id="L560">			person.getAddress().addAll(addressList);</span>
+
+<span class="nc" id="L562">			fillIndentityPhoneDetailsForSA(request, person);</span>
+
+<span class="nc" id="L564">			transactionIdentityVerification.setPerson(person);</span>
+<span class="nc" id="L565">		} catch (Exception e) {</span>
+<span class="nc" id="L566">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L567">		}</span>
+
+<span class="nc" id="L569">	}</span>
+
+	/**
+	 * Fill indentity phone details for SA.
+	 *
+	 * @param request
+	 *            the request
+	 * @param person
+	 *            the person
+	 */
+	private void fillIndentityPhoneDetailsForSA(KYCContactRequest request, PersonType person) {
+<span class="nc" id="L580">		PhoneNumberType phoneNumberType = new PhoneNumberType();</span>
+<span class="nc" id="L581">		List&lt;PhoneNumberType&gt; phoneNumberTypeList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L583" title="All 2 branches missed.">		if (request.getIdentification() != null) {</span>
+<span class="nc bnc" id="L584" title="All 2 branches missed.">			for (Identification identity : request.getIdentification()) {</span>
+<span class="nc bnc" id="L585" title="All 2 branches missed.">				if (Constants.KYC_NATIONAL_ID_NUMBER.equalsIgnoreCase(identity.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L586">					person.setNationalId(identity.getNumber());</span>
+				}
+<span class="nc" id="L588">			}</span>
+		}
+
+<span class="nc bnc" id="L591" title="All 2 branches missed.">		if (request.getPhone() != null) {</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">			for (Phone phone : request.getPhone()) {</span>
+<span class="nc bnc" id="L593" title="All 2 branches missed.">				if (Constants.KYC_PHONE_TYPE_HOME.equalsIgnoreCase(phone.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L594">					phoneNumberType.setPhoneNumberContext(PhoneNumberContextType.HOME);</span>
+<span class="nc" id="L595">					phoneNumberType.setPhoneNumber(phone.getNumber());</span>
+<span class="nc bnc" id="L596" title="All 2 branches missed.">				} else if (Constants.KYC_PHONE_TYPE_MOBILE.equalsIgnoreCase(phone.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L597">					phoneNumberType.setPhoneNumberContext(PhoneNumberContextType.MOBILE);</span>
+<span class="nc" id="L598">					phoneNumberType.setPhoneNumber(phone.getNumber());</span>
+				}
+<span class="nc" id="L600">			}</span>
+		}
+
+<span class="nc" id="L603">		phoneNumberTypeList.add(phoneNumberType);</span>
+<span class="nc" id="L604">		person.getPhoneNumber().addAll(phoneNumberTypeList);</span>
+<span class="nc" id="L605">	}</span>
+
+	/**
+	 * Creates the request for mexico.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createRequestForMexico(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String countryShortCode)
+			throws KYCException {
+<span class="nc" id="L624">		PersonType person = new PersonType();</span>
+<span class="nc" id="L625">		BirthdateType birthdate = new BirthdateType();</span>
+<span class="nc" id="L626">		AddressType address = new AddressType();</span>
+<span class="nc" id="L627">		List&lt;AddressType&gt; addressList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L628">		Passport passport = new Passport();</span>
+		try {
+<span class="nc" id="L630">			setPersonalDetails(request, c1, person, birthdate);</span>
+
+<span class="nc" id="L632">			setAddressForAustraliaBrazilSouthafricaMexicoNewzealand(request, countryShortCode, address);</span>
+
+<span class="nc" id="L634">			passport.setGender(request.getPersonalDetails().getGender());</span>
+<span class="nc" id="L635">			addressList.add(address);</span>
+<span class="nc" id="L636">			person.getAddress().addAll(addressList);</span>
+<span class="nc" id="L637">			person.setPassport(passport);</span>
+<span class="nc" id="L638">			fillIdentityPhoneDetailsForMexico(request, person);</span>
+<span class="nc" id="L639">			transactionIdentityVerification.setPerson(person);</span>
+<span class="nc" id="L640">		} catch (Exception e) {</span>
+<span class="nc" id="L641">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L642">		}</span>
+
+<span class="nc" id="L644">	}</span>
+
+	/**
+	 * Fill identity phone details for mexico.
+	 *
+	 * @param request
+	 *            the request
+	 * @param person
+	 *            the person
+	 */
+	private void fillIdentityPhoneDetailsForMexico(KYCContactRequest request, PersonType person) {
+<span class="nc" id="L655">		PhoneNumberType phoneNumberType = new PhoneNumberType();</span>
+<span class="nc" id="L656">		List&lt;PhoneNumberType&gt; phoneNumberTypeList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L658" title="All 2 branches missed.">		if (request.getIdentification() != null) {</span>
+<span class="nc bnc" id="L659" title="All 2 branches missed.">			for (Identification identity : request.getIdentification()) {</span>
+<span class="nc bnc" id="L660" title="All 2 branches missed.">				if (Constants.KYC_CURP_ID_NUMBER.equalsIgnoreCase(identity.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L661">					person.setNationalId(identity.getNumber());</span>
+				}
+<span class="nc" id="L663">			}</span>
+		}
+<span class="nc bnc" id="L665" title="All 2 branches missed.">		if (request.getPhone() != null) {</span>
+<span class="nc bnc" id="L666" title="All 2 branches missed.">			for (Phone phone : request.getPhone()) {</span>
+<span class="nc bnc" id="L667" title="All 2 branches missed.">				if (Constants.KYC_PHONE_TYPE_HOME.equalsIgnoreCase(phone.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L668">					phoneNumberType.setPhoneNumberContext(PhoneNumberContextType.HOME);</span>
+<span class="nc" id="L669">					phoneNumberType.setPhoneNumber(phone.getNumber());</span>
+				}
+<span class="nc" id="L671">			}</span>
+		}
+<span class="nc" id="L673">		phoneNumberTypeList.add(phoneNumberType);</span>
+<span class="nc" id="L674">		person.getPhoneNumber().addAll(phoneNumberTypeList);</span>
+<span class="nc" id="L675">	}</span>
+
+	/**
+	 * Creates the request for new zealand.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createRequestForNewZealand(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String countryShortCode)
+			throws KYCException {
+<span class="nc" id="L694">		PersonType person = new PersonType();</span>
+<span class="nc" id="L695">		BirthdateType birthdate = new BirthdateType();</span>
+<span class="nc" id="L696">		AddressType address = new AddressType();</span>
+<span class="nc" id="L697">		List&lt;AddressType&gt; addressList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L700">			setPersonalDetails(request, c1, person, birthdate);</span>
+
+<span class="nc" id="L702">			setAddressForAustraliaBrazilSouthafricaMexicoNewzealand(request, countryShortCode, address);</span>
+
+<span class="nc" id="L704">			addressList.add(address);</span>
+<span class="nc" id="L705">			person.getAddress().addAll(addressList);</span>
+
+<span class="nc" id="L707">			fillPhoneIdentityDetailsForNZ(request, person);</span>
+<span class="nc" id="L708">			transactionIdentityVerification.setPerson(person);</span>
+<span class="nc" id="L709">		} catch (Exception e) {</span>
+<span class="nc" id="L710">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L711">		}</span>
+
+<span class="nc" id="L713">	}</span>
+
+	/**
+	 * Fill phone identity details for NZ.
+	 *
+	 * @param request
+	 *            the request
+	 * @param person
+	 *            the person
+	 */
+	private void fillPhoneIdentityDetailsForNZ(KYCContactRequest request, PersonType person) {
+<span class="nc bnc" id="L724" title="All 2 branches missed.">		if (request.getIdentification() != null) {</span>
+<span class="nc bnc" id="L725" title="All 2 branches missed.">			for (Identification identity : request.getIdentification()) {</span>
+<span class="nc bnc" id="L726" title="All 2 branches missed.">				if (Constants.KYC_DRIVING_LICENSE.equalsIgnoreCase(identity.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L727">					person.setDriversLicenseNumber(identity.getNumber());</span>
+				}
+<span class="nc" id="L729">			}</span>
+		}
+<span class="nc" id="L731">	}</span>
+
+	/**
+	 * Creates the request for china.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createRequestForChina(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String countryShortCode)
+			throws KYCException {
+<span class="nc" id="L750">		PersonType person = new PersonType();</span>
+<span class="nc" id="L751">		BirthdateType birthdate = new BirthdateType();</span>
+<span class="nc" id="L752">		AddressType address = new AddressType();</span>
+<span class="nc" id="L753">		List&lt;AddressType&gt; addressList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L756">			setPersonalDetails(request, c1, person, birthdate);</span>
+
+<span class="nc" id="L758">			setAddressForChinaAustriaJapanLuxembourg(request, countryShortCode, address);</span>
+
+<span class="nc" id="L760">			addressList.add(address);</span>
+<span class="nc" id="L761">			person.getAddress().addAll(addressList);</span>
+<span class="nc" id="L762">			transactionIdentityVerification.setPerson(person);</span>
+<span class="nc" id="L763">		} catch (Exception e) {</span>
+<span class="nc" id="L764">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L765">		}</span>
+
+<span class="nc" id="L767">	}</span>
+
+	/**
+	 * Creates the request for canada.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createRequestForCanada(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String countryShortCode)
+			throws KYCException {
+<span class="nc" id="L786">		PersonType person = new PersonType();</span>
+<span class="nc" id="L787">		BirthdateType birthdate = new BirthdateType();</span>
+<span class="nc" id="L788">		AddressType address = new AddressType();</span>
+<span class="nc" id="L789">		List&lt;AddressType&gt; addressList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L791">			setPersonalDetails(request, c1, person, birthdate);</span>
+
+<span class="nc" id="L793">			address.setAddressStreet1(request.getAddress().getAddress1());</span>
+<span class="nc" id="L794">			address.setAddressStreet2(request.getAddress().getStreetType());</span>
+<span class="nc" id="L795">			address.setAddressPostcode(request.getAddress().getPostCode());</span>
+<span class="nc" id="L796">			address.setAddressProvince(request.getAddress().getState());</span>
+
+<span class="nc bnc" id="L798" title="All 2 branches missed.">			if (!StringUtils.isNullOrTrimEmpty(request.getAddress().getCity())) {</span>
+<span class="nc" id="L799">				address.setAddressLocality(request.getAddress().getCity());</span>
+			}
+
+<span class="nc" id="L802">			address.setAddressCountry(countryShortCode);</span>
+<span class="nc" id="L803">			address.setAddressContext(AddressContextType.PRIMARY);</span>
+
+<span class="nc" id="L805">			fillIdentityPhoneDetailsForCanada(request, person);</span>
+
+<span class="nc" id="L807">			addressList.add(address);</span>
+<span class="nc" id="L808">			person.getAddress().addAll(addressList);</span>
+<span class="nc" id="L809">			transactionIdentityVerification.setPerson(person);</span>
+<span class="nc" id="L810">		} catch (Exception e) {</span>
+<span class="nc" id="L811">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L812">		}</span>
+<span class="nc" id="L813">	}</span>
+
+	/**
+	 * Fill identity phone details for canada.
+	 *
+	 * @param request
+	 *            the request
+	 * @param person
+	 *            the person
+	 */
+	private void fillIdentityPhoneDetailsForCanada(KYCContactRequest request, PersonType person) {
+<span class="nc" id="L824">		PhoneNumberType phoneNumberType = new PhoneNumberType();</span>
+<span class="nc" id="L825">		List&lt;PhoneNumberType&gt; phoneNumberTypeList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L827" title="All 2 branches missed.">		if (request.getIdentification() != null) {</span>
+<span class="nc bnc" id="L828" title="All 2 branches missed.">			for (Identification identity : request.getIdentification()) {</span>
+<span class="nc bnc" id="L829" title="All 2 branches missed.">				if (Constants.KYC_SOCIAL_INSURANCE_NUMBER.equalsIgnoreCase(identity.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L830">					person.setNationalId(identity.getNumber());</span>
+				}
+<span class="nc" id="L832">			}</span>
+		}
+<span class="nc bnc" id="L834" title="All 2 branches missed.">		if (request.getPhone() != null) {</span>
+<span class="nc bnc" id="L835" title="All 2 branches missed.">			for (Phone phone : request.getPhone()) {</span>
+<span class="nc bnc" id="L836" title="All 2 branches missed.">				if (Constants.KYC_PHONE_TYPE_HOME.equalsIgnoreCase(phone.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L837">					phoneNumberType.setPhoneNumberContext(PhoneNumberContextType.HOME);</span>
+<span class="nc" id="L838">					phoneNumberType.setPhoneNumber(phone.getNumber());</span>
+				}
+<span class="nc" id="L840">			}</span>
+		}
+<span class="nc" id="L842">		phoneNumberTypeList.add(phoneNumberType);</span>
+<span class="nc" id="L843">		person.getPhoneNumber().addAll(phoneNumberTypeList);</span>
+<span class="nc" id="L844">	}</span>
+
+	/**
+	 * Creates the request for luxembourg.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createRequestForAustriaLuxembourg(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String countryShortCode)
+			throws KYCException {
+
+<span class="nc" id="L864">		PersonType person = new PersonType();</span>
+<span class="nc" id="L865">		BirthdateType birthdate = new BirthdateType();</span>
+<span class="nc" id="L866">		AddressType address = new AddressType();</span>
+<span class="nc" id="L867">		List&lt;AddressType&gt; addressList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L870">			setPersonalDetails(request, c1, person, birthdate);</span>
+
+<span class="nc" id="L872">			setAddressForChinaAustriaJapanLuxembourg(request, countryShortCode, address);</span>
+
+<span class="nc" id="L874">			fillPhoneDetailsForAustraliaLuxembourgAustriaJapan(request, person);</span>
+
+<span class="nc" id="L876">			addressList.add(address);</span>
+<span class="nc" id="L877">			person.getAddress().addAll(addressList);</span>
+<span class="nc" id="L878">			transactionIdentityVerification.setPerson(person);</span>
+<span class="nc" id="L879">		} catch (Exception e) {</span>
+<span class="nc" id="L880">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L881">		}</span>
+
+<span class="nc" id="L883">	}</span>
+
+	/**
+	 * Creates the request for japan.
+	 *
+	 * @param request
+	 *            the request
+	 * @param transactionIdentityVerification
+	 *            the transaction identity verification
+	 * @param c1
+	 *            the c 1
+	 * @param countryShortCode
+	 *            the country short code
+	 * @throws KYCException
+	 *             the KYC exception
+	 */
+	private void createRequestForJapan(KYCContactRequest request,
+			TransactionIdentityVerification transactionIdentityVerification, Calendar c1, String countryShortCode)
+			throws KYCException {
+<span class="nc" id="L902">		PersonType person = new PersonType();</span>
+<span class="nc" id="L903">		BirthdateType birthdate = new BirthdateType();</span>
+<span class="nc" id="L904">		AddressType address = new AddressType();</span>
+<span class="nc" id="L905">		List&lt;AddressType&gt; addressList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L906">		Passport passport = new Passport();</span>
+
+		try {
+<span class="nc" id="L909">			setPersonalDetails(request, c1, person, birthdate);</span>
+
+<span class="nc" id="L911">			setAddressForChinaAustriaJapanLuxembourg(request, countryShortCode, address);</span>
+
+<span class="nc" id="L913">			passport.setGender(request.getPersonalDetails().getGender());</span>
+<span class="nc" id="L914">			person.setPassport(passport);</span>
+
+<span class="nc" id="L916">			fillPhoneDetailsForAustraliaLuxembourgAustriaJapan(request, person);</span>
+
+<span class="nc" id="L918">			addressList.add(address);</span>
+<span class="nc" id="L919">			person.getAddress().addAll(addressList);</span>
+<span class="nc" id="L920">			transactionIdentityVerification.setPerson(person);</span>
+<span class="nc" id="L921">		} catch (Exception e) {</span>
+<span class="nc" id="L922">			throw new KYCException(KYCErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L923">		}</span>
+
+<span class="nc" id="L925">	}</span>
+
+	
+	/**
+	 * Sets the address for australia brazil southafrica mexico newzealand.
+	 *
+	 * @param request
+	 *            the request
+	 * @param countryShortCode
+	 *            the country short code
+	 * @param address
+	 *            the address
+	 */
+	private void setAddressForAustraliaBrazilSouthafricaMexicoNewzealand(KYCContactRequest request,
+			String countryShortCode, AddressType address) {
+<span class="nc" id="L940">		address.setAddressStreet1(request.getAddress().getAddress1());</span>
+
+<span class="nc bnc" id="L942" title="All 2 branches missed.">		if (!StringUtils.isNullOrTrimEmpty(request.getAddress().getCity())) {</span>
+<span class="nc" id="L943">			address.setAddressLocality(request.getAddress().getCity());</span>
+		}
+
+<span class="nc" id="L946">		address.setAddressPostcode(request.getAddress().getPostCode());</span>
+<span class="nc" id="L947">		address.setAddressProvince(request.getAddress().getState());</span>
+<span class="nc" id="L948">		address.setAddressCountry(countryShortCode);</span>
+<span class="nc" id="L949">		address.setAddressContext(AddressContextType.PRIMARY);</span>
+<span class="nc" id="L950">	}</span>
+
+	/**
+	 * Sets the address for china austria japan luxembourg.
+	 *
+	 * @param request
+	 *            the request
+	 * @param countryShortCode
+	 *            the country short code
+	 * @param address
+	 *            the address
+	 */
+	private void setAddressForChinaAustriaJapanLuxembourg(KYCContactRequest request, String countryShortCode,
+			AddressType address) {
+<span class="nc" id="L964">		address.setAddressStreet1(request.getAddress().getAddress1());</span>
+<span class="nc" id="L965">		address.setAddressPostcode(request.getAddress().getPostCode());</span>
+
+<span class="nc bnc" id="L967" title="All 2 branches missed.">		if (!StringUtils.isNullOrTrimEmpty(request.getAddress().getCity())) {</span>
+<span class="nc" id="L968">			address.setAddressLocality(request.getAddress().getCity());</span>
+		}
+
+<span class="nc" id="L971">		address.setAddressCountry(countryShortCode);</span>
+<span class="nc" id="L972">		address.setAddressContext(AddressContextType.PRIMARY);</span>
+<span class="nc" id="L973">	}</span>
+
+	/**
+	 * Sets the personal details.
+	 *
+	 * @param request
+	 *            the request
+	 * @param c1
+	 *            the c 1
+	 * @param person
+	 *            the person
+	 * @param birthdate
+	 *            the birthdate
+	 */
+	private void setPersonalDetails(KYCContactRequest request, Calendar c1, PersonType person,
+			BirthdateType birthdate) {
+
+<span class="nc" id="L990">		person.setNameFirst(request.getPersonalDetails().getForeName());</span>
+<span class="nc bnc" id="L991" title="All 2 branches missed.">		if (!StringUtils.isNullOrTrimEmpty(request.getPersonalDetails().getMiddleName())) {</span>
+<span class="nc" id="L992">			person.setNameMiddle(request.getPersonalDetails().getMiddleName());</span>
+		}
+<span class="nc" id="L994">		person.setNameLast(request.getPersonalDetails().getSurName());</span>
+
+<span class="nc" id="L996">		birthdate.setYear(BigInteger.valueOf(c1.get(Calendar.YEAR)));</span>
+<span class="nc" id="L997">		birthdate.setMonth(c1.get(Calendar.MONTH) + 1);</span>
+<span class="nc" id="L998">		birthdate.setDay(c1.get(Calendar.DAY_OF_MONTH));</span>
+<span class="nc" id="L999">		person.setBirthdate(birthdate);</span>
+<span class="nc" id="L1000">	}</span>
+
+	/**
+	 * Fill phone details for australia luxembourg austria.
+	 *
+	 * @param request
+	 *            the request
+	 * @param person
+	 *            the person
+	 */
+	private void fillPhoneDetailsForAustraliaLuxembourgAustriaJapan(KYCContactRequest request, PersonType person) {
+<span class="nc" id="L1011">		PhoneNumberType phoneNumberType = new PhoneNumberType();</span>
+<span class="nc" id="L1012">		List&lt;PhoneNumberType&gt; phoneNumberTypeList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L1014" title="All 2 branches missed.">		if (request.getPhone() != null) {</span>
+<span class="nc bnc" id="L1015" title="All 2 branches missed.">			for (Phone phone : request.getPhone()) {</span>
+<span class="nc bnc" id="L1016" title="All 2 branches missed.">				if (Constants.KYC_PHONE_TYPE_HOME.equalsIgnoreCase(phone.getType().replaceAll(&quot;\\s+&quot;, &quot;&quot;))) {</span>
+<span class="nc" id="L1017">					phoneNumberType.setPhoneNumberContext(PhoneNumberContextType.HOME);</span>
+<span class="nc" id="L1018">					phoneNumberType.setPhoneNumber(phone.getNumber());</span>
+				}
+<span class="nc" id="L1020">			}</span>
+		}
+<span class="nc" id="L1022">		phoneNumberTypeList.add(phoneNumberType);</span>
+<span class="nc" id="L1023">		person.getPhoneNumber().addAll(phoneNumberTypeList);</span>
+<span class="nc" id="L1024">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataValidator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsout</a> &gt; <span class="el_source">DataValidator.java</span></div><h1>DataValidator.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsout;
+
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.Header;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutBaseRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.FundsOutSanctionResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResendResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.whitelist.UdateWhiteListRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.BaseMessageValidator;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.FieldValidator;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.FundsOutResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+/**
+ * @author bnt
+ *
+ */
+<span class="nc" id="L42">public class DataValidator extends BaseMessageValidator{</span>
+	public static final String PAYMENT_FUNDSOUT_ID = &quot;payment_fundsout_id&quot;;
+
+	private static final String REQUEST_IS_NOT_VALID = &quot;Request is not valid&quot;;
+
+<span class="nc" id="L47">	private static final Logger LOGGER = LoggerFactory.getLogger(DataValidator.class);</span>
+	
+	private static final String PAYMENTOUT_EVENTTYPE = &quot;PAYMENTOUT&quot;;
+
+	@Autowired
+	private FundsOutDBServiceImpl fundsOutDBService;
+	
+	/**
+	 * @param message
+	 * @param correlationID
+	 * @return
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+<span class="nc" id="L61">		FundsOutResponse response = new FundsOutResponse();		</span>
+<span class="nc" id="L62">		MessageExchange messageExchange =  message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L63">		response.setOsrID(message.getHeaders().get(MessageContextHeaders.OSR_ID).toString());</span>
+		try {
+<span class="nc" id="L65">			ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc" id="L66">			OperationEnum operation = messageExchange.getOperation();</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">			if(serviceInterfaceType == ServiceInterfaceType.FUNDSOUT) {</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">				if (operation == OperationEnum.FUNDS_OUT) {</span>
+<span class="nc" id="L69">					FundsOutRequest fundsOutRequest = (FundsOutRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L70">					fundsOutRequest.setVersion(1);</span>
+<span class="nc" id="L71">					FieldValidator fv = new FieldValidator();</span>
+<span class="nc" id="L72">					FundsOutRequest oldReuqest = (FundsOutRequest)fundsOutRequest.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+					
+<span class="nc" id="L74">					Account acc = (Account)fundsOutRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L75">					checkWhetherAccountExists(fv, acc);</span>
+<span class="nc" id="L76">					Contact contact = (Contact)fundsOutRequest.getAdditionalAttribute(Constants.FIELD_CONTACT);</span>
+<span class="nc" id="L77">					checkWhetherContactExistsForAccount(fv, contact);</span>
+					
+<span class="nc" id="L79">					Account account = (Account) oldReuqest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L80">					checkForCustTypeAndExistingFundsOut(fv, oldReuqest, account);				</span>
+					
+<span class="nc" id="L82">					createBaseResponse(response, fv, </span>
+<span class="nc" id="L83">							FundsInReasonCode.MISSINGINFO.getReasonCode(), Constants.MSG_MISSING_INFO,PAYMENTOUT_EVENTTYPE);</span>
+<span class="nc" id="L84">					setResponseForExistingFundsOut(response, fundsOutRequest, fv);</span>
+<span class="nc" id="L85">					messageExchange.setResponse(response);</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">				}else if (operation == OperationEnum.SANCTION_RESEND) {</span>
+<span class="nc" id="L87">					SanctionResendResponse sanctionResendResponse = new SanctionResendResponse();</span>
+<span class="nc" id="L88">					FundsOutSanctionResendRequest fundsOutSanctionResendRequest =  messageExchange.getRequest(FundsOutSanctionResendRequest.class);</span>
+<span class="nc" id="L89">					FieldValidator fv = validateFundsOutSanctionResend(fundsOutSanctionResendRequest);</span>
+<span class="nc" id="L90">					createBaseResponse(sanctionResendResponse, fv, </span>
+<span class="nc" id="L91">							FundsInReasonCode.MISSINGINFO.getReasonCode(), Constants.MSG_MISSING_INFO,&quot;&quot;);</span>
+<span class="nc" id="L92">					messageExchange.setResponse(sanctionResendResponse);</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">				}else if (operation == OperationEnum.UPDATE_OPI) {</span>
+<span class="nc" id="L94">					FundsOutUpdateRequest fRequest = (FundsOutUpdateRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L95">					FundsOutRequest oldReuqest = (FundsOutRequest)fRequest.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+<span class="nc" id="L96">					Account acc = (Account)oldReuqest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L97">					validateUpdateDeleteFundsOut(response, fRequest, oldReuqest,acc);</span>
+<span class="nc" id="L98">					messageExchange.setResponse(response);</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">				}else if (operation == OperationEnum.DELETE_OPI) {</span>
+<span class="nc" id="L100">					FundsOutDeleteRequest fRequest = (FundsOutDeleteRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L101">					FundsOutRequest oldReuqest = (FundsOutRequest)fRequest.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+<span class="nc" id="L102">					Account acc = (Account)oldReuqest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L103">					validateUpdateDeleteFundsOut(response, fRequest, oldReuqest,acc);</span>
+<span class="nc" id="L104">					messageExchange.setResponse(response);</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">				}else if (operation == OperationEnum.WHITELIST_UPDATE) {</span>
+<span class="nc" id="L106">					CustomCheckResponse customCheckResponse = new CustomCheckResponse(); </span>
+<span class="nc" id="L107">					UdateWhiteListRequest fRequest = (UdateWhiteListRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L108">					FundsOutRequest oldReuqest = (FundsOutRequest)fRequest.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+<span class="nc" id="L109">					validateWhitelistUpdateFundsOut(customCheckResponse, fRequest, oldReuqest);</span>
+<span class="nc" id="L110">					messageExchange.setResponse(customCheckResponse);</span>
+				}
+			}
+<span class="nc" id="L113">		} catch (Exception e) {</span>
+<span class="nc" id="L114">			LOGGER.error(REQUEST_IS_NOT_VALID, e);</span>
+<span class="nc" id="L115">			response.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L116">			response.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L117">			response.setResponseReason(FundsOutReasonCode.MISSINGINFO);</span>
+<span class="nc" id="L118">			messageExchange.setResponse(response);</span>
+<span class="nc" id="L119">		}</span>
+<span class="nc" id="L120">		response.setCorrelationID(correlationID);</span>
+		
+<span class="nc" id="L122">		return message;</span>
+	}
+
+	/**
+	 * Check whether account exists.
+	 *
+	 * @param fv the fv
+	 * @param acc the acc
+	 */
+	private void checkWhetherAccountExists(FieldValidator fv, Account acc) {
+<span class="nc bnc" id="L132" title="All 2 branches missed.">		if(null == acc)</span>
+<span class="nc" id="L133">			fv.addError(Constants.ERR_INVALID_ACCOUNT, &quot;trade_account_number&quot;);</span>
+<span class="nc" id="L134">	}</span>
+
+	/**
+	 * Check whether contact exists for account.
+	 *
+	 * @param fv the fv
+	 * @param contact the contact
+	 */
+	private void checkWhetherContactExistsForAccount(FieldValidator fv, Contact contact) {
+<span class="nc bnc" id="L143" title="All 2 branches missed.">		if(null == contact)</span>
+<span class="nc" id="L144">			fv.addError(Constants.ERR_INVALID_COTACT, &quot;trade_contact_id&quot;);</span>
+<span class="nc" id="L145">	}</span>
+
+	/**
+	 * Check for cust type and existing funds out.
+	 *
+	 * @param fv the fv
+	 * @param oldReuqest the old reuqest
+	 * @param account the account
+	 */
+	private void checkForCustTypeAndExistingFundsOut(FieldValidator fv, FundsOutRequest oldReuqest, Account account) {
+<span class="nc bnc" id="L155" title="All 6 branches missed.">		if (null != oldReuqest.getCustType() &amp;&amp; null != account &amp;&amp; !account.getCustType().equals(oldReuqest.getCustType())){</span>
+<span class="nc" id="L156">			fv.addError(Constants.ERR_CUST_TYPE_INVALID, &quot;cust_type&quot;);</span>
+		}
+<span class="nc bnc" id="L158" title="All 2 branches missed.">		if(null != oldReuqest.getFundsOutId()){</span>
+<span class="nc" id="L159">			fv.addError(Constants.ERR_PAYMENT_EXISTS, PAYMENT_FUNDSOUT_ID);</span>
+		}
+<span class="nc" id="L161">	}</span>
+
+	/**
+	 * Sets the response for existing funds out.
+	 *
+	 * @param response the response
+	 * @param fundsOutRequest the funds out request
+	 * @param fv the fv
+	 */
+	private void setResponseForExistingFundsOut(FundsOutResponse response, FundsOutRequest fundsOutRequest,
+			FieldValidator fv) {
+<span class="nc bnc" id="L172" title="All 4 branches missed.">		if(fv != null &amp;&amp; !fv.isFailed())</span>
+<span class="nc" id="L173">			updateResponseForPaymentDone(response, fundsOutRequest);</span>
+<span class="nc" id="L174">	}</span>
+
+	private void validateWhitelistUpdateFundsOut(CustomCheckResponse response, UdateWhiteListRequest fRequest,
+			FundsOutRequest oldReuqest) {
+<span class="nc" id="L178">		FieldValidator fv = new FieldValidator();</span>
+		
+<span class="nc bnc" id="L180" title="All 2 branches missed.">		if(null!=oldReuqest.getFundsOutId()){</span>
+<span class="nc" id="L181">			fRequest.addAttribute(Constants.OLD_REQUEST, oldReuqest);</span>
+<span class="nc" id="L182">			fRequest.setPaymentFundsOutId(oldReuqest.getFundsOutId());</span>
+<span class="nc" id="L183">			createBaseResponse(response, fv, </span>
+					null, null,&quot;&quot;);
+		}else{
+<span class="nc" id="L186">			fv.addError(Constants.ERR_PAYMENT_NOT_EXISTS, PAYMENT_FUNDSOUT_ID);</span>
+<span class="nc" id="L187">			createBaseResponse(response, fv, </span>
+					null, null,&quot;&quot;);
+		}
+<span class="nc" id="L190">	}</span>
+	
+	private void validateUpdateDeleteFundsOut(FundsOutResponse response, FundsOutBaseRequest fRequest,
+			FundsOutRequest oldReuqest, Account acc) {
+<span class="nc" id="L194">		FieldValidator fv = new FieldValidator();</span>
+<span class="nc" id="L195">		checkWhetherAccountExists(fv, acc);</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">		if(null!=oldReuqest.getFundsOutId()){</span>
+<span class="nc" id="L197">			fRequest.addAttribute(Constants.OLD_REQUEST, oldReuqest);</span>
+<span class="nc" id="L198">			fRequest.setFundsOutId(oldReuqest.getFundsOutId());</span>
+<span class="nc" id="L199">			createBaseResponse(response, fv, </span>
+					null, null,PAYMENTOUT_EVENTTYPE);
+		}else{
+<span class="nc" id="L202">			fv.addError(Constants.ERR_PAYMENT_NOT_EXISTS, PAYMENT_FUNDSOUT_ID);</span>
+<span class="nc" id="L203">			createBaseResponse(response, fv, </span>
+					null, null,PAYMENTOUT_EVENTTYPE);
+		}
+<span class="nc" id="L206">	}</span>
+
+	
+	private FieldValidator validateFundsOutSanctionResend(FundsOutSanctionResendRequest request) throws ComplianceException{
+<span class="nc" id="L210">		FieldValidator fv = new FieldValidator();</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">		if(null == fundsOutDBService.doesFundsOutExists(request.getTradePaymentId())){</span>
+<span class="nc" id="L212">			fv.addError(Constants.ERR_PAYMENT_NOT_EXISTS, &quot;tradePaymentId&quot;);</span>
+		}
+<span class="nc" id="L214">		return fv;</span>
+	}
+	
+	/**
+	 * sometimes Aurora fails to update Compliance response, in those cases Aurora sends the payment request again
+	 * instead of sending INV_REquest, send compliance status of payment again
+	 * so that Aurora will update status on their side
+	 * 
+	 *  if payment is on HOLD, set reason desc to FAIL else PASS
+	 *
+	 * @param response the response
+	 * @param fundsInCreateRequest the funds in create request
+	 */
+	private void updateResponseForPaymentDone(FundsOutResponse response,FundsOutRequest fundsOutRequest){
+
+<span class="nc" id="L229">		FundsOutBaseRequest oldReuqest = (FundsOutBaseRequest) fundsOutRequest</span>
+<span class="nc" id="L230">				.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+<span class="nc" id="L231">		String oldStatus = (String)oldReuqest.getAdditionalAttribute(&quot;status&quot;);</span>
+<span class="nc bnc" id="L232" title="All 2 branches missed.">		if(&quot;PAYMENTOUT [payment_fundsout_id Payment ID Already Exists]&quot;.equals(response.getErrorDescription()) </span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">				&amp;&amp; &quot;701&quot;.equals(response.getResponseCode())){</span>
+			
+<span class="nc" id="L235">			response.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc bnc" id="L236" title="All 2 branches missed.">			if(null != oldStatus &amp;&amp; </span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">					!FundsInComplianceStatus.CLEAR.getFundsInStatusAsString().equalsIgnoreCase(oldStatus)){</span>
+<span class="nc" id="L238">				response.setResponseCode(FundsOutReasonCode.DUPLICATE_PAYMENT_FAIL.getFundsOutReasonCode());</span>
+<span class="nc" id="L239">				response.setResponseDescription(FundsOutReasonCode.DUPLICATE_PAYMENT_FAIL.getFundsOutReasonDescription());</span>
+			}else{
+<span class="nc" id="L241">				response.setResponseCode(FundsOutReasonCode.DUPLICATE_PAYMENT_PASS.getFundsOutReasonCode());</span>
+<span class="nc" id="L242">				response.setResponseDescription(FundsOutReasonCode.DUPLICATE_PAYMENT_PASS.getFundsOutReasonDescription());</span>
+			}
+<span class="nc" id="L244">			response.setOrgCode(fundsOutRequest.getOrgCode());</span>
+<span class="nc" id="L245">			response.setTradeContractNumber(fundsOutRequest.getTrade().getContractNumber());</span>
+<span class="nc" id="L246">			response.setStatus(oldStatus);</span>
+<span class="nc" id="L247">			response.setErrorCode(null);</span>
+<span class="nc" id="L248">			response.setErrorDescription(null);</span>
+		}
+		
+<span class="nc" id="L251">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GBGroupPort.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">kyc-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.kyc.gbgroupport</a> &gt; <span class="el_source">GBGroupPort.java</span></div><h1>GBGroupPort.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.kyc.gbgroupport;
+
+import java.net.URL;
+import java.util.List;
+import java.util.concurrent.Callable;
+
+import javax.xml.namespace.QName;
+import javax.xml.soap.SOAPElement;
+
+import org.apache.axis.Message;
+import org.apache.axis.MessageContext;
+import org.apache.axis.client.Service;
+import org.apache.axis.message.SOAPHeaderElement;
+import org.apache.axis.types.UnsignedInt;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactResponse;
+import com.currenciesdirect.gtg.compliance.kyc.core.IKYCProviderService;
+import com.currenciesdirect.gtg.compliance.kyc.core.domain.KYCProviderProperty;
+import com.currenciesdirect.gtg.compliance.kyc.core.domain.ProfileVersionID;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCErrors;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCException;
+import com.currenciesdirect.gtg.compliance.kyc.util.Constants;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.id3global.www.ID3gWS._2013._04.BasicHttpBinding_GlobalAuthenticateStub;
+import com.id3global.www.ID3gWS._2013._04.GlobalInputData;
+import com.id3global.www.ID3gWS._2013._04.GlobalProfileIDVersion;
+import com.id3global.www.ID3gWS._2013._04.GlobalResultData;
+
+/**
+ * The Class GBGroupPort.
+ *
+ * @author manish
+ */
+public class GBGroupPort implements IKYCProviderService, Callable&lt;KYCContactResponse&gt; {
+
+	/** The Constant LOG. */
+<span class="nc" id="L41">	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(GBGroupPort.class);</span>
+
+	/** The request. */
+	private KYCContactRequest request;
+
+	/** The property. */
+	private KYCProviderProperty property;
+
+	/**
+	 * Instantiates a new GB group port.
+	 *
+	 * @param request the request
+	 * @param property the property
+	 */
+<span class="nc" id="L55">	public GBGroupPort(KYCContactRequest request, KYCProviderProperty property) {</span>
+<span class="nc" id="L56">		this.request = request;</span>
+<span class="nc" id="L57">		this.property = property;</span>
+<span class="nc" id="L58">	}</span>
+
+	/* (non-Javadoc)
+	 * @see java.util.concurrent.Callable#call()
+	 */
+	@Override
+	public KYCContactResponse call() throws Exception {
+<span class="nc" id="L65">		return checkKYCdetails(request, property);</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.kyc.core.IKYCProviderService#checkKYCdetails(com.currenciesdirect.gtg.compliance.kyc.core.domain.KYCContactRequest, com.currenciesdirect.gtg.compliance.kyc.core.domain.ProviderProperty)
+	 */
+	@Override
+	public KYCContactResponse checkKYCdetails(KYCContactRequest request, KYCProviderProperty property)
+			throws KYCException {
+<span class="nc" id="L74">		GlobalInputData globalInputData = new GlobalInputData();</span>
+<span class="nc" id="L75">		KYCContactResponse response = new KYCContactResponse();</span>
+<span class="nc" id="L76">		String id3GlobalEndpointUrl = null;</span>
+<span class="nc" id="L77">		String profileIDVersionID = null;</span>
+<span class="nc" id="L78">		List&lt;ProfileVersionID&gt; profileVersionIDs = null;</span>
+<span class="nc" id="L79">		GlobalResultData result = null;</span>
+		try {
+
+<span class="nc" id="L82">			id3GlobalEndpointUrl = property.getEndPointUrl();</span>
+
+<span class="nc" id="L84">			profileVersionIDs = property.getProfileVersionIDList();</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">			for (ProfileVersionID profileVersionID : profileVersionIDs) {</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">				if (profileVersionID.getCountry().equalsIgnoreCase(request.getAddress().getCountry().trim())) {</span>
+<span class="nc" id="L87">					profileIDVersionID = profileVersionID.getId();</span>
+<span class="nc" id="L88">					break;</span>
+				}
+<span class="nc" id="L90">			}</span>
+
+<span class="nc" id="L92">			globalInputData = GBGroupTransformer.getInstance().transformRequestObject(request);</span>
+<span class="nc" id="L93">			URL endpointUrl = new URL(id3GlobalEndpointUrl);</span>
+<span class="nc" id="L94">			Service service = new Service();</span>
+<span class="nc" id="L95">			BasicHttpBinding_GlobalAuthenticateStub authenticateStub = new BasicHttpBinding_GlobalAuthenticateStub(</span>
+					endpointUrl, service);
+<span class="nc" id="L97">			authenticateStub.setHeader(getSecurityHeader(property));</span>
+<span class="nc" id="L98">			authenticateStub.setTimeout(property.getSocketTimeoutMillis());</span>
+<span class="nc" id="L99">			GlobalProfileIDVersion profileIDVersion = new GlobalProfileIDVersion();</span>
+<span class="nc" id="L100">			profileIDVersion.setID(profileIDVersionID);</span>
+<span class="nc" id="L101">			UnsignedInt version = new UnsignedInt(0);</span>
+<span class="nc" id="L102">			profileIDVersion.setVersion(version);</span>
+<span class="nc" id="L103">			result = authenticateStub.authenticateSP(profileIDVersion, request.getContactSFId(), globalInputData);</span>
+			
+<span class="nc" id="L105">			ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L106">			String json = mapper.writeValueAsString(result);</span>
+<span class="nc" id="L107">			response.setProviderResponse(json);</span>
+<span class="nc" id="L108">			response.setProviderUniqueRefNo(result.getCustomerRef());</span>
+<span class="nc" id="L109">			response.setProviderMethod(Constants.GBGROUP_PROVIDER_METHOD);</span>
+<span class="nc" id="L110">			response.setProviderName(Constants.GBGROUP_PROVIDER);</span>
+<span class="nc" id="L111">			response.setOverallScore(String.valueOf(result.getScore()));</span>
+			
+<span class="nc" id="L113">			response.setBandText(String.valueOf(result.getBandText()));</span>
+			
+<span class="nc bnc" id="L115" title="All 2 branches missed.">			if(!Constants.PASS.equalsIgnoreCase(response.getBandText())){</span>
+<span class="nc" id="L116">				response.setStatus(Constants.FAIL);</span>
+			}else{
+<span class="nc" id="L118">				response.setStatus(Constants.PASS);</span>
+			}
+			
+<span class="nc" id="L121">			response.setContactSFId(request.getContactSFId());</span>
+<span class="nc" id="L122">			response.setId(request.getId());</span>
+<span class="nc" id="L123">		} catch (KYCException exception) {</span>
+<span class="nc" id="L124">			logDebug(exception);</span>
+<span class="nc" id="L125">			response.setBandText(Constants.NOT_PERFORMED);</span>
+<span class="nc" id="L126">			response.setStatus(Constants.NOT_PERFORMED);</span>
+<span class="nc" id="L127">			response.setOverallScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L128">			response.setContactSFId(request.getContactSFId());</span>
+<span class="nc" id="L129">			response.setId(request.getId());</span>
+<span class="nc" id="L130">			response.setProviderName(Constants.GBGROUP_PROVIDER);</span>
+<span class="nc" id="L131">			response.setProviderMethod(Constants.GBGROUP_PROVIDER_METHOD);</span>
+<span class="nc" id="L132">			response.setErrorCode(exception.getkycErrors().getErrorCode());</span>
+<span class="nc" id="L133">			response.setErrorDescription(exception.getDescription());</span>
+<span class="nc" id="L134">		} catch (Exception e) {</span>
+<span class="nc" id="L135">			LOG.error(&quot; Error in GBGroupPort : checkKYCdetails()&quot; , e);</span>
+<span class="nc" id="L136">			response.setBandText(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L137">			response.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L138">			response.setOverallScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L139">			response.setContactSFId(request.getContactSFId());</span>
+<span class="nc" id="L140">			response.setId(request.getId());</span>
+<span class="nc" id="L141">			response.setProviderName(Constants.GBGROUP_PROVIDER);</span>
+<span class="nc" id="L142">			response.setProviderMethod(Constants.GBGROUP_PROVIDER_METHOD);</span>
+<span class="nc" id="L143">			response.setErrorCode(KYCErrors.ERROR_WHILE_SENDING_REQUEST_TO_GBGROUP_KYC_PROVIDER.getErrorCode());</span>
+<span class="nc" id="L144">			response.setErrorDescription(KYCErrors.ERROR_WHILE_SENDING_REQUEST_TO_GBGROUP_KYC_PROVIDER.getErrorDescription()+e.getMessage());</span>
+<span class="nc" id="L145">		}</span>
+<span class="nc bnc" id="L146" title="All 4 branches missed.">		if(property.getAlwaysPass()!=null&amp;&amp;property.getAlwaysPass()){</span>
+<span class="nc" id="L147">			response.setBandText(Constants.PASS);</span>
+<span class="nc" id="L148">			response.setStatus(Constants.PASS);</span>
+		}
+		/**
+		 * Code added for AT-1504 by Vishal J
+		 * 
+		 * Description: Provider is going to send 2 new bandtext separately for address verification and identity verification 
+		 * (POA Needed or POI Needed) so depending upon that we will set new response description from Compliance towards SF.
+		 * */
+<span class="nc bnc" id="L156" title="All 4 branches missed.">		if(property.getPoaRequired()!=null&amp;&amp;property.getPoaRequired()){</span>
+<span class="nc" id="L157">			response.setBandText(&quot;POA NEEDED&quot;);</span>
+<span class="nc" id="L158">			response.setStatus(Constants.FAIL);</span>
+		}
+<span class="nc bnc" id="L160" title="All 4 branches missed.">		if(property.getPoiRequired()!=null&amp;&amp;property.getPoiRequired()){</span>
+<span class="nc" id="L161">			response.setBandText(&quot;POI NEEDED&quot;);</span>
+<span class="nc" id="L162">			response.setStatus(Constants.FAIL);</span>
+		}
+		
+<span class="nc" id="L165">		return response;</span>
+	}
+
+	/**
+	 * Gets the security header.
+	 *
+	 * @param property the property
+	 * @return the security header
+	 * @throws KYCException the KYC exception
+	 */
+	private SOAPHeaderElement getSecurityHeader(KYCProviderProperty property) throws KYCException {
+<span class="nc" id="L176">		SOAPHeaderElement headerGbGroup = null;</span>
+<span class="nc" id="L177">		String id3GlobalQname = null;</span>
+<span class="nc" id="L178">		String userName = null;</span>
+<span class="nc" id="L179">		String passWord = null;</span>
+		try {
+<span class="nc" id="L181">			id3GlobalQname = property.getQname();</span>
+<span class="nc" id="L182">			userName = property.getUserName();</span>
+<span class="nc" id="L183">			passWord = property.getPassWord();</span>
+<span class="nc" id="L184">			QName headerName = new QName(id3GlobalQname, &quot;Security&quot;);</span>
+<span class="nc" id="L185">			headerGbGroup = new SOAPHeaderElement(headerName);</span>
+<span class="nc" id="L186">			headerGbGroup.setActor(null);</span>
+<span class="nc" id="L187">			headerGbGroup.setPrefix(&quot;wsse&quot;);</span>
+<span class="nc" id="L188">			headerGbGroup.setMustUnderstand(true);</span>
+			SOAPElement utElemGbGroup;
+<span class="nc" id="L190">			utElemGbGroup = headerGbGroup.addChildElement(&quot;UsernameToken&quot;);</span>
+<span class="nc" id="L191">			SOAPElement userNameElemGbGroup = utElemGbGroup.addChildElement(&quot;Username&quot;);</span>
+<span class="nc" id="L192">			userNameElemGbGroup.setValue(userName);</span>
+<span class="nc" id="L193">			SOAPElement passwordElemGbGroup = utElemGbGroup.addChildElement(&quot;Password&quot;);</span>
+<span class="nc" id="L194">			passwordElemGbGroup.setValue(passWord);</span>
+<span class="nc" id="L195">		} catch (Exception exception) {</span>
+<span class="nc" id="L196">			throw new KYCException(KYCErrors.ERROR_GENERATING_SECURITY_HEADER, exception);</span>
+<span class="nc" id="L197">		}</span>
+<span class="nc" id="L198">		return headerGbGroup;</span>
+	}
+
+
+	
+	/**
+	 * Log debug.
+	 *
+	 * @param exception the exception
+	 */
+	private void logDebug(Throwable exception) {
+<span class="nc" id="L209">		LOG.debug(&quot;Error in class GBGroup Port :&quot;, exception);</span>
+<span class="nc" id="L210">	}</span>
+	
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

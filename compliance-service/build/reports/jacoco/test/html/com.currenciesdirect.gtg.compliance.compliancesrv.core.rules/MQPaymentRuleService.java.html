@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MQPaymentRuleService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.rules</a> &gt; <span class="el_source">MQPaymentRuleService.java</span></div><h1>MQPaymentRuleService.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.rules;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringFundsProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentInResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsInRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.TransactionMonitoringMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+
+
+/**
+ * The Class MQPaymentRuleService.
+ */
+<span class="nc" id="L31">public class MQPaymentRuleService {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L34">	private static final Logger LOG = LoggerFactory.getLogger(MQPaymentRuleService.class);</span>
+	
+	/** The Constant OLD_PAYMENT_STATUS. */
+	private static final String OLD_PAYMENT_STATUS = &quot;oldPaymentStatus&quot;;
+	
+	
+	/**
+	 * Process.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message) {
+		
+<span class="nc" id="L49">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L50">		TransactionMonitoringMQRequest transactionMonitoringMQRequest = (TransactionMonitoringMQRequest) messageExchange</span>
+<span class="nc" id="L51">				.getRequest();</span>
+		try {
+<span class="nc" id="L53">		MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L54">				.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND);</span>
+		
+		
+<span class="nc bnc" id="L57" title="All 2 branches missed.">		if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_in&quot;)</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">				|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_in_update&quot;)) {</span>
+<span class="nc" id="L59">			paymentInCreateResponse(exchange);</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">		} else if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_out&quot;)</span>
+<span class="nc bnc" id="L61" title="All 2 branches missed.">				|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_out_update&quot;)) {</span>
+<span class="nc" id="L62">			paymentOutCreateResponse(exchange);</span>
+		}
+<span class="nc" id="L64">		}catch (Exception e) {</span>
+<span class="nc" id="L65">			LOG.error(&quot;Error while sting services response in MQPaymentRuleService :: process() ::  &quot;, e);</span>
+<span class="nc" id="L66">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L67">		}</span>
+		
+<span class="nc" id="L69">		return message;</span>
+	}
+	
+	/**
+	 * Payment in create response.
+	 *
+	 * @param exchange the exchange
+	 */
+	private void paymentInCreateResponse(MessageExchange exchange) {
+<span class="nc" id="L78">		TransactionMonitoringMQServiceResponse mqResponse = (TransactionMonitoringMQServiceResponse) exchange</span>
+<span class="nc" id="L79">				.getResponse();</span>
+		
+<span class="nc" id="L81">		TransactionMonitoringMQServiceRequest mqRequest = (TransactionMonitoringMQServiceRequest) exchange</span>
+<span class="nc" id="L82">				.getRequest();</span>
+<span class="nc" id="L83">		List&lt;FundsInReasonCode&gt; responseReasons = new ArrayList&lt;&gt;(10);</span>
+		
+		
+		
+		try {
+<span class="nc" id="L88">			TransactionMonitoringPaymentsInRequest request = mqRequest.getTransactionMonitoringPaymentsInRequest();</span>
+<span class="nc" id="L89">			TransactionMonitoringPaymentInResponse response = mqResponse.getTransactionMonitoringPaymentInResponse();</span>
+
+			
+<span class="nc bnc" id="L92" title="All 2 branches missed.">			if (FundsInComplianceStatus.HOLD.name().equals(request.getAdditionalAttribute(OLD_PAYMENT_STATUS))) {</span>
+<span class="nc" id="L93">				response.setPaymentStatus(FundsInComplianceStatus.CLEAR.name());</span>
+<span class="nc" id="L94">				response.setResponseCode(FundsInReasonCode.PASS.getReasonCode());</span>
+<span class="nc" id="L95">				response.setResponseDescription(FundsInReasonCode.PASS.getReasonDescription());</span>
+
+<span class="nc bnc" id="L97" title="All 2 branches missed.">				if (!ServiceStatus.PASS.name().equals(request.getSanctionContactStatus())</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionContactStatus())</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(request.getSanctionContactStatus())) {</span>
+<span class="nc" id="L100">					responseReasons.add(FundsInReasonCode.SANCTIONED);</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">				} else if (ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionContactStatus())) {</span>
+<span class="nc" id="L102">					responseReasons.add(FundsInReasonCode.SANCTION_SERVICE_FAIL);</span>
+				}
+
+<span class="nc bnc" id="L105" title="All 2 branches missed.">				if (!ServiceStatus.PASS.name().equals(response.getStatus())</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(response.getStatus())</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(response.getStatus())</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.NOT_PERFORMED.name().equals(response.getStatus())) {</span>
+<span class="nc" id="L109">					responseReasons.add(FundsInReasonCode.TRANSACTION_MONITORING_CHECK_FAIL);</span>
+<span class="nc bnc" id="L110" title="All 2 branches missed.">				} else if (ServiceStatus.SERVICE_FAILURE.name().equals(response.getStatus())) {</span>
+<span class="nc" id="L111">					responseReasons.add(FundsInReasonCode.TRANSACTION_MONITORING_SERVICE_FAIL);</span>
+				}
+
+<span class="nc" id="L114">				checkResponseReasonSize(response, responseReasons);</span>
+<span class="nc" id="L115">				request.setUpdateStatus(response.getPaymentStatus());</span>
+			}else {
+<span class="nc" id="L117">				response.setPaymentStatus(request.getAdditionalAttribute(OLD_PAYMENT_STATUS).toString());</span>
+			}
+<span class="nc" id="L119">		} catch (Exception e) {</span>
+<span class="nc" id="L120">			LOG.error(&quot;Error while sting services response in MQPaymentRuleService :: paymentInCreateResponse() ::  &quot;, e);</span>
+<span class="nc" id="L121">		}</span>
+		
+<span class="nc" id="L123">	}</span>
+		
+	/**
+	 * Check response reason size.
+	 *
+	 * @param response the response
+	 * @param responseReasons the response reasons
+	 */
+	private void checkResponseReasonSize(TransactionMonitoringPaymentInResponse response,
+			List&lt;FundsInReasonCode&gt; responseReasons) {
+<span class="nc bnc" id="L133" title="All 2 branches missed.">		if (!responseReasons.isEmpty()) {</span>
+<span class="nc" id="L134">			StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">			for (FundsInReasonCode field : responseReasons) {</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">				if (!(sb.toString().contains(field.getReasonDescription()))) {</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">					if (sb.length() &gt; 0) {</span>
+<span class="nc" id="L138">						sb.append(&quot;, &quot;);</span>
+					}
+<span class="nc" id="L140">					sb.append(field.getReasonDescription());</span>
+				}
+<span class="nc" id="L142">				response.setResponseDescription(sb.toString());</span>
+<span class="nc" id="L143">				response.setPaymentStatus(FundsInComplianceStatus.HOLD.name());</span>
+<span class="nc" id="L144">			}</span>
+
+		} 
+<span class="nc" id="L147">	}</span>
+	
+	/**
+	 * Payment out create response.
+	 *
+	 * @param exchange the exchange
+	 */
+	private void paymentOutCreateResponse(MessageExchange exchange) {
+<span class="nc" id="L155">		TransactionMonitoringMQServiceResponse mqResponse = (TransactionMonitoringMQServiceResponse) exchange</span>
+<span class="nc" id="L156">				.getResponse();</span>
+		
+<span class="nc" id="L158">		TransactionMonitoringMQServiceRequest mqRequest = (TransactionMonitoringMQServiceRequest) exchange</span>
+<span class="nc" id="L159">				.getRequest();</span>
+<span class="nc" id="L160">		List&lt;FundsOutReasonCode&gt; responseReasons = new ArrayList&lt;&gt;();</span>
+		
+		
+		
+		try {
+<span class="nc" id="L165">			TransactionMonitoringPaymentsOutRequest request = mqRequest.getTransactionMonitoringPaymentsOutRequest();</span>
+<span class="nc" id="L166">			TransactionMonitoringPaymentOutResponse response = mqResponse.getTransactionMonitoringPaymentOutResponse();</span>
+
+			
+<span class="nc bnc" id="L169" title="All 2 branches missed.">			if (FundsOutComplianceStatus.HOLD.name().equals(request.getAdditionalAttribute(OLD_PAYMENT_STATUS))) {</span>
+
+<span class="nc" id="L171">				response.setPaymentStatus(FundsOutComplianceStatus.CLEAR.name());</span>
+<span class="nc" id="L172">				response.setResponseCode(FundsOutReasonCode.PASS.getFundsOutReasonCode());</span>
+<span class="nc" id="L173">				response.setResponseDescription(FundsOutReasonCode.PASS.getFundsOutReasonDescription());</span>
+
+<span class="nc" id="L175">				setSanctionStatusResponse(responseReasons, request);</span>
+
+<span class="nc bnc" id="L177" title="All 2 branches missed.">				if (!ServiceStatus.PASS.name().equals(response.getStatus())</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(response.getStatus())</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(response.getStatus())</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.NOT_PERFORMED.name().equals(response.getStatus())) {</span>
+<span class="nc" id="L181">					responseReasons.add(FundsOutReasonCode.TRANSACTION_MONITORING_CHECK_FAIL);</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">				} else if (ServiceStatus.SERVICE_FAILURE.name().equals(response.getStatus())) {</span>
+<span class="nc" id="L183">					responseReasons.add(FundsOutReasonCode.TRANSACTION_MONITORING_SERVICE_FAIL);</span>
+				}
+
+<span class="nc" id="L186">				checkResponseReasonSize(response, responseReasons);</span>
+<span class="nc" id="L187">				request.setUpdateStatus(response.getPaymentStatus());</span>
+			}else {
+<span class="nc" id="L189">				response.setPaymentStatus(request.getAdditionalAttribute(OLD_PAYMENT_STATUS).toString());</span>
+			}
+			
+<span class="nc" id="L192">		} catch (Exception e) {</span>
+<span class="nc" id="L193">			LOG.error(&quot;Error while sting services response in MQPaymentRuleService :: paymentOutCreateResponse() ::  &quot;, e);</span>
+<span class="nc" id="L194">		}</span>
+
+<span class="nc" id="L196">	}</span>
+
+	/**
+	 * Sets the sanction status response.
+	 *
+	 * @param responseReasons the response reasons
+	 * @param request the request
+	 */
+	private void setSanctionStatusResponse(List&lt;FundsOutReasonCode&gt; responseReasons,
+			TransactionMonitoringPaymentsOutRequest request) {
+<span class="nc bnc" id="L206" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(request.getSanctionContactStatus())</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionContactStatus())</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">				&amp;&amp; !ServiceStatus.NOT_REQUIRED.name().equals(request.getSanctionContactStatus())) {</span>
+<span class="nc" id="L209">			responseReasons.add(FundsOutReasonCode.CONTACT_SANCTIONED);</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">		} else if (ServiceStatus.NOT_REQUIRED.name().equals(request.getSanctionContactStatus())) {</span>
+<span class="nc" id="L211">			responseReasons.add(FundsOutReasonCode.INACTIVE_CUSTOMER);</span>
+		}
+
+<span class="nc bnc" id="L214" title="All 2 branches missed.">		if (!ServiceStatus.NOT_REQUIRED.name().equals(request.getSanctionBankStatus())) {</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">			if (!ServiceStatus.PASS.name().equals(request.getSanctionBankStatus())</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionBankStatus())) {</span>
+<span class="nc" id="L217">				responseReasons.add(FundsOutReasonCode.BANK_SANCTIONED);</span>
+			}
+
+<span class="nc bnc" id="L220" title="All 2 branches missed.">			if (!ServiceStatus.PASS.name().equals(request.getSanctionBeneficiaryStatus())</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionBeneficiaryStatus())) {</span>
+<span class="nc" id="L222">				responseReasons.add(FundsOutReasonCode.BENEFICIARY_SANCTIONED);</span>
+			}
+		}
+		
+<span class="nc bnc" id="L226" title="All 2 branches missed.">		if(ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionContactStatus())</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">				|| ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionBankStatus())</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">				|| ServiceStatus.SERVICE_FAILURE.name().equals(request.getSanctionBeneficiaryStatus())) {</span>
+<span class="nc" id="L229">			responseReasons.add(FundsOutReasonCode.SANCTION_SERVICE_FAIL);</span>
+		}
+<span class="nc" id="L231">	}</span>
+	
+	/**
+	 * Check response reason size.
+	 *
+	 * @param response the response
+	 * @param responseReasons the response reasons
+	 */
+	private void checkResponseReasonSize(TransactionMonitoringPaymentOutResponse response,
+			List&lt;FundsOutReasonCode&gt; responseReasons) {
+<span class="nc bnc" id="L241" title="All 2 branches missed.">		if (!responseReasons.isEmpty()) {</span>
+<span class="nc" id="L242">			StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">			for (FundsOutReasonCode field : responseReasons) {</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">				if (!(sb.toString().contains(field.getFundsOutReasonDescription()))) {</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">					if (sb.length() &gt; 0) {</span>
+<span class="nc" id="L246">						sb.append(&quot;, &quot;);</span>
+					}
+<span class="nc" id="L248">					sb.append(field.getFundsOutReasonDescription());</span>
+				}
+<span class="nc" id="L250">				response.setResponseDescription(sb.toString());</span>
+<span class="nc" id="L251">				response.setPaymentStatus(FundsInComplianceStatus.HOLD.name());</span>
+<span class="nc" id="L252">			}</span>
+
+		} 
+<span class="nc" id="L255">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,137 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:p="http://www.springframework.org/schema/p"
+  xmlns:int="http://www.springframework.org/schema/integration"
+  xmlns:int-http="http://www.springframework.org/schema/integration/http"
+  xmlns:util="http://www.springframework.org/schema/util"
+  xmlns:task="http://www.springframework.org/schema/task"
+  xmlns:context="http://www.springframework.org/schema/context"
+  xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+  <context:component-scan
+    base-package="com.currenciesdirect.gtg.compliance.compliancesrv"/>
+  <int:channel id="CARD.STATUS_SAVE.CHANNEL"/>
+  <int:channel id="CARD.CARD_STATUS_UPDATE.in.channel"/>
+  <int:channel id="CARD.STATUS_UPDATE_RESPONSE.CHANNEL"/>
+  <int:channel id="CARD.ERROR.CHANNEL"/>
+  <int:channel id="REGISTRATION.ERROR.CHANNEL"/>
+  <int:channel id="CARD.STATUS_UPDATE_TRANSFORM.CHANNEL"/> 
+
+	  <int:chain
+	    id="CARD.STATUS_UPDATE_INIT.CHAIN.ID"
+	    input-channel="CARD.CARD_STATUS_UPDATE.in.channel">
+		    <int:header-enricher id="CARD.STATUS_UPDATE_HEADER_ENRICHER.ID">
+			      <int:header
+			        name="correlationID"
+			        expression="T(java.util.UUID).randomUUID()"/>
+			      <int:header
+			        name="username"
+			        expression="headers['username']"/>
+		    </int:header-enricher>
+		    <int:service-activator ref="cardStatusUpdateMessageValidator" id="CARD.STATUS_UPDATE_VALIDATOR.ID"/>
+		    <int:router
+		      id="CARD.STATUS_UPDATE_VALIDATION.ROUTER.ID"
+		      expression="payload.getValidationResult()">
+			      <int:mapping
+			        value="FAIL"
+			        channel="CARD.STATUS_UPDATE_RESPONSE.CHANNEL"/>
+			      <int:mapping
+			        value="SUCCESS"
+			        channel="CARD.STATUS_SAVE.CHANNEL"/>
+		    </int:router>
+	  </int:chain>
+  
+	  <int:chain id="CARD.STATUS_SAVE.CHAIN.ID" input-channel="CARD.STATUS_SAVE.CHANNEL"
+	    output-channel="CARD.STATUS_UPDATE.CHANNEL">
+	    	 <int:service-activator
+		      	id="CARD.STATUS_UPDATE_ENRICHER.ID"
+		      	ref="cardStatusUpdateDataEnricher"
+		      	method="process"/>
+		      
+		    <int:service-activator
+				ref="cardDBServiceImpl"
+				method="saveNewCard" />  
+		
+		   <int:service-activator
+		     	ref="eventDBServiceImpl"
+		     	method="createEvent" />
+		     	
+		     	 <int:filter discard-channel="CARD.ERROR.CHANNEL" expression="!payload.isFailed()"/>
+	   </int:chain>
+
+ 	 <int:chain id="CARD.STATUS_UPDATE.CHAIN.ID" input-channel="CARD.STATUS_UPDATE.CHANNEL"
+	    output-channel="CARD.STATUS_UPDATE_TRANSFORM.CHANNEL">
+	    
+		    <int:transformer
+		     	 ref="transactionMonitoringTransformer" 
+		     	 method="transformRequest" />
+		      
+		    <int:service-activator
+		      id="REG.TRANSACTIONMONITORING" 
+		      method="sendRequest">
+			      <bean
+			        class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+			        p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_SERVICE')}"
+			        p:method="POST"
+			        p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+			        p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupRequest"
+			        p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse" />
+		    </int:service-activator>
+		
+		    <int:transformer
+		      	ref="transactionMonitoringTransformer"
+		        method="transformResponse" />
+		
+		   <int:service-activator 
+		   		ref="eventDBServiceImpl"
+		      	method="createTransactionMonitoringEventSerivceLog" />
+		
+		    <int:filter discard-channel="CARD.ERROR.CHANNEL" expression="!payload.isFailed()"/>
+	</int:chain>
+	
+	<int:chain id="CARD.STATUS_UPDATE_TRANSFORM.CHAIN.ID" input-channel="CARD.STATUS_UPDATE_TRANSFORM.CHANNEL"
+	    output-channel="CARD.STATUS_UPDATE_RESPONSE.CHANNEL">
+	    <int:transformer
+	      ref="cardStatusUpdateTransformer" 
+	      method="transformResponse" />
+	    <int:filter discard-channel="CARD.ERROR.CHANNEL" expression="!payload.isFailed()" />
+  	</int:chain>
+
+  <int:chain input-channel="CARD.STATUS_UPDATE_RESPONSE.CHANNEL" output-channel="nullChannel">
+    	<int:service-activator 
+    		id="CARD.STATUS_UPDATE_RESPONSE_BUILDER.ID" 
+    		ref="cardResponseBuilder"
+      		method="process"/>
+    	<int:filter discard-channel="CARD.ERROR.CHANNEL" expression="!payload.isFailed()"/>
+  </int:chain>
+
+  <int:chain id="CARD.STATUS_UPDATE_ERROR.CHAIN.ID" input-channel="CARD.ERROR.CHANNEL"
+	    output-channel="nullChannel">
+	    <int:service-activator 
+	    	id="CARD.STATUS_UPDATE_RESEND_ERROR.HANDLER.ID"
+	    	ref="cardErrorhandler"
+	      	method="logError" >
+	    </int:service-activator>
+  </int:chain>
+
+  <bean id="cardStatusUpdateMessageValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.card.update.MessageValidator"/>
+  <bean id="cardStatusUpdateDataEnricher"
+    class="com.currenciesdirect.gtg.compliance.compliancesrv.core.card.update.DataEnricher" />
+  <bean id="cardStatusUpdateTransformer" 
+  	class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.card.update.OrderCardStatusUpdateTransformer"/>
+  <bean id="cardDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.CardDBServiceImpl" />
+  <bean id="cardErrorhandler"
+    class="com.currenciesdirect.gtg.compliance.compliancesrv.core.card.OrderCardErrorHandler"/>
+</beans>

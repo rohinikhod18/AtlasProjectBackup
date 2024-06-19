@@ -1,0 +1,1503 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationRulesService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.rules</a> &gt; <span class="el_source">RegistrationRulesService.java</span></div><h1>RegistrationRulesService.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.rules;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse.DECISION;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.ContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse;
+import com.currenciesdirect.gtg.compliance.commons.enums.LegalEntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ContactComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.PropertyHandler;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class RegistrationRulesService.
+ *
+ * @author bnt
+ */
+<span class="fc" id="L49">public class RegistrationRulesService {</span>
+
+	/** The Constant LOG. */
+<span class="fc" id="L52">	private static final Logger LOG = LoggerFactory.getLogger(RegistrationRulesService.class);</span>
+
+	/** The Constant ACCOUNT. */
+	private static final String ACCOUNT = &quot;oldAccount&quot;;
+
+	/*
+	 * create rule object from message fire the rule update the results in event
+	 * and eventServiceLog summary &amp; status in future drools rule engine will be
+	 * implemented Purpose of method - Business: Get MessageContext from
+	 * transformer and validate each service check status and accordingly set
+	 * response reasoneCode and reasonDescription Implementation : 1.Get
+	 * messageContext from transformer and separate messageContext object
+	 * according to each service 2.First Priority goes to Internal_Rule_Service
+	 * to check information is blacklisted or not. 3.If customer information is
+	 * blacklisted then no further check is performed. 4.If customer information
+	 * is not blacklisted then Fraugster,Sanction,KYC checks are performed. 5.If
+	 * any check is fail except Fraugster then account status is set to Inactive
+	 * 6.If any contact status of that account is active then account status is
+	 * active if and only if contact in that account is not blacklisted
+	 */
+	/**
+	 * Process.
+	 *
+	 * @param signUpMsg
+	 *            the sign up msg
+	 * @return the message
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; signUpMsg) {
+<span class="fc" id="L81">		RegistrationResponse signUpResponse = new RegistrationResponse();</span>
+<span class="fc" id="L82">		Boolean kycHookStatus = Boolean.parseBoolean(System.getProperty(&quot;kycHookApplied&quot;));//AT-5472</span>
+		try {
+<span class="fc" id="L84">			RegistrationServiceRequest signUpRequest = (RegistrationServiceRequest) signUpMsg.getPayload()</span>
+<span class="fc" id="L85">					.getGatewayMessageExchange().getRequest();</span>
+<span class="fc" id="L86">			signUpResponse = (RegistrationResponse) signUpMsg.getPayload().getGatewayMessageExchange().getResponse();</span>
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">			if (signUpResponse == null) {</span>
+<span class="nc" id="L88">				signUpResponse = new RegistrationResponse();</span>
+<span class="nc" id="L89">				signUpMsg.getPayload().getGatewayMessageExchange().setResponse(signUpResponse);</span>
+			}
+<span class="fc" id="L91">			signUpResponse.setOsrID(signUpRequest.getOsrId());</span>
+<span class="fc" id="L92">			signUpResponse.setOrgCode(signUpRequest.getOrgCode());</span>
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">			if (Constants.CFX.equalsIgnoreCase(signUpRequest.getAccount().getCustType())) {</span>
+<span class="nc" id="L94">				performCfxRules(signUpMsg);</span>
+			} else {
+<span class="fc" id="L96">				performPFXRules(signUpMsg, signUpResponse, signUpRequest);</span>
+				//AT-5472
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">				if (Boolean.TRUE.equals(kycHookStatus)) {</span>
+<span class="nc" id="L99">					setContactstatus(signUpResponse, signUpRequest);</span>
+				}
+			}
+<span class="fc" id="L102">			updateRegistrationDates(signUpResponse.getAccount());</span>
+<span class="nc" id="L103">		} catch (Exception e) {</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">			if (signUpResponse == null) {</span>
+<span class="nc" id="L105">				signUpResponse = new RegistrationResponse();</span>
+			}
+<span class="nc" id="L107">			signUpResponse.setOsrID(signUpMsg.getHeaders().get(MessageContextHeaders.OSR_ID).toString());</span>
+<span class="nc" id="L108">			signUpResponse.setErrorCode(ComplianceReasonCode.SYSTEM_FAILURE.getReasonCode());</span>
+<span class="nc" id="L109">			signUpResponse.setErrorDescription(ComplianceReasonCode.SYSTEM_FAILURE.getReasonDescription());</span>
+<span class="nc" id="L110">			signUpResponse.setDecision(DECISION.FAIL);</span>
+<span class="nc" id="L111">			LOG.error(&quot;Error in Registration Rule Service&quot;, e);</span>
+<span class="fc" id="L112">		}</span>
+<span class="fc" id="L113">		return signUpMsg;</span>
+	}
+
+	/**
+	 * Perform PFX rules.
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param response
+	 *            the response
+	 * @param request
+	 *            the request
+	 */
+	private void performPFXRules(Message&lt;MessageContext&gt; msg, RegistrationResponse response,
+			RegistrationServiceRequest request) {
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">		if (OperationEnum.ADD_CONTACT==msg.getPayload().getGatewayMessageExchange().getOperation()) {</span>
+<span class="nc" id="L129">			performPFXAddContactRules(msg, response, request);</span>
+		} else {
+<span class="fc" id="L131">			performSignUpPFXRules(msg, response, request);</span>
+		}
+<span class="fc" id="L133">		setPFXContactSTPFlagStatus(response);</span>
+<span class="fc" id="L134">	}</span>
+
+	// set contact STPFlag status
+	/**
+	 * Sets the PFX contact STP flag status.
+	 *
+	 * @param response
+	 *            the new PFX contact STP flag status
+	 */
+	private void setPFXContactSTPFlagStatus(RegistrationResponse response) {
+<span class="fc" id="L144">		ComplianceAccount acc = response.getAccount();</span>
+<span class="fc" id="L145">		List&lt;ComplianceContact&gt; signUpContact = acc.getContacts();</span>
+<span class="fc" id="L146">		setContactStpFlag(signUpContact);</span>
+<span class="fc" id="L147">		setPFXAccountSTPFlagStatus(response);</span>
+<span class="fc" id="L148">	}</span>
+
+	// This will set Account STPFlag. if all contacts are active then Account
+	// STPFlag is set true
+	/**
+	 * Sets the PFX account STP flag status.
+	 *
+	 * @param response
+	 *            the new PFX account STP flag status
+	 */
+	// AT-1679 - sneha zagade
+	private void setPFXAccountSTPFlagStatus(RegistrationResponse response) {
+<span class="fc" id="L160">		ComplianceAccount acc = response.getAccount();</span>
+<span class="fc" id="L161">		Boolean accountSTPStatus= Boolean.FALSE;</span>
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">		if (acc.getAcs().name().equals(ContactComplianceStatus.ACTIVE.name())) {</span>
+<span class="nc" id="L163">			accountSTPStatus = Boolean.TRUE;</span>
+		}
+<span class="fc" id="L165">		acc.setSTPFlag(accountSTPStatus);</span>
+<span class="fc" id="L166">	}</span>
+
+	/**
+	 * Perform sign up PFX rules.
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param response
+	 *            the response
+	 * @param request
+	 *            the request
+	 */
+	private void performSignUpPFXRules(Message&lt;MessageContext&gt; msg, RegistrationResponse response,
+			RegistrationServiceRequest request) {
+<span class="fc" id="L180">		ComplianceAccount acc = new ComplianceAccount();</span>
+<span class="fc" id="L181">		performCommonPFXRules(msg, response, request, acc);</span>
+<span class="fc" id="L182">		acc.setPaymentinWatchlistStatus((String) request.getAdditionalAttribute(Constants.PAYMENTIN_WATCHLIST_STATUS));</span>
+<span class="fc" id="L183">		acc.setPaymentoutWatchlistStatus(</span>
+<span class="fc" id="L184">				(String) request.getAdditionalAttribute(Constants.PAYMENTOUT_WATCHLIST_STATUS));</span>
+<span class="fc" id="L185">		setPFXSignUpServiceStatuses(acc, msg);</span>
+<span class="fc" id="L186">		response.setAccount(acc);</span>
+<span class="fc" id="L187">	}</span>
+
+	/**
+	 * Perform PFX add contact rules.
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param response
+	 *            the response
+	 * @param request
+	 *            the request
+	 */
+	private void performPFXAddContactRules(Message&lt;MessageContext&gt; msg, RegistrationResponse response,
+			RegistrationServiceRequest request) {
+<span class="nc" id="L201">		ComplianceAccount acc = new ComplianceAccount();</span>
+
+<span class="nc" id="L203">		Boolean blackListedcontact = performCommonPFXRules(msg, response, request, acc);</span>
+<span class="nc" id="L204">		checkIsOtherContactBlacklistedForAddCOntact(request, acc, blackListedcontact);</span>
+<span class="nc" id="L205">		setPFXAddContactServiceStatuses(acc, msg);</span>
+<span class="nc" id="L206">		response.setAccount(acc);</span>
+		// Condition For AddContact
+<span class="nc" id="L208">		updateAccoutStatusForAddContact(request, response, blackListedcontact);</span>
+
+		// set STPFlag for Addcontact
+<span class="nc" id="L211">		ComplianceAccount account = response.getAccount();</span>
+<span class="nc" id="L212">		List&lt;ComplianceContact&gt; signUpContact = account.getContacts();</span>
+<span class="nc" id="L213">		setContactStpFlag(signUpContact);</span>
+<span class="nc" id="L214">	}</span>
+
+	/**
+	 * Check is other contact blacklisted for add C ontact.
+	 *
+	 * @param request
+	 *            the request
+	 * @param acc
+	 *            the acc
+	 * @param blackListedcontact
+	 *            the black listedcontact
+	 * @return the boolean
+	 */
+	private Boolean checkIsOtherContactBlacklistedForAddCOntact(RegistrationServiceRequest request,
+			ComplianceAccount acc, Boolean blackListedcontact) {
+<span class="nc" id="L229">		String blackListedContacts = request.getAdditionalAttribute(&quot;listOfBlackListedContact&quot;).toString();</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">		if (Boolean.FALSE.equals(blackListedcontact)) {</span>
+<span class="nc" id="L231">			getAcountStatusForBlacklist(acc, blackListedContacts);</span>
+		}
+<span class="nc" id="L233">		return blackListedcontact;</span>
+	}
+
+	/**
+	 * Perform common PFX rules.
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param response
+	 *            the response
+	 * @param request
+	 *            the request
+	 * @param acc
+	 *            the acc
+	 * @return true, if successful
+	 */
+	private boolean performCommonPFXRules(Message&lt;MessageContext&gt; msg, RegistrationResponse response,
+			RegistrationServiceRequest request, ComplianceAccount acc) {
+		boolean blackListedcontact;
+<span class="fc" id="L252">		Boolean isContactModifiedFlag = Boolean.FALSE;</span>
+
+<span class="fc" id="L254">		Map&lt;Integer, ComplianceContact&gt; responseContacts = createDefaultResponse(request);</span>
+<span class="fc" id="L255">		InternalServiceResponse internalServiceResponse = (InternalServiceResponse) msg.getPayload()</span>
+<span class="fc" id="L256">				.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE).getResponse();</span>
+<span class="fc" id="L257">		MessageExchange fraugsterExchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="fc" id="L258">		MessageExchange sanctionExchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="fc" id="L259">		MessageExchange kycExchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.KYC_SERVICE);</span>
+
+<span class="fc" id="L261">		FraugsterSignupResponse fResponse = null;</span>
+<span class="pc bpc" id="L262" title="1 of 2 branches missed.">		if (fraugsterExchange != null)</span>
+<span class="fc" id="L263">			fResponse = (FraugsterSignupResponse) fraugsterExchange.getResponse();</span>
+
+<span class="fc" id="L265">		SanctionResponse sanctionResponse = null;</span>
+<span class="pc bpc" id="L266" title="1 of 2 branches missed.">		if (sanctionExchange != null)</span>
+<span class="fc" id="L267">			sanctionResponse = (SanctionResponse) sanctionExchange.getResponse();</span>
+
+<span class="fc" id="L269">		KYCProviderResponse kycProviderResponse = null;</span>
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">		if (kycExchange != null)</span>
+<span class="fc" id="L271">			kycProviderResponse = (KYCProviderResponse) kycExchange.getResponse();</span>
+
+<span class="fc" id="L273">		processServiceResponses(responseContacts, internalServiceResponse, fResponse, sanctionResponse,</span>
+<span class="fc" id="L274">				kycProviderResponse,request.getAccount().getCustLegalEntity());</span>
+
+<span class="fc" id="L276">		acc.setVersion(request.getAccount().getVersion());</span>
+<span class="fc" id="L277">		acc.setId(request.getAccount().getId());</span>
+<span class="fc" id="L278">		acc.setAccountSFID(request.getAccount().getAccSFID());</span>
+<span class="fc" id="L279">		acc.setTradeAccountID(request.getAccount().getTradeAccountID());</span>
+<span class="fc" id="L280">		acc.setAcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="fc" id="L281">		blackListedcontact = processContactsStatus(acc, responseContacts);</span>
+<span class="fc" id="L282">		Boolean isContactModified = (Boolean) request.getAdditionalAttribute(&quot;isContactModified&quot;);</span>
+<span class="pc bpc" id="L283" title="1 of 2 branches missed.">		isContactModified = isContactModified == null ? isContactModifiedFlag : isContactModified;</span>
+<span class="pc bpc" id="L284" title="3 of 4 branches missed.">		if (Boolean.TRUE.equals(isContactModified) &amp;&amp; ContactComplianceStatus.INACTIVE==acc.getAcs()) {</span>
+<span class="nc" id="L285">			acc.setArc(acc.getContacts().get(0).getCrc());</span>
+		}
+<span class="pc bpc" id="L287" title="1 of 2 branches missed.">		if (blackListedcontact) {</span>
+<span class="nc" id="L288">			acc.setAcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L289">			acc.setArc(ComplianceReasonCode.BLACKLISTED);</span>
+		}
+<span class="fc" id="L291">		response.setAccount(acc);</span>
+<span class="fc" id="L292">		return blackListedcontact;</span>
+	}
+
+	// Make sure that response code and description are not NULL for any
+	// contact.
+	// When only fraugster fails or contact is on any watchlist &amp;&amp; contact is
+	// active,
+	/**
+	 * Process contacts status.
+	 *
+	 * @param acc
+	 *            the acc
+	 * @param responseContacts
+	 *            the response contacts
+	 * @return true, if successful
+	 */
+	// but shuld not change response code and description
+	private boolean processContactsStatus(ComplianceAccount acc, Map&lt;Integer, ComplianceContact&gt; responseContacts) {
+<span class="fc" id="L310">		boolean blackListedcontact = false;</span>
+<span class="fc bfc" id="L311" title="All 2 branches covered.">		for (ComplianceContact cResponse : responseContacts.values()) {</span>
+<span class="pc bpc" id="L312" title="3 of 4 branches missed.">			if (null == cResponse.getResponseCode() &amp;&amp; ContactComplianceStatus.ACTIVE == cResponse.getCcs()) {</span>
+<span class="nc" id="L313">				cResponse.setResponseCode(ComplianceReasonCode.PASS.getReasonCode());</span>
+<span class="nc" id="L314">				cResponse.setResponseDescription(ComplianceReasonCode.PASS.getReasonDescription());</span>
+			}
+
+<span class="pc bpc" id="L317" title="1 of 2 branches missed.">			if (ContactComplianceStatus.ACTIVE == cResponse.getCcs()) {</span>
+<span class="nc" id="L318">				acc.setAcs(ContactComplianceStatus.ACTIVE);</span>
+<span class="nc" id="L319">				acc.setArc(ComplianceReasonCode.PASS);</span>
+			}
+			/**
+			 * AT-336 : Added BLACKLISTCOUNTRY check to change Account Status to
+			 * Inactive when blacklisted country. : Abhijit G
+			 */
+<span class="pc bpc" id="L325" title="1 of 2 branches missed.">			if (ComplianceReasonCode.GLOBACLCHECK.getReasonCode().equals(cResponse.getResponseCode())</span>
+<span class="pc bpc" id="L326" title="1 of 2 branches missed.">					|| ComplianceReasonCode.BLACKLISTED.getReasonCode().equals(cResponse.getResponseCode())</span>
+<span class="pc bpc" id="L327" title="1 of 2 branches missed.">					|| ComplianceReasonCode.BLACKLISTCOUNTRY.getReasonCode().equals(cResponse.getResponseCode()))</span>
+<span class="nc" id="L328">				blackListedcontact = true;</span>
+<span class="fc" id="L329">			acc.addContact(cResponse);</span>
+<span class="fc" id="L330">		}</span>
+<span class="fc" id="L331">		return blackListedcontact;</span>
+	}
+
+	/**
+	 * Process service responses.
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param internalServiceResponse
+	 *            the internal service response
+	 * @param fResponse
+	 *            the f response
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @param kycProviderResponse
+	 *            the kyc provider response
+	 */
+	private void processServiceResponses(Map&lt;Integer, ComplianceContact&gt; responseContacts,
+			InternalServiceResponse internalServiceResponse, FraugsterSignupResponse fResponse,
+			SanctionResponse sanctionResponse, KYCProviderResponse kycProviderResponse, String legalEntity) {
+<span class="pc bpc" id="L351" title="1 of 2 branches missed.">		if(LegalEntityEnum.isEULegalEntity(legalEntity) </span>
+<span class="nc bnc" id="L352" title="All 2 branches missed.">				&amp;&amp; Boolean.TRUE.equals(getPFXBlackListStatus(responseContacts, internalServiceResponse))) {</span>
+<span class="nc" id="L353">			createResponseForEULegalEntityBlacklistedCustomers(responseContacts);</span>
+		}//AT-3398
+<span class="pc bpc" id="L355" title="1 of 2 branches missed.">		else if (Boolean.FALSE.equals(getPFXBlackListStatus(responseContacts, internalServiceResponse))</span>
+<span class="pc bpc" id="L356" title="1 of 2 branches missed.">				&amp;&amp; (Boolean.FALSE.equals(getPFXGlobalCheckStatus(responseContacts, internalServiceResponse)))</span>
+<span class="pc bpc" id="L357" title="1 of 2 branches missed.">				&amp;&amp; (Boolean.FALSE.equals(getPFXHighRiskCountryStatus(responseContacts, internalServiceResponse)))) {</span>
+			// When all above three checks are passed this block gets executed
+			// if Contact is added to Fraugster watchlist
+			// update contact reason codes accordingly
+<span class="pc bpc" id="L361" title="1 of 2 branches missed.">			if (fResponse != null)</span>
+<span class="fc" id="L362">				updatePFXFraugsterSignUpStatus(responseContacts, fResponse);</span>
+<span class="pc bpc" id="L363" title="1 of 2 branches missed.">			if (sanctionResponse != null)</span>
+<span class="fc" id="L364">				populatePFXSanctionStatus(responseContacts, sanctionResponse);</span>
+<span class="pc bpc" id="L365" title="1 of 2 branches missed.">			if (kycProviderResponse != null)</span>
+<span class="fc" id="L366">				getKYCStatus(responseContacts, kycProviderResponse);</span>
+		}
+<span class="fc" id="L368">	}</span>
+
+	/**
+	 * Gets the acount status for blacklist.
+	 *
+	 * @param acc
+	 *            the acc
+	 * @param blackListedContacts
+	 *            the black listed contacts
+	 * @return the acount status for blacklist
+	 */
+	private boolean getAcountStatusForBlacklist(ComplianceAccount acc, String blackListedContacts) {
+		boolean blackListedcontact;
+<span class="nc bnc" id="L381" title="All 2 branches missed.">		if (blackListedContacts.length() &gt; 0) {</span>
+<span class="nc" id="L382">			acc.setAcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L383">			acc.setArc(ComplianceReasonCode.BLACKLISTED);</span>
+<span class="nc" id="L384">			blackListedcontact = true;</span>
+		} else {
+<span class="nc" id="L386">			blackListedcontact = false;</span>
+		}
+<span class="nc" id="L388">		return blackListedcontact;</span>
+	}
+
+	/**
+	 * Perform cfx rules.
+	 *
+	 * @param msg
+	 *            the msg
+	 */
+	@SuppressWarnings(&quot;unchecked&quot;)
+	private void performCfxRules(Message&lt;MessageContext&gt; msg) {
+<span class="nc" id="L399">		RegistrationServiceRequest request = (RegistrationServiceRequest) msg.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L400">				.getRequest();</span>
+<span class="nc" id="L401">		RegistrationResponse response = (RegistrationResponse) msg.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L402">				.getResponse();</span>
+<span class="nc bnc" id="L403" title="All 2 branches missed.">		if (response == null) {</span>
+<span class="nc" id="L404">			response = new RegistrationResponse();</span>
+<span class="nc" id="L405">			msg.getPayload().getGatewayMessageExchange().setResponse(response);</span>
+		}
+<span class="nc" id="L407">		ComplianceAccount acc = new ComplianceAccount();</span>
+<span class="nc" id="L408">		performCommonCFXRules(msg, response, request, acc);</span>
+<span class="nc bnc" id="L409" title="All 2 branches missed.">		if (OperationEnum.ADD_CONTACT==msg.getPayload().getGatewayMessageExchange().getOperation()) {</span>
+<span class="nc" id="L410">			setCFXAddContactServiceStatuses(acc, msg);</span>
+
+			// set STP Flag for add contact
+<span class="nc" id="L413">			ComplianceAccount account = response.getAccount();</span>
+<span class="nc" id="L414">			List&lt;ComplianceContact&gt; signUpContact = account.getContacts();</span>
+<span class="nc" id="L415">			setContactStpFlag(signUpContact);</span>
+<span class="nc" id="L416">		}</span>
+		else {
+<span class="nc" id="L418">			setCFXSignUpServiceStatuses(acc, msg);</span>
+<span class="nc" id="L419">			setCFXSTPFlagStatus(response);</span>
+		}
+		/**
+		 * Explicitly setting all contact statuses to INACTIVE if Account gets
+		 * INACTIVE on add contact (AT-1576) -Vishal J
+		 */
+<span class="nc" id="L425">		List&lt;Contact&gt; oldContacts = (List&lt;Contact&gt;) request.getAdditionalAttribute(&quot;oldContacts&quot;);</span>
+<span class="nc bnc" id="L426" title="All 2 branches missed.">		for (Contact contact : oldContacts) {</span>
+<span class="nc" id="L427">			ComplianceContact complianceContact = new ComplianceContact();</span>
+<span class="nc" id="L428">			complianceContact.setId(contact.getId());</span>
+<span class="nc" id="L429">			complianceContact.setContactSFID(contact.getContactSFID());</span>
+<span class="nc" id="L430">			complianceContact.setTradeContactID(contact.getTradeContactID());</span>
+<span class="nc" id="L431">			complianceContact.setCcs(response.getAccount().getAcs());</span>
+<span class="nc" id="L432">			complianceContact.setKycStatus(contact.getPreviousKycStatus());</span>
+<span class="nc" id="L433">			complianceContact.setFraugsterStatus(contact.getPreviousFraugsterStatus());</span>
+<span class="nc" id="L434">			complianceContact.setSanctionStatus(contact.getPreviousSanctionStatus());</span>
+<span class="nc" id="L435">			complianceContact.setBlacklistStatus(contact.getPreviousBlacklistStatus());</span>
+<span class="nc" id="L436">			complianceContact.setCustomCheckStatus(contact.getPreviousCountryGlobalCheckStatus());</span>
+<span class="nc" id="L437">			boolean stpFlag = complianceContact.getCcs().name().equals(ContactComplianceStatus.ACTIVE.name());</span>
+<span class="nc" id="L438">			complianceContact.setSTPFlag(stpFlag);</span>
+<span class="nc" id="L439">			complianceContact.setVersion(contact.getVersion());</span>
+<span class="nc" id="L440">			acc.getContacts().add(complianceContact);</span>
+<span class="nc" id="L441">		}</span>
+<span class="nc" id="L442">		response.setAccount(acc);</span>
+<span class="nc" id="L443">	}</span>
+
+	// set STPFlag for CFX customer
+	/**
+	 * Sets the CFXSTP flag status.
+	 *
+	 * @param response
+	 *            the new CFXSTP flag status
+	 */
+	private void setCFXSTPFlagStatus(RegistrationResponse response) {
+<span class="nc" id="L453">		ComplianceAccount acc = response.getAccount();</span>
+<span class="nc" id="L454">		List&lt;ComplianceContact&gt; signUpContact = acc.getContacts();</span>
+<span class="nc" id="L455">		setContactStpFlag(signUpContact);</span>
+
+		// set STPFlag for account
+<span class="nc" id="L458">		boolean stpFlag = acc.getAcs().name().equals(ContactComplianceStatus.ACTIVE.name());</span>
+<span class="nc" id="L459">		acc.setSTPFlag(stpFlag);</span>
+<span class="nc" id="L460">	}</span>
+
+	/**
+	 * Perform common CFX rules.
+	 *
+	 * @param msg
+	 *            the msg
+	 * @param response
+	 *            the response
+	 * @param request
+	 *            the request
+	 * @param acc
+	 *            the acc
+	 * @return true, if successful
+	 */
+	@SuppressWarnings(&quot;squid:S2589&quot;) // until getCFXGlobalCheckStatus and getCFXHighRiskCountryStatus implemented
+	private boolean performCommonCFXRules(Message&lt;MessageContext&gt; msg, RegistrationResponse response,
+			RegistrationServiceRequest request, ComplianceAccount acc) {
+<span class="nc" id="L478">		boolean blackListedcontact = false;</span>
+
+<span class="nc" id="L480">		response.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L481">		createDefaultCFXResponse(request, acc);</span>
+<span class="nc" id="L482">		InternalServiceResponse internalServiceResponseCfx = (InternalServiceResponse) msg.getPayload()</span>
+<span class="nc" id="L483">				.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE).getResponse();</span>
+<span class="nc" id="L484">		Map&lt;Integer, ComplianceContact&gt; responseContactCfx = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L485" title="All 2 branches missed.">		for (ComplianceContact contact : acc.getContacts()) {</span>
+<span class="nc" id="L486">			responseContactCfx.put(contact.getId(), contact);</span>
+<span class="nc" id="L487">		}</span>
+<span class="nc bnc" id="L488" title="All 2 branches missed.">		if (Boolean.FALSE.equals(getCFXBlackListStatus(responseContactCfx, internalServiceResponseCfx))</span>
+<span class="nc bnc" id="L489" title="All 2 branches missed.">				&amp;&amp; (Boolean.FALSE.equals(getCFXGlobalCheckStatus(responseContactCfx, internalServiceResponseCfx)))</span>
+<span class="nc bnc" id="L490" title="All 2 branches missed.">				&amp;&amp; (Boolean.FALSE.equals(getCFXHighRiskCountryStatus(responseContactCfx, internalServiceResponseCfx)))) {</span>
+<span class="nc" id="L491">			acc.setAcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L492">			acc.setArc(ComplianceReasonCode.COMPLIANCE_PENDING);</span>
+<span class="nc bnc" id="L493" title="All 2 branches missed.">			for (ComplianceContact contact : acc.getContacts()) {</span>
+<span class="nc" id="L494">				contact.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L495">				contact.setCrc(ComplianceReasonCode.COMPLIANCE_PENDING);</span>
+<span class="nc" id="L496">			}</span>
+			/**
+			 * NEED TO IMPLEMENT WHEN IT WILL HAVE ONLINE REGISTRATION. NO NEED
+			 * TO CALL FOLLOWING METHODS AS CURRENTLY ITS MANUAL REGITRATION AND
+			 * ACCOUNT STATUS IS ALWAYS INACTIVE AND NOT DEPEND on SANCTION OR
+			 * KYC OR FRAUGSTER getKYCStatus(responseContactCfx,
+			 * kycProviderResponse);
+			 * updateCFXFraugsterSignUpStatus(responseContactCfx, fResponse);
+			 * populateCFXSanctionStatus(responseContactCfx, fResponse);
+			 */
+		} else {
+<span class="nc bnc" id="L507" title="All 2 branches missed.">			for (ComplianceContact contact : acc.getContacts()) {</span>
+<span class="nc bnc" id="L508" title="All 2 branches missed.">				if (contact.getCrc() == ComplianceReasonCode.BLACKLISTED</span>
+<span class="nc bnc" id="L509" title="All 2 branches missed.">						|| contact.getCrc() == ComplianceReasonCode.BLACKLISTED_COMPANY) {</span>
+<span class="nc" id="L510">					acc.setArc(contact.getCrc());</span>
+<span class="nc" id="L511">					blackListedcontact = true;</span>
+<span class="nc" id="L512">					break;</span>
+				}
+<span class="nc" id="L514">			}</span>
+<span class="nc" id="L515">			acc.setAcs(ContactComplianceStatus.INACTIVE);</span>
+		}
+<span class="nc" id="L517">		response.setAccount(acc);</span>
+<span class="nc" id="L518">		return blackListedcontact;</span>
+	}
+
+	/**
+	 * Check getCFXBlackListStatus for each contact and set reasonCode
+	 * accordingly.
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param internalServiceResponse
+	 *            the internal service response
+	 * @return the CFX black list status
+	 */
+	private Boolean getCFXBlackListStatus(Map&lt;Integer, ComplianceContact&gt; responseContacts,
+			InternalServiceResponse internalServiceResponse) {
+<span class="nc" id="L533">		boolean isAnyContactBlacklisted = false;</span>
+<span class="nc bnc" id="L534" title="All 2 branches missed.">		for (ContactResponse blacklistContactResponse : internalServiceResponse.getContacts()) {</span>
+<span class="nc bnc" id="L535" title="All 2 branches missed.">			if ((EntityEnum.ACCOUNT.toString()).equalsIgnoreCase(blacklistContactResponse.getEntityType())) {</span>
+<span class="nc" id="L536">				boolean val = isAccountBlacklisted(responseContacts, blacklistContactResponse);</span>
+<span class="nc bnc" id="L537" title="All 2 branches missed.">				if (val) {</span>
+<span class="nc" id="L538">					return val;</span>
+				}
+<span class="nc" id="L540">			} else {</span>
+<span class="nc" id="L541">				isAnyContactBlacklisted = setContactBlackListReasonCode(responseContacts, isAnyContactBlacklisted,</span>
+						blacklistContactResponse);
+			}
+<span class="nc" id="L544">		}</span>
+		// if any contact is blacklisted,
+		// mark other contacts as 914
+<span class="nc" id="L547">		return fillBlacklistResponse(responseContacts, isAnyContactBlacklisted);</span>
+	}
+
+	/**
+	 * Checks if is account blacklisted.
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param blacklistContactResponse
+	 *            the blacklist contact response
+	 * @return true, if is account blacklisted
+	 */
+	private boolean isAccountBlacklisted(Map&lt;Integer, ComplianceContact&gt; responseContacts,
+			ContactResponse blacklistContactResponse) {
+<span class="nc bnc" id="L561" title="All 2 branches missed.">		if (!blacklistContactResponse.getBlacklist().getStatus().equals(ServiceStatus.PASS.name())) {</span>
+			// when blacklistContactResponse status is pass then its not
+			// blacklisted
+			// So when its blacklisted this block will get executed
+<span class="nc bnc" id="L565" title="All 2 branches missed.">			for (ComplianceContact cResponse : responseContacts.values()) {</span>
+<span class="nc" id="L566">				cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc bnc" id="L567" title="All 2 branches missed.">				if (blacklistContactResponse.getBlacklist().getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L568">					cResponse.setCrc(ComplianceReasonCode.SYSTEM_FAILURE);</span>
+				} else {
+<span class="nc" id="L570">					cResponse.setCrc(ComplianceReasonCode.BLACKLISTED_COMPANY);</span>
+				}
+<span class="nc" id="L572">			}</span>
+<span class="nc" id="L573">			return true;</span>
+		}
+<span class="nc" id="L575">		return false;</span>
+	}
+
+	/**
+	 * Gets the PFX black list status.
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param internalServiceResponse
+	 *            the internal service response
+	 * @return the PFX black list status
+	 */
+	private Boolean getPFXBlackListStatus(Map&lt;Integer, ComplianceContact&gt; responseContacts,
+			InternalServiceResponse internalServiceResponse) {
+<span class="fc" id="L589">		boolean isAnyContactBlacklisted = false;</span>
+<span class="fc bfc" id="L590" title="All 2 branches covered.">		for (ContactResponse blacklistContactResponse : internalServiceResponse.getContacts()) {</span>
+<span class="fc" id="L591">			isAnyContactBlacklisted = setContactBlackListReasonCode(responseContacts, isAnyContactBlacklisted,</span>
+					blacklistContactResponse);
+
+<span class="fc" id="L594">		}</span>
+		// if any contact is blacklisted, mark other contacts as 914
+<span class="fc" id="L596">		return fillBlacklistResponse(responseContacts, isAnyContactBlacklisted);</span>
+	}
+
+	/**
+	 * Sets the contact black list reason code.
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param isAnyContactBlacklisted
+	 *            the is any contact blacklisted
+	 * @param blacklistContactResponse
+	 *            the blacklist contact response
+	 * @return true, if successful
+	 */
+	private boolean setContactBlackListReasonCode(Map&lt;Integer, ComplianceContact&gt; responseContacts,
+			boolean isAnyContactBlacklisted, ContactResponse blacklistContactResponse) {
+<span class="fc" id="L612">		boolean isBlack = isAnyContactBlacklisted;</span>
+
+<span class="fc" id="L614">		ComplianceContact cResponse = responseContacts.get(blacklistContactResponse.getId());</span>
+		// When one of mutiple contacts is blacklisted
+		// Blacklist is not checked for rest
+		// so contat blackList response is NULL
+<span class="pc bpc" id="L618" title="1 of 2 branches missed.">		if (null == blacklistContactResponse.getBlacklist().getStatus()) {</span>
+<span class="fc" id="L619">			cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="fc" id="L620">			cResponse.setCrc(ComplianceReasonCode.BLACKLISTED_OTHER);</span>
+<span class="fc" id="L621">			return isBlack;</span>
+		}
+<span class="nc bnc" id="L623" title="All 2 branches missed.">		if (!ServiceStatus.PASS.name().equals(blacklistContactResponse.getBlacklist().getStatus())</span>
+<span class="nc bnc" id="L624" title="All 2 branches missed.">				&amp;&amp; !blacklistContactResponse.getBlacklist().getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())</span>
+<span class="nc bnc" id="L625" title="All 2 branches missed.">				&amp;&amp; !blacklistContactResponse.getBlacklist().getStatus().equals(ServiceStatus.NOT_PERFORMED.name())</span>
+<span class="nc bnc" id="L626" title="All 2 branches missed.">				&amp;&amp; !blacklistContactResponse.getBlacklist().getStatus().equals(ServiceStatus.NOT_REQUIRED.name())) {</span>
+<span class="nc" id="L627">			cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L628">			cResponse.setSkipRestChecks(Boolean.TRUE);</span>
+<span class="nc" id="L629">			cResponse.setCrc(ComplianceReasonCode.BLACKLISTED);</span>
+<span class="nc" id="L630">			isBlack = true;</span>
+<span class="nc bnc" id="L631" title="All 2 branches missed.">		} else if (blacklistContactResponse.getBlacklist().getStatus().equals(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L632">			cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L633">			cResponse.setCrc(ComplianceReasonCode.SYSTEM_FAILURE);</span>
+<span class="nc" id="L634">			cResponse.setSkipRestChecks(Boolean.TRUE);</span>
+<span class="nc" id="L635">			return true;</span>
+		} // changes made for AT-268
+			// Added status as Inactive if 1st contact is blacklisted
+			// changes made by-Saylee
+<span class="nc" id="L639">		else if ((ServiceStatus.NOT_PERFORMED.name()</span>
+<span class="nc bnc" id="L640" title="All 2 branches missed.">				.equalsIgnoreCase(blacklistContactResponse.getBlacklist().getStatus())</span>
+<span class="nc" id="L641">				|| ServiceStatus.NOT_REQUIRED.name()</span>
+<span class="nc bnc" id="L642" title="All 4 branches missed.">						.equalsIgnoreCase(blacklistContactResponse.getBlacklist().getStatus()))</span>
+				&amp;&amp; isAnyContactBlacklisted) {
+<span class="nc" id="L644">			cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L645">			cResponse.setCrc(ComplianceReasonCode.BLACKLISTED_OTHER);</span>
+		} else {
+<span class="nc" id="L647">			cResponse.setCcs(ContactComplianceStatus.ACTIVE);</span>
+		}
+<span class="nc" id="L649">		return isBlack;</span>
+	}
+
+	/**
+	 * If any one contact is blacklisted then status of other contact is set to
+	 * inactive and other contact status set to blacklisted other.
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param isAnyContactBlacklisted
+	 *            the is any contact blacklisted
+	 * @return true, if successful
+	 */
+	private boolean fillBlacklistResponse(Map&lt;Integer, ComplianceContact&gt; responseContacts,
+			boolean isAnyContactBlacklisted) {
+<span class="fc" id="L664">		boolean areAllContactsInactive = false;</span>
+<span class="pc bpc" id="L665" title="1 of 2 branches missed.">		if (isAnyContactBlacklisted) {</span>
+<span class="nc" id="L666">			areAllContactsInactive = true;</span>
+<span class="nc bnc" id="L667" title="All 2 branches missed.">			for (ComplianceContact cResponse : responseContacts.values()) {</span>
+<span class="nc bnc" id="L668" title="All 2 branches missed.">				if (!(ComplianceReasonCode.BLACKLISTED==cResponse.getCrc()</span>
+<span class="nc bnc" id="L669" title="All 2 branches missed.">						|| ComplianceReasonCode.GLOBACLCHECK==cResponse.getCrc()</span>
+<span class="nc bnc" id="L670" title="All 2 branches missed.">						|| ComplianceReasonCode.BLACKLISTCOUNTRY==cResponse.getCrc()</span>
+<span class="nc bnc" id="L671" title="All 2 branches missed.">						|| ComplianceReasonCode.SYSTEM_FAILURE==cResponse.getCrc())) {</span>
+<span class="nc" id="L672">					cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L673">					cResponse.setCrc(ComplianceReasonCode.BLACKLISTED_OTHER);</span>
+				}
+<span class="nc" id="L675">			}</span>
+		}
+<span class="fc" id="L677">		return areAllContactsInactive;</span>
+	}
+
+	/**
+	 * getCFXGlobalCheckStatus() METHOD IS NOT IMPLEMENTED AS CURRENTLY CFX HAS
+	 * MANUAL REGITRATION. NEED TO IMPLEMENT WHEN IT WILL HAVE ONLINE
+	 * REGISTRATION.
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param internalServiceResponse
+	 *            the internal service response
+	 * @return the CFX global check status
+	 */
+	private Boolean getCFXGlobalCheckStatus(Map&lt;Integer, ComplianceContact&gt; responseContacts, // NOSONAR
+			InternalServiceResponse internalServiceResponse) { // NOSONAR
+<span class="nc" id="L693">		return Boolean.FALSE;</span>
+	}
+
+	/**
+	 * getCFXHighRiskCountryStatus() METHOD IS NOT IMPLEMENTED AS CURRENTLY CFX
+	 * HAS MANUAL REGITRATION. NEED TO IMPLEMENT WHEN IT WILL HAVE ONLINE
+	 * REGISTRATION.
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param internalServiceResponse
+	 *            the internal service response
+	 * @return the CFX high risk country status
+	 */
+	private Boolean getCFXHighRiskCountryStatus(Map&lt;Integer, ComplianceContact&gt; responseContacts, // NOSONAR
+			InternalServiceResponse internalServiceResponse) { // NOSONAR
+<span class="nc" id="L709">		return Boolean.FALSE;</span>
+	}
+
+	/**
+	 * If blacklist check is Passed and if country is USA then GlobalCheck is
+	 * performed If country is USA then GlobalCheck status is Fail and set
+	 * status as Inactive.
+	 *
+	 * @param signUpResponseContacts
+	 *            the sign up response contacts
+	 * @param signUpInternalServiceResponse
+	 *            the sign up internal service response
+	 * @return the PFX global check status
+	 */
+	private Boolean getPFXGlobalCheckStatus(Map&lt;Integer, ComplianceContact&gt; signUpResponseContacts,
+			InternalServiceResponse signUpInternalServiceResponse) {
+<span class="fc" id="L725">		boolean isAnyContactBlacklisted = false;</span>
+<span class="fc bfc" id="L726" title="All 2 branches covered.">		for (ContactResponse contactServiceResponse : signUpInternalServiceResponse.getContacts()) {</span>
+<span class="fc" id="L727">			ComplianceContact signUpCResponse = signUpResponseContacts.get(contactServiceResponse.getId());</span>
+<span class="pc bpc" id="L728" title="1 of 2 branches missed.">			if (!(EntityEnum.ACCOUNT.toString()).equalsIgnoreCase(contactServiceResponse.getEntityType())</span>
+<span class="pc bpc" id="L729" title="1 of 2 branches missed.">					&amp;&amp; Boolean.FALSE.equals(signUpCResponse.getSkipRestChecks())) {</span>
+<span class="pc bpc" id="L730" title="1 of 2 branches missed.">				if (ServiceStatus.FAIL.name().equals(contactServiceResponse.getGlobalCheck().getStatus())) {</span>
+<span class="nc" id="L731">					signUpCResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L732">					signUpCResponse.setSkipRestChecks(Boolean.TRUE);</span>
+<span class="nc" id="L733">					signUpCResponse.setCrc(ComplianceReasonCode.GLOBACLCHECK);</span>
+<span class="nc" id="L734">					isAnyContactBlacklisted = true;</span>
+<span class="fc" id="L735">				} else if (ServiceStatus.WATCH_LIST.name()</span>
+<span class="pc bpc" id="L736" title="1 of 2 branches missed.">						.equalsIgnoreCase(contactServiceResponse.getGlobalCheck().getStatus())) {</span>
+<span class="nc" id="L737">					signUpCResponse.setCrc(ComplianceReasonCode.USGLOBAL_WATCHLIST);</span>
+<span class="fc" id="L738">				} else if (ServiceStatus.SERVICE_FAILURE.name()</span>
+<span class="pc bpc" id="L739" title="1 of 2 branches missed.">						.equalsIgnoreCase(contactServiceResponse.getGlobalCheck().getStatus())) {</span>
+<span class="nc" id="L740">					signUpCResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L741">					signUpCResponse.setSkipRestChecks(Boolean.TRUE);</span>
+<span class="nc" id="L742">					signUpCResponse.setCrc(ComplianceReasonCode.SYSTEM_FAILURE);</span>
+<span class="nc" id="L743">					isAnyContactBlacklisted = true;</span>
+				}
+				/**
+				 * Changes made for AT-31 Added status as INACTIVE if country is
+				 * USA with list C state -Saylee
+				 */
+<span class="pc bpc" id="L749" title="3 of 4 branches missed.">				else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(</span>
+<span class="fc" id="L750">						contactServiceResponse.getGlobalCheck().getStatus()) &amp;&amp; isAnyContactBlacklisted) {</span>
+<span class="nc" id="L751">					signUpCResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L752">					signUpCResponse.setCrc(ComplianceReasonCode.BLACKLISTED_OTHER);</span>
+<span class="fc" id="L753">				} else if (ServiceStatus.NOT_REQUIRED.name()</span>
+<span class="pc bpc" id="L754" title="1 of 2 branches missed.">						.equalsIgnoreCase(contactServiceResponse.getGlobalCheck().getStatus())) {</span>
+<span class="nc" id="L755">					signUpCResponse.setCcs(ContactComplianceStatus.ACTIVE);</span>
+				}
+
+			}
+<span class="fc" id="L759">		}</span>
+<span class="fc" id="L760">		return fillBlacklistResponse(signUpResponseContacts, isAnyContactBlacklisted);</span>
+	}
+
+	/**
+	 * If RiskLevel of Country is high then HighRiskCountryStatus is Fail and
+	 * contact status set to Inactive.
+	 *
+	 * @param signUpResponseContacts
+	 *            the sign up response contacts
+	 * @param internalServiceResponse
+	 *            the internal service response
+	 * @return the PFX high risk country status
+	 */
+	private Boolean getPFXHighRiskCountryStatus(Map&lt;Integer, ComplianceContact&gt; signUpResponseContacts,
+			InternalServiceResponse internalServiceResponse) {
+<span class="fc" id="L775">		boolean isAnyContactBlacklisted = false;</span>
+<span class="fc bfc" id="L776" title="All 2 branches covered.">		for (ContactResponse contactServiceResponse : internalServiceResponse.getContacts()) {</span>
+<span class="fc" id="L777">			ComplianceContact signUpCResponse = signUpResponseContacts.get(contactServiceResponse.getId());</span>
+<span class="pc bpc" id="L778" title="1 of 2 branches missed.">			if (!(EntityEnum.ACCOUNT.toString()).equalsIgnoreCase(contactServiceResponse.getEntityType())</span>
+<span class="pc bpc" id="L779" title="1 of 2 branches missed.">					&amp;&amp; Boolean.FALSE.equals(signUpCResponse.getSkipRestChecks())) {</span>
+<span class="pc bpc" id="L780" title="1 of 2 branches missed.">				if (contactServiceResponse.getCountryCheck().getStatus().equals(ServiceStatus.FAIL.name())) {</span>
+<span class="nc" id="L781">					signUpCResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L782">					signUpCResponse.setSkipRestChecks(Boolean.TRUE);</span>
+<span class="nc" id="L783">					signUpCResponse.setCrc(ComplianceReasonCode.BLACKLISTCOUNTRY);</span>
+<span class="nc" id="L784">					isAnyContactBlacklisted = true;</span>
+<span class="fc" id="L785">				} else if (ServiceStatus.WATCH_LIST.name()</span>
+<span class="pc bpc" id="L786" title="1 of 2 branches missed.">						.equalsIgnoreCase(contactServiceResponse.getCountryCheck().getStatus())) {</span>
+<span class="nc" id="L787">					signUpCResponse.setCrc(ComplianceReasonCode.HIGHRISK_WATCHLIST);</span>
+<span class="fc" id="L788">				} else if (ServiceStatus.SERVICE_FAILURE.name()</span>
+<span class="pc bpc" id="L789" title="1 of 2 branches missed.">						.equalsIgnoreCase(contactServiceResponse.getCountryCheck().getStatus())) {</span>
+<span class="nc" id="L790">					signUpCResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L791">					signUpCResponse.setCrc(ComplianceReasonCode.SYSTEM_FAILURE);</span>
+<span class="nc" id="L792">					signUpCResponse.setSkipRestChecks(Boolean.TRUE);</span>
+<span class="nc" id="L793">					isAnyContactBlacklisted = true;</span>
+				} // changes made for AT-268
+					// Added status Inactive if 1st contact is contain
+					// Sanction country
+					// changes made by-Saylee
+<span class="pc bpc" id="L798" title="3 of 4 branches missed.">				else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(</span>
+<span class="fc" id="L799">						contactServiceResponse.getCountryCheck().getStatus()) &amp;&amp; isAnyContactBlacklisted) {</span>
+<span class="nc" id="L800">					signUpCResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L801">					signUpCResponse.setCrc(ComplianceReasonCode.BLACKLISTED_OTHER);</span>
+<span class="fc" id="L802">				} else if (!ServiceStatus.NOT_REQUIRED.name()</span>
+<span class="pc bpc" id="L803" title="1 of 2 branches missed.">						.equalsIgnoreCase(contactServiceResponse.getCountryCheck().getStatus())) {</span>
+<span class="fc" id="L804">					signUpCResponse.setCcs(ContactComplianceStatus.ACTIVE);</span>
+				}
+
+			}
+<span class="fc" id="L808">		}</span>
+<span class="fc" id="L809">		return fillBlacklistResponse(signUpResponseContacts, isAnyContactBlacklisted);</span>
+	}
+
+	/**
+	 * If response from transformer is fail then reasonCode set to Sanctioned
+	 * and contact status is Inactive.
+	 *
+	 * @param signUpResponseContacts
+	 *            the sign up response contacts
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @return the boolean
+	 */
+	private Boolean populatePFXSanctionStatus(Map&lt;Integer, ComplianceContact&gt; signUpResponseContacts,
+			SanctionResponse sanctionResponse) {
+<span class="fc" id="L824">		boolean areAllContactsInactive = true;</span>
+<span class="pc bpc" id="L825" title="1 of 2 branches missed.">		if (sanctionResponse.getContactResponses() != null) {</span>
+<span class="pc bpc" id="L826" title="1 of 2 branches missed.">			for (SanctionContactResponse sResponse : sanctionResponse.getContactResponses()) {</span>
+<span class="nc" id="L827">				ComplianceContact signUpCResponse = signUpResponseContacts.get(sResponse.getContactId());</span>
+<span class="nc bnc" id="L828" title="All 2 branches missed.">				if (!ServiceStatus.PASS.name().equalsIgnoreCase(sResponse.getStatus())</span>
+<span class="nc bnc" id="L829" title="All 2 branches missed.">						&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equalsIgnoreCase(sResponse.getStatus())) {</span>
+<span class="nc" id="L830">					signUpCResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L831">					signUpCResponse.setCrc(ComplianceReasonCode.SANCTIONED);</span>
+<span class="nc bnc" id="L832" title="All 2 branches missed.">				} else if (ServiceStatus.SERVICE_FAILURE.name().equalsIgnoreCase(sResponse.getStatus())) {</span>
+<span class="nc" id="L833">					signUpCResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L834">					signUpCResponse.setCrc(ComplianceReasonCode.SANCTIONED);</span>
+<span class="nc" id="L835">					areAllContactsInactive = true;</span>
+				} else {
+<span class="nc" id="L837">					areAllContactsInactive = false;</span>
+				}
+<span class="nc" id="L839">			}</span>
+
+		}
+<span class="fc" id="L842">		return areAllContactsInactive;</span>
+	}
+
+	/**
+	 * If response from transformer is fail then reasonCode set to KYC and
+	 * contact status is Inactive If Sanction Status is Fail and KYC status also
+	 * fail then reasonCode set to KYC_AND_SANCTIONED If Country not supported
+	 * in KYC then reasonCode set to KYC_NA i.e country_not_supported
+	 *
+	 * @param signUpResponseContacts
+	 *            the sign up response contacts
+	 * @param kycProviderResponse
+	 *            the kyc provider response
+	 * @return the KYC status
+	 */
+	private Boolean getKYCStatus(Map&lt;Integer, ComplianceContact&gt; signUpResponseContacts,
+			KYCProviderResponse kycProviderResponse) {
+<span class="fc" id="L859">		boolean areAllContactsInactive = true;</span>
+<span class="pc bpc" id="L860" title="1 of 2 branches missed.">		if (ServiceStatus.FAIL.name().equalsIgnoreCase(kycProviderResponse.getStatus())) {</span>
+<span class="nc bnc" id="L861" title="All 2 branches missed.">			for (ComplianceContact signUpCResponse : signUpResponseContacts.values()) {</span>
+<span class="nc" id="L862">				signUpCResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L863">				signUpCResponse.setCrc(ComplianceReasonCode.KYC_NA);</span>
+<span class="nc" id="L864">			}</span>
+		} else {
+<span class="fc bfc" id="L866" title="All 2 branches covered.">			for (KYCContactResponse kycResponse : kycProviderResponse.getContactResponse()) {</span>
+<span class="fc" id="L867">				areAllContactsInactive = setComplianceReasonCodeForKYC(signUpResponseContacts, areAllContactsInactive,</span>
+						kycResponse);
+<span class="fc" id="L869">			}</span>
+		}
+<span class="fc" id="L871">		return areAllContactsInactive;</span>
+	}
+
+	/**
+	 * 1. If contact is sanctioned, always make contact Inactive 2. If BandText
+	 * is &quot;POA NEEDED&quot; or &quot;POI NEEDED&quot;, and contact not sanctioned, don't change
+	 * contact status. And set response code accrodingly 3. In other cases mark
+	 * contact KYC failed. if sanction is also failed, mark KYC and sanction
+	 * failed
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param areAllContactsInactive
+	 *            the are all contacts inactive
+	 * @param kycResponse
+	 *            the kyc response
+	 * @return true, if successful
+	 */
+	private boolean setComplianceReasonCodeForKYC(Map&lt;Integer, ComplianceContact&gt; responseContacts,
+			boolean areAllContactsInactive, KYCContactResponse kycResponse) {
+<span class="fc" id="L891">		boolean contactsInactive = areAllContactsInactive;</span>
+<span class="fc" id="L892">		ComplianceContact cResponse = responseContacts.get(kycResponse.getId());</span>
+<span class="pc bpc" id="L893" title="1 of 2 branches missed.">		boolean isContactSanctioned = cResponse.getCrc()==ComplianceReasonCode.SANCTIONED;</span>
+<span class="pc bpc" id="L894" title="1 of 2 branches missed.">		if (!ServiceStatus.PASS.name().equalsIgnoreCase(kycResponse.getStatus())</span>
+<span class="pc bpc" id="L895" title="1 of 2 branches missed.">				&amp;&amp; !ServiceStatus.SERVICE_FAILURE.name().equalsIgnoreCase(kycResponse.getStatus())) {</span>
+<span class="pc bpc" id="L896" title="1 of 2 branches missed.">			if (!isPOIOrPOANeeded(isContactSanctioned, kycResponse.getBandText(), cResponse)) {</span>
+<span class="nc" id="L897">				cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc bnc" id="L898" title="All 2 branches missed.">				if (isContactSanctioned) {</span>
+<span class="nc" id="L899">					cResponse.setCrc(ComplianceReasonCode.KYC_AND_SANCTIONED);</span>
+<span class="nc bnc" id="L900" title="All 2 branches missed.">				} else if (Constants.COUNTRY_NOT_SUPPORTED.equals(kycResponse.getErrorCode())) {</span>
+<span class="nc" id="L901">					cResponse.setCrc(ComplianceReasonCode.KYC_NA);</span>
+<span class="nc bnc" id="L902" title="All 2 branches missed.">				} else if (Constants.EU_LE_POI_NEEDED.equals(kycResponse.getBandText())) {//AT-3327</span>
+<span class="nc" id="L903">					cResponse.setCrc(ComplianceReasonCode.KYC_POI);</span>
+				} else {
+<span class="nc" id="L905">					cResponse.setCrc(ComplianceReasonCode.KYC);</span>
+				}
+			}
+<span class="nc bnc" id="L908" title="All 2 branches missed.">		} else if (ServiceStatus.SERVICE_FAILURE.name().equalsIgnoreCase(kycResponse.getStatus())) {</span>
+<span class="nc" id="L909">			cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc bnc" id="L910" title="All 2 branches missed.">			if (isContactSanctioned) {</span>
+<span class="nc" id="L911">				cResponse.setCrc(ComplianceReasonCode.KYC_AND_SANCTIONED);</span>
+<span class="nc" id="L912">				contactsInactive = true;</span>
+			} else {
+<span class="nc" id="L914">				cResponse.setCrc(ComplianceReasonCode.KYC);</span>
+<span class="nc" id="L915">				contactsInactive = true;</span>
+			}
+		} else {
+<span class="nc" id="L918">			contactsInactive = false;</span>
+		}
+<span class="fc" id="L920">		return contactsInactive;</span>
+	}
+
+	/**
+	 * Checks if is POI or POA needed.
+	 *
+	 * @param isContactSanctioned
+	 *            the is contact sanctioned
+	 * @param bandText
+	 *            the band text
+	 * @param cResponse
+	 *            the c response
+	 * @return true, if is POI or POA needed
+	 */
+	private boolean isPOIOrPOANeeded(boolean isContactSanctioned, String bandText, ComplianceContact cResponse) {
+<span class="fc" id="L935">		boolean result = false;</span>
+<span class="pc bpc" id="L936" title="2 of 4 branches missed.">		if (!isContactSanctioned &amp;&amp; Constants.POA_NEEDED.equalsIgnoreCase(bandText)) {</span>
+<span class="nc" id="L937">			cResponse.setCrc(ComplianceReasonCode.KYC_POA);</span>
+<span class="nc" id="L938">			cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L939">			result = true;</span>
+<span class="pc bpc" id="L940" title="2 of 4 branches missed.">		} else if (!isContactSanctioned &amp;&amp; Constants.POI_NEEDED.equalsIgnoreCase(bandText)) {</span>
+<span class="fc" id="L941">			cResponse.setCrc(ComplianceReasonCode.KYC_POI);</span>
+<span class="fc" id="L942">			cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="fc" id="L943">			result = true;</span>
+		}
+<span class="fc" id="L945">		return result;</span>
+	}
+
+	/**
+	 * Update common fraugster sign up status.
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param fResponse
+	 *            the f response
+	 */
+	private void updateCommonFraugsterSignUpStatus(Map&lt;Integer, ComplianceContact&gt; responseContacts,
+			FraugsterSignupResponse fResponse) {
+
+<span class="pc bpc" id="L959" title="1 of 2 branches missed.">		for (FraugsterSignupContactResponse idResponse : fResponse.getContactResponses()) {</span>
+<span class="nc" id="L960">			ComplianceContact cResponse = responseContacts.get(idResponse.getId());</span>
+<span class="nc bnc" id="L961" title="All 2 branches missed.">			if (ServiceStatus.WATCH_LIST.name().equalsIgnoreCase(idResponse.getStatus())</span>
+<span class="nc bnc" id="L962" title="All 2 branches missed.">					|| ServiceStatus.SERVICE_FAILURE.name().equalsIgnoreCase(idResponse.getStatus())) {</span>
+<span class="nc" id="L963">				cResponse.setResponseCode(ComplianceReasonCode.FRAUGSTER_WATCHLIST.getReasonCode());</span>
+<span class="nc" id="L964">				cResponse.setResponseDescription(ComplianceReasonCode.FRAUGSTER_WATCHLIST.getReasonDescription());</span>
+			}
+<span class="nc" id="L966">		}</span>
+<span class="fc" id="L967">	}</span>
+
+	/**
+	 * Update PFX fraugster sign up status.
+	 *
+	 * @param responseContacts
+	 *            the response contacts
+	 * @param fResponse
+	 *            the f response
+	 */
+	private void updatePFXFraugsterSignUpStatus(Map&lt;Integer, ComplianceContact&gt; responseContacts,
+			FraugsterSignupResponse fResponse) {
+
+<span class="fc" id="L980">		updateCommonFraugsterSignUpStatus(responseContacts, fResponse);</span>
+<span class="fc" id="L981">	}</span>
+
+	/**
+	 * Creates the default response.
+	 *
+	 * @param request
+	 *            the request
+	 * @return the map
+	 */
+	private Map&lt;Integer, ComplianceContact&gt; createDefaultResponse(RegistrationServiceRequest request) {
+<span class="fc" id="L991">		Map&lt;Integer, ComplianceContact&gt; responseContacts = new HashMap&lt;&gt;(request.getAccount().getContacts().size());</span>
+<span class="fc bfc" id="L992" title="All 2 branches covered.">		for (com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact requestContact : request.getAccount()</span>
+<span class="fc" id="L993">				.getContacts()) {</span>
+<span class="fc" id="L994">			ComplianceContact cResponse = new ComplianceContact();</span>
+<span class="fc" id="L995">			cResponse.setVersion(requestContact.getVersion());</span>
+<span class="fc" id="L996">			cResponse.setId(requestContact.getId());</span>
+<span class="fc" id="L997">			cResponse.setContactSFID(requestContact.getContactSFID());</span>
+<span class="fc" id="L998">			cResponse.setCcs(ContactComplianceStatus.ACTIVE);</span>
+<span class="fc" id="L999">			cResponse.setCrc(ComplianceReasonCode.PASS);</span>
+<span class="fc" id="L1000">			cResponse.setTradeContactID(requestContact.getTradeContactID());</span>
+<span class="fc" id="L1001">			responseContacts.put(requestContact.getId(), cResponse);</span>
+<span class="fc" id="L1002">		}</span>
+<span class="fc" id="L1003">		return responseContacts;</span>
+	}
+
+	/**
+	 * Creates the default CFX response.
+	 *
+	 * @param request
+	 *            the request
+	 * @param complianceAccount
+	 *            the compliance account
+	 * @return the compliance account
+	 */
+	private ComplianceAccount createDefaultCFXResponse(RegistrationServiceRequest request,
+			ComplianceAccount complianceAccount) {
+<span class="nc" id="L1017">		List&lt;ComplianceContact&gt; responseContacts = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1018">		complianceAccount.setAcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L1019">		complianceAccount.setId(request.getAccount().getId());</span>
+<span class="nc" id="L1020">		complianceAccount.setAccountSFID(request.getAccount().getAccSFID());</span>
+<span class="nc" id="L1021">		complianceAccount.setArc(ComplianceReasonCode.COMPLIANCE_PENDING);</span>
+<span class="nc" id="L1022">		complianceAccount.setTradeAccountID(request.getAccount().getTradeAccountID());</span>
+<span class="nc" id="L1023">		complianceAccount.setVersion(request.getAccount().getVersion());</span>
+
+<span class="nc bnc" id="L1025" title="All 2 branches missed.">		for (com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact requestContact : request.getAccount()</span>
+<span class="nc" id="L1026">				.getContacts()) {</span>
+<span class="nc" id="L1027">			ComplianceContact cResponse = new ComplianceContact();</span>
+<span class="nc" id="L1028">			cResponse.setVersion(requestContact.getVersion());</span>
+<span class="nc" id="L1029">			cResponse.setId(requestContact.getId());</span>
+<span class="nc" id="L1030">			cResponse.setContactSFID(requestContact.getContactSFID());</span>
+<span class="nc" id="L1031">			cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L1032">			cResponse.setCrc(ComplianceReasonCode.COMPLIANCE_PENDING);</span>
+<span class="nc" id="L1033">			cResponse.setTradeContactID(requestContact.getTradeContactID());</span>
+<span class="nc" id="L1034">			responseContacts.add(cResponse);</span>
+<span class="nc" id="L1035">		}</span>
+<span class="nc" id="L1036">		complianceAccount.setContacts(responseContacts);</span>
+<span class="nc" id="L1037">		return complianceAccount;</span>
+	}
+
+	/**
+	 * Update accout status for add contact.
+	 *
+	 * @param request
+	 *            the request
+	 * @param response
+	 *            the response
+	 * @param isBlacklisted
+	 *            the is blacklisted
+	 */
+	private void updateAccoutStatusForAddContact(RegistrationServiceRequest request, RegistrationResponse response,
+			Boolean isBlacklisted) {
+
+<span class="nc" id="L1053">		Account oldAccount = (Account) request.getAdditionalAttribute(ACCOUNT);</span>
+
+		// AT-355.If oldaccount &amp; status not null &amp; no contact is blacklisted
+		// then old account status checked
+		// if true set new status as active and remove arc description
+		// else if old status and new status is same then remove arc description
+		// --Tejas I
+<span class="nc bnc" id="L1060" title="All 6 branches missed.">		if (oldAccount != null &amp;&amp; oldAccount.getAccountStatus() != null &amp;&amp; Boolean.FALSE.equals(isBlacklisted)) {</span>
+<span class="nc bnc" id="L1061" title="All 2 branches missed.">			if (ContactComplianceStatus.ACTIVE.name().equals(oldAccount.getAccountStatus())) {</span>
+<span class="nc" id="L1062">				response.getAccount().setAcs(ContactComplianceStatus.ACTIVE);</span>
+<span class="nc" id="L1063">				response.getAccount().setArc(ComplianceReasonCode.ACCOUNT_STATUS_UNCHANGED);</span>
+<span class="nc bnc" id="L1064" title="All 2 branches missed.">			} else if (response.getAccount().getAcs().name().equals(oldAccount.getAccountStatus())) {</span>
+<span class="nc" id="L1065">				response.getAccount().setArc(ComplianceReasonCode.ACCOUNT_STATUS_UNCHANGED);</span>
+			}
+		}
+<span class="nc" id="L1068">	}</span>
+
+	/**
+	 * This method is used for setting different micro service statuses
+	 * performed on account and contact these statuses are updated in account
+	 * and contact tables
+	 * 
+	 * If any service status is not_required in update and add contact then set
+	 * previous status.
+	 *
+	 * @param signUpAccount
+	 *            the sign up account
+	 * @param msg
+	 *            the msg
+	 * @return the compliance account
+	 */
+	private ComplianceAccount setCFXSignUpServiceStatuses(ComplianceAccount signUpAccount,
+			Message&lt;MessageContext&gt; msg) {
+<span class="nc" id="L1086">		RegistrationServiceRequest registrationServiceRequest = (RegistrationServiceRequest) msg.getPayload()</span>
+<span class="nc" id="L1087">				.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L1088">		Account regAccount = registrationServiceRequest.getAccount();</span>
+
+<span class="nc" id="L1090">		MessageExchange blackListexchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L1091">		MessageExchange sanctionExchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L1092">		MessageExchange fraugsterExchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L1093">		MessageExchange kycExchange = msg.getPayload().getMessageExchange(ServiceTypeEnum.KYC_SERVICE);</span>
+		// For CFX Sign up update account table for status
+<span class="nc" id="L1095">		EventServiceLog accountBlackListlog = blackListexchange.getEventServiceLog(ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L1096">				EntityEnum.ACCOUNT.name(), regAccount.getId());</span>
+<span class="nc" id="L1097">		signUpAccount.setBlacklistStatus(accountBlackListlog.getStatus());</span>
+<span class="nc" id="L1098">		signUpAccount.setPaymentinWatchlistStatus(</span>
+<span class="nc" id="L1099">				(String) registrationServiceRequest.getAdditionalAttribute(Constants.PAYMENTIN_WATCHLIST_STATUS));</span>
+<span class="nc" id="L1100">		signUpAccount.setPaymentoutWatchlistStatus(</span>
+<span class="nc" id="L1101">				(String) registrationServiceRequest.getAdditionalAttribute(Constants.PAYMENTOUT_WATCHLIST_STATUS));</span>
+<span class="nc" id="L1102">		EventServiceLog accountSanctionLog = sanctionExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L1103">				EntityEnum.ACCOUNT.name(), regAccount.getId());</span>
+<span class="nc" id="L1104">		signUpAccount.setSanctionStatus(accountSanctionLog.getStatus());</span>
+		// End For CFX Sign up update account table for status
+<span class="nc bnc" id="L1106" title="All 2 branches missed.">		for (ComplianceContact signUpContact : signUpAccount.getContacts()) {</span>
+<span class="nc" id="L1107">			updateContactStatus(blackListexchange, sanctionExchange, fraugsterExchange, kycExchange, signUpContact,</span>
+<span class="nc" id="L1108">					signUpAccount.getBlacklistStatus());</span>
+<span class="nc" id="L1109">		}</span>
+
+<span class="nc" id="L1111">		return signUpAccount;</span>
+	}
+
+	/**
+	 * Sets the PFX sign up service statuses.
+	 *
+	 * @param signUpAccResponse
+	 *            the sign up acc response
+	 * @param signUpMsg
+	 *            the sign up msg
+	 * @return the compliance account
+	 */
+	private ComplianceAccount setPFXSignUpServiceStatuses(ComplianceAccount signUpAccResponse,
+			Message&lt;MessageContext&gt; signUpMsg) {
+<span class="fc" id="L1125">		MessageExchange blackListexchange = signUpMsg.getPayload()</span>
+<span class="fc" id="L1126">				.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="fc" id="L1127">		MessageExchange sanctionExchange = signUpMsg.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="fc" id="L1128">		MessageExchange fraugsterExchange = signUpMsg.getPayload()</span>
+<span class="fc" id="L1129">				.getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="fc" id="L1130">		MessageExchange kycExchange = signUpMsg.getPayload().getMessageExchange(ServiceTypeEnum.KYC_SERVICE);</span>
+<span class="fc bfc" id="L1131" title="All 2 branches covered.">		for (ComplianceContact contact : signUpAccResponse.getContacts()) {</span>
+<span class="fc" id="L1132">			updateContactStatus(blackListexchange, sanctionExchange, fraugsterExchange, kycExchange, contact,</span>
+<span class="fc" id="L1133">					signUpAccResponse.getBlacklistStatus());</span>
+<span class="fc" id="L1134">		}</span>
+<span class="fc" id="L1135">		return signUpAccResponse;</span>
+	}
+
+	/**
+	 * Sets the CFX add contact service statuses.
+	 *
+	 * @param account
+	 *            the account
+	 * @param msg
+	 *            the msg
+	 * @return the compliance account
+	 */
+	private ComplianceAccount setCFXAddContactServiceStatuses(ComplianceAccount account, Message&lt;MessageContext&gt; msg) {
+<span class="nc" id="L1148">		return setCommonAddContactServiceStatuses(account, msg);</span>
+	}
+
+	/**
+	 * Sets the PFX add contact service statuses.
+	 *
+	 * @param account
+	 *            the account
+	 * @param msg
+	 *            the msg
+	 * @return the compliance account
+	 */
+	private ComplianceAccount setPFXAddContactServiceStatuses(ComplianceAccount account, Message&lt;MessageContext&gt; msg) {
+<span class="nc" id="L1161">		return setCommonAddContactServiceStatuses(account, msg);</span>
+	}
+
+	/**
+	 * Sets the common add contact service statuses.
+	 *
+	 * @param addContactAccount
+	 *            the add contact account
+	 * @param addContactMsg
+	 *            the add contact msg
+	 * @return the compliance account
+	 */
+	private ComplianceAccount setCommonAddContactServiceStatuses(ComplianceAccount addContactAccount,
+			Message&lt;MessageContext&gt; addContactMsg) {
+
+<span class="nc" id="L1176">		RegistrationServiceRequest registrationServiceRequest = (RegistrationServiceRequest) addContactMsg.getPayload()</span>
+<span class="nc" id="L1177">				.getGatewayMessageExchange().getRequest();</span>
+
+<span class="nc" id="L1179">		Account regAccount = registrationServiceRequest.getAccount();</span>
+
+<span class="nc" id="L1181">		MessageExchange blackListexchange = addContactMsg.getPayload()</span>
+<span class="nc" id="L1182">				.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L1183">		MessageExchange sanctionExchange = addContactMsg.getPayload()</span>
+<span class="nc" id="L1184">				.getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L1185">		MessageExchange fraugsterExchange = addContactMsg.getPayload()</span>
+<span class="nc" id="L1186">				.getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L1187">		MessageExchange kycExchange = addContactMsg.getPayload().getMessageExchange(ServiceTypeEnum.KYC_SERVICE);</span>
+
+<span class="nc" id="L1189">		setPreviousStatus(addContactAccount, regAccount);</span>
+<span class="nc" id="L1190">		setPreviousWatchlistStatus(addContactAccount, regAccount, registrationServiceRequest);</span>
+<span class="nc bnc" id="L1191" title="All 2 branches missed.">		for (ComplianceContact contactAdded : addContactAccount.getContacts()) {</span>
+
+<span class="nc" id="L1193">			updateContactStatus(blackListexchange, sanctionExchange, fraugsterExchange, kycExchange, contactAdded,</span>
+<span class="nc" id="L1194">					addContactAccount.getBlacklistStatus());</span>
+<span class="nc" id="L1195">		}</span>
+
+<span class="nc" id="L1197">		return addContactAccount;</span>
+	}
+
+	/**
+	 * Sets the previous status.
+	 *
+	 * @param account
+	 *            the account
+	 * @param regAccount
+	 *            the reg account
+	 */
+	private void setPreviousStatus(ComplianceAccount account, Account regAccount) {
+
+<span class="nc bnc" id="L1210" title="All 2 branches missed.">		if (ServiceStatus.NOT_REQUIRED.toString().equals(account.getBlacklistStatus())) {</span>
+<span class="nc" id="L1211">			account.setBlacklistStatus(regAccount.getPreviousBlacklistStatus());</span>
+		}
+
+<span class="nc bnc" id="L1214" title="All 2 branches missed.">		if (ServiceStatus.NOT_REQUIRED.toString().equals(account.getSanctionStatus())) {</span>
+<span class="nc" id="L1215">			account.setSanctionStatus(regAccount.getPreviousSanctionStatus());</span>
+		}
+		/**
+		 * KYC and Fraugster status will be always not_required fro account.
+		 * need to check whether these below to check can be skipped?
+		 **/
+<span class="nc bnc" id="L1221" title="All 2 branches missed.">		if (ServiceStatus.NOT_REQUIRED.toString().equals(account.getKycStatus())) {</span>
+<span class="nc" id="L1222">			account.setKycStatus(regAccount.getPreviousKycStatus());</span>
+		}
+
+<span class="nc bnc" id="L1225" title="All 2 branches missed.">		if (ServiceStatus.NOT_REQUIRED.toString().equals(account.getFraugsterStatus())) {</span>
+<span class="nc" id="L1226">			account.setFraugsterStatus(regAccount.getPreviousFraugsterStatus());</span>
+		}
+<span class="nc" id="L1228">	}</span>
+
+	/**
+	 * Sets the previous watchlist status.
+	 *
+	 * @param account
+	 *            the account
+	 * @param regAccount
+	 *            the reg account
+	 * @param registrationServiceRequest
+	 *            the registration service request
+	 */
+	private void setPreviousWatchlistStatus(ComplianceAccount account, Account regAccount,
+			RegistrationServiceRequest registrationServiceRequest) {
+<span class="nc bnc" id="L1242" title="All 2 branches missed.">		if (!StringUtils.isNullOrEmpty(regAccount.getPreviousPaymentinWatchlistStatus())) {</span>
+<span class="nc bnc" id="L1243" title="All 2 branches missed.">			if (ServiceStatus.FAIL.toString().equals(regAccount.getPreviousPaymentinWatchlistStatus())) {</span>
+<span class="nc" id="L1244">				account.setPaymentinWatchlistStatus(ServiceStatus.FAIL.name());</span>
+			} else {
+<span class="nc" id="L1246">				account.setPaymentinWatchlistStatus((String) registrationServiceRequest</span>
+<span class="nc" id="L1247">						.getAdditionalAttribute(Constants.PAYMENTIN_WATCHLIST_STATUS));</span>
+			}
+		} else {
+<span class="nc" id="L1250">			account.setPaymentinWatchlistStatus(</span>
+<span class="nc" id="L1251">					(String) registrationServiceRequest.getAdditionalAttribute(Constants.PAYMENTIN_WATCHLIST_STATUS));</span>
+		}
+<span class="nc bnc" id="L1253" title="All 2 branches missed.">		if (!StringUtils.isNullOrEmpty(regAccount.getPreviousPaymentoutWatchlistStatus())) {</span>
+<span class="nc bnc" id="L1254" title="All 2 branches missed.">			if (ServiceStatus.FAIL.toString().equals(regAccount.getPreviousPaymentoutWatchlistStatus())) {</span>
+<span class="nc" id="L1255">				account.setPaymentoutWatchlistStatus(ServiceStatus.FAIL.name());</span>
+			} else {
+<span class="nc" id="L1257">				account.setPaymentoutWatchlistStatus((String) registrationServiceRequest</span>
+<span class="nc" id="L1258">						.getAdditionalAttribute(Constants.PAYMENTOUT_WATCHLIST_STATUS));</span>
+			}
+		} else {
+<span class="nc" id="L1261">			account.setPaymentoutWatchlistStatus(</span>
+<span class="nc" id="L1262">					(String) registrationServiceRequest.getAdditionalAttribute(Constants.PAYMENTOUT_WATCHLIST_STATUS));</span>
+		}
+<span class="nc" id="L1264">	}</span>
+
+	/**
+	 * Update contact status.
+	 *
+	 * @param blackListexchange
+	 *            the black listexchange
+	 * @param sanctionExchange
+	 *            the sanction exchange
+	 * @param fraugsterExchange
+	 *            the fraugster exchange
+	 * @param kycExchange
+	 *            the kyc exchange
+	 * @param contact
+	 *            the contact
+	 * @param accountBlackListStatus
+	 *            the account black list status
+	 */
+	private void updateContactStatus(MessageExchange blackListexchange, MessageExchange sanctionExchange,
+			MessageExchange fraugsterExchange, MessageExchange kycExchange, ComplianceContact contact,
+			String accountBlackListStatus) {
+<span class="fc" id="L1285">		EventServiceLog blacklistLog = blackListexchange.getEventServiceLog(ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="fc" id="L1286">				EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="fc" id="L1287">		EventServiceLog countryCheckLog = blackListexchange.getEventServiceLog(ServiceTypeEnum.HRC_SERVICE,</span>
+<span class="fc" id="L1288">				EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="fc" id="L1289">		EventServiceLog globalCheckLog = blackListexchange.getEventServiceLog(ServiceTypeEnum.GLOBAL_CHECK_SERVICE,</span>
+<span class="fc" id="L1290">				EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="fc" id="L1291">		EventServiceLog sanctionLog = sanctionExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="fc" id="L1292">				EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="fc" id="L1293">		EventServiceLog fraugsterLog = fraugsterExchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="fc" id="L1294">				EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="fc" id="L1295">		EventServiceLog kycLog = kycExchange.getEventServiceLog(ServiceTypeEnum.KYC_SERVICE, EntityEnum.CONTACT.name(),</span>
+<span class="fc" id="L1296">				contact.getId());</span>
+
+<span class="fc" id="L1298">		contact.setCustomCheckStatus(getOverallCustomCheckStatus(globalCheckLog, countryCheckLog));</span>
+
+		// this is signup process and there would be no previuos status hence
+		// removing below if conditions
+<span class="pc bpc" id="L1302" title="1 of 2 branches missed.">		if (null == blacklistLog.getStatus()) {</span>
+<span class="nc" id="L1303">			contact.setBlacklistStatus(accountBlackListStatus);</span>
+		} else {
+<span class="fc" id="L1305">			contact.setBlacklistStatus(blacklistLog.getStatus());</span>
+		}
+<span class="fc" id="L1307">		contact.setSanctionStatus(sanctionLog.getStatus());</span>
+<span class="fc" id="L1308">		contact.setFraugsterStatus(fraugsterLog.getStatus());</span>
+<span class="fc" id="L1309">		contact.setKycStatus(kycLog.getStatus());</span>
+
+<span class="fc" id="L1311">	}</span>
+
+	/**
+	 * Gets the overall custom check status.
+	 *
+	 * @param firstGlobalCheckLog
+	 *            the first global check log
+	 * @param firstCountryCheckLog
+	 *            the first country check log
+	 * @return the overall custom check status
+	 */
+	private String getOverallCustomCheckStatus(EventServiceLog firstGlobalCheckLog,
+			EventServiceLog firstCountryCheckLog) {
+<span class="pc bpc" id="L1324" title="1 of 2 branches missed.">		if (isCustomCheckStatusServiceFailure(firstGlobalCheckLog, firstCountryCheckLog)) {</span>
+<span class="nc" id="L1325">			return Constants.SERVICE_FAILURE;</span>
+<span class="pc bpc" id="L1326" title="1 of 2 branches missed.">		} else if (isCustomCheckStatusFailed(firstGlobalCheckLog, firstCountryCheckLog)) {</span>
+<span class="nc" id="L1327">			return Constants.FAIL;</span>
+<span class="pc bpc" id="L1328" title="1 of 2 branches missed.">		} else if (isCustomCheckNotRequired(firstGlobalCheckLog, firstCountryCheckLog)) {</span>
+<span class="nc" id="L1329">			return Constants.NOT_REQUIRED;</span>
+<span class="pc bpc" id="L1330" title="1 of 2 branches missed.">		} else if (isCustomCheckNotPerformed(firstGlobalCheckLog, firstCountryCheckLog)) {</span>
+<span class="nc" id="L1331">			return Constants.NOT_PERFORMED;</span>
+		} else {
+<span class="fc" id="L1333">			return Constants.PASS;</span>
+		}
+	}
+
+	/**
+	 * Checks if is custom check not performed.
+	 *
+	 * @param firstGlobalCheckLog
+	 *            the first global check log
+	 * @param firstCountryCheckLog
+	 *            the first country check log
+	 * @return true, if is custom check not performed
+	 */
+	private boolean isCustomCheckNotPerformed(EventServiceLog firstGlobalCheckLog,
+			EventServiceLog firstCountryCheckLog) {
+<span class="pc bpc" id="L1348" title="1 of 2 branches missed.">		return Constants.NOT_PERFORMED.equals(firstCountryCheckLog.getStatus())</span>
+<span class="pc bpc" id="L1349" title="1 of 2 branches missed.">				|| Constants.NOT_PERFORMED.equals(firstGlobalCheckLog.getStatus());</span>
+	}
+
+	/**
+	 * Checks if is custom check not required.
+	 *
+	 * @param firstGlobalCheckLog
+	 *            the first global check log
+	 * @param firstCountryCheckLog
+	 *            the first country check log
+	 * @return true, if is custom check not required
+	 */
+	private boolean isCustomCheckNotRequired(EventServiceLog firstGlobalCheckLog,
+			EventServiceLog firstCountryCheckLog) {
+<span class="pc bpc" id="L1363" title="1 of 2 branches missed.">		return Constants.NOT_REQUIRED.equals(firstCountryCheckLog.getStatus())</span>
+<span class="pc bnc" id="L1364" title="All 2 branches missed.">				&amp;&amp; Constants.NOT_REQUIRED.equals(firstGlobalCheckLog.getStatus());</span>
+	}
+
+	/**
+	 * Checks if is custom check status service failure.
+	 *
+	 * @param firstGlobalCheckLog
+	 *            the first global check log
+	 * @param firstCountryCheckLog
+	 *            the first country check log
+	 * @return true, if is custom check status service failure
+	 */
+	private boolean isCustomCheckStatusServiceFailure(EventServiceLog firstGlobalCheckLog,
+			EventServiceLog firstCountryCheckLog) {
+<span class="pc bpc" id="L1378" title="1 of 2 branches missed.">		return Constants.SERVICE_FAILURE.equals(firstCountryCheckLog.getStatus())</span>
+<span class="pc bpc" id="L1379" title="1 of 2 branches missed.">				|| Constants.SERVICE_FAILURE.equals(firstGlobalCheckLog.getStatus());</span>
+	}
+
+	/**
+	 * Checks if is custom check status failed.
+	 *
+	 * @param firstGlobalCheckLog
+	 *            the first global check log
+	 * @param firstCountryCheckLog
+	 *            the first country check log
+	 * @return true, if is custom check status failed
+	 */
+	private boolean isCustomCheckStatusFailed(EventServiceLog firstGlobalCheckLog,
+			EventServiceLog firstCountryCheckLog) {
+<span class="pc bpc" id="L1393" title="1 of 2 branches missed.">		return Constants.FAIL.equals(firstCountryCheckLog.getStatus())</span>
+<span class="pc bpc" id="L1394" title="1 of 2 branches missed.">				|| Constants.FAIL.equals(firstGlobalCheckLog.getStatus());</span>
+	}
+
+	/**
+	 * Update registration dates.
+	 *
+	 * @param account
+	 *            the account
+	 */
+	private void updateRegistrationDates(ComplianceAccount account) {
+<span class="fc" id="L1404">		Timestamp time = new Timestamp(System.currentTimeMillis());</span>
+<span class="fc" id="L1405">		account.setRegistrationInDate(time);</span>
+<span class="pc bpc" id="L1406" title="1 of 2 branches missed.">		if (ContactComplianceStatus.ACTIVE==account.getAcs()) {</span>
+<span class="nc" id="L1407">			account.setRegisteredDate(time);</span>
+<span class="nc" id="L1408">			Calendar c = Calendar.getInstance();</span>
+<span class="nc" id="L1409">			c.setTime(time);</span>
+<span class="nc" id="L1410">			c.add(Calendar.YEAR, PropertyHandler.getComplianceExpiryYears());</span>
+<span class="nc" id="L1411">			account.setExpiryDate(new Timestamp(c.getTimeInMillis()));</span>
+		}
+<span class="fc" id="L1413">	}</span>
+	
+	/**
+	 * Sets the contact stp flag.
+	 *
+	 * @param signUpContact the new contact stp flag
+	 */
+	private void setContactStpFlag(List&lt;ComplianceContact&gt; signUpContact) {
+<span class="fc bfc" id="L1421" title="All 2 branches covered.">		for (ComplianceContact contact : signUpContact) {</span>
+<span class="fc" id="L1422">			boolean flag = contact.getCcs().name().equals(ContactComplianceStatus.ACTIVE.name());</span>
+<span class="fc" id="L1423">			contact.setSTPFlag(flag);</span>
+<span class="fc" id="L1424">		}</span>
+<span class="fc" id="L1425">	}</span>
+	
+	/**
+	 * AT-3398
+	 * Creates the response for EU legal entity customers.
+	 *
+	 * @param responseContacts the response contacts
+	 * @param kycProviderResponse the kyc provider response
+	 */
+	private void createResponseForEULegalEntityBlacklistedCustomers(Map&lt;Integer, ComplianceContact&gt; responseContacts) {
+		
+<span class="nc bnc" id="L1436" title="All 2 branches missed.">		for(ComplianceContact complianceContact : responseContacts.values()) {</span>
+<span class="nc bnc" id="L1437" title="All 2 branches missed.">			if(complianceContact.getCrc()==ComplianceReasonCode.BLACKLISTED)</span>
+<span class="nc" id="L1438">				complianceContact.setCrc(ComplianceReasonCode.KYC_POI);</span>
+<span class="nc" id="L1439">		}</span>
+<span class="nc" id="L1440">	}</span>
+	
+	/**
+	 * Sets the contactstatus.
+	 *
+	 * @param signUpResponse the sign up response
+	 * @param signUpRequest  the sign up request
+	 */
+	private void setContactstatus(RegistrationResponse signUpResponse, RegistrationServiceRequest signUpRequest) {
+		
+		//AT-5550
+<span class="nc" id="L1451">		ComplianceAccount aResponse = signUpResponse.getAccount();</span>
+	
+<span class="nc bnc" id="L1453" title="All 2 branches missed.">		for (Contact contact : signUpRequest.getAccount().getContacts()) {</span>
+<span class="nc bnc" id="L1454" title="All 4 branches missed.">			if (contact.getOccupation() != null &amp;&amp; aResponse!=null) {</span>
+<span class="nc bnc" id="L1455" title="All 2 branches missed.">				for (ComplianceContact cResponse : aResponse.getContacts()) {</span>
+<span class="nc bnc" id="L1456" title="All 2 branches missed.">					if (contact.getOccupation().equalsIgnoreCase(&quot;pfxreg000&quot;)) {</span>
+<span class="nc" id="L1457">						cResponse.setResponseCode(ComplianceReasonCode.PASS.getReasonCode());</span>
+<span class="nc" id="L1458">						cResponse.setResponseDescription(ComplianceReasonCode.PASS.getReasonDescription());	</span>
+<span class="nc" id="L1459">						aResponse.setResponseCode(ComplianceReasonCode.PASS.getReasonCode());</span>
+<span class="nc" id="L1460">						aResponse.setResponseDescription(ComplianceReasonCode.PASS.getReasonDescription());						</span>
+					}
+<span class="nc bnc" id="L1462" title="All 2 branches missed.">					if (contact.getOccupation().equalsIgnoreCase(&quot;pfxreg902&quot;)) {</span>
+<span class="nc" id="L1463">						cResponse.setResponseCode(ComplianceReasonCode.BLACKLISTED.getReasonCode());</span>
+<span class="nc" id="L1464">						cResponse.setResponseDescription(ComplianceReasonCode.BLACKLISTED.getReasonDescription());</span>
+<span class="nc" id="L1465">						aResponse.setResponseCode(ComplianceReasonCode.BLACKLISTED.getReasonCode());</span>
+<span class="nc" id="L1466">						aResponse.setResponseDescription(ComplianceReasonCode.BLACKLISTED.getReasonDescription());</span>
+					}
+<span class="nc bnc" id="L1468" title="All 2 branches missed.">					if (contact.getOccupation().equalsIgnoreCase(&quot;pfxreg908&quot;)) {</span>
+<span class="nc" id="L1469">						cResponse.setResponseCode(ComplianceReasonCode.KYC.getReasonCode());</span>
+<span class="nc" id="L1470">						cResponse.setResponseDescription(ComplianceReasonCode.KYC.getReasonDescription());</span>
+<span class="nc" id="L1471">						aResponse.setResponseCode(ComplianceReasonCode.KYC.getReasonCode());</span>
+<span class="nc" id="L1472">						aResponse.setResponseDescription(ComplianceReasonCode.KYC.getReasonDescription());</span>
+					}
+<span class="nc bnc" id="L1474" title="All 2 branches missed.">					if (contact.getOccupation().equalsIgnoreCase(&quot;pfxreg909&quot;)) {</span>
+<span class="nc" id="L1475">						cResponse.setResponseCode(ComplianceReasonCode.KYC_NA.getReasonCode());</span>
+<span class="nc" id="L1476">						cResponse.setResponseDescription(ComplianceReasonCode.KYC_NA.getReasonDescription());</span>
+<span class="nc" id="L1477">						aResponse.setResponseCode(ComplianceReasonCode.KYC_NA.getReasonCode());</span>
+<span class="nc" id="L1478">						aResponse.setResponseDescription(ComplianceReasonCode.KYC_NA.getReasonDescription());</span>
+					}
+<span class="nc bnc" id="L1480" title="All 2 branches missed.">					if (contact.getOccupation().equalsIgnoreCase(&quot;pfxreg910&quot;)) {</span>
+<span class="nc" id="L1481">						cResponse.setResponseCode(ComplianceReasonCode.KYC_AND_SANCTIONED.getReasonCode());</span>
+<span class="nc" id="L1482">						cResponse.setResponseDescription(ComplianceReasonCode.KYC_AND_SANCTIONED.getReasonDescription());</span>
+<span class="nc" id="L1483">						aResponse.setResponseCode(ComplianceReasonCode.KYC_AND_SANCTIONED.getReasonCode());</span>
+<span class="nc" id="L1484">						aResponse.setResponseDescription(ComplianceReasonCode.KYC_AND_SANCTIONED.getReasonDescription());</span>
+					}
+<span class="nc bnc" id="L1486" title="All 2 branches missed.">					if (contact.getOccupation().equalsIgnoreCase(&quot;pfxreg918&quot;)) {</span>
+<span class="nc" id="L1487">						cResponse.setResponseCode(ComplianceReasonCode.KYC_POA.getReasonCode());</span>
+<span class="nc" id="L1488">						cResponse.setResponseDescription(ComplianceReasonCode.KYC_POA.getReasonDescription());</span>
+<span class="nc" id="L1489">						aResponse.setResponseCode(ComplianceReasonCode.KYC_POA.getReasonCode());</span>
+<span class="nc" id="L1490">						aResponse.setResponseDescription(ComplianceReasonCode.KYC_POA.getReasonDescription());</span>
+					}
+<span class="nc bnc" id="L1492" title="All 2 branches missed.">					if (contact.getOccupation().equalsIgnoreCase(&quot;pfxreg919&quot;)) {</span>
+<span class="nc" id="L1493">						cResponse.setResponseCode(ComplianceReasonCode.KYC_POI.getReasonCode());</span>
+<span class="nc" id="L1494">						cResponse.setResponseDescription(ComplianceReasonCode.KYC_POI.getReasonDescription());						</span>
+<span class="nc" id="L1495">						aResponse.setResponseCode(ComplianceReasonCode.KYC_POI.getReasonCode());</span>
+<span class="nc" id="L1496">						aResponse.setResponseDescription(ComplianceReasonCode.KYC_POI.getReasonDescription());</span>
+					}
+<span class="nc" id="L1498">				}	</span>
+			}
+<span class="nc" id="L1500">		}</span>
+<span class="nc" id="L1501">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

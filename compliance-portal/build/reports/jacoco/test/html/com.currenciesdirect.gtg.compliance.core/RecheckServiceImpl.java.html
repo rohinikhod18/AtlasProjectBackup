@@ -1,0 +1,506 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RecheckServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.core</a> &gt; <span class="el_source">RecheckServiceImpl.java</span></div><h1>RecheckServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.core;
+
+import java.sql.Timestamp;
+import java.util.List;
+import java.util.UUID;
+
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.ReprocessFailedDetails;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDto;
+import com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentin.PaymentInRecheckFailureDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutActivityLogDto;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutRecheckFailureDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.RegistrationRecheckFailureDetails;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.recheckmonitor.RecheckMonitorThread;
+import com.currenciesdirect.gtg.compliance.util.HttpClientPool;
+
+/**
+ * The Class RecheckServiceImpl.
+ */
+@Component(&quot;recheckServiceImpl&quot;)
+<span class="fc" id="L39">public class RecheckServiceImpl implements IRecheckService {</span>
+
+	public static final String BASE_COMPLIANCE_SERVICE_URL = &quot;baseComplianceServiceUrl&quot;;
+
+	/** The i recheck DB service. */
+	@Autowired
+	@Qualifier(&quot;reCheckDBServiceImpl&quot;)
+	private IRecheckDBService iRecheckDBService;
+	
+	/** The payment out DB service impl. */
+	@Autowired
+    @Qualifier(&quot;paymentOutDBServiceImpl&quot;)
+	private IPaymentOutDBService paymentOutDBServiceImpl;
+	
+	/** The payment in DB service impl. */
+	@Autowired
+    @Qualifier(&quot;payInDBServiceImpl&quot;)
+	private IPaymentInDBService paymentInDBServiceImpl;
+	
+	@Value(&quot;${datalake.tx.kafka.enable}&quot;)
+	public String datalakeTxKafkaEnable;
+
+	
+
+	/** The log. */
+<span class="fc" id="L64">	private Logger log = LoggerFactory.getLogger(RecheckServiceImpl.class);</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckService#
+	 * repeatCheckFundsOutFailures(com.currenciesdirect.gtg.compliance.iam.core.
+	 * domain.UserProfile,
+	 * com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse repeatCheckFundsOutFailures(UserProfile user, BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+<span class="nc" id="L77">		BaseRepeatCheckResponse baseRepeatCheckResponse = new BaseRepeatCheckResponse();</span>
+		List&lt;PaymentOutRecheckFailureDetails&gt; paymentOutFailedList;
+		List&lt;ReprocessFailedDetails&gt; reprocessFailedList;
+		try {
+<span class="nc" id="L81">			paymentOutFailedList = iRecheckDBService.getFundsOutFailures(request);</span>
+<span class="nc" id="L82">			int noOfRecordsToProcess = iRecheckDBService.saveFailedDetailsToDB(paymentOutFailedList, baseRepeatCheckResponse);</span>
+<span class="nc" id="L83">			reprocessFailedList = iRecheckDBService.getReprocessList(request, baseRepeatCheckResponse);</span>
+<span class="nc" id="L84">			RecheckMonitorThread recheckMonitorThread = new RecheckMonitorThread(user,  </span>
+					 reprocessFailedList, iRecheckDBService, baseRepeatCheckResponse);
+<span class="nc" id="L86">			recheckMonitorThread.setName(Constants.RECHECK_MONITOR+&quot;-&quot;+reprocessFailedList.get(0).getBatchId());</span>
+<span class="nc" id="L87">			recheckMonitorThread.start();</span>
+<span class="nc" id="L88">			baseRepeatCheckResponse.setTotalCount(noOfRecordsToProcess);</span>
+<span class="nc" id="L89">			return baseRepeatCheckResponse;</span>
+<span class="nc" id="L90">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L91">			logError(e);</span>
+<span class="nc" id="L92">			throw e;</span>
+<span class="nc" id="L93">		} catch (Exception e) {</span>
+<span class="nc" id="L94">			logError(e);</span>
+<span class="nc" id="L95">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		}
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckService#repeatCheckRegistrationFailures(com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile, com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse repeatCheckRegistrationFailures(UserProfile user, BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+<span class="nc" id="L105">		BaseRepeatCheckResponse repeatCheckResponse = new BaseRepeatCheckResponse();</span>
+		List&lt;RegistrationRecheckFailureDetails&gt; registrationFailedList;
+		List&lt;ReprocessFailedDetails&gt; reprocessFailedList;
+		try {
+<span class="nc" id="L109">			registrationFailedList = iRecheckDBService.getRegistrationFailures(request);</span>
+<span class="nc" id="L110">			int noOfRecordsToProcess = iRecheckDBService.saveFailedRegDetailsToDB(registrationFailedList, repeatCheckResponse);</span>
+<span class="nc" id="L111">			reprocessFailedList = iRecheckDBService.getReprocessList(request, repeatCheckResponse);</span>
+<span class="nc" id="L112">			RecheckMonitorThread recheckMonitorThread = new RecheckMonitorThread(user,  </span>
+					 reprocessFailedList, iRecheckDBService, repeatCheckResponse);
+<span class="nc" id="L114">			recheckMonitorThread.setName(Constants.RECHECK_MONITOR+&quot;-&quot;+reprocessFailedList.get(0).getBatchId());</span>
+<span class="nc" id="L115">			recheckMonitorThread.start();</span>
+<span class="nc" id="L116">			repeatCheckResponse.setTotalCount(noOfRecordsToProcess);</span>
+<span class="nc" id="L117">			return repeatCheckResponse;</span>
+
+<span class="nc" id="L119">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L120">			logError(e);</span>
+<span class="nc" id="L121">			throw e;</span>
+<span class="nc" id="L122">		} catch (Exception e) {</span>
+<span class="nc" id="L123">			logError(e);</span>
+<span class="nc" id="L124">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		}
+	}
+
+	/**
+	 * Log error.
+	 *
+	 * @param t
+	 *            the t
+	 */
+	private void logError(Throwable t) {
+<span class="fc" id="L135">		log.error(&quot;Exception: &quot;, t);</span>
+<span class="fc" id="L136">	}</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckService#
+	 * getRegistrationServiceFailureCount(com.currenciesdirect.gtg.compliance.
+	 * iam.core.domain.UserProfile,
+	 * com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse repeatCheckFundsInFailures(UserProfile user, BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+<span class="nc" id="L149">		BaseRepeatCheckResponse baseRepeatCheckResponse = new BaseRepeatCheckResponse();</span>
+		List&lt;PaymentInRecheckFailureDetails&gt; paymentInFailedList;
+		List&lt;ReprocessFailedDetails&gt; reprocessFailedList;
+		try {
+<span class="nc" id="L153">			paymentInFailedList = iRecheckDBService.getFundsInFailures(request);</span>
+<span class="nc" id="L154">			int noOfRecordsToProcess = iRecheckDBService.saveFailedFundsInDetailsToDB(paymentInFailedList, baseRepeatCheckResponse);</span>
+<span class="nc" id="L155">			reprocessFailedList = iRecheckDBService.getReprocessList(request, baseRepeatCheckResponse);</span>
+<span class="nc" id="L156">            RecheckMonitorThread recheckMonitorThread =</span>
+                  new RecheckMonitorThread(user, reprocessFailedList, iRecheckDBService, baseRepeatCheckResponse);
+<span class="nc" id="L158">            recheckMonitorThread.setName(Constants.RECHECK_MONITOR+&quot;-&quot;+reprocessFailedList.get(0).getBatchId());</span>
+<span class="nc" id="L159">			recheckMonitorThread.start();</span>
+<span class="nc" id="L160">			baseRepeatCheckResponse.setTotalCount(noOfRecordsToProcess);</span>
+<span class="nc" id="L161">			return baseRepeatCheckResponse;</span>
+<span class="nc" id="L162">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L163">			logError(e);</span>
+<span class="nc" id="L164">			throw e;</span>
+<span class="nc" id="L165">		} catch (Exception e) {</span>
+<span class="nc" id="L166">			logError(e);</span>
+<span class="nc" id="L167">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		}
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckService#getRegistrationServiceFailureCount(com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile, com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse getRegistrationServiceFailureCount(UserProfile user, BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+<span class="fc" id="L177">		BaseRepeatCheckResponse repeatCheckResponse = null;</span>
+		try {
+<span class="fc" id="L179">			repeatCheckResponse = iRecheckDBService.getRegistrationServiceFailureCount(request);</span>
+<span class="nc" id="L180">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L181">			logError(e);</span>
+<span class="nc" id="L182">			throw e;</span>
+<span class="nc" id="L183">		} catch (Exception e) {</span>
+<span class="nc" id="L184">			logError(e);</span>
+<span class="nc" id="L185">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L186">		}</span>
+<span class="fc" id="L187">		return repeatCheckResponse;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckService#
+	 * getFundsInServiceFailureCount(com.currenciesdirect.gtg.compliance.iam.
+	 * core.domain.UserProfile,
+	 * com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse getFundsInServiceFailureCount(UserProfile user, BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+<span class="fc" id="L201">		BaseRepeatCheckResponse repeatCheckResponse = null;</span>
+		try {
+<span class="fc" id="L203">			repeatCheckResponse = iRecheckDBService.getFundsInServiceFailureCount(request);</span>
+<span class="fc" id="L204">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L205">			logError(e);</span>
+<span class="fc" id="L206">			throw e;</span>
+<span class="nc" id="L207">		} catch (Exception e) {</span>
+<span class="nc" id="L208">			logError(e);</span>
+<span class="nc" id="L209">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L210">		}</span>
+<span class="fc" id="L211">		return repeatCheckResponse;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckService#
+	 * getFundsOutServiceFailureCount(com.currenciesdirect.gtg.compliance.iam.
+	 * core.domain.UserProfile,
+	 * com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse getFundsOutServiceFailureCount(UserProfile user, BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+<span class="fc" id="L225">		BaseRepeatCheckResponse repeatCheckResponse = null;</span>
+		try {
+<span class="fc" id="L227">			repeatCheckResponse = iRecheckDBService.getFundsOutServiceFailureCount(request);</span>
+<span class="fc" id="L228">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L229">			logError(e);</span>
+<span class="fc" id="L230">			throw e;</span>
+<span class="nc" id="L231">		} catch (Exception e) {</span>
+<span class="nc" id="L232">			logError(e);</span>
+<span class="nc" id="L233">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L234">		}</span>
+<span class="fc" id="L235">		return repeatCheckResponse;</span>
+	}
+
+	
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckService#getRepeatCheckProgressBar(com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public Integer getRepeatCheckProgressBar(BaseRepeatCheckRequest request) throws CompliancePortalException {
+<span class="fc" id="L245">		int response = 0;</span>
+		try {
+<span class="fc" id="L247">			response = iRecheckDBService.getRepeatCheckProgressBar(request);</span>
+<span class="nc" id="L248">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L249">			logError(e);</span>
+<span class="nc" id="L250">			throw e;</span>
+<span class="nc" id="L251">		} catch (Exception e) {</span>
+<span class="nc" id="L252">			logError(e);</span>
+<span class="nc" id="L253">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L254">		}</span>
+<span class="fc" id="L255">		return response;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckService#forceClearfundsOuts(com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile, com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse forceClearFundsOuts(UserProfile user, BaseRepeatCheckRequest request) throws CompliancePortalException{
+<span class="fc" id="L263">	  BaseRepeatCheckResponse repeatCheckResponse = new BaseRepeatCheckResponse();</span>
+	  List&lt;PaymentOutRecheckFailureDetails&gt; paymentOutFailedList;
+      try {
+<span class="fc" id="L266">          paymentOutFailedList = iRecheckDBService.getFundsOutFailures(request);</span>
+          PaymentOutActivityLogDto activityLogs;
+<span class="fc bfc" id="L268" title="All 2 branches covered.">          for(PaymentOutRecheckFailureDetails entry:paymentOutFailedList){</span>
+<span class="fc" id="L269">            activityLogs = builFundsOutActivity(user, entry);</span>
+<span class="fc" id="L270">            paymentOutDBServiceImpl.forceClearPaymentOut(entry, activityLogs, user);</span>
+<span class="fc" id="L271">            callKafkaForPaymentUpdate(Constants.OPERATION_UPDATE_OPI,Constants.SERVICE_FUNDSOUT,UUID.randomUUID().toString(),String.valueOf(entry.getTradePaymentId()));</span>
+<span class="fc" id="L272">          }</span>
+<span class="fc" id="L273">          repeatCheckResponse.setStatus(&quot;PASS&quot;);</span>
+<span class="nc" id="L274">      }catch (CompliancePortalException e) {</span>
+<span class="nc" id="L275">        logError(e);</span>
+<span class="nc" id="L276">        throw e;</span>
+<span class="nc" id="L277">    } catch (Exception e) {</span>
+<span class="nc" id="L278">        logError(e);</span>
+<span class="nc" id="L279">        throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L280">    }</span>
+<span class="fc" id="L281">	  return repeatCheckResponse;</span>
+	}
+	
+	public void callKafkaForPaymentUpdate(String operationType, String serviceType, String transactionId, String tradePaymentId) {
+		
+<span class="pc bpc" id="L286" title="1 of 2 branches missed.">		if(!(&quot;true&quot;.equalsIgnoreCase(datalakeTxKafkaEnable))) {</span>
+<span class="fc" id="L287">			log.info(&quot;------- Feature DatalakeTxKafka is Disabled --------\n&quot;);</span>
+<span class="fc" id="L288">			return;</span>
+		}
+		
+		try {
+<span class="nc" id="L292">		String baseUrl = System.getProperty(&quot;baseComplianceServiceUrl&quot;)+&quot;/compliance-service/rest-services/producedatalaketxmessage&quot;;</span>
+<span class="nc" id="L293">		baseUrl+=&quot;?operation=&quot;+operationType+&quot;&amp;serviceType=&quot;+serviceType+&quot;&amp;transactionId=&quot;+transactionId+&quot;&amp;tradePaymentId=&quot;+tradePaymentId;</span>
+		
+		
+<span class="nc" id="L296">		HttpClientPool clientPool = HttpClientPool.getInstance();</span>
+<span class="nc" id="L297">		MultivaluedHashMap&lt;String, Object&gt; headers = new MultivaluedHashMap&lt;&gt;();</span>
+<span class="nc" id="L298">		clientPool.sendAsyncRequest(</span>
+				baseUrl, &quot;POST&quot;,
+				null, headers, MediaType.APPLICATION_JSON_TYPE);
+
+<span class="nc" id="L302">		}catch(CompliancePortalException e) {</span>
+<span class="nc" id="L303">			log.error(e.getMessage());</span>
+<span class="nc" id="L304">		}</span>
+<span class="nc" id="L305">	}</span>
+		
+	
+	
+	/**
+	 * Buil funds out activity.
+	 *
+	 * @param user the user
+	 * @param entry the entry
+	 * @return the payment out activity log dto
+	 */
+	private PaymentOutActivityLogDto builFundsOutActivity(UserProfile user, PaymentOutRecheckFailureDetails entry){
+<span class="fc" id="L317">	  PaymentOutActivityLogDto logData = new PaymentOutActivityLogDto();</span>
+	  
+<span class="fc" id="L319">	  logData.setAccountId(entry.getAccountId());</span>
+<span class="fc" id="L320">	  logData.setActivityBy(user.getName());</span>
+<span class="fc" id="L321">	  logData.setComment(&quot;Force cleared payment&quot;);</span>
+<span class="fc" id="L322">	  logData.setCreatedBy(user.getName());</span>
+<span class="fc" id="L323">	  Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="fc" id="L324">	  logData.setCreatedOn(timestamp);</span>
+<span class="fc" id="L325">	  logData.setOrgCode(entry.getOrgCode());</span>
+<span class="fc" id="L326">	  logData.setTimeStatmp(timestamp);</span>
+<span class="fc" id="L327">	  logData.setUpdatedBy(user.getName());</span>
+<span class="fc" id="L328">	  logData.setUpdatedOn(timestamp);</span>
+<span class="fc" id="L329">	  logData.setPaymentOutId(entry.getPaymentOutId());</span>
+	  
+<span class="fc" id="L331">	  PaymentOutActivityLogDetailDto activityLogDetailDto = new PaymentOutActivityLogDetailDto();</span>
+<span class="fc" id="L332">      activityLogDetailDto.setActivityType(ActivityType.PAYMENT_OUT_RECHECK);</span>
+<span class="fc" id="L333">      activityLogDetailDto.setLog(&quot;Force cleared Payment out&quot;);</span>
+<span class="fc" id="L334">      activityLogDetailDto.setCreatedBy(user.getName());</span>
+<span class="fc" id="L335">      activityLogDetailDto.setUpdatedBy(user.getName());</span>
+<span class="fc" id="L336">      activityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="fc" id="L337">      activityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="fc" id="L338">      logData.setActivityLogDetailDto(activityLogDetailDto);	  </span>
+<span class="fc" id="L339">	  return logData;</span>
+	}
+	
+
+	
+	
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckService#forceClearFundsIn(com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile, com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public BaseRepeatCheckResponse forceClearFundsIn(UserProfile user, BaseRepeatCheckRequest request)
+			throws CompliancePortalException {
+<span class="fc" id="L352">		BaseRepeatCheckResponse repeatCheckResponse = new BaseRepeatCheckResponse();</span>
+		List&lt;PaymentInRecheckFailureDetails&gt; paymentInFailedList;
+		try {
+<span class="fc" id="L355">			paymentInFailedList = iRecheckDBService.getFundsInFailures(request);</span>
+			PaymentInActivityLogDto activityLogs;
+<span class="fc bfc" id="L357" title="All 2 branches covered.">			for (PaymentInRecheckFailureDetails entry : paymentInFailedList) {</span>
+<span class="fc" id="L358">				activityLogs = builFundsInActivity(user, entry);</span>
+<span class="fc" id="L359">				paymentInDBServiceImpl.forceClearPaymentIn(entry, activityLogs, user);</span>
+<span class="fc" id="L360">	            callKafkaForPaymentUpdate(Constants.OPERATION_UPDATE_OPI,Constants.SERVICE_FUNDSIN,UUID.randomUUID().toString(),String.valueOf(entry.getTradePaymentId()));</span>
+<span class="fc" id="L361">			}</span>
+<span class="fc" id="L362">			repeatCheckResponse.setStatus(&quot;PASS&quot;);</span>
+<span class="nc" id="L363">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L364">			logError(e);</span>
+<span class="nc" id="L365">			throw e;</span>
+<span class="nc" id="L366">		} catch (Exception e) {</span>
+<span class="nc" id="L367">			logError(e);</span>
+<span class="nc" id="L368">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L369">		}</span>
+<span class="fc" id="L370">		return repeatCheckResponse;</span>
+	}
+
+	/**
+	 * Buil funds in activity.
+	 *
+	 * @param user the user
+	 * @param entry the entry
+	 * @return the payment in activity log dto
+	 */
+	private PaymentInActivityLogDto builFundsInActivity(UserProfile user, PaymentInRecheckFailureDetails entry) {
+<span class="fc" id="L381">		PaymentInActivityLogDto logData = new PaymentInActivityLogDto();</span>
+
+<span class="fc" id="L383">		logData.setAccountId(entry.getAccountId());</span>
+<span class="fc" id="L384">		logData.setActivityBy(user.getName());</span>
+<span class="fc" id="L385">		logData.setComment(&quot;Force cleared payment&quot;);</span>
+<span class="fc" id="L386">		logData.setCreatedBy(user.getName());</span>
+<span class="fc" id="L387">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="fc" id="L388">		logData.setCreatedOn(timestamp);</span>
+<span class="fc" id="L389">		logData.setOrgCode(entry.getOrgCode());</span>
+<span class="fc" id="L390">		logData.setTimeStatmp(timestamp);</span>
+<span class="fc" id="L391">		logData.setUpdatedBy(user.getName());</span>
+<span class="fc" id="L392">		logData.setUpdatedOn(timestamp);</span>
+<span class="fc" id="L393">		logData.setPaymentInId(entry.getPaymentInId());</span>
+
+<span class="fc" id="L395">		PaymentInActivityLogDetailDto activityLogDetailDto = new PaymentInActivityLogDetailDto();</span>
+<span class="fc" id="L396">		activityLogDetailDto.setActivityType(ActivityType.PAYMENT_IN_RECHECK);</span>
+<span class="fc" id="L397">		activityLogDetailDto.setLog(&quot;Force cleared Payment In&quot;);</span>
+<span class="fc" id="L398">		activityLogDetailDto.setCreatedBy(user.getName());</span>
+<span class="fc" id="L399">		activityLogDetailDto.setUpdatedBy(user.getName());</span>
+<span class="fc" id="L400">		activityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="fc" id="L401">		activityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="fc" id="L402">		logData.setActivityLogDetailDto(activityLogDetailDto);</span>
+<span class="fc" id="L403">		return logData;</span>
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IRecheckService#deleteReprocessFailed(com.currenciesdirect.gtg.compliance.core.domain.BaseRepeatCheckRequest)
+	 */
+	@Override
+	public Integer deleteReprocessFailed(BaseRepeatCheckRequest request) throws CompliancePortalException {
+<span class="fc" id="L411">		Integer result = 0;</span>
+		try {
+<span class="fc" id="L413">			result = iRecheckDBService.deleteReprocessFailed(request);</span>
+<span class="nc" id="L414">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L415">			logError(e);</span>
+<span class="nc" id="L416">			throw e;</span>
+<span class="nc" id="L417">		} catch (Exception e) {</span>
+<span class="nc" id="L418">			logError(e);</span>
+<span class="nc" id="L419">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L420">		}</span>
+<span class="fc" id="L421">		return result;</span>
+	}
+	
+	/**
+	 * Update TMMQ retry count.
+	 *
+	 * @return true, if successful
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	@Override
+	public boolean updateTMMQRetryCount() throws CompliancePortalException {
+<span class="nc" id="L432">		boolean result = false;</span>
+		try {
+<span class="nc" id="L434">			result = iRecheckDBService.updateTMMQRetryCount();</span>
+<span class="nc" id="L435">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L436">			logError(e);</span>
+<span class="nc" id="L437">			throw e;</span>
+<span class="nc" id="L438">		} catch (Exception e) {</span>
+<span class="nc" id="L439">			logError(e);</span>
+<span class="nc" id="L440">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L441">		}</span>
+<span class="nc" id="L442">		return result;</span>
+	}
+
+	/**
+	 * Show count reprocess failed.
+	 *
+	 * @param batchId the batch id
+	 * @return the string
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	//AT-4289
+	@Override
+	public String showCountReprocessFailed(Integer batchId) throws CompliancePortalException {
+		String result;
+		try {
+<span class="nc" id="L457">			result = iRecheckDBService.showCountReprocessFailed(batchId);</span>
+<span class="nc" id="L458">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L459">			logError(e);</span>
+<span class="nc" id="L460">			throw e;</span>
+<span class="nc" id="L461">		} catch (Exception e) {</span>
+<span class="nc" id="L462">			logError(e);</span>
+<span class="nc" id="L463">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L464">		}</span>
+<span class="nc" id="L465">		return result;</span>
+	}
+
+	//AT-4289
+	@Override
+	public Integer clearReprocessFailed() throws CompliancePortalException {
+<span class="nc" id="L471">		Integer result = 0;</span>
+		try {
+<span class="nc" id="L473">			result = iRecheckDBService.clearReprocessFailed();</span>
+<span class="nc" id="L474">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L475">			logError(e);</span>
+<span class="nc" id="L476">			throw e;</span>
+<span class="nc" id="L477">		} catch (Exception e) {</span>
+<span class="nc" id="L478">			logError(e);</span>
+<span class="nc" id="L479">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L480">		}</span>
+<span class="nc" id="L481">		return result;</span>
+	}
+	
+	/**
+	 * Update post card TMMQ retry count.
+	 *
+	 * @return true, if successful
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	//Add For AT-5023
+	@Override
+	public boolean updatePostCardTMMQRetryCount() throws CompliancePortalException {
+<span class="nc" id="L493">		boolean result = false;</span>
+		try {
+<span class="nc" id="L495">			result = iRecheckDBService.updatePostCardTMMQRetryCount();</span>
+<span class="nc" id="L496">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L497">			logError(e);</span>
+<span class="nc" id="L498">			throw e;</span>
+<span class="nc" id="L499">		} catch (Exception e) {</span>
+<span class="nc" id="L500">			logError(e);</span>
+<span class="nc" id="L501">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L502">		}</span>
+<span class="nc" id="L503">		return result;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

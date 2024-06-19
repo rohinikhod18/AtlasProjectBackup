@@ -1,0 +1,826 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationDetailsTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.transformer</a> &gt; <span class="el_source">RegistrationDetailsTransformer.java</span></div><h1>RegistrationDetailsTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.transformer;
+
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.onfido.OnfidoSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSummary;
+import com.currenciesdirect.gtg.compliance.core.ITransform;
+import com.currenciesdirect.gtg.compliance.core.domain.AccountWrapper;
+import com.currenciesdirect.gtg.compliance.core.domain.Blacklist;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.ContactWrapper;
+import com.currenciesdirect.gtg.compliance.core.domain.CountryCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.CustomCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.EventDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.Fraugster;
+import com.currenciesdirect.gtg.compliance.core.domain.GlobalCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.InternalRule;
+import com.currenciesdirect.gtg.compliance.core.domain.Intuition;
+import com.currenciesdirect.gtg.compliance.core.domain.IpCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.Kyc;
+import com.currenciesdirect.gtg.compliance.core.domain.Onfido;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationAccount;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationContact;
+import com.currenciesdirect.gtg.compliance.core.domain.Sanction;
+import com.currenciesdirect.gtg.compliance.core.domain.Watchlist;
+import com.currenciesdirect.gtg.compliance.core.domain.internalrule.BlacklistSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.internalrule.IpSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.kyc.KYCSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationDetailsDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.sanction.SanctionSummary;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.DecimalFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.StringUtils;
+
+
+
+
+/**
+ * The Class RegistrationDetailsTransformer.
+ */
+@Component(&quot;registrationDetailsTransformer&quot;)
+<span class="fc" id="L47">public class RegistrationDetailsTransformer extends AbstractRegistrationTransformer implements ITransform&lt;RegistrationDetailsDto, RegistrationDetailsDBDto&gt; {</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.core.ITransform#transform(java.lang.
+	 * Object)
+	 */
+	@Override
+	public RegistrationDetailsDto transform(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L58">		RegistrationDetailsDto regDetailsDto = new RegistrationDetailsDto();</span>
+<span class="fc" id="L59">		regDetailsDto.setAccount(getAccount(detailsDBDto));</span>
+<span class="fc" id="L60">		regDetailsDto.setCurrentContact(getContact(detailsDBDto));</span>
+<span class="fc" id="L61">		regDetailsDto.setInternalRule(getInternalRule(detailsDBDto));</span>
+<span class="fc" id="L62">		regDetailsDto.setKyc(getKyc(detailsDBDto));</span>
+<span class="fc" id="L63">		regDetailsDto.setSanction(getSanction(detailsDBDto));</span>
+<span class="fc" id="L64">		regDetailsDto.setFraugster(getFraugster(detailsDBDto));</span>
+<span class="fc" id="L65">		regDetailsDto.setIntuition(getIntuition(detailsDBDto)); //AT-4114</span>
+<span class="fc" id="L66">		regDetailsDto.setOnfido(getOnfido(detailsDBDto));</span>
+<span class="fc" id="L67">		regDetailsDto.setOtherContacts(detailsDBDto.getOtherContacts());</span>
+<span class="fc" id="L68">		regDetailsDto.setPaginationDetails(detailsDBDto.getPaginationDetails());</span>
+<span class="fc" id="L69">		detailsDBDto.getActivityLogs().setTotalRecords(detailsDBDto.getActivityLogs().getActivityLogData().size());</span>
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">		if(detailsDBDto.getActivityLogs().getActivityLogData().size() &lt;= 10){</span>
+<span class="fc" id="L71">			regDetailsDto.setActivityLogs(detailsDBDto.getActivityLogs());</span>
+		} else {
+<span class="nc" id="L73">			detailsDBDto.getActivityLogs().setActivityLogData(detailsDBDto.getActivityLogs().getActivityLogData().subList(0, 10));</span>
+<span class="nc" id="L74">			regDetailsDto.setActivityLogs(detailsDBDto.getActivityLogs());</span>
+		}
+<span class="fc" id="L76">		Watchlist watchlist = deleteDuplicateWatclist(detailsDBDto.getWatachList());</span>
+<span class="fc" id="L77">		regDetailsDto.setWatchlist(watchlist);</span>
+<span class="fc" id="L78">		regDetailsDto.setStatusReason(detailsDBDto.getContactStatusReason());</span>
+<span class="pc bpc" id="L79" title="2 of 4 branches missed.">		if(detailsDBDto.getLockedBy() != null &amp;&amp; !detailsDBDto.getLockedBy().isEmpty()){</span>
+<span class="fc" id="L80">			regDetailsDto.setLocked(Boolean.TRUE);</span>
+<span class="fc" id="L81">			regDetailsDto.setLockedBy(detailsDBDto.getLockedBy());</span>
+<span class="fc" id="L82">			regDetailsDto.setUserResourceId(detailsDBDto.getUserResourceId());</span>
+		}
+<span class="fc" id="L84">		regDetailsDto.setDocumentList(detailsDBDto.getDocumentList());</span>
+<span class="fc" id="L85">		regDetailsDto.setAlertComplianceLog(detailsDBDto.getAlertComplianceLog());</span>
+<span class="fc" id="L86">		regDetailsDto.setIsOnQueue(detailsDBDto.getIsOnQueue());</span>
+<span class="fc" id="L87">		regDetailsDto.setDataAnonStatus(detailsDBDto.getDataAnonStatus());</span>
+<span class="fc" id="L88">		regDetailsDto.setPoiExists(detailsDBDto.getPoiExists());//AT-3391</span>
+		
+		//Added for AT-4190
+<span class="pc bpc" id="L91" title="1 of 2 branches missed.">		if(detailsDBDto.getIntuitionRiskLevel() != null) {</span>
+<span class="fc" id="L92">			regDetailsDto.setIntuitionRiskLevel(detailsDBDto.getIntuitionRiskLevel());</span>
+		}
+<span class="fc" id="L94">		regDetailsDto.setAccountVersion(detailsDBDto.getAccountVersion());</span>
+<span class="fc" id="L95">		return regDetailsDto;</span>
+	}
+
+	/**
+	 * Gets the account.
+	 *
+	 * @param detailsDBDto
+	 *            the details DB dto
+	 * @return the account
+	 */
+	private AccountWrapper getAccount(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L106">		AccountWrapper account = new AccountWrapper();</span>
+<span class="fc" id="L107">		RegistrationAccount regAccount = JsonConverterUtil.convertToObject(RegistrationAccount.class,</span>
+<span class="fc" id="L108">				detailsDBDto.getAccountAttrib());</span>
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">		if (regAccount != null) {</span>
+<span class="fc" id="L110">			account.setClientType(regAccount.getCustType());</span>
+<span class="fc" id="L111">			account.setCurrencyPair(regAccount.getSellingCurrency() + &quot;  -  &quot; + regAccount.getBuyingCurrency());</span>
+<span class="fc" id="L112">			account.setEstimTransValue(regAccount.getValueOfTransaction());</span>
+<span class="fc" id="L113">			account.setPurposeOfTran(regAccount.getPurposeOfTran());</span>
+<span class="fc" id="L114">			account.setServiceRequired(regAccount.getServiceRequired());</span>
+<span class="fc" id="L115">			account.setSource(regAccount.getSource());</span>
+<span class="fc" id="L116">			account.setSourceOfFund(regAccount.getSourceOfFund());</span>
+<span class="fc" id="L117">			account.setRefferalText(regAccount.getReferralText());</span>
+<span class="fc" id="L118">			account.setAffiliateName(regAccount.getAffiliateName());</span>
+<span class="fc" id="L119">			account.setRegMode(regAccount.getRegistrationMode());</span>
+<span class="fc" id="L120">			account.setConversionPrediction(regAccount.getConversionPrediction());</span>
+		}
+<span class="fc" id="L122">		account.setAccountTMFlag(detailsDBDto.getAccountTMFlag());</span>
+<span class="fc" id="L123">		account.setComplianceStatus(detailsDBDto.getAccComplianceStatus());</span>
+<span class="fc" id="L124">		account.setId(detailsDBDto.getAccountId());</span>
+<span class="fc" id="L125">		account.setOrgCode(detailsDBDto.getOrgnization());</span>
+<span class="fc" id="L126">		account.setTradeAccountNumber(detailsDBDto.getTradeAccountNum());</span>
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">		if(null != detailsDBDto.getRegCompAccount()){</span>
+<span class="nc" id="L128">			account.setRegCompleteAccount(detailsDBDto.getRegCompAccount().toString());</span>
+		}else {
+<span class="fc" id="L130">			account.setRegCompleteAccount(Constants.DASH_UI);</span>
+		}
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">		if(null != detailsDBDto.getRegistrationInDate()){</span>
+<span class="fc" id="L133">			account.setRegistrationInDate(detailsDBDto.getRegistrationInDate().toString());</span>
+		}
+<span class="pc bpc" id="L135" title="1 of 2 branches missed.">		if(null != detailsDBDto.getComplianceExpiry()){</span>
+<span class="nc" id="L136">			account.setComplianceExpiry(detailsDBDto.getComplianceExpiry().toString());</span>
+		}else {
+<span class="fc" id="L138">			account.setComplianceExpiry(null);</span>
+		}
+<span class="pc bpc" id="L140" title="2 of 4 branches missed.">		if(null != detailsDBDto.getLegalEntity() &amp;&amp; !detailsDBDto.getLegalEntity().isEmpty())</span>
+<span class="fc" id="L141">			account.setLegalEntity(detailsDBDto.getLegalEntity());</span>
+<span class="nc" id="L142">		else account.setLegalEntity(Constants.DASH_UI);</span>
+		
+<span class="fc" id="L144">		return account;</span>
+
+	}
+
+	/**
+	 * Gets the contact.
+	 *
+	 * @param detailsDBDto
+	 *            the details DB dto
+	 * @return the contact
+	 */
+	private ContactWrapper getContact(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L156">		RegistrationContact regContact = JsonConverterUtil.convertToObject(RegistrationContact.class,</span>
+<span class="fc" id="L157">				detailsDBDto.getContactAttrib());</span>
+<span class="fc" id="L158">		ContactWrapper contact = new ContactWrapper();</span>
+<span class="pc bpc" id="L159" title="1 of 2 branches missed.">		if (regContact != null) {</span>
+<span class="fc" id="L160">			contact.setAddress(getCompleteAddress(regContact));</span>
+<span class="fc" id="L161">			contact.setCountryOfResidence(detailsDBDto.getCountryOfResidenceFullName()+&quot; (&quot;+regContact.getCountry()+&quot;)&quot;);</span>
+<span class="fc" id="L162">			contact.setEmail(regContact.getEmail());</span>
+<span class="fc" id="L163">			contact.setMobile(regContact.getPhoneMobile());</span>
+<span class="fc" id="L164">			contact.setNationality(regContact.getNationality());</span>
+<span class="fc" id="L165">			contact.setOccupation(regContact.getOccupation());</span>
+<span class="fc" id="L166">			contact.setPhone(regContact.getPhoneHome());</span>
+<span class="pc bpc" id="L167" title="2 of 4 branches missed.">			contact.setIsUsClient(regContact.getCountry() != null &amp;&amp; Constants.USA.equals(regContact.getCountry()));</span>
+<span class="fc" id="L168">			contact.setIpAddress(regContact.getIpAddress());</span>
+<span class="fc" id="L169">			contact.setIsCountrySupported(checkIsKycSupportedCountry(regContact.getCountry(),detailsDBDto.getKycSupportedCountryList(),</span>
+<span class="fc" id="L170">					detailsDBDto.getOrgnization(),detailsDBDto.getLegalEntity()));</span>
+<span class="fc" id="L171">			contact.setPrimaryContact(regContact.getPrimaryContact());</span>
+			//added By Neelesh Pant
+<span class="fc" id="L173">			contact.setDob(DateTimeFormatter.getDateInRFC3339(regContact.getDob()));</span>
+<span class="fc" id="L174">			updateWorkPhone(regContact, contact);</span>
+	
+			//changes done to show full name on UI
+<span class="pc bpc" id="L177" title="2 of 4 branches missed.">			if(regContact.getMiddleName() != null &amp;&amp; !regContact.getMiddleName().trim().isEmpty()){</span>
+<span class="nc" id="L178">				String fullName = new StringBuilder().append(regContact.getFirstName()).append(&quot; &quot;).append(regContact.getMiddleName()).append(&quot; &quot;).append(regContact.getLastName()).toString();</span>
+<span class="nc" id="L179">				contact.setName(fullName);</span>
+<span class="nc" id="L180">			} else {</span>
+<span class="fc" id="L181">				contact.setName(detailsDBDto.getContactName());</span>
+			}
+				
+			
+		}
+<span class="pc bpc" id="L186" title="1 of 2 branches missed.">		if (detailsDBDto.getRegIn() != null) {</span>
+<span class="fc" id="L187">			contact.setRegIn(DateTimeFormatter.dateTimeFormatter(detailsDBDto.getRegIn()));</span>
+		}
+<span class="pc bpc" id="L189" title="1 of 2 branches missed.">		if (detailsDBDto.getRegComp() != null) {</span>
+<span class="fc" id="L190">			contact.setRegComplete(DateTimeFormatter.dateTimeFormatter(detailsDBDto.getRegComp()));</span>
+		}
+<span class="fc" id="L192">		contact.setAccountId(detailsDBDto.getAccountId());</span>
+<span class="fc" id="L193">		contact.setId(detailsDBDto.getContactId());</span>
+<span class="fc" id="L194">		contact.setTradeContactID(Integer.valueOf(detailsDBDto.getTradeContactId()));</span>
+<span class="fc" id="L195">		contact.setCrmAccountId(detailsDBDto.getCrmAccountId());</span>
+<span class="fc" id="L196">		contact.setCrmContactId(detailsDBDto.getCrmContactId());</span>
+<span class="fc" id="L197">		contact.setComplianceStatus(detailsDBDto.getConComplianceStatus());</span>
+<span class="fc" id="L198">		return contact;</span>
+
+	}
+
+  private void updateWorkPhone(RegistrationContact regContact, ContactWrapper contact) {
+<span class="pc bpc" id="L203" title="3 of 4 branches missed.">	 if((!StringUtils.isNullOrEmpty(regContact.getPhoneWorkExtn())) &amp;&amp; (!StringUtils.isNullOrEmpty(regContact.getPhoneWork()))) {</span>
+<span class="nc" id="L204">	    	contact.setPhoneWork(regContact.getPhoneWork()+&quot;;&quot;+regContact.getPhoneWorkExtn());</span>
+	 }
+    	
+<span class="pc bpc" id="L207" title="3 of 4 branches missed.">     if((!StringUtils.isNullOrEmpty(regContact.getPhoneWorkExtn())) &amp;&amp; (StringUtils.isNullOrEmpty(regContact.getPhoneWork()))) {</span>
+<span class="nc" id="L208">    	contact.setPhoneWork(regContact.getPhoneWorkExtn());</span>
+     }
+    
+<span class="pc bpc" id="L211" title="2 of 4 branches missed.">     if((StringUtils.isNullOrEmpty(regContact.getPhoneWorkExtn()))&amp;&amp; (!StringUtils.isNullOrEmpty(regContact.getPhoneWork()))) {</span>
+<span class="fc" id="L212">    	contact.setPhoneWork(regContact.getPhoneWork());</span>
+     }
+<span class="fc" id="L214">  }</span>
+
+	/**
+	 * Gets the internal rule.
+	 *
+	 * @param detailsDBDto
+	 *            the details DB dto
+	 * @return the internal rule
+	 */
+	private InternalRule getInternalRule(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L224">		InternalRule internalRule = new InternalRule();</span>
+<span class="fc" id="L225">		internalRule.setCustomCheck(getCustomCheck(detailsDBDto));</span>
+<span class="fc" id="L226">		internalRule.setBlacklist(getBlacklist(detailsDBDto));</span>
+<span class="fc" id="L227">		return internalRule;</span>
+
+	}
+	
+	private CustomCheck getCustomCheck(RegistrationDetailsDBDto detailsDBDto){
+<span class="fc" id="L232">		CustomCheck customCheck = new CustomCheck();</span>
+<span class="fc" id="L233">		customCheck.setIpCheck(getIp(detailsDBDto));</span>
+<span class="fc" id="L234">		customCheck.setGlobalCheck(getGlobalCheck(detailsDBDto));</span>
+<span class="fc" id="L235">		customCheck.setCountryCheck(getCountryCheck(detailsDBDto));</span>
+		
+<span class="fc" id="L237">		customCheck.setCustomCheckTotalRecords(1);</span>
+		
+<span class="pc bpc" id="L239" title="3 of 4 branches missed.">		if((null != detailsDBDto.getCustomCheckStatus() || !detailsDBDto.getCustomCheckStatus().isEmpty() )</span>
+<span class="pc bpc" id="L240" title="1 of 2 branches missed.">				&amp;&amp; (detailsDBDto.getCustomCheckStatus().equalsIgnoreCase(Constants.PASS) || </span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">				detailsDBDto.getCustomCheckStatus().equalsIgnoreCase(Constants.NOT_REQUIRED_UI))){</span>
+<span class="fc" id="L242">			customCheck.setPassCount(customCheck.getCustomCheckTotalRecords());	</span>
+		}
+		else
+<span class="nc" id="L245">			customCheck.setFailCount(customCheck.getCustomCheckTotalRecords());</span>
+<span class="fc" id="L246">		return customCheck;</span>
+	}
+
+
+	/**
+	 * Gets the kyc.
+	 *
+	 * @param detailsDBDto
+	 *            the details DB dto
+	 * @return the kyc
+	 */
+	private Kyc getKyc(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L258">		List&lt;EventDBDto&gt; kycEventDBDtos = detailsDBDto.getEventDBDto().get(Constants.KYC);</span>
+<span class="fc" id="L259">		Integer passCount = 0;</span>
+<span class="fc" id="L260">		Integer failCount = 0;</span>
+<span class="fc" id="L261">		Kyc kyc = new Kyc();</span>
+<span class="pc bpc" id="L262" title="2 of 4 branches missed.">		if (kycEventDBDtos == null || kycEventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L263">			kyc.setKycTotalRecords(0);</span>
+<span class="nc" id="L264">			return kyc;</span>
+		}
+<span class="fc" id="L266">		EventDBDto kycEventDBDto = kycEventDBDtos.get(0);</span>
+<span class="fc" id="L267">		KYCSummary kycSummary = JsonConverterUtil.convertToObject(KYCSummary.class, kycEventDBDto.getSummary());</span>
+<span class="pc bpc" id="L268" title="1 of 2 branches missed.">		if (kycSummary == null) {</span>
+<span class="nc" id="L269">			kyc.setFailCount(kycEventDBDtos.size());</span>
+<span class="nc" id="L270">			return kyc;</span>
+		}
+		
+		//condition added by Vishal J to check whether we should do KYC check for pfx contact
+		/*
+		 * 1) We are checking status of response from KYC service if it is 'NOT_REQUIRED' 
+		 *    then we are showing that on UI with other important fields also.
+		 */
+<span class="pc bpc" id="L278" title="1 of 2 branches missed.">		if(!Constants.NOT_REQUIRED.equalsIgnoreCase(kycSummary.getStatus()))</span>
+		{
+<span class="nc" id="L280">			boolean status = Constants.PASS.equals(kycSummary.getStatus());</span>
+<span class="nc" id="L281">			kyc.setStatus(status);</span>
+<span class="nc" id="L282">			kyc.setEidCheck(kycSummary.getEidCheck());			</span>
+<span class="nc" id="L283">			kyc.setIsRequired(Boolean.TRUE);</span>
+			/**if (null != kycSummary.getEidCheck()  &amp;&amp; kycSummary.getEidCheck()) {
+				passCount++;
+			} else {
+				failCount++;
+			}*/
+<span class="nc bnc" id="L289" title="All 2 branches missed.">			if (status) {</span>
+<span class="nc" id="L290">				passCount= kycEventDBDtos.size();</span>
+			} else {
+<span class="nc" id="L292">				failCount = kycEventDBDtos.size();</span>
+			}
+<span class="nc" id="L294">			kyc.setPassCount(passCount);</span>
+<span class="nc" id="L295">			kyc.setFailCount(failCount);</span>
+<span class="nc" id="L296">			kyc.setKycTotalRecords(kycEventDBDtos.size());</span>
+<span class="nc" id="L297">		}</span>
+		else
+		{
+			//sending status value to UI
+<span class="fc" id="L301">			kyc.setIsRequired(Boolean.FALSE);</span>
+<span class="fc" id="L302">			kyc.setStatusValue(Constants.NOT_REQUIRED_UI);	</span>
+<span class="fc" id="L303">			kyc.setKycTotalRecords(kycEventDBDtos.size());</span>
+		}
+		
+		//method is extracted for code re-usability
+<span class="fc" id="L307">		setKycResponse(kyc, kycEventDBDto, kycSummary);		</span>
+<span class="fc" id="L308">		return kyc;</span>
+
+	}
+
+	//this method is created for code re-usability from getKyc()
+	private void setKycResponse(Kyc kyc, EventDBDto kycEventDBDto, KYCSummary kycSummary) {
+<span class="fc" id="L314">		kyc.setCheckedOn(DateTimeFormatter.dateTimeFormatter(kycSummary.getCheckedOn()));</span>
+<span class="fc" id="L315">		kyc.setDob(kycSummary.getDob());</span>
+<span class="fc" id="L316">		kyc.setId(kycEventDBDto.getId());</span>
+<span class="fc" id="L317">		kyc.setReferenceId(kycSummary.getReferenceId());</span>
+<span class="fc" id="L318">		kyc.setVerifiactionResult(kycSummary.getVerifiactionResult());</span>
+<span class="fc" id="L319">		kyc.setPrevStatusValue(kycSummary.getStatus());</span>
+<span class="fc" id="L320">	}</span>
+
+	/**
+	 * Gets the sanction.
+	 *
+	 * @param detailsDBDto
+	 *            the details DB dto
+	 * @return the sanction
+	 */
+	private Sanction getSanction(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L330">		Sanction sanction = new Sanction();</span>
+<span class="fc" id="L331">		Integer passCount = 0;</span>
+<span class="fc" id="L332">		Integer failCount = 0;</span>
+<span class="fc" id="L333">		List&lt;EventDBDto&gt; eventDBDtos = detailsDBDto.getEventDBDto().get(Constants.SANCTION);</span>
+<span class="pc bpc" id="L334" title="2 of 4 branches missed.">		if (eventDBDtos == null || eventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L335">			sanction.setSanctionTotalRecords(0);</span>
+<span class="nc" id="L336">			return sanction;</span>
+		}
+
+<span class="fc" id="L339">		EventDBDto eventDBDto = eventDBDtos.get(0);</span>
+<span class="fc" id="L340">		SanctionSummary summary = JsonConverterUtil.convertToObject(SanctionSummary.class, eventDBDto.getSummary());</span>
+<span class="fc" id="L341">		sanction.setEventServiceLogId(eventDBDto.getId());</span>
+		
+		//condition added by Vishal J to check whether we should do sanction check for pfx contact
+		/*
+		 * 1) We are checking status of response from sanction service if it is 'NOT_REQUIRED' 
+		 *    then we are showing that on UI with other important fields also.
+		 */
+<span class="pc bpc" id="L348" title="2 of 4 branches missed.">		if (summary != null &amp;&amp; !Constants.NOT_REQUIRED.equalsIgnoreCase(summary.getStatus())) {			</span>
+<span class="pc bpc" id="L349" title="2 of 4 branches missed.">			boolean status = summary.getStatus() != null &amp;&amp; Constants.PASS.equals(summary.getStatus());</span>
+<span class="pc bpc" id="L350" title="1 of 2 branches missed.">			if (status) {</span>
+<span class="fc" id="L351">				passCount = eventDBDtos.size();</span>
+			} else {
+<span class="nc" id="L353">				failCount = eventDBDtos.size();</span>
+			}			
+<span class="fc" id="L355">			sanction.setStatus(status);</span>
+<span class="fc" id="L356">			sanction.setIsRequired(Boolean.TRUE);</span>
+<span class="fc" id="L357">			sanction.setFailCount(failCount);</span>
+<span class="fc" id="L358">			sanction.setPassCount(passCount);</span>
+<span class="fc" id="L359">			sanction.setSanctionTotalRecords(eventDBDtos.size());</span>
+<span class="fc" id="L360">		}</span>
+		else
+		{	
+			//sending status value (NOT_REQUIRED) to UI
+<span class="nc" id="L364">			sanction.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L365">			sanction.setStatusValue(Constants.NOT_REQUIRED_UI);	</span>
+<span class="nc" id="L366">			sanction.setSanctionTotalRecords(eventDBDtos.size());</span>
+		}
+		
+		//method is extracted for code re-usability
+<span class="fc" id="L370">		setSanctionResponse(sanction, eventDBDto, summary);		</span>
+<span class="fc" id="L371">		return sanction;</span>
+
+	}
+
+	//this method is created for code re-usability from getSanction()
+	private void setSanctionResponse(Sanction sanction, EventDBDto eventDBDto, SanctionSummary summary) {
+<span class="pc bpc" id="L377" title="1 of 2 branches missed.">		if(summary !=null ){</span>
+<span class="fc" id="L378">			sanction.setWorldCheck(summary.getWorldCheck());</span>
+<span class="fc" id="L379">			sanction.setSanctionId(summary.getSanctionId());</span>
+<span class="fc" id="L380">			sanction.setOfacList(summary.getOfacList());</span>
+<span class="fc" id="L381">			sanction.setUpdatedOn(DateTimeFormatter.dateTimeFormatter(eventDBDto.getUpdatedOn()));</span>
+<span class="fc" id="L382">			sanction.setUpdatedBy(eventDBDto.getUpdatedBy());</span>
+<span class="fc" id="L383">			sanction.setPrevStatusValue(summary.getStatus());</span>
+		}
+<span class="fc" id="L385">	}</span>
+
+	/**
+	 * Gets the fraugster.
+	 *
+	 * @param detailsDBDto
+	 *            the details DB dto
+	 * @return the fraugster
+	 */
+	private Fraugster getFraugster(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L395">		List&lt;EventDBDto&gt; eventDBDtos = detailsDBDto.getEventDBDto().get(Constants.FRAUGSTER);</span>
+<span class="fc" id="L396">		Fraugster fraugster = new Fraugster();</span>
+<span class="pc bpc" id="L397" title="2 of 4 branches missed.">		if (eventDBDtos == null || eventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L398">			fraugster.setFraugsterTotalRecords(0);</span>
+<span class="nc" id="L399">			return fraugster;</span>
+		}
+<span class="fc" id="L401">		EventDBDto eventDBDto = eventDBDtos.get(0);</span>
+<span class="pc bpc" id="L402" title="1 of 2 branches missed.">		if (eventDBDto == null) {</span>
+<span class="nc" id="L403">			fraugster.setFraugsterTotalRecords(0);</span>
+<span class="nc" id="L404">			return fraugster;</span>
+		}
+		
+<span class="fc" id="L407">		FraugsterSummary fraugsterSummary = JsonConverterUtil.convertToObject(FraugsterSummary.class,</span>
+<span class="fc" id="L408">				eventDBDto.getSummary());</span>
+<span class="fc" id="L409">		checkForNotRequired(eventDBDtos, fraugster,  eventDBDto, fraugsterSummary);</span>
+<span class="fc" id="L410">		return fraugster;</span>
+	}
+	
+  private void checkForNotRequired(List&lt;EventDBDto&gt; eventDBDtos, Fraugster fraugster,  EventDBDto eventDBDto, FraugsterSummary fraugsterSummary) {
+    //condition added by Vishal J to check whether we should do fraugster check for pfx contact
+		/*
+		 * 1) We are checking status of response from fraugster service if it is 'NOT_REQUIRED' 
+		 *    then we are showing that on UI with other important fields also.
+		 */
+<span class="fc" id="L419">    Integer passCount = 0;</span>
+<span class="fc" id="L420">    Integer failCount = 0;</span>
+<span class="pc bpc" id="L421" title="2 of 4 branches missed.">		if(fraugsterSummary != null &amp;&amp; !Constants.NOT_REQUIRED.equalsIgnoreCase(fraugsterSummary.getStatus()))</span>
+		{
+<span class="pc bpc" id="L423" title="1 of 2 branches missed.">			if (eventDBDto.getUpdatedOn() != null) {</span>
+<span class="fc" id="L424">				fraugster.setCreatedOn(DateTimeFormatter.dateTimeFormatter(eventDBDto.getUpdatedOn()));</span>
+			}
+<span class="fc" id="L426">			fraugster.setUpdatedBy(eventDBDto.getUpdatedBy());</span>
+	
+<span class="pc bpc" id="L428" title="2 of 4 branches missed.">			boolean status = fraugsterSummary.getStatus() != null &amp;&amp; Constants.PASS.equals(fraugsterSummary.getStatus());</span>
+<span class="pc bpc" id="L429" title="1 of 2 branches missed.">			if (status) {</span>
+<span class="fc" id="L430">				passCount = eventDBDtos.size();</span>
+			} else {
+<span class="nc" id="L432">				failCount = eventDBDtos.size();</span>
+			}
+<span class="fc" id="L434">			fraugster.setFraugsterId(fraugsterSummary.getFrgTransId());</span>
+<span class="fc" id="L435">			fraugster.setScore(fraugsterSummary.getScore());</span>
+<span class="fc" id="L436">			fraugster.setPassCount(passCount);</span>
+<span class="fc" id="L437">			fraugster.setFailCount(failCount);</span>
+<span class="fc" id="L438">			fraugster.setId(eventDBDto.getId());</span>
+<span class="fc" id="L439">			fraugster.setIsRequired(Boolean.TRUE);</span>
+<span class="fc" id="L440">			fraugster.setFraugsterTotalRecords(eventDBDtos.size());</span>
+<span class="fc" id="L441">			fraugster.setStatus(status);</span>
+<span class="fc" id="L442">			fraugster.setPrevStatusValue(fraugsterSummary.getStatus());</span>
+<span class="fc" id="L443">		}</span>
+		else
+		{
+			//sending status value to UI (NOT REQUIRED)
+<span class="nc" id="L447">			fraugster.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L448">			fraugster.setStatusValue(Constants.NOT_REQUIRED_UI);</span>
+<span class="nc bnc" id="L449" title="All 2 branches missed.">			if (eventDBDto.getUpdatedOn() != null) {</span>
+<span class="nc" id="L450">				fraugster.setCreatedOn(DateTimeFormatter.dateTimeFormatter(eventDBDto.getUpdatedOn()));</span>
+			}
+<span class="nc bnc" id="L452" title="All 2 branches missed.">			if (fraugsterSummary != null) {</span>
+<span class="nc" id="L453">				fraugster.setFraugsterId(fraugsterSummary.getFrgTransId());</span>
+<span class="nc" id="L454">				fraugster.setScore(fraugsterSummary.getScore());</span>
+<span class="nc" id="L455">				fraugster.setPassCount(passCount);</span>
+<span class="nc" id="L456">				fraugster.setFailCount(failCount);</span>
+<span class="nc" id="L457">				fraugster.setPrevStatusValue(fraugsterSummary.getStatus());</span>
+			}
+<span class="nc" id="L459">			fraugster.setId(eventDBDto.getId());</span>
+<span class="nc" id="L460">			fraugster.setUpdatedBy(eventDBDto.getUpdatedBy());</span>
+<span class="nc" id="L461">			fraugster.setFraugsterTotalRecords(eventDBDtos.size());</span>
+		}
+<span class="fc" id="L463">  }</span>
+
+	
+	/**
+	 * purpose of method:
+	 * Get the contact details from EventServiceLog table and using most recent blacklisted data
+	 *		to show on UI
+	 * Implementation:
+	 * 1) In this method we created list for blacklisted event if the list is empty or null 
+	 *      then return blacklist with fail count(No. of columns)
+	 * 2) If the list is present then fetch data from blacklist summary and set that data into UI perspective object Blacklist
+	 */
+	private Blacklist getBlacklist(RegistrationDetailsDBDto detailsDBDto) {
+		//constant added by Vishal J
+<span class="fc" id="L477">		List&lt;EventDBDto&gt; blacklistEventDBDtos = detailsDBDto.getEventDBDto().get(Constants.BLACKLIST);		</span>
+<span class="fc" id="L478">		Blacklist blacklist = new Blacklist();</span>
+<span class="pc bpc" id="L479" title="2 of 4 branches missed.">		if (blacklistEventDBDtos == null || blacklistEventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L480">			return null;</span>
+		}
+		
+<span class="fc" id="L483">		BlacklistSummary blacklistSummary = JsonConverterUtil.convertToObject(BlacklistSummary.class,</span>
+<span class="fc" id="L484">				blacklistEventDBDtos.get(0).getSummary());</span>
+<span class="pc bpc" id="L485" title="1 of 2 branches missed.">		if (blacklistSummary == null) {</span>
+<span class="nc" id="L486">			return blacklist;</span>
+		}
+		
+		
+<span class="fc" id="L490">		setIntoBlacklistSummary(blacklistSummary);</span>
+		//added method as setBlacklistFromBlacklistSummary
+<span class="fc" id="L492">		setBlacklistFromBlacklistSummary(blacklistEventDBDtos, blacklist, blacklistSummary);</span>
+		
+		//added method to set blacklist matched data
+<span class="fc" id="L495">		setBlacklistedMatchedData(blacklistSummary,blacklist);</span>
+		
+<span class="pc bpc" id="L497" title="1 of 2 branches missed.">		if(!blacklistSummary.getStatus().equalsIgnoreCase(Constants.NOT_REQUIRED))</span>
+<span class="fc" id="L498">			setBlacklistPassAndFailCount(blacklist);</span>
+<span class="fc" id="L499">		return blacklist;</span>
+	}
+
+	/**
+	 * Fetch Data from BlacklistSummary and set Data into Blacklist
+	 */
+	private void setBlacklistFromBlacklistSummary(List&lt;EventDBDto&gt; blacklistEventDBDtos, Blacklist blacklist,
+			BlacklistSummary blacklistSummary) {
+		
+		//condition added by Vishal J to show 'NOT REQUIRED' status on UI
+<span class="pc bpc" id="L509" title="1 of 2 branches missed.">		if(!Constants.NOT_REQUIRED.equalsIgnoreCase(blacklistSummary.getStatus()))</span>
+		{
+<span class="pc bpc" id="L511" title="1 of 2 branches missed.">			if(Constants.SERVICE_FAILURE.equalsIgnoreCase(blacklistSummary.getStatus())){</span>
+<span class="nc" id="L512">				setServiceFailureResponseForBlacklist(blacklist);</span>
+			}
+			else {
+<span class="fc" id="L515">				updateBlacklist(blacklistEventDBDtos, blacklist, blacklistSummary);</span>
+				}
+			}
+		else
+		{
+			//if status is 'NOT REQUIRED' then we will show that on UI for blacklist check
+<span class="nc" id="L521">			blacklist.setStatusValue(Constants.NOT_REQUIRED_UI);</span>
+<span class="nc" id="L522">			blacklist.setIsRequired(Boolean.FALSE);</span>
+		}
+		//end of - condition added
+		
+<span class="fc" id="L526">	}</span>
+
+  private void updateBlacklist(List&lt;EventDBDto&gt; blacklistEventDBDtos, Blacklist blacklist,
+      BlacklistSummary blacklistSummary) {
+<span class="pc bpc" id="L530" title="1 of 2 branches missed.">    if(Constants.NOT_REQUIRED.equalsIgnoreCase(blacklistSummary.getName()))</span>
+<span class="nc" id="L531">    	blacklist.setName(Constants.NOT_REQUIRED_UI);</span>
+<span class="fc" id="L532">    else blacklist.setName(blacklistSummary.getName());</span>
+<span class="pc bpc" id="L533" title="1 of 2 branches missed.">    if(Constants.NOT_REQUIRED.equalsIgnoreCase(blacklistSummary.getEmail()))</span>
+<span class="nc" id="L534">    	blacklist.setEmail(Constants.NOT_REQUIRED_UI);</span>
+<span class="fc" id="L535">    else blacklist.setEmail(blacklistSummary.getEmail());</span>
+    //Set Domain for blacklist check for AT-112 -Saylee
+<span class="pc bpc" id="L537" title="1 of 2 branches missed.">    if(Constants.NOT_REQUIRED.equalsIgnoreCase(blacklistSummary.getDomain()))</span>
+<span class="nc" id="L538">    	blacklist.setDomain(Constants.NOT_REQUIRED_UI);</span>
+<span class="fc" id="L539">    else blacklist.setDomain(blacklistSummary.getDomain());</span>
+<span class="pc bpc" id="L540" title="1 of 2 branches missed.">    if(Constants.NOT_REQUIRED.equalsIgnoreCase(blacklistSummary.getIp()))</span>
+<span class="nc" id="L541">    	blacklist.setIp(Constants.NOT_REQUIRED_UI);</span>
+<span class="fc" id="L542">    else blacklist.setIp(blacklistSummary.getIp());</span>
+<span class="pc bpc" id="L543" title="1 of 2 branches missed.">    blacklist.setPhone(!blacklistSummary.getPhone());</span>
+<span class="fc" id="L544">    blacklist.setStatus(Constants.PASS.equals(blacklistSummary.getStatus()));</span>
+<span class="fc" id="L545">    blacklist.setId(blacklistEventDBDtos.get(0).getId());</span>
+<span class="fc" id="L546">    blacklist.setIsRequired(Boolean.TRUE);</span>
+<span class="fc" id="L547">    blacklist.setPrevStatusValue(blacklistSummary.getStatus());</span>
+<span class="fc" id="L548">  }</span>
+
+	private void setServiceFailureResponseForBlacklist(Blacklist blacklist) {
+<span class="nc" id="L551">		blacklist.setName(Constants.BLACKLISTED_TRUE);</span>
+<span class="nc" id="L552">		blacklist.setEmail(Constants.BLACKLISTED_TRUE);</span>
+<span class="nc" id="L553">		blacklist.setDomain(Constants.BLACKLISTED_TRUE);</span>
+<span class="nc" id="L554">		blacklist.setIp(Constants.BLACKLISTED_TRUE);</span>
+<span class="nc" id="L555">		blacklist.setPhone(Boolean.FALSE);</span>
+<span class="nc" id="L556">		blacklist.setStatus(Boolean.FALSE);</span>
+<span class="nc" id="L557">		blacklist.setIsRequired(Boolean.TRUE);</span>
+<span class="nc" id="L558">		blacklist.setPrevStatusValue(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L559">	}</span>
+
+	/**
+	 * set Data into BlacklistSummary
+	 */
+	private void setIntoBlacklistSummary(BlacklistSummary blacklistSummary) {
+<span class="fc" id="L565">		Boolean blacklistSummaryPhone = Boolean.TRUE;</span>
+<span class="fc" id="L566">		blacklistSummary.setName(blacklistSummary.getName());</span>
+<span class="fc" id="L567">		blacklistSummary.setEmail(blacklistSummary.getEmail());</span>
+<span class="fc" id="L568">		blacklistSummary.setDomain(blacklistSummary.getDomain());</span>
+<span class="fc" id="L569">		blacklistSummary.setIp(blacklistSummary.getIp());</span>
+<span class="pc bpc" id="L570" title="1 of 2 branches missed.">		blacklistSummary.setPhone(blacklistSummary.getPhone() == null ? blacklistSummaryPhone : blacklistSummary.getPhone());</span>
+<span class="fc" id="L571">	}</span>
+
+
+	/**
+	 * Gets the ip.
+	 *
+	 * @param detailsDBDto
+	 *            the details DB dto
+	 * @return the ip
+	 */
+	private IpCheck getIp(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L582">		List&lt;EventDBDto&gt; ipEventDBDtos = detailsDBDto.getEventDBDto().get(Constants.IP);</span>
+<span class="fc" id="L583">		IpCheck ip = new IpCheck();</span>
+<span class="pc bpc" id="L584" title="2 of 4 branches missed.">		if (ipEventDBDtos == null || ipEventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L585">			ip.setIpCheckTotalRecords(0);</span>
+<span class="nc" id="L586">			return ip;</span>
+		}
+<span class="fc" id="L588">		EventDBDto eventDBDto = ipEventDBDtos.get(0);</span>
+<span class="fc" id="L589">		IpSummary ipSummary = JsonConverterUtil.convertToObject(IpSummary.class, eventDBDto.getSummary());</span>
+		
+		
+<span class="pc bpc" id="L592" title="1 of 2 branches missed.">		if (eventDBDto.getUpdatedOn() != null) {</span>
+<span class="fc" id="L593">			ip.setCheckedOn(DateTimeFormatter.dateTimeFormatter(eventDBDto.getUpdatedOn()));</span>
+		}
+<span class="pc bpc" id="L595" title="1 of 2 branches missed.">		if (ipSummary == null) {</span>
+<span class="nc" id="L596">			return ip;</span>
+		}
+		
+		/*condition added by Vishal J to check the status of IP check
+		* If status is 'NOT_REQUIRED' then we wil show it on UI
+		*/
+<span class="pc bpc" id="L602" title="1 of 2 branches missed.">		if(!Constants.NOT_REQUIRED.equalsIgnoreCase(ipSummary.getStatus()))</span>
+		{
+<span class="fc" id="L604">			ip.setIpAddress(ipSummary.getIpAddress());</span>
+<span class="fc" id="L605">			ip.setIpRule(ipSummary.getIpRule());</span>
+<span class="fc" id="L606">			ip.setId(eventDBDto.getId());</span>
+<span class="fc" id="L607">			ip.setStatus(eventDBDto.getStatus());			</span>
+<span class="fc" id="L608">			ip.setIsRequired(Boolean.TRUE);	</span>
+<span class="pc bpc" id="L609" title="2 of 4 branches missed.">			if(ip.getStatus().equalsIgnoreCase(Constants.PASS) || ip.getStatus().equalsIgnoreCase(Constants.FAIL)){</span>
+<span class="nc" id="L610">				ip.setIpCity(Constants.IP_CITY_FIELD+StringUtils.isNullOrTrimEmptySetNA(ipSummary.getIpCity())+Constants.COMMA);</span>
+<span class="nc" id="L611">				ip.setIpCountry(Constants.IP_COUNTRY_FIELD+StringUtils.isNullOrTrimEmptySetNA(ipSummary.getIpCountry())+Constants.COMMA);</span>
+<span class="nc" id="L612">				ip.setGeoDifference(Constants.IP_DISTANCE_FIELD+StringUtils.isNullOrTrimEmptySetNA(DecimalFormatter.convertToOneDigit</span>
+<span class="nc" id="L613">				(ipSummary.getGeoDifference()))+</span>
+<span class="nc" id="L614">				StringUtils.isNullOrTrimEmptySetSpace(ipSummary.getUnit())+Constants.CLOSING_BRACKET);</span>
+			}
+			
+		}
+		else
+		{
+			//sending status value (NOT_REQUIRED) on UI
+<span class="nc" id="L621">			ip.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L622">			ip.setStatusValue(Constants.NOT_REQUIRED_UI);</span>
+		}
+<span class="fc" id="L624">		ip.setIpCheckTotalRecords(ipEventDBDtos.size());</span>
+<span class="fc" id="L625">		return ip;</span>
+	}
+	
+	private GlobalCheck getGlobalCheck(RegistrationDetailsDBDto detailsDBDto){
+<span class="fc" id="L629">		List&lt;EventDBDto&gt; gbEventDBDtos = detailsDBDto.getEventDBDto().get(Constants.GLOBALCHECK);</span>
+<span class="fc" id="L630">		 GlobalCheck globalCheck = new GlobalCheck();</span>
+
+<span class="pc bpc" id="L632" title="2 of 4 branches missed.">		if (gbEventDBDtos == null || gbEventDBDtos.isEmpty()) {</span>
+<span class="nc" id="L633">			globalCheck.setGlobalCheckTotalRecords(0);</span>
+<span class="nc" id="L634">			return globalCheck;</span>
+		}
+<span class="fc" id="L636">		EventDBDto eventDBDto = gbEventDBDtos.get(0);</span>
+			
+			/*condition added by Vishal J to check the status of Global check
+			* If status is 'NOT_REQUIRED' then we will show it on UI
+			*/
+<span class="pc bpc" id="L641" title="1 of 2 branches missed.">		if(!Constants.NOT_REQUIRED.equalsIgnoreCase(eventDBDto.getStatus()))</span>
+		{
+<span class="fc" id="L643">			globalCheck.setEntityType(eventDBDto.getEitityType());</span>
+<span class="fc" id="L644">			globalCheck.setId(eventDBDto.getId());</span>
+<span class="fc" id="L645">			globalCheck.setStatus(eventDBDto.getStatus());</span>
+				
+<span class="fc" id="L647">			globalCheck.setIsRequired(Boolean.TRUE);</span>
+		}
+		else
+		{
+				//sending status value (NOT_REQUIRED) on UI
+<span class="nc" id="L652">			globalCheck.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L653">			globalCheck.setStatusValue(Constants.NOT_REQUIRED_UI);				</span>
+		}
+<span class="fc" id="L655">		globalCheck.setGlobalCheckTotalRecords(gbEventDBDtos.size());</span>
+<span class="fc" id="L656">		return globalCheck;</span>
+	}
+	
+	private CountryCheck getCountryCheck(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L660">		List&lt;EventDBDto&gt; ccEventDBDtos = detailsDBDto.getEventDBDto().get(Constants.COUNTRYCHECK);</span>
+<span class="fc" id="L661">		CountryCheck countryCheck = new CountryCheck();</span>
+<span class="pc bpc" id="L662" title="3 of 4 branches missed.">		if (ccEventDBDtos == null || ccEventDBDtos.isEmpty()) {</span>
+<span class="fc" id="L663">			countryCheck.setCountryCheckTotalRecords(0);</span>
+<span class="fc" id="L664">			return countryCheck;</span>
+		}
+<span class="nc" id="L666">		EventDBDto eventDBDto = ccEventDBDtos.get(0);</span>
+
+			/*condition added by Vishal J to check the status of Country check
+			* If status is 'NOT_REQUIRED' then we will show it on UI
+			*/
+<span class="nc bnc" id="L671" title="All 2 branches missed.">		if(!Constants.NOT_REQUIRED.equalsIgnoreCase(eventDBDto.getStatus()))</span>
+		{
+<span class="nc" id="L673">			countryCheck.setEntityType(eventDBDto.getEitityType());</span>
+<span class="nc" id="L674">			countryCheck.setId(eventDBDto.getId());</span>
+<span class="nc" id="L675">			countryCheck.setStatus(eventDBDto.getStatus());</span>
+				
+<span class="nc" id="L677">			countryCheck.setIsRequired(true);</span>
+		}
+		else
+		{
+				//sending status value (NOT_REQUIRED) on UI
+<span class="nc" id="L682">			countryCheck.setIsRequired(false);</span>
+<span class="nc" id="L683">			countryCheck.setStatusValue(Constants.NOT_REQUIRED_UI);</span>
+		}	
+<span class="nc" id="L685">		countryCheck.setCountryCheckTotalRecords(ccEventDBDtos.size());</span>
+<span class="nc" id="L686">		return countryCheck;</span>
+	}
+	
+	/**
+	 * Gets the onfido.
+	 *
+	 * @param detailsDBDto the details DB dto
+	 * @return the onfido
+	 */
+	private Onfido getOnfido(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L696">		Onfido onfido = new Onfido();</span>
+<span class="fc" id="L697">		Integer passCount = 0;</span>
+<span class="fc" id="L698">		Integer failCount = 0;</span>
+		
+<span class="fc" id="L700">		List&lt;EventDBDto&gt; eventDBDtos = detailsDBDto.getEventDBDto().get(Constants.ONFIDO);</span>
+		
+<span class="pc bpc" id="L702" title="3 of 4 branches missed.">		if (eventDBDtos == null || eventDBDtos.isEmpty()) {</span>
+<span class="fc" id="L703">			onfido.setOnfidoTotalRecords(0);</span>
+<span class="fc" id="L704">			return onfido;</span>
+		}
+<span class="nc" id="L706">		EventDBDto eventDBDto = eventDBDtos.get(0);</span>
+<span class="nc" id="L707">		OnfidoSummary summary = JsonConverterUtil.convertToObject(OnfidoSummary.class,eventDBDto.getSummary());</span>
+<span class="nc bnc" id="L708" title="All 4 branches missed.">		boolean status = summary.getStatus() != null &amp;&amp; Constants.PASS.equals(summary.getStatus());</span>
+<span class="nc bnc" id="L709" title="All 2 branches missed.">		if (status) {</span>
+<span class="nc" id="L710">			passCount = eventDBDtos.size();</span>
+		} else {
+<span class="nc" id="L712">			failCount = eventDBDtos.size();</span>
+		}
+<span class="nc" id="L714">		onfido.setIsRequired(Boolean.TRUE);</span>
+<span class="nc bnc" id="L715" title="All 2 branches missed.">		if(Constants.PASS.equals(summary.getStatus())) {</span>
+<span class="nc" id="L716">			onfido.setStatus(Boolean.TRUE);</span>
+<span class="nc" id="L717">			onfido.setStatusValue(Constants.PASS);</span>
+		}
+		else {
+<span class="nc" id="L720">			onfido.setStatus(Boolean.FALSE);</span>
+<span class="nc" id="L721">			onfido.setStatusValue(Constants.FAIL);</span>
+		}
+<span class="nc" id="L723">		onfido.setReviewed(Constants.DASH_DETAILS_PAGE);</span>
+<span class="nc bnc" id="L724" title="All 2 branches missed.">		if(null != summary.getReviewed()) {</span>
+<span class="nc" id="L725">			onfido.setReviewed(summary.getReviewed());</span>
+		}
+<span class="nc" id="L727">		onfido.setOnfidoTotalRecords(eventDBDtos.size());</span>
+<span class="nc" id="L728">		onfido.setEntityId(eventDBDto.getEntityId());</span>
+<span class="nc" id="L729">		onfido.setEventServiceLogId(eventDBDto.getId());</span>
+<span class="nc" id="L730">		onfido.setOnfidoId(summary.getOnfidoId());</span>
+<span class="nc" id="L731">		onfido.setPassCount(passCount);</span>
+<span class="nc" id="L732">		onfido.setFailCount(failCount);</span>
+<span class="nc" id="L733">		onfido.setUpdatedBy(eventDBDto.getUpdatedBy());</span>
+<span class="nc" id="L734">		onfido.setUpdatedOn(DateTimeFormatter.dateTimeFormatter(eventDBDto.getUpdatedOn()));</span>
+<span class="nc" id="L735">		onfido.setOnfidoReport(JsonConverterUtil.convertToJsonWithoutNull(summary.getOnfidoReport()));</span>
+		
+<span class="nc" id="L737">		return onfido;</span>
+	}
+	
+	// AT-4114
+	private Intuition getIntuition(RegistrationDetailsDBDto detailsDBDto) {
+<span class="fc" id="L742">		List&lt;EventDBDto&gt; eventDBDtos = detailsDBDto.getEventDBDto().get(Constants.TRANSACTION_MONITORING);</span>
+<span class="fc" id="L743">		Intuition intuition = new Intuition();</span>
+<span class="pc bpc" id="L744" title="3 of 4 branches missed.">		if (eventDBDtos == null || eventDBDtos.isEmpty()) {</span>
+<span class="fc" id="L745">			intuition.setIntuitionTotalRecords(0);</span>
+<span class="fc" id="L746">			return intuition;</span>
+		}
+<span class="nc" id="L748">		EventDBDto eventDBDto = eventDBDtos.get(0);</span>
+<span class="nc bnc" id="L749" title="All 2 branches missed.">		if (eventDBDto == null) {</span>
+<span class="nc" id="L750">			intuition.setIntuitionTotalRecords(0);</span>
+<span class="nc" id="L751">			return intuition;</span>
+		}
+
+<span class="nc" id="L754">		TransactionMonitoringAccountSummary intuitionSummary = JsonConverterUtil</span>
+<span class="nc" id="L755">				.convertToObject(TransactionMonitoringAccountSummary.class, eventDBDto.getSummary());</span>
+<span class="nc" id="L756">		checkForNotPerformed(eventDBDtos, intuition, eventDBDto, intuitionSummary);</span>
+<span class="nc" id="L757">		return intuition;</span>
+	}
+	
+	// AT-4114
+	 private void checkForNotPerformed(List&lt;EventDBDto&gt; eventDBDtos, Intuition intuition,  EventDBDto eventDBDto, TransactionMonitoringAccountSummary intuitionSummary) {
+		   
+<span class="nc" id="L763">		    Integer passCount = 0;</span>
+<span class="nc" id="L764">		    Integer failCount = 0;</span>
+		    
+<span class="nc" id="L766">		    intuition.setCorrelationId(Constants.DASH_SINGLE_DETAILS);</span>
+<span class="nc" id="L767">			intuition.setProfileScore(Constants.DASH_SINGLE_DETAILS);</span>
+<span class="nc" id="L768">			intuition.setRuleScore(Constants.DASH_SINGLE_DETAILS);</span>
+<span class="nc" id="L769">			intuition.setRiskLevel(Constants.DASH_SINGLE_DETAILS);</span>
+		    
+<span class="nc bnc" id="L771" title="All 6 branches missed.">			if (intuitionSummary != null &amp;&amp; !Constants.NOT_PERFORMED.equalsIgnoreCase(intuitionSummary.getStatus()) &amp;&amp; !Constants.NOT_REQUIRED.equalsIgnoreCase(intuitionSummary.getStatus())) {</span>
+<span class="nc bnc" id="L772" title="All 4 branches missed.">				boolean status = intuitionSummary.getStatus() != null &amp;&amp; Constants.PASS.equals(intuitionSummary.getStatus());</span>
+<span class="nc bnc" id="L773" title="All 2 branches missed.">				if (status) {</span>
+<span class="nc" id="L774">					passCount = eventDBDtos.size();</span>
+				} else {
+<span class="nc" id="L776">					failCount = eventDBDtos.size();</span>
+				}
+				
+<span class="nc" id="L779">			    setIntuitionSummaryDetails(intuition, intuitionSummary);</span>
+				
+<span class="nc" id="L781">				intuition.setIsRequired(Boolean.TRUE);</span>
+<span class="nc" id="L782">				intuition.setStatus(status);</span>
+<span class="nc" id="L783">			}</span>
+<span class="nc bnc" id="L784" title="All 4 branches missed.">			else if(intuitionSummary != null &amp;&amp; Constants.NOT_REQUIRED.equalsIgnoreCase(intuitionSummary.getStatus())){</span>
+<span class="nc" id="L785">				intuition.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L786">				intuition.setStatusValue(Constants.NOT_REQUIRED);	</span>
+			}
+			else {
+<span class="nc" id="L789">				intuition.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L790">				intuition.setStatusValue(Constants.NOT_PERFORMED); </span>
+			}
+			
+<span class="nc bnc" id="L793" title="All 2 branches missed.">		    if (eventDBDto.getUpdatedOn() != null) {</span>
+<span class="nc" id="L794">				intuition.setCreatedOn(DateTimeFormatter.dateTimeFormatter(eventDBDto.getUpdatedOn()));</span>
+			}
+<span class="nc" id="L796">		    intuition.setPassCount(passCount);</span>
+<span class="nc" id="L797">			intuition.setFailCount(failCount);</span>
+<span class="nc" id="L798">		    intuition.setId(eventDBDto.getId());</span>
+<span class="nc" id="L799">			intuition.setUpdatedBy(eventDBDto.getUpdatedBy());</span>
+<span class="nc" id="L800">			intuition.setIntuitionTotalRecords(eventDBDtos.size());</span>
+		    
+<span class="nc" id="L802">		  }</span>
+
+	/**
+	 * @param intuition
+	 * @param intuitionSummary
+	 */
+	private void setIntuitionSummaryDetails(Intuition intuition, TransactionMonitoringAccountSummary intuitionSummary) {
+<span class="nc bnc" id="L809" title="All 2 branches missed.">		if(null != intuitionSummary.getCorrelationId()) {</span>
+<span class="nc" id="L810">			intuition.setCorrelationId(intuitionSummary.getCorrelationId());</span>
+		}
+		
+<span class="nc bnc" id="L813" title="All 2 branches missed.">		if(null != intuitionSummary.getProfileScore()) {</span>
+<span class="nc" id="L814">			intuition.setProfileScore(intuitionSummary.getProfileScore());</span>
+		}
+		
+<span class="nc bnc" id="L817" title="All 2 branches missed.">		if(null != intuitionSummary.getRuleScore()) {</span>
+<span class="nc" id="L818">			intuition.setRuleScore(intuitionSummary.getRuleScore());</span>
+		}
+		
+<span class="nc bnc" id="L821" title="All 2 branches missed.">		if(null != intuitionSummary.getRiskLevel()) {</span>
+<span class="nc" id="L822">			intuition.setRiskLevel(intuitionSummary.getRiskLevel());</span>
+		}
+<span class="nc" id="L824">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

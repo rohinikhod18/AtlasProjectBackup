@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PostCardTransactionEmailAlertImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.tmemailalert</a> &gt; <span class="el_source">PostCardTransactionEmailAlertImpl.java</span></div><h1>PostCardTransactionEmailAlertImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.tmemailalert;
+
+import java.util.Arrays;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailHeaderForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailPayloadForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.SendEmailRequestForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionResponse;
+import com.currenciesdirect.gtg.compliance.commons.externalservice.commhubport.ICommHubServiceImpl;
+import com.currenciesdirect.gtg.compliance.commons.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.postcardtransactionmq.PostCardTransactionMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+
+<span class="nc" id="L23">public class PostCardTransactionEmailAlertImpl {</span>
+	
+	/** The log. */
+<span class="nc" id="L26">	private static final Logger LOG = LoggerFactory.getLogger(PostCardTransactionEmailAlertImpl.class);</span>
+	
+	/** The i comm hub service impl. */
+	@Autowired
+	private ICommHubServiceImpl iCommHubServiceImpl;
+	
+	/**
+	 * Send email alert.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; sendEmailAlert(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L39">		MessageExchange messageExchange = message.getPayload()</span>
+<span class="nc" id="L40">				.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L41">		TransactionMonitoringPostCardTransactionRequest postCardMQRequest = (TransactionMonitoringPostCardTransactionRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L42">		TransactionMonitoringPostCardTransactionResponse tmCardResponse = (TransactionMonitoringPostCardTransactionResponse) messageExchange</span>
+<span class="nc" id="L43">				.getResponse();</span>
+		
+<span class="nc" id="L45">		SendEmailRequestForTM sendTMEmailRequest = new SendEmailRequestForTM(); </span>
+		try {
+			
+<span class="nc" id="L48">			sendTMEmailRequest = preparePostCardTransactionEmailRequest(sendTMEmailRequest,tmCardResponse.getErrorDescription(), postCardMQRequest.getTrxID());</span>
+<span class="nc bnc" id="L49" title="All 2 branches missed.">			if(message.getPayload().getRetryCount() == Integer.parseInt(System.getProperty(&quot;transactionmonitoring.retrycount&quot;))) {</span>
+<span class="nc" id="L50">				iCommHubServiceImpl.sendEmailForTMAlert(sendTMEmailRequest,true);</span>
+			}
+			
+<span class="nc" id="L53">		} catch (Exception e) {</span>
+<span class="nc" id="L54">			LOG.error(&quot;Error in Post Card Transaction sendEmailAlert()&quot;, e);</span>
+<span class="nc" id="L55">		}</span>
+<span class="nc" id="L56">		return message;</span>
+	}
+	
+	
+	
+	/**
+	 * Prepare post card transaction email request.
+	 *
+	 * @param sendEmailRequest the send email request
+	 * @return the send email request for TM
+	 */
+	private SendEmailRequestForTM preparePostCardTransactionEmailRequest(SendEmailRequestForTM sendEmailRequest, String errorDesc, String instructionNumber) {
+
+<span class="nc" id="L69">		EmailHeaderForTM header = new EmailHeaderForTM();</span>
+<span class="nc" id="L70">		EmailPayloadForTM payload = new EmailPayloadForTM();</span>
+
+<span class="nc" id="L72">		header.setSourceSystem(Constants.SOURCE_ATLAS);</span>
+<span class="nc" id="L73">		header.setOrgCode(&quot;Currencies Direct&quot;);</span>
+<span class="nc" id="L74">		header.setLegalEntity(&quot;CDLGB&quot;);</span>
+		
+<span class="nc" id="L76">		String email = System.getProperty(&quot;intuition.sendTo&quot;);</span>
+<span class="nc" id="L77">		List&lt;String&gt; list = Arrays.asList(email.split(&quot;,&quot;));</span>
+
+<span class="nc" id="L79">		payload.setEmailId(list);</span>
+<span class="nc" id="L80">		payload.setSubject(&quot;Intuition Post Card Transaction service unavailable&quot;);</span>
+<span class="nc" id="L81">		payload.setEmailContent(&quot;Post Card Transaction request for Instruction Number &quot; + instructionNumber</span>
+				+ &quot; to Intuition failed, due to &quot;+errorDesc+&quot;, please alert dev team.&quot;);
+<span class="nc" id="L83">		payload.setFromEmilId(System.getProperty(&quot;intuition.sendFrom&quot;));</span>
+<span class="nc" id="L84">		payload.setReplyToEmailId(System.getProperty(&quot;intuition.sendFrom&quot;));</span>
+
+<span class="nc" id="L86">		sendEmailRequest.setTmHeader(header);</span>
+<span class="nc" id="L87">		sendEmailRequest.setTmPayload(payload);</span>
+
+<span class="nc" id="L89">		return sendEmailRequest;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,45 @@
+pipeline {
+    agent any
+    stages {
+        stage('Start') {
+            steps {
+                sendSlackNotifications 'STARTED'
+            }
+        }
+		stage("Deploy to UAT Server") {
+            steps {
+                echo "Deploy in UAT from snapshot"
+                    script {
+                        ansibleTower(
+                            towerServer: 'Ansible_Tower_Integration', importTowerLogs:true,
+                            towerCredentialsId: '',
+                            templateType: 'workflow',
+                            jobTemplate: 'atlas-uat-workflow',
+                            verbose: true,
+							extraVars:"""---
+                              repoPath: ${params.repoPath}
+                              portalartifact: compliance-portal-${params.buildVersion}.war
+                              complianceserviceartifact: compliance-service-${params.buildVersion}.war
+                              customcheckartifact: custom-checks-service-${params.buildVersion}.war
+                              fraugsterartifact: fraugster-service-${params.buildVersion}.war
+                              internalruleartifact: internalrule-service-${params.buildVersion}.war
+                              kycartifact: kyc-service-${params.buildVersion}.war
+                              sanctionartifact: sanction-service-${params.buildVersion}.war
+                              transactionmonitoringartifact: transaction-monitoring-service-${params.buildVersion}.war
+                              """,
+                            async: false
+                        )
+                    }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs deleteDirs: true, notFailBuild: true
+            sendSlackNotifications currentBuild.result
+        }
+        failure{
+            sendEmail("yogeshwar.vhatkar@bnt-soft.com")
+        }
+    }
+}

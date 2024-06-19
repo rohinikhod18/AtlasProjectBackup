@@ -1,0 +1,137 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	
+
+	<int:channel id="FUNDSIN.DELETE_OPI.in.channel" />
+	<int:channel id="FUNDS_IN.DELETE.DATA_ENRICHMENT" />
+	<int:channel id="FUNDS_IN.DELETE.DELETE_REQUEST" />
+	<int:channel id="FUNDS_IN.DELETE.TRANFROM.REQUESTS" />
+	<int:channel id="FUNDS_IN.DELETE.RULES.IN" />
+	
+	<int:channel id="FUNDS_IN.DELETE.RESPONSE" />
+
+
+	<int:chain
+		id="fundsin.del.initChain"
+		input-channel="FUNDSIN.DELETE_OPI.in.channel">
+		<int:header-enricher id="fundsin.del.HeaderEnricher">
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+		</int:header-enricher>
+		<int:service-activator
+			id="fundsin.del.Validator"
+			ref="fundsin.MsgValidator"
+			method="process" />
+		<int:router
+			id="fundsin.del.postValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="FUNDS_IN.DATA_ENRICHMENT">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDS_IN.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDS_IN.DELETE.DATA_ENRICHMENT" />
+		</int:router>
+	</int:chain>
+	
+	<!-- added for AT-4699 -->
+	<int:chain
+		id="fundsin.del.dataEnrichChain"
+		input-channel="FUNDS_IN.DELETE.DATA_ENRICHMENT" 
+		output-channel="FUNDS_IN.DELETE.DELETE_REQUEST">
+		<int:service-activator
+			id="fundsin.del.dataEnrich"
+			ref="fundsin.dataEnricher"
+			method="enrichDataForDeletOpi" />
+			
+		<!-- <int:service-activator
+			id="fundsin.del.DataValidation"
+			ref="fundsin.DataValidator"
+			method="process" />	
+		<int:router
+			id="fundsin.del.postDataValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="FUNDS_IN.DELETE.DELETE_REQUEST">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDS_IN.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDS_IN.DELETE.DELETE_REQUEST" />
+		</int:router> -->
+	</int:chain>
+	
+	<int:chain id="fundsin.del.update" input-channel="FUNDS_IN.DELETE.DELETE_REQUEST" output-channel="FUNDS_IN.RESPONSE">
+	<int:service-activator
+			id="fundsin.del.updateStatus"
+			ref="fundsInDBService"
+			method="deletePaymentIn" />
+			
+	<int:service-activator
+			id="fundsin.createEvent"
+			ref="eventDBServiceImpl"
+			method="createEvent" />	
+			
+	<int:transformer
+			ref="fundsin.transactionMonitoringTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsin.TRANSACTIONMONITORING"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_FUNDSIN_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsInRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentInResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsin.transactionMonitoringTransformer"
+			method="transformResponse" />
+		
+		<int:service-activator
+			ref="fundsInDBService"
+			method="updateAccountIntuitionClientRiskLevel">
+		</int:service-activator>
+		<int:service-activator
+			id="fundsin.kafkaTxExecutor"
+			ref="kafkaTxExecutorServiceImpl"
+			method="executeKafkaTx" />
+		
+		<int:service-activator
+			id="fundsin.SAVE.EVENT.SERVICE"
+			ref="eventDBServiceImpl"
+			method="createEventSerivceLog">
+		</int:service-activator>
+			
+			
+			<int:service-activator
+			id="delete.fundsin.Exec.Rules"
+			ref="fundsin.RulesService"
+			method="process">
+			</int:service-activator>
+			<int:filter  discard-channel="FUNDS_IN.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+</beans>

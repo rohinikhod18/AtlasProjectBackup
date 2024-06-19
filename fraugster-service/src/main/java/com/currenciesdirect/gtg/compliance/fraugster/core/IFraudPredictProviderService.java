@@ -1,0 +1,25 @@
+package com.currenciesdirect.gtg.compliance.fraugster.core;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupContactResponse;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterProviderProperty;
+import com.currenciesdirect.gtg.compliance.fraugster.exception.FraugsterException;
+
+public interface IFraudPredictProviderService {
+	
+	public FraugsterSignupContactResponse doFraudPredictSignupCheck(FraugsterSignupContactRequest request,FraugsterProviderProperty fraugsterProviderProperty)throws FraugsterException;
+	
+	public FraugsterOnUpdateContactResponse doFraudPredictOnUpdateCheck(FraugsterOnUpdateContactRequest request,FraugsterProviderProperty fraugsterProviderProperty)throws FraugsterException;
+	
+	public FraugsterPaymentsInContactResponse doFraudPredictPaymentsInCheck(FraugsterPaymentsInRequest request, FraugsterPaymentsInContactRequest contact,FraugsterProviderProperty fraugsterProviderProperty)throws FraugsterException;
+	
+	public FraugsterPaymentsOutContactResponse doFraudPredictPaymentsOutCheck( FraugsterPaymentsOutRequest request, FraugsterPaymentsOutContactRequest contact,FraugsterProviderProperty fraugsterProviderProperty)throws FraugsterException;
+}

@@ -1,0 +1,118 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="PROFILE.BLACKLIST_RESEND.in.channel"/>
+	<int:channel id="BLACKLISTRESEND.out.channel"/>
+	<int:channel id="BLACKLISTRESEND.RESPONSE"/>
+	<int:channel id="BLACKLISTRESEND.ACTIVITY.LOG"/>
+	<int:channel id="REGISTRATION.BLACKLIST.RESEND.ERROR.CHANNEL"/>
+	
+	<int:chain id="resendBlacklistService" input-channel="PROFILE.BLACKLIST_RESEND.in.channel">
+	<int:header-enricher>
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header
+				name="username"
+				expression="headers['username']" />
+			<int:header
+				name="password"
+				expression="headers['password']" />
+		</int:header-enricher>
+	<int:service-activator ref="blacklistResendMessageValidator" />	
+		<int:router
+			id="blacklistResendValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="BLACKLISTRESEND.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="BLACKLIST.RESEND.CHANNEL" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain id="blacklistRsendChannel" input-channel="BLACKLIST.RESEND.CHANNEL" output-channel="BLACKLISTRESEND.out.channel">
+		<int:service-activator
+			id="blacklistResend.ENRICH"
+			ref="blacklistResendRegistratioDataEnricher"
+			method="enrichData" />
+		<int:service-activator
+			id="BLACKLISTRESEND.CREATE.EVENT"
+			method="createEvent" ref = "eventDBServiceImpl">
+		</int:service-activator>
+		<int:transformer
+			ref="internalRuleServiceTransformer"
+			method="transformRequest" />
+	<int:service-activator
+			id="BLACKLIST.RESEND"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('INTERNAL_RULE_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).INTERNAL_RULE_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse" />
+	</int:service-activator>
+	<int:transformer
+			ref="internalRuleServiceTransformer"
+			method="transformResponse" />
+	<int:filter  discard-channel="REGISTRATION.BLACKLIST.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />		
+	</int:chain>
+	
+	 <int:chain input-channel="BLACKLISTRESEND.out.channel" output-channel="BLACKLISTRESEND.ACTIVITY.LOG">
+		<int:service-activator id="BLACKLISTRESEND.SAVE.EVENT.SERVICE"
+			method="createEventSerivceLog" ref ="eventDBServiceImpl">
+		</int:service-activator>
+	<int:filter  discard-channel="REGISTRATION.BLACKLIST.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />	
+	</int:chain> 
+	
+	<int:chain id="blacklistRepeatcreateActivity" input-channel="BLACKLISTRESEND.ACTIVITY.LOG" output-channel="BLACKLISTRESEND.RESPONSE">
+		<int:service-activator id="blacklistResendActivityBuilder" ref="blacklistResendActivityBuilder"  method="buildActivityLogs" />
+	    <int:service-activator id="blacklistResendActivity"  method="createProfileActivity" >
+	    <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl" />
+	    </int:service-activator>
+	    <!--  Added new service activator to update blacklist status for account and contact -->
+	    <int:service-activator id="blacklistResendStatus"  method="updateBlacklistStatus" >
+	    <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl" />
+	    </int:service-activator>
+	   <int:filter  discard-channel="REGISTRATION.BLACKLIST.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" /> 
+	</int:chain>
+	
+	<int:chain input-channel="BLACKLISTRESEND.RESPONSE" output-channel="nullChannel">
+	<int:service-activator id="BLACKLISTRESEND.RES" ref="BlacklistResendResponse" method="process" />
+	<int:filter  discard-channel="REGISTRATION.BLACKLIST.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain id="reg.blacklist.resend.errorchain" input-channel="REGISTRATION.BLACKLIST.RESEND.ERROR.CHANNEL"
+		output-channel="nullChannel">
+	<int:service-activator id="reg.resend.blacklist"
+			method="logError" ref="reg.blacklist.resend.errorhandler">
+	</int:service-activator>
+	</int:chain>
+	
+	<bean id="reg.blacklist.resend.errorhandler" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist.BlacklistRepeatErrorHandler"/>
+	<bean id="BlacklistResendResponse" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist.PrepareBlacklistResendResponse"/>
+	<bean id="blacklistResendMessageValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist.BlacklistResendMessageValidator" />
+	<bean id="blacklistResendRegistratioDataEnricher" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.reg.RepeatCheckDataEnricher" />
+	<bean id="internalRuleServiceTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.InternalRuleServiceTransformer" />
+	<bean id="blacklistResendActivityBuilder" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist.ResendActivityLogBuilder"/>
+</beans>

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MessageValidator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.reg</a> &gt; <span class="el_source">MessageValidator.java</span></div><h1>MessageValidator.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.reg;
+
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.Header;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.BaseMessageValidator;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.FieldValidator;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+/**
+ * @author bnt
+ *
+ */
+<span class="nc" id="L28">public class MessageValidator extends BaseMessageValidator {</span>
+	
+	private static final String INVALID_REQUEST = &quot;Request is not valid&quot;;
+<span class="nc" id="L31">	private static final Logger LOG = LoggerFactory.getLogger(MessageValidator.class);</span>
+
+	/**
+	 * Process.
+	 *
+	 * @param message the message
+	 * @param correlationID the correlation ID
+	 * @return the message
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+<span class="nc" id="L42">		RegistrationResponse response = new RegistrationResponse();</span>
+<span class="nc" id="L43">		RegistrationServiceRequest registrationServiceRequest = null;</span>
+<span class="nc" id="L44">		FieldValidator validator = null;</span>
+<span class="nc" id="L45">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+		try {
+<span class="nc" id="L47">			registrationServiceRequest = (RegistrationServiceRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L48">			registrationServiceRequest.setCorrelationID(correlationID);</span>
+<span class="nc bnc" id="L49" title="All 2 branches missed.">			if(null == registrationServiceRequest.getIsBroadCastRequired()) {</span>
+<span class="nc" id="L50">				registrationServiceRequest.setIsBroadCastRequired(Boolean.TRUE);</span>
+			}
+<span class="nc" id="L52">			registrationServiceRequest.addAttribute(Constants.FIELD_BROADCAST_REQUIRED, registrationServiceRequest.getIsBroadCastRequired());</span>
+<span class="nc" id="L53">			ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc" id="L54">			OperationEnum operation = messageExchange.getOperation();</span>
+
+<span class="nc bnc" id="L56" title="All 4 branches missed.">			if (serviceInterfaceType == ServiceInterfaceType.PROFILE &amp;&amp; operation == OperationEnum.NEW_REGISTRATION) {</span>
+<span class="nc" id="L57">				validator = validateNewRegistration(registrationServiceRequest);</span>
+<span class="nc" id="L58">				createBaseResponse(response, validator,ComplianceReasonCode.MISSINGINFO.getReasonCode(),  Constants.MSG_MISSING_INFO,&quot;SIGNUP&quot;);</span>
+				
+<span class="nc bnc" id="L60" title="All 4 branches missed.">			} else if (serviceInterfaceType == ServiceInterfaceType.PROFILE</span>
+					&amp;&amp; operation == OperationEnum.UPDATE_ACCOUNT) {
+<span class="nc" id="L62">				validator = validateUpdateAccount(registrationServiceRequest);</span>
+<span class="nc" id="L63">				createBaseResponse(response, validator,ComplianceReasonCode.MISSINGINFO.getReasonCode(),  Constants.MSG_MISSING_INFO,&quot;UPDATE&quot;);</span>
+
+<span class="nc bnc" id="L65" title="All 4 branches missed.">			} else if (serviceInterfaceType == ServiceInterfaceType.PROFILE &amp;&amp; operation == OperationEnum.ADD_CONTACT) {</span>
+<span class="nc" id="L66">				validator = validateAddContact(registrationServiceRequest);</span>
+<span class="nc" id="L67">				createBaseResponse(response, validator,ComplianceReasonCode.MISSINGINFO.getReasonCode(),  Constants.MSG_MISSING_INFO,&quot;ADDCONTACT&quot;);</span>
+
+			}
+<span class="nc" id="L70">		} catch (Exception e) {</span>
+<span class="nc" id="L71">			LOG.error(INVALID_REQUEST, e);</span>
+<span class="nc" id="L72">			response.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L73">			response.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L74">			response.setErrorDescription(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L75">		}</span>
+<span class="nc" id="L76">		response.setOsrID(messageExchange.getRequest().getOsrId());</span>
+<span class="nc" id="L77">		response.setCorrelationID(correlationID);</span>
+<span class="nc" id="L78">		messageExchange.setResponse(response);</span>
+<span class="nc" id="L79">		return message;</span>
+	}
+
+	private FieldValidator validateNewRegistration(RegistrationServiceRequest registrationServiceRequest) {
+<span class="nc" id="L83">		Account account = registrationServiceRequest.getAccount();</span>
+<span class="nc" id="L84">		FieldValidator validator = registrationServiceRequest.validateSignup();</span>
+
+<span class="nc bnc" id="L86" title="All 2 branches missed.">		if (registrationServiceRequest.validateSignup().isFailed()) {</span>
+<span class="nc" id="L87">			account.setVersion(1);</span>
+		}
+<span class="nc" id="L89">		return validator;</span>
+	}
+
+	private FieldValidator validateUpdateAccount(RegistrationServiceRequest registrationServiceRequest){
+<span class="nc" id="L93">		return registrationServiceRequest.validateUpdateAccount();</span>
+	}
+
+	private FieldValidator validateAddContact(RegistrationServiceRequest registrationServiceRequest) {
+<span class="nc" id="L97">		return registrationServiceRequest.getAccount().validateAddContact();</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

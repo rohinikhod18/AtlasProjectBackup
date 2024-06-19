@@ -1,0 +1,637 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CopyObjectUtil.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.util</a> &gt; <span class="el_source">CopyObjectUtil.java</span></div><h1>CopyObjectUtil.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.util;
+
+import java.beans.BeanInfo;
+import java.beans.IntrospectionException;
+import java.beans.Introspector;
+import java.beans.PropertyDescriptor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.FieldDisplayName;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+/**
+ * The Class CopyObjectUtil.
+ */
+public class CopyObjectUtil {
+	
+	/** The Constant JAVA_LANG_STRING. */
+	public static final String JAVA_LANG_STRING = &quot;java.lang.String&quot;;
+	
+	/** The Constant JAVA_LANG_BOOLEAN. */
+	public static final String JAVA_LANG_BOOLEAN = &quot;java.lang.boolean&quot;;
+
+	/** The Constant ERROR. */
+	private static final String ERROR = &quot;Error &quot;;
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L33">	private static final Logger LOGGER = LoggerFactory.getLogger(CopyObjectUtil.class);</span>
+	
+	/** The Constant SPEC_CHAR_REG_EXP. */
+	private static final String SPEC_CHAR_REG_EXP = &quot;[^\\p{L}^\\p{Nd}]+&quot;;
+
+	/**
+	 * Instantiates a new copy object util.
+	 */
+	private CopyObjectUtil (){}
+	
+	/**
+	 * Copy null fields.
+	 *
+	 * @param &lt;T&gt; the generic type
+	 * @param toObject the to object
+	 * @param fromObject the from object
+	 * @param clazz the clazz
+	 * @return the t
+	 */
+	public static &lt;T&gt; T copyNullFields(T toObject, T fromObject, Class&lt;T&gt; clazz) {
+<span class="nc bnc" id="L53" title="All 2 branches missed.">		if(null == fromObject)</span>
+<span class="nc" id="L54">			return toObject;</span>
+		try {
+<span class="nc" id="L56">			BeanInfo info = Introspector.getBeanInfo(clazz);</span>
+<span class="nc bnc" id="L57" title="All 2 branches missed.">			for (PropertyDescriptor pd : info.getPropertyDescriptors()) {</span>
+<span class="nc" id="L58">				copyValues(toObject, fromObject, pd);</span>
+			}
+<span class="nc" id="L60">		} catch (IntrospectionException e) {</span>
+<span class="nc" id="L61">			LOGGER.trace(ERROR, e);</span>
+<span class="nc" id="L62">		}</span>
+<span class="nc" id="L63">		return toObject;</span>
+	}
+
+	/**
+	 * Copy values.
+	 *
+	 * @param &lt;T&gt; the generic type
+	 * @param toObject the to object
+	 * @param fromObject the from object
+	 * @param pd the pd
+	 */
+	private static &lt;T&gt; void copyValues(T toObject, T fromObject, PropertyDescriptor pd) {
+		try {
+			 
+<span class="nc bnc" id="L77" title="All 2 branches missed.">			if (!&quot;isContactRegistered&quot;.equals(pd.getName())) {</span>
+<span class="nc bnc" id="L78" title="All 4 branches missed.">				if (pd.getWriteMethod() == null || pd.getReadMethod() == null)</span>
+<span class="nc" id="L79">					return;</span>
+<span class="nc" id="L80">				Object  fieldValue = pd.getReadMethod().invoke(toObject);</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">				if (fieldValue == null) {</span>
+<span class="nc" id="L82">					pd.getWriteMethod().invoke(toObject, pd.getReadMethod().invoke(fromObject));</span>
+				}
+			}
+
+<span class="nc" id="L86">		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {</span>
+<span class="nc" id="L87">			LOGGER.warn(ERROR, e);</span>
+<span class="nc" id="L88">		} catch (Exception ex) {</span>
+<span class="nc" id="L89">			LOGGER.warn(ERROR, ex);</span>
+<span class="nc" id="L90">		}</span>
+<span class="nc" id="L91">	}</span>
+	
+	/**
+	 * Compare fields.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @return the string
+	 */
+	@SuppressWarnings(&quot;squid:S4973&quot;) //change to use equals is causing other issue
+	public static String compareFields(Object oldVersion, Object newVersion) {
+<span class="nc" id="L102">		List&lt;String&gt; fieldsModified = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L104" title="All 6 branches missed.">		if ((null == oldVersion || null == newVersion) || (oldVersion.getClass().getName() != newVersion.getClass().getName()))</span>
+<span class="nc" id="L105">			return null;</span>
+<span class="nc" id="L106">		Field[] oldVersionFields = oldVersion.getClass().getDeclaredFields();</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">		for (Field oldField : oldVersionFields) {</span>
+<span class="nc" id="L108">			compareFieldValues(oldVersion, newVersion, fieldsModified, oldField);</span>
+		}
+<span class="nc" id="L110">		return fieldsModified.toString();</span>
+	}
+
+	/**
+	 * Compare field values.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @param fieldsModified the fields modified
+	 * @param oldField the old field
+	 */
+	@SuppressWarnings(&quot;squid:S3011&quot;)
+	private static void compareFieldValues(Object oldVersion, Object newVersion, List&lt;String&gt; fieldsModified,
+			Field oldField) {
+		Field newField;
+		try {
+<span class="nc" id="L126">			newField = newVersion.getClass().getDeclaredField(oldField.getName());</span>
+<span class="nc" id="L127">			oldField.setAccessible(true);</span>
+<span class="nc" id="L128">			newField.setAccessible(true);</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">			if (newField.getType().getName().contains(&quot;java&quot;)) {</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">				if(JAVA_LANG_STRING.equalsIgnoreCase(newField.getType().getName())){</span>
+<span class="nc" id="L131">						String newValue = (String) newField.get(newVersion);</span>
+<span class="nc" id="L132">						String oldValue = (String) oldField.get(oldVersion);</span>
+<span class="nc" id="L133">						addModifiedFieldCaseSensitive(fieldsModified, newField, newValue, oldValue);</span>
+<span class="nc bnc" id="L134" title="All 6 branches missed.">				} else if(newField.get(newVersion) != null &amp;&amp; (oldField.get(oldVersion) == null || oldField.get(oldVersion) != null) &amp;&amp; </span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">						(!newField.get(newVersion).equals(oldField.get(oldVersion)))){</span>
+<span class="nc" id="L136">					fieldsModified.add(newField.getName());</span>
+				}
+			} 
+<span class="nc" id="L139">		} catch (NoSuchFieldException | SecurityException | IllegalArgumentException | IllegalAccessException e) {</span>
+<span class="nc" id="L140">			LOGGER.warn(ERROR, e);</span>
+<span class="nc" id="L141">		}</span>
+<span class="nc" id="L142">	}</span>
+	
+	/**
+	 * Check for only case change.
+	 *
+	 * @param fieldsModified the fields modified
+	 * @param newField the new field
+	 * @param newValue the new value
+	 * @param oldValue the old value
+	 */
+	private static void checkForOnlyCaseChange(List&lt;String&gt; fieldsModified, Field newField, String newValue,
+			String oldValue) {
+<span class="nc bnc" id="L154" title="All 8 branches missed.">		Boolean oldValueNotEmptyAndNewValueNotEmpty = (null != oldValue &amp;&amp; !oldValue.isEmpty()) &amp;&amp; (newValue != null &amp;&amp; !newValue.isEmpty());</span>
+<span class="nc bnc" id="L155" title="All 4 branches missed.">		if(oldValueNotEmptyAndNewValueNotEmpty &amp;&amp; checkIsOnlyCaseChanged(newValue, oldValue)) {</span>
+<span class="nc" id="L156">				fieldsModified.add(newField.getName()+&quot;,&quot;);</span>
+		}
+<span class="nc" id="L158">	}</span>
+
+	/**
+	 * Compare fields case insensitive.
+	 *
+	 * @param newVersion the new version
+	 * @param oldVersion the old version
+	 * @return the string
+	 */
+	@SuppressWarnings(&quot;squid:S4973&quot;)
+	public static String compareFieldsCaseInsensitive(Object newVersion,Object oldVersion) {
+<span class="nc" id="L169">		List&lt;String&gt; fieldsModified = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L171" title="All 6 branches missed.">		if ((null == oldVersion || null == newVersion) || (oldVersion.getClass().getName() != newVersion.getClass().getName()))</span>
+<span class="nc" id="L172">			return null;</span>
+<span class="nc" id="L173">		Field[] oldVersionFields = oldVersion.getClass().getDeclaredFields();</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">		for (Field oldField : oldVersionFields) {</span>
+<span class="nc" id="L175">			compareFieldValueCaseInsensitive(oldVersion, newVersion, fieldsModified, oldField,false);</span>
+		}
+<span class="nc" id="L177">		fieldsModified.add(&quot;&quot;);</span>
+<span class="nc" id="L178">		return fieldsModified.toString();</span>
+	}
+
+	/**
+	 * Compare field value case insensitive.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @param fieldsModified the fields modified
+	 * @param oldField the old field
+	 * @param removeSpecialCharacters the remove special characters
+	 */
+	@SuppressWarnings(&quot;squid:S3011&quot;)
+	private static void compareFieldValueCaseInsensitive(Object oldVersion, Object newVersion, List&lt;String&gt; fieldsModified,
+			Field oldField,boolean removeSpecialCharacters) {
+		Field newField;
+		try {
+<span class="nc" id="L195">			newField = newVersion.getClass().getDeclaredField(oldField.getName());</span>
+<span class="nc" id="L196">			oldField.setAccessible(true);</span>
+<span class="nc" id="L197">			newField.setAccessible(true);</span>
+			
+<span class="nc bnc" id="L199" title="All 4 branches missed.">			if(oldField.getAnnotation(JsonProperty.class) == null || oldField.getType().getName().contains(&quot;java.util&quot;)){</span>
+<span class="nc" id="L200">				return;</span>
+			}
+<span class="nc bnc" id="L202" title="All 2 branches missed.">			if (newField.getType().getName().contains(&quot;java&quot;)) {</span>
+<span class="nc" id="L203">				addModifiedFieldsByRemovingSpecialChar(oldVersion, newVersion, fieldsModified, oldField,</span>
+						removeSpecialCharacters, newField);
+			} 
+<span class="nc" id="L206">		} catch (NoSuchFieldException | SecurityException | IllegalArgumentException </span>
+				| IllegalAccessException |NullPointerException e) {
+<span class="nc" id="L208">			LOGGER.warn(ERROR, e);</span>
+<span class="nc" id="L209">		}</span>
+<span class="nc" id="L210">	}</span>
+
+	/**
+	 * Adds the modified fields by removing special char.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @param fieldsModified the fields modified
+	 * @param oldField the old field
+	 * @param removeSpecialCharacters the remove special characters
+	 * @param newField the new field
+	 * @throws IllegalAccessException the illegal access exception
+	 */
+	private static void addModifiedFieldsByRemovingSpecialChar(Object oldVersion, Object newVersion,
+			List&lt;String&gt; fieldsModified, Field oldField, boolean removeSpecialCharacters, Field newField)
+			throws IllegalAccessException {
+<span class="nc bnc" id="L226" title="All 2 branches missed.">		if(JAVA_LANG_STRING.equalsIgnoreCase(newField.getType().getName())){</span>
+<span class="nc" id="L227">				String newValue = (String) newField.get(newVersion);</span>
+<span class="nc" id="L228">				String oldValue = (String) oldField.get(oldVersion) ;</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">			if (removeSpecialCharacters) {</span>
+<span class="nc" id="L230">				newValue = removeSpecialCharacters(newValue);</span>
+<span class="nc" id="L231">				oldValue = removeSpecialCharacters(oldValue);</span>
+			}
+<span class="nc" id="L233">				addModifiedField(fieldsModified, newField, newValue, oldValue);</span>
+<span class="nc bnc" id="L234" title="All 6 branches missed.">		} else if(newField.get(newVersion) != null &amp;&amp; (oldField.get(oldVersion) == null || oldField.get(oldVersion) != null) </span>
+<span class="nc bnc" id="L235" title="All 2 branches missed.">				&amp;&amp; (!newField.get(newVersion).equals(oldField.get(oldVersion)))){</span>
+<span class="nc" id="L236">			fieldsModified.add(newField.getName());</span>
+		}
+<span class="nc" id="L238">	}</span>
+	
+	
+	
+	/**
+	 * Removes the special characters.
+	 *
+	 * @param newValue the new value
+	 * @return the string
+	 */
+	private static String removeSpecialCharacters(String newValue) {
+<span class="nc bnc" id="L249" title="All 4 branches missed.">		if (newValue == null || newValue.isEmpty()) {</span>
+<span class="nc" id="L250">			return newValue;</span>
+		}
+<span class="nc" id="L252">		return newValue.replaceAll(SPEC_CHAR_REG_EXP, &quot;&quot;);</span>
+	}
+
+	/**
+	 * Adds the modified field.
+	 *
+	 * @param fieldsModified the fields modified
+	 * @param newField the new field
+	 * @param newValue the new value
+	 * @param oldValue the old value
+	 */
+	private static void addModifiedField(List&lt;String&gt; fieldsModified, Field newField, String newValue,
+			String oldValue) {
+<span class="nc bnc" id="L265" title="All 8 branches missed.">		Boolean oldValueEmptyAndNewValueNotEmpty = (null == oldValue || oldValue.isEmpty()) &amp;&amp; (newValue != null &amp;&amp; !newValue.isEmpty());</span>
+<span class="nc bnc" id="L266" title="All 8 branches missed.">		Boolean oldValueNotEmptyAndNewValueNotEmpty = (null != oldValue &amp;&amp; !oldValue.isEmpty()) &amp;&amp; (newValue != null &amp;&amp; newValue.isEmpty());</span>
+<span class="nc" id="L267">		checkWhetherFieldsModified(fieldsModified, newField, newValue, oldValue, oldValueEmptyAndNewValueNotEmpty,</span>
+				oldValueNotEmptyAndNewValueNotEmpty); 
+<span class="nc" id="L269">	}</span>
+
+	/**
+	 * Check whether fields modified.
+	 *
+	 * @param fieldsModified the fields modified
+	 * @param newField the new field
+	 * @param newValue the new value
+	 * @param oldValue the old value
+	 * @param oldValueEmptyAndNewValueNotEmpty the old value empty and new value not empty
+	 * @param oldValueNotEmptyAndNewValueNotEmpty the old value not empty and new value not empty
+	 */
+	private static void checkWhetherFieldsModified(List&lt;String&gt; fieldsModified, Field newField, String newValue,
+			String oldValue, Boolean oldValueEmptyAndNewValueNotEmpty, Boolean oldValueNotEmptyAndNewValueNotEmpty) {
+<span class="nc bnc" id="L283" title="All 8 branches missed.">		Boolean oldValueNotEmptyAndNotEqualsNewValue = (oldValue != null &amp;&amp; !oldValue.isEmpty()) &amp;&amp; (newValue != null &amp;&amp; !newValue.equalsIgnoreCase(oldValue));</span>
+		
+<span class="nc bnc" id="L285" title="All 2 branches missed.">		if (Boolean.TRUE.equals(oldValueEmptyAndNewValueNotEmpty) </span>
+<span class="nc bnc" id="L286" title="All 2 branches missed.">				|| Boolean.TRUE.equals(oldValueNotEmptyAndNewValueNotEmpty) </span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">				|| Boolean.TRUE.equals(oldValueNotEmptyAndNotEqualsNewValue)){</span>
+<span class="nc" id="L288">			fieldsModified.add(newField.getName()+&quot;,&quot;);</span>
+		}		
+<span class="nc" id="L290">	}</span>
+
+	/**
+	 * Check is only case changed.
+	 *
+	 * @param newValue the new value
+	 * @param oldValue the old value
+	 * @return the boolean
+	 */
+	private static Boolean checkIsOnlyCaseChanged(String newValue, String oldValue) {
+<span class="nc" id="L300">		Boolean caseChanged = Boolean.FALSE;</span>
+<span class="nc bnc" id="L301" title="All 6 branches missed.">		if(null != newValue &amp;&amp; !newValue.equals(oldValue) &amp;&amp; newValue.equalsIgnoreCase(oldValue)){</span>
+<span class="nc" id="L302">			caseChanged = Boolean.TRUE;</span>
+		}
+<span class="nc" id="L304">		return caseChanged;</span>
+	}
+	
+	
+	/**
+	 * Adds the modified field case sensitive.
+	 *
+	 * @param fieldsModified the fields modified
+	 * @param newField the new field
+	 * @param newValue the new value
+	 * @param oldValue the old value
+	 */
+	private static void addModifiedFieldCaseSensitive(List&lt;String&gt; fieldsModifiedCaseSensitive, Field newFieldCaseSensitive, String newValueCaseSensitive,
+			String oldValueCaseSensitive) {
+<span class="nc bnc" id="L318" title="All 8 branches missed.">		Boolean oldValueEmptyAndNewValueNotEmpty = (null == oldValueCaseSensitive || oldValueCaseSensitive.isEmpty()) &amp;&amp; (newValueCaseSensitive != null &amp;&amp; !newValueCaseSensitive.isEmpty());</span>
+<span class="nc bnc" id="L319" title="All 8 branches missed.">		Boolean oldValueNotEmptyAndNewValueNotEmpty = (null != oldValueCaseSensitive &amp;&amp; !oldValueCaseSensitive.isEmpty()) &amp;&amp; (newValueCaseSensitive != null &amp;&amp; newValueCaseSensitive.isEmpty());</span>
+<span class="nc" id="L320">		checkWhetherFieldsModified(fieldsModifiedCaseSensitive, newFieldCaseSensitive, newValueCaseSensitive, oldValueCaseSensitive, oldValueEmptyAndNewValueNotEmpty,</span>
+				oldValueNotEmptyAndNewValueNotEmpty);
+<span class="nc" id="L322">	}</span>
+	
+	/**
+	 * Removes the special charcter and compare.
+	 *
+	 * @param fields the fields
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @return the string
+	 */
+	@SuppressWarnings(&quot;squid:S4973&quot;)
+	public static String removeSpecialCharcterAndCompare(String[] fields,Object oldVersion, Object newVersion){
+<span class="nc" id="L334">		List&lt;String&gt; fieldsModified = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L336" title="All 2 branches missed.">		if (oldVersion.getClass().getName() != newVersion.getClass().getName())</span>
+<span class="nc" id="L337">			return null;</span>
+		Field oldField; 
+<span class="nc bnc" id="L339" title="All 2 branches missed.">		for (String field : fields) {</span>
+<span class="nc" id="L340">			oldField = null;</span>
+			try {
+<span class="nc" id="L342">				oldField = oldVersion.getClass().getDeclaredField(field);</span>
+				
+<span class="nc" id="L344">			} catch (NoSuchFieldException |SecurityException e) {</span>
+<span class="nc" id="L345">				LOGGER.debug(ERROR, e);</span>
+<span class="nc" id="L346">			}</span>
+<span class="nc bnc" id="L347" title="All 2 branches missed.">			if(null !=oldField)</span>
+<span class="nc" id="L348">				compareFieldValueCaseInsensitive(oldVersion, newVersion, fieldsModified, oldField,true);</span>
+		}
+<span class="nc" id="L350">		fieldsModified.add(&quot;&quot;);</span>
+<span class="nc" id="L351">		return fieldsModified.toString();</span>
+	}
+
+	/**
+	 * Compare fields for case checking.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @return the string
+	 */
+	@SuppressWarnings(&quot;squid:S4973&quot;)
+	public static String compareFieldsForCaseChecking(Object oldVersion, Object newVersion) {
+<span class="nc" id="L363">		List&lt;String&gt; fieldsModified = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L364" title="All 2 branches missed.">		if(null == oldVersion)</span>
+<span class="nc" id="L365">			return null;</span>
+<span class="nc bnc" id="L366" title="All 2 branches missed.">		if (oldVersion.getClass().getName() != newVersion.getClass().getName())</span>
+<span class="nc" id="L367">			return null;</span>
+<span class="nc" id="L368">		Field[] oldVersionFields = oldVersion.getClass().getDeclaredFields();</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">		for (Field oldField : oldVersionFields) {</span>
+<span class="nc" id="L370">			compareFieldValuesForCaseChecking(oldVersion, newVersion, fieldsModified, oldField);</span>
+		}
+<span class="nc" id="L372">		return fieldsModified.toString();</span>
+	}
+	
+	/**
+	 * Compare field values for case checking.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @param fieldsModified the fields modified
+	 * @param oldField the old field
+	 */
+	@SuppressWarnings(&quot;squid:S3011&quot;)
+	private static void compareFieldValuesForCaseChecking(Object oldVersion, Object newVersion, List&lt;String&gt; fieldsModified,
+			Field oldField) {
+		Field newField;
+		try {
+<span class="nc" id="L388">			newField = newVersion.getClass().getDeclaredField(oldField.getName());</span>
+<span class="nc" id="L389">			oldField.setAccessible(true);</span>
+<span class="nc" id="L390">			newField.setAccessible(true);</span>
+<span class="nc bnc" id="L391" title="All 2 branches missed.">			if (newField.getType().getName().contains(&quot;java&quot;)) {</span>
+<span class="nc bnc" id="L392" title="All 2 branches missed.">				if(JAVA_LANG_STRING.equalsIgnoreCase(newField.getType().getName())){</span>
+<span class="nc" id="L393">						String newValue = (String) newField.get(newVersion);</span>
+<span class="nc" id="L394">						String oldValue = (String) oldField.get(oldVersion);</span>
+<span class="nc" id="L395">						checkForOnlyCaseChange(fieldsModified, newField, newValue, oldValue);</span>
+<span class="nc bnc" id="L396" title="All 6 branches missed.">				} else if(newField.get(newVersion) != null &amp;&amp; (oldField.get(oldVersion) == null || oldField.get(oldVersion) != null) &amp;&amp; </span>
+<span class="nc bnc" id="L397" title="All 2 branches missed.">						(!newField.get(newVersion).equals(oldField.get(oldVersion)))){</span>
+<span class="nc" id="L398">					fieldsModified.add(newField.getName());</span>
+				}
+			} 
+<span class="nc" id="L401">		} catch (NoSuchFieldException | SecurityException | IllegalArgumentException | IllegalAccessException e) {</span>
+<span class="nc" id="L402">			LOGGER.warn(ERROR, e);</span>
+<span class="nc" id="L403">		}</span>
+<span class="nc" id="L404">	}</span>
+	
+	/**
+	 * Compare fields for content checking.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @return the string
+	 */
+	@SuppressWarnings(&quot;squid:S4973&quot;)
+	public static String compareFieldsForContentChecking(Object oldVersion, Object newVersion) {
+<span class="nc" id="L415">		List&lt;String&gt; fieldsModified = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L417" title="All 2 branches missed.">		if (oldVersion.getClass().getName() != newVersion.getClass().getName())</span>
+<span class="nc" id="L418">			return null;</span>
+<span class="nc" id="L419">		Field[] oldVersionFields = oldVersion.getClass().getDeclaredFields();</span>
+<span class="nc bnc" id="L420" title="All 2 branches missed.">		for (Field oldField : oldVersionFields) {</span>
+<span class="nc" id="L421">			compareFieldValuesForContentChecking(oldVersion, newVersion, fieldsModified, oldField);</span>
+		}
+<span class="nc" id="L423">		return fieldsModified.toString();</span>
+	}
+	
+	/**
+	 * Compare field values for content checking.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @param fieldsModified the fields modified
+	 * @param oldField the old field
+	 */
+	@SuppressWarnings(&quot;squid:S3011&quot;)
+	private static void compareFieldValuesForContentChecking(Object oldVersionContentChecking, Object newVersionContentChecking, List&lt;String&gt; fieldsModifiedContentChecking,
+			Field oldFieldContentChecking) {
+		Field newField;
+		try {
+<span class="nc" id="L439">			newField = newVersionContentChecking.getClass().getDeclaredField(oldFieldContentChecking.getName());</span>
+<span class="nc" id="L440">			oldFieldContentChecking.setAccessible(true);</span>
+<span class="nc" id="L441">			newField.setAccessible(true);</span>
+<span class="nc bnc" id="L442" title="All 2 branches missed.">			if (newField.getType().getName().contains(&quot;java&quot;)) {</span>
+<span class="nc bnc" id="L443" title="All 2 branches missed.">				if(JAVA_LANG_STRING.equalsIgnoreCase(newField.getType().getName())){</span>
+<span class="nc" id="L444">						String newValue = (String) newField.get(newVersionContentChecking);</span>
+<span class="nc" id="L445">						String oldValue = (String) oldFieldContentChecking.get(oldVersionContentChecking);</span>
+<span class="nc" id="L446">						addModifiedFieldCaseSensitive(fieldsModifiedContentChecking, newField, newValue, oldValue);</span>
+<span class="nc bnc" id="L447" title="All 6 branches missed.">				} else if(newField.get(newVersionContentChecking) != null &amp;&amp; (oldFieldContentChecking.get(oldVersionContentChecking) == null || oldFieldContentChecking.get(oldVersionContentChecking) != null) &amp;&amp; </span>
+<span class="nc bnc" id="L448" title="All 2 branches missed.">						(!newField.get(newVersionContentChecking).equals(oldFieldContentChecking.get(oldVersionContentChecking)))){</span>
+<span class="nc" id="L449">					fieldsModifiedContentChecking.add(newField.getName());</span>
+				}
+			} 
+<span class="nc" id="L452">		} catch (NoSuchFieldException | SecurityException | IllegalArgumentException | IllegalAccessException e) {</span>
+<span class="nc" id="L453">			LOGGER.warn(ERROR, e);</span>
+<span class="nc" id="L454">		}</span>
+<span class="nc" id="L455">	}</span>
+	
+	/**
+	 * Compare fields for content checking activity log.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @return the string
+	 */
+	@SuppressWarnings(&quot;squid:S4973&quot;)
+	public static String compareFieldsForContentCheckingActivityLog(Object oldVersion, Object newVersion) {
+<span class="nc" id="L466">		List&lt;String&gt; fieldsModified = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L468" title="All 2 branches missed.">		if (oldVersion.getClass().getName() != newVersion.getClass().getName())</span>
+<span class="nc" id="L469">			return null;</span>
+<span class="nc" id="L470">		Field[] oldVersionFields = oldVersion.getClass().getDeclaredFields();</span>
+<span class="nc bnc" id="L471" title="All 2 branches missed.">		for (Field oldField : oldVersionFields) {</span>
+<span class="nc" id="L472">			compareFieldValuesForContentCheckingActivityLog(oldVersion, newVersion, fieldsModified, oldField);</span>
+		}
+<span class="nc" id="L474">		return fieldsModified.toString();</span>
+	}
+
+	/**
+	 * Compare field values for content checking activity log.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @param fieldsModified the fields modified
+	 * @param oldField the old field
+	 */
+	@SuppressWarnings(&quot;squid:S3011&quot;)
+	private static void compareFieldValuesForContentCheckingActivityLog(Object oldVersion, Object newVersion,
+			List&lt;String&gt; fieldsModified, Field oldField) {
+		Field newField;
+		try {
+<span class="nc" id="L490">			newField = newVersion.getClass().getDeclaredField(oldField.getName());</span>
+<span class="nc" id="L491">			oldField.setAccessible(true);</span>
+<span class="nc" id="L492">			newField.setAccessible(true);</span>
+<span class="nc bnc" id="L493" title="All 2 branches missed.">			if (newField.getType().getName().contains(&quot;java&quot;)) {</span>
+<span class="nc bnc" id="L494" title="All 2 branches missed.">				if (JAVA_LANG_STRING.equalsIgnoreCase(newField.getType().getName())) {</span>
+<span class="nc" id="L495">					String newValue = (String) newField.get(newVersion);</span>
+<span class="nc" id="L496">					String oldValue = (String) oldField.get(oldVersion);</span>
+<span class="nc" id="L497">					addModifiedFieldCaseSensitiveActivityLog(fieldsModified, newField, newValue, oldValue);</span>
+<span class="nc bnc" id="L498" title="All 2 branches missed.">				} else if(JAVA_LANG_BOOLEAN.equalsIgnoreCase(newField.getType().getName())){</span>
+<span class="nc" id="L499">					getFieldValues(oldVersion, newVersion, fieldsModified, oldField, newField);</span>
+					
+				}
+			}
+<span class="nc" id="L503">		} catch (NoSuchFieldException | SecurityException | IllegalArgumentException | IllegalAccessException e) {</span>
+<span class="nc" id="L504">			LOGGER.warn(ERROR, e);</span>
+<span class="nc" id="L505">		}</span>
+<span class="nc" id="L506">	}</span>
+
+	/**
+	 * Gets the field values.
+	 *
+	 * @param oldVersion the old version
+	 * @param newVersion the new version
+	 * @param fieldsModified the fields modified
+	 * @param oldField the old field
+	 * @param newField the new field
+	 * @return the field values
+	 * @throws IllegalAccessException the illegal access exception
+	 */
+	private static void getFieldValues(Object oldVersion, Object newVersion, List&lt;String&gt; fieldsModified,
+			Field oldField, Field newField) throws IllegalAccessException {
+<span class="nc" id="L521">		Boolean newBooleanValue = (Boolean) newField.get(newVersion);</span>
+<span class="nc" id="L522">		Boolean oldBooleanValue = (Boolean) oldField.get(oldVersion);</span>
+
+<span class="nc bnc" id="L524" title="All 4 branches missed.">		if (null != newBooleanValue &amp;&amp; null != oldBooleanValue) {</span>
+			String newValue;
+			String oldValue;
+<span class="nc bnc" id="L527" title="All 2 branches missed.">			if (Boolean.TRUE.equals(newBooleanValue)) {</span>
+<span class="nc" id="L528">				newValue = &quot;true&quot;;</span>
+			} else {
+<span class="nc" id="L530">				newValue = &quot;false&quot;;</span>
+			}
+
+<span class="nc bnc" id="L533" title="All 2 branches missed.">			if (Boolean.TRUE.equals(oldBooleanValue)) {</span>
+<span class="nc" id="L534">				oldValue = &quot;true&quot;;</span>
+			} else {
+<span class="nc" id="L536">				oldValue = &quot;false&quot;;</span>
+			}
+<span class="nc" id="L538">			addModifiedFieldCaseSensitiveActivityLog(fieldsModified, newField, newValue, oldValue);</span>
+		}
+<span class="nc" id="L540">	}</span>
+
+	/**
+	 * Adds the modified field case sensitive activity log.
+	 *
+	 * @param fieldsModified the fields modified
+	 * @param newField the new field
+	 * @param newValue the new value
+	 * @param oldValue the old value
+	 */
+	private static void addModifiedFieldCaseSensitiveActivityLog(List&lt;String&gt; fieldsModified, Field newField,
+			String newValue, String oldValue) {
+<span class="nc bnc" id="L552" title="All 6 branches missed.">		Boolean oldValueEmptyAndNewValueNotEmpty = (null == oldValue || oldValue.isEmpty())</span>
+<span class="nc bnc" id="L553" title="All 2 branches missed.">				&amp;&amp; (newValue != null &amp;&amp; !newValue.isEmpty());</span>
+<span class="nc bnc" id="L554" title="All 6 branches missed.">		Boolean oldValueNotEmptyAndNewValueNotEmpty = (null != oldValue &amp;&amp; !oldValue.isEmpty())</span>
+<span class="nc bnc" id="L555" title="All 2 branches missed.">				&amp;&amp; (newValue != null &amp;&amp; newValue.isEmpty());</span>
+<span class="nc" id="L556">		checkWhetherFieldsModifiedActivityLog(fieldsModified, newField, newValue, oldValue,</span>
+				oldValueEmptyAndNewValueNotEmpty, oldValueNotEmptyAndNewValueNotEmpty);
+<span class="nc" id="L558">	}</span>
+
+	/**
+	 * Check whether fields modified activity log.
+	 *
+	 * @param fieldsModified the fields modified
+	 * @param newField the new field
+	 * @param newValue the new value
+	 * @param oldValue the old value
+	 * @param oldValueEmptyAndNewValueNotEmpty the old value empty and new value not empty
+	 * @param oldValueNotEmptyAndNewValueNotEmpty the old value not empty and new value not empty
+	 */
+	private static void checkWhetherFieldsModifiedActivityLog(List&lt;String&gt; fieldsModified, Field newField,
+			String newValue, String oldValue, Boolean oldValueEmptyAndNewValueNotEmpty,
+			Boolean oldValueNotEmptyAndNewValueNotEmpty) {
+<span class="nc bnc" id="L573" title="All 6 branches missed.">		Boolean oldValueNotEmptyAndNotEqualsNewValue = (oldValue != null &amp;&amp; !oldValue.isEmpty())</span>
+<span class="nc bnc" id="L574" title="All 2 branches missed.">				&amp;&amp; (newValue != null &amp;&amp; !newValue.equals(oldValue));</span>
+
+<span class="nc bnc" id="L576" title="All 2 branches missed.">		if (Boolean.TRUE.equals(oldValueEmptyAndNewValueNotEmpty) </span>
+<span class="nc bnc" id="L577" title="All 2 branches missed.">				|| Boolean.TRUE.equals(oldValueNotEmptyAndNewValueNotEmpty)</span>
+<span class="nc bnc" id="L578" title="All 2 branches missed.">				|| Boolean.TRUE.equals(oldValueNotEmptyAndNotEqualsNewValue)) {</span>
+<span class="nc" id="L579">			addModifiedFields(fieldsModified, newField, newValue, oldValue);</span>
+		}
+<span class="nc" id="L581">	}</span>
+
+	/**
+	 * Adds the modified fields.
+	 *
+	 * @param fieldsModified the fields modified
+	 * @param newField the new field
+	 * @param newValue the new value
+	 * @param oldValue the old value
+	 */
+	private static void addModifiedFields(List&lt;String&gt; fieldsModified, Field newField, String newValue,
+			String oldValue) {
+		
+<span class="nc" id="L594">		String date = DateTimeFormatter.getDateInRFC3339(newValue);</span>
+
+<span class="nc bnc" id="L596" title="All 2 branches missed.">		if (!StringUtils.isNullOrTrimEmpty(date)) {</span>
+<span class="nc" id="L597">			getActivityLogList(fieldsModified, newField, date, oldValue);</span>
+		} else {
+<span class="nc" id="L599">			getActivityLogList(fieldsModified, newField, newValue, oldValue);</span>
+		}
+		
+		
+<span class="nc" id="L603">	}</span>
+
+	/**
+	 * Gets the activity log list.
+	 *
+	 * @param fieldsModified the fields modified
+	 * @param newField the new field
+	 * @param newValue the new value
+	 * @param oldValue the old value
+	 * @return the activity log list
+	 */
+	private static void getActivityLogList(List&lt;String&gt; fieldsModified, Field newField, String newValue,
+			String oldValue) {
+<span class="nc bnc" id="L616" title="All 2 branches missed.">		if (null != newField.getAnnotation(FieldDisplayName.class)) {</span>
+<span class="nc" id="L617">			String displayName = newField.getAnnotation(FieldDisplayName.class).displayName();</span>
+
+<span class="nc bnc" id="L619" title="All 4 branches missed.">			if (null == oldValue || oldValue.isEmpty()) {</span>
+<span class="nc" id="L620">				fieldsModified.add(</span>
+						&quot;Changed &quot; + displayName + &quot; to &quot; + newValue);
+			}
+
+<span class="nc bnc" id="L624" title="All 4 branches missed.">			if (null == newValue || newValue.isEmpty()) {</span>
+<span class="nc" id="L625">				fieldsModified.add(&quot;Removed &quot; + displayName);</span>
+			}
+			
+<span class="nc bnc" id="L628" title="All 4 branches missed.">			if(!StringUtils.isNullOrTrimEmpty(newValue) &amp;&amp; !StringUtils.isNullOrTrimEmpty(oldValue))</span>
+			{
+<span class="nc" id="L630">				fieldsModified.add(&quot;Changed &quot; + displayName + &quot; from &quot;</span>
+						+ oldValue + &quot; to &quot; + newValue);
+			}
+
+		}
+<span class="nc" id="L635">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

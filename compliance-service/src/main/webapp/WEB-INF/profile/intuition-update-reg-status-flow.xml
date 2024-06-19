@@ -1,0 +1,121 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<int:channel id="INTUITION.UPDATE_ACCOUNT.in.channel" />
+	<int:channel id="INTUITIONUPDATE_ACCOUNT.RESPONSE" />
+	<int:channel id="INTUITIONUPDATE_ACCOUNT.ERROR.CHANNEL" />
+
+	<int:chain id="updateRegStatusServcie"
+		input-channel="INTUITION.UPDATE_ACCOUNT.in.channel"
+		output-channel="INTUITIONUPDATE_ACCOUNT.EVENT.CHANNEL">
+		<int:header-enricher>
+			<int:header name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header name="username"
+				expression="headers['username']" />
+			<int:header name="password"
+				expression="headers['password']" />
+		</int:header-enricher>
+
+		<int:service-activator
+			id="updateRegStatus.dataEnricher"
+			ref="updateRegStatusDataEnricher"
+			method="process"/>
+		<int:filter discard-channel="INTUITIONUPDATE_ACCOUNT.ERROR.CHANNEL" expression="!payload.isFailed()" />	
+
+		<!-- <int:service-activator
+			id="intuitionupdate.VALIDATOR" ref="messageValidator" method="" />
+		<int:router id="updateRegStatusValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping value="FAIL"
+				channel="INTUITIONUPDATE_ACCOUNT.RESPONSE" />
+			<int:mapping value="SUCCESS"
+				channel="INTUITIONUPDATE_ACCOUNT.CHANNEL" />
+		</int:router> -->
+	</int:chain>
+
+	<int:chain id="updateRegStatusChannel"
+		input-channel="INTUITIONUPDATE_ACCOUNT.EVENT.CHANNEL"
+		output-channel="INTUITIONUPDATE_ACCOUNT.RESPONSE">
+
+		<int:service-activator
+			method="createEvent"
+			ref="eventDBServiceImpl">
+		</int:service-activator>
+
+		<int:transformer
+			ref="transactionMonitoringTransformer" method="transformRequest" />
+		<int:service-activator
+			id="REG.TRANSACTIONMONITORING" method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="transactionMonitoringTransformer" method="transformResponse" />
+
+		<int:service-activator ref="eventDBServiceImpl"
+			method="createTransactionMonitoringEventSerivceLog">
+		</int:service-activator>
+		
+		<int:service-activator
+			ref="updateRegistrationDBServiceImpl"
+			method="updateIntuitionRiskLevelForRegUpdate">
+		</int:service-activator>
+
+		<int:filter
+			discard-channel="INTUITIONUPDATE_ACCOUNT.ERROR.CHANNEL"
+			expression="!payload.isFailed()" />
+	</int:chain>
+
+	<int:chain input-channel="INTUITIONUPDATE_ACCOUNT.RESPONSE"
+		output-channel="nullChannel">
+		<int:service-activator id="intuitionStatusResponse"
+			ref="updateRegStatusResponse" method="process" />
+		<int:filter
+			discard-channel="INTUITIONUPDATE_ACCOUNT.ERROR.CHANNEL"
+			expression="!payload.isFailed()" />
+	</int:chain>
+
+	<int:chain id="intuitionupdate.reg.status.errorchain"
+		input-channel="INTUITIONUPDATE_ACCOUNT.ERROR.CHANNEL"
+		output-channel="nullChannel">
+		<int:service-activator id="update.reg.status"
+			method="logError" ref="update.reg.status.errorhandler">
+		</int:service-activator>
+	</int:chain>
+
+	<bean id="update.reg.status.errorhandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.TranscationMonitoringErrorHandler" />
+	<bean id="updateRegStatusResponse"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.TransactionMonitoringUpdateStatusResponse" />	
+	<bean id="updateRegStatusDataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.DataEnricher" />
+	<bean id="updateRegistrationDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.UpdateRegistrationDBServiceImpl" />		
+		
+</beans>

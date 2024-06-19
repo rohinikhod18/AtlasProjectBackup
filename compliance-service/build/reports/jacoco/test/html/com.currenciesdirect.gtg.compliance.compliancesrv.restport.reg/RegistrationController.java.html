@@ -1,0 +1,401 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.restport.reg</a> &gt; <span class="el_source">RegistrationController.java</span></div><h1>RegistrationController.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.restport.reg;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.annotation.security.RolesAllowed;
+import javax.servlet.http.HttpServletRequest;
+
+import org.keycloak.KeycloakPrincipal;
+import org.keycloak.adapters.RefreshableKeycloakSecurityContext;
+import org.keycloak.representations.AccessToken;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.context.request.async.DeferredResult;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.DeviceInfo;
+import com.currenciesdirect.gtg.compliance.commons.domain.ReprocessFailedDetails;
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.Contact;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.statusupdate.StatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.statusupdate.StatusUpdateResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.AddContactRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.SignUpRequestWrapper;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.UpdateProfileRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.delete.contact.DeleteContactRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ProfileResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.restport.BaseController;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.ParseSSNNumber;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
+import springfox.documentation.swagger2.annotations.EnableSwagger2;
+
+/**
+ * The Class RegistrationController.
+ */
+@Controller
+@EnableSwagger2
+@EnableWebMvc  
+@Api(value = &quot;/&quot;)   
+@RequestMapping(&quot;profile&quot;)
+<span class="nc" id="L66">public class RegistrationController extends BaseController {</span>
+
+	/** The Constant LOGGER. */
+<span class="nc" id="L69">	private static final Logger LOGGER = LoggerFactory.getLogger(RegistrationController.class);</span>
+
+	/**
+	 * New reg.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param signUpRequestWrapper
+	 *            the sign up request wrapper
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Called when SalesForce sends a SignUP request&quot;, value = &quot;Called when SalesForce sends a SignUP request&quot;, nickname = &quot;Sign-Up&quot;)
+	@ApiImplicitParams({
+			@ApiImplicitParam(name = &quot;Authorization&quot;, value = &quot;Add bearer token&quot;, defaultValue = &quot;Bearer &lt;&lt;AbCdEf123456&gt;&gt;&quot;, required = true, dataType = &quot;string&quot;, paramType = &quot;header&quot;) })
+	@RolesAllowed(&quot;compliance_api_access&quot;)
+	@ApiResponses(value = {
+			@ApiResponse(response = RegistrationResponse.class, code = 200, message = &quot;A successful response is an instance of the RegistrationResponse class.&quot;) })
+	@PostMapping(value = &quot;/signup&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; newReg(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;Sign-Up request JSON data&quot;, required = true) final @RequestBody SignUpRequestWrapper signUpRequestWrapper) {
+		
+<span class="nc" id="L90">		ParseSSNNumber.getInstance().parseSsnNumber(signUpRequestWrapper.getSignupRequest());//AT-3661</span>
+		
+<span class="nc" id="L92">		String jsonSignupRequest = JsonConverterUtil.convertToJsonWithoutNull(signUpRequestWrapper);</span>
+<span class="nc" id="L93">		LOGGER.warn(&quot;\n -------Signup Request Start -------- \n  {}&quot;, jsonSignupRequest);</span>
+<span class="nc" id="L94">		LOGGER.warn(&quot; \n -----------Signup Request End ---------&quot;);</span>
+<span class="nc" id="L95">		RegistrationServiceRequest registrationServiceRequest = convertToRegistrationRequest(signUpRequestWrapper);</span>
+<span class="nc" id="L96">		setCitytoRegionforZAF(registrationServiceRequest.getAccount());</span>
+		
+<span class="nc" id="L98">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class, httpRequest.getHeader(&quot;user&quot;));</span>
+		
+<span class="nc" id="L100">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+				ServiceInterfaceType.PROFILE, OperationEnum.NEW_REGISTRATION,
+<span class="nc" id="L102">				signUpRequestWrapper.getSignupRequest().getOrgCode(), registrationServiceRequest);</span>
+		
+<span class="nc" id="L104">		AccessToken userToken = new AccessToken();</span>
+<span class="nc" id="L105">		userToken.setPreferredUsername(user.getName());	</span>
+
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;
+<span class="nc" id="L108">			deferredResult = super.executeWorkflow(messageContext, userToken);</span>
+			
+<span class="nc" id="L110">		return deferredResult;</span>
+	}
+
+	// Changes made for AT-459.
+	// For country_of_residence South Africa if region field does not come then
+	// we set city in it.
+	/**
+	 * Sets the cityto regionfor ZAF.
+	 *
+	 * @param account
+	 *            the new cityto regionfor ZAF
+	 */
+	// Changes done by Tejas I
+	private void setCitytoRegionforZAF(Account account) {
+<span class="nc bnc" id="L124" title="All 2 branches missed.">		for (com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact contact : account.getContacts()) {</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">			if ((Constants.ZAF).equalsIgnoreCase(contact.getCountry())</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">					&amp;&amp; StringUtils.isNullOrEmpty(contact.getRegion())) {</span>
+<span class="nc" id="L127">				contact.setRegion(contact.getCity());</span>
+			}
+<span class="nc" id="L129">		}</span>
+
+<span class="nc" id="L131">	}</span>
+
+	/**
+	 * Adds the contact.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param addContactRequest
+	 *            the add contact request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Called when SalesForce sends an Add Contact&quot;, value = &quot;Called when SalesForce sends an Add Contact&quot;, nickname = &quot;Add Contact&quot;)
+	@ApiImplicitParams({
+			@ApiImplicitParam(name = &quot;Authorization&quot;, value = &quot;Add bearer token&quot;, defaultValue = &quot;Bearer &lt;&lt;AbCdEf123456&gt;&gt;&quot;, required = true, dataType = &quot;string&quot;, paramType = &quot;header&quot;) })
+	@RolesAllowed(&quot;compliance_api_access&quot;)
+	@ApiResponses(value = {
+			@ApiResponse(response = RegistrationResponse.class, code = 200, message = &quot;A successful response is an instance of the RegistrationResponse class.&quot;) })
+	@PostMapping(value = &quot;/addContact&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; addContact(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;Add Contact request JSON data&quot;, required = true) final @RequestBody AddContactRequest addContactRequest) {
+		
+<span class="nc" id="L152">		ParseSSNNumber.getInstance().parseSsnNumberForAddContact(addContactRequest);//AT-3661</span>
+		
+<span class="nc" id="L154">		String jsonAddContactRequest = JsonConverterUtil.convertToJsonWithoutNull(addContactRequest);</span>
+<span class="nc" id="L155">		LOGGER.warn(&quot;\n -------addContact Request Start -------- \n  {}&quot;, jsonAddContactRequest);</span>
+<span class="nc" id="L156">		LOGGER.warn(&quot; \n -----------addContact Request End ---------&quot;);</span>
+		// Since add Contact has same flow as New Registration
+		// operation is used same as above
+<span class="nc" id="L159">		RegistrationServiceRequest request = mapToRegistrationRequest(addContactRequest);</span>
+<span class="nc" id="L160">		setCitytoRegionforZAF(request.getAccount());</span>
+<span class="nc" id="L161">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L162">				ServiceInterfaceType.PROFILE, OperationEnum.ADD_CONTACT, addContactRequest.getOrgCode(), request);</span>
+
+<span class="nc" id="L164">		KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt; principal = (KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt;) httpRequest</span>
+<span class="nc" id="L165">				.getUserPrincipal();</span>
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;
+<span class="nc bnc" id="L167" title="All 2 branches missed.">		if (null != principal) {</span>
+<span class="nc" id="L168">			deferredResult = super.executeWorkflow(messageContext, principal.getKeycloakSecurityContext().getToken());</span>
+		} else {
+<span class="nc" id="L170">			deferredResult = new DeferredResult&lt;&gt;();</span>
+<span class="nc" id="L171">			BaseResponse baseResponse = new BaseResponse();</span>
+<span class="nc" id="L172">			ResponseEntity&lt;BaseResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(baseResponse, HttpStatus.UNAUTHORIZED);</span>
+<span class="nc" id="L173">			deferredResult.setResult(responseEntity);</span>
+		}
+
+<span class="nc" id="L176">		return deferredResult;</span>
+	}
+
+	/**
+	 * Update reg.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param updateProfileReuqest
+	 *            the update profile reuqest
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Called when SF sends an Update request for registrations &quot;, value = &quot;Call this api at the time of updating profile&quot;, nickname = &quot;Update Profile&quot;)
+	@ApiImplicitParams({
+			@ApiImplicitParam(name = &quot;Authorization&quot;, value = &quot;Add bearer token&quot;, defaultValue = &quot;Bearer &lt;&lt;AbCdEf123456&gt;&gt;&quot;, required = true, dataType = &quot;string&quot;, paramType = &quot;header&quot;) })
+	@RolesAllowed(&quot;compliance_api_access&quot;)
+	@ApiResponses(value = {
+			@ApiResponse(response = ProfileResponse.class, code = 200, message = &quot;A successful response is an instance of the BlacklistResendResponse class.&quot;) })
+	@PostMapping(value = &quot;/update&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; updateReg(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;Update Profile request JSON data&quot;, required = true) final @RequestBody UpdateProfileRequest updateProfileReuqest) {
+		
+<span class="nc" id="L198">		ParseSSNNumber.getInstance().parseSsnNumberForUpdate(updateProfileReuqest.getAccount());//AT-3661</span>
+		
+<span class="nc" id="L200">		String jsonUpdateProfileRequest = JsonConverterUtil.convertToJsonWithoutNull(updateProfileReuqest);</span>
+<span class="nc" id="L201">		LOGGER.warn(&quot;\n -------Update Request Start -------- \n  {}&quot;, jsonUpdateProfileRequest);</span>
+<span class="nc" id="L202">		LOGGER.warn(&quot; \n -----------Update Request End ---------&quot;);</span>
+<span class="nc" id="L203">		RegistrationServiceRequest request = convertToRegistrationRequestForUpdate(updateProfileReuqest);</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">		if (null != request.getAccount()) {</span>
+<span class="nc" id="L205">			setCitytoRegionforZAF(request.getAccount());</span>
+		}
+<span class="nc" id="L207">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L208">				ServiceInterfaceType.PROFILE, OperationEnum.UPDATE_ACCOUNT, updateProfileReuqest.getOrgCode(), request);</span>
+
+<span class="nc" id="L210">		KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt; principal = (KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt;) httpRequest</span>
+<span class="nc" id="L211">				.getUserPrincipal();</span>
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;
+<span class="nc bnc" id="L213" title="All 2 branches missed.">		if (null != principal) {</span>
+<span class="nc" id="L214">			deferredResult = super.executeWorkflow(messageContext, principal.getKeycloakSecurityContext().getToken());</span>
+		} else {
+<span class="nc" id="L216">			deferredResult = new DeferredResult&lt;&gt;();</span>
+<span class="nc" id="L217">			BaseResponse baseResponse = new BaseResponse();</span>
+<span class="nc" id="L218">			ResponseEntity&lt;BaseResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(baseResponse, HttpStatus.UNAUTHORIZED);</span>
+<span class="nc" id="L219">			deferredResult.setResult(responseEntity);</span>
+		}
+
+<span class="nc" id="L222">		return deferredResult;</span>
+	}
+
+	/**
+	 * Convert to registration request.
+	 *
+	 * @param request
+	 *            the request
+	 * @return the registration service request
+	 */
+	private RegistrationServiceRequest convertToRegistrationRequest(SignUpRequestWrapper request) {
+		RegistrationServiceRequest registrationServiceRequest;
+<span class="nc" id="L234">		String json = JsonConverterUtil.convertToJsonWithoutNull(request.getSignupRequest());</span>
+<span class="nc" id="L235">		registrationServiceRequest = JsonConverterUtil.convertToObject(RegistrationServiceRequest.class, json);</span>
+<span class="nc" id="L236">		registrationServiceRequest.getAccount().setConversionPrediction(request.getConversionPrediction());</span>
+<span class="nc" id="L237">		return registrationServiceRequest;</span>
+	}
+
+	/**
+	 * Convert to registration request for update.
+	 *
+	 * @param request
+	 *            the request
+	 * @return the registration service request
+	 */
+	private RegistrationServiceRequest convertToRegistrationRequestForUpdate(Object request) {
+<span class="nc" id="L248">		String json = JsonConverterUtil.convertToJsonWithoutNull(request);</span>
+<span class="nc" id="L249">		return JsonConverterUtil.convertToObject(RegistrationServiceRequest.class, json);</span>
+	}
+
+	/**
+	 * Map to registration request.
+	 *
+	 * @param aReq
+	 *            the a req
+	 * @return the registration service request
+	 */
+	private RegistrationServiceRequest mapToRegistrationRequest(AddContactRequest aReq) {
+<span class="nc" id="L260">		RegistrationServiceRequest rReq = new RegistrationServiceRequest();</span>
+<span class="nc" id="L261">		rReq.setOrgCode(aReq.getOrgCode());</span>
+<span class="nc" id="L262">		rReq.setSourceApplication(aReq.getSourceApplication());</span>
+<span class="nc" id="L263">		rReq.setIsBroadCastRequired(aReq.getIsBroadCastRequired());</span>
+<span class="nc" id="L264">		Account acc = new Account();</span>
+<span class="nc" id="L265">		acc.setAccSFID(aReq.getAccSFID());</span>
+<span class="nc" id="L266">		acc.setCustType(aReq.getCustType());</span>
+<span class="nc" id="L267">		List&lt;com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact&gt; list = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L268" title="All 2 branches missed.">		for (Contact c : aReq.getContacts()) {</span>
+<span class="nc" id="L269">			String cJson = JsonConverterUtil.convertToJsonWithoutNull(c);</span>
+<span class="nc" id="L270">			com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact regCon = JsonConverterUtil</span>
+<span class="nc" id="L271">					.convertToObject(com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact.class, cJson);</span>
+<span class="nc" id="L272">			list.add(regCon);</span>
+<span class="nc" id="L273">		}</span>
+<span class="nc" id="L274">		acc.setContacts(list);</span>
+<span class="nc" id="L275">		rReq.setAccount(acc);</span>
+
+<span class="nc" id="L277">		String deviceInfoJson = JsonConverterUtil.convertToJsonWithoutNull(aReq.getDeviceInfo());</span>
+<span class="nc" id="L278">		DeviceInfo deviceInfo = JsonConverterUtil.convertToObject(DeviceInfo.class, deviceInfoJson);</span>
+
+<span class="nc" id="L280">		rReq.setDeviceInfo(deviceInfo);</span>
+<span class="nc" id="L281">		return rReq;</span>
+	}
+
+	/**
+	 * Repeat check failed reg.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param regRecheckFailureDetailsRequest
+	 *            the reg recheck failure details request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;This is called when we have have service failure for checks and we want to perform &quot;
+			+ &quot;a bulk repeat check for failed registrations from the Compliance portal\n\n&quot;, value = &quot;Recheck failure details request&quot;, nickname = &quot;repeatCheckFailedReg&quot;, response = RegistrationResponse.class)
+	@ApiResponses(value = {
+			@ApiResponse(response = RegistrationResponse.class, code = 200, message = &quot;A successful response is an instance of the RegistrationResponse class.&quot;) })
+	@PostMapping(value = &quot;/repeatCheckFailedReg&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; repeatCheckFailedReg(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;Repeat Check Failed Registration request JSON data&quot;, required = true) final @RequestBody ReprocessFailedDetails regRecheckFailureDetailsRequest) {
+<span class="nc" id="L300">		String jsonRegRecheckDetailsRequest = JsonConverterUtil</span>
+<span class="nc" id="L301">				.convertToJsonWithoutNull(regRecheckFailureDetailsRequest);</span>
+<span class="nc" id="L302">		LOGGER.warn(&quot;\n -------Repeat Check Failed Registration Request Start -------- \n  {}&quot;,</span>
+				jsonRegRecheckDetailsRequest);
+<span class="nc" id="L304">		LOGGER.warn(&quot; \n -----------Repeat Check Failed Registration Request End ---------&quot;);</span>
+<span class="nc" id="L305">		LOGGER.warn(&quot; \n ----- scanActiveCustomerForBRC ------ {}&quot;,Boolean.parseBoolean(System.getProperty(&quot;scanActiveCustomerForBRC&quot;)));</span>
+<span class="nc" id="L306">		LOGGER.warn(&quot; \n ----- persistActiveAccountStatusPostBRC ------ {}&quot;,Boolean.parseBoolean(System.getProperty(&quot;persistActiveAccountStatusPostBRC&quot;)));</span>
+<span class="nc" id="L307">		LOGGER.warn(&quot; \n ----- persistInactiveAccountStatusPostBRC ------ {}&quot;,Boolean.parseBoolean(System.getProperty(&quot;persistInactiveAccountStatusPostBRC&quot;)));</span>
+<span class="nc" id="L308">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+				ServiceInterfaceType.PROFILE, OperationEnum.RECHECK_FAILURES, null, regRecheckFailureDetailsRequest);
+<span class="nc" id="L310">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class, httpRequest.getHeader(&quot;user&quot;));</span>
+<span class="nc" id="L311">		AccessToken userToken = new AccessToken();</span>
+<span class="nc" id="L312">		userToken.setPreferredUsername(user.getName());</span>
+
+<span class="nc" id="L314">		return super.executeWorkflow(messageContext, userToken);</span>
+	}
+
+	/**
+	 * Update profile status.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param statusUpdateRequest
+	 *            the status update request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Perform a manual profile status update.\n\n&quot;, value = &quot;Call this api to manually update a profile status&quot;, nickname = &quot;updateProfileStatus&quot;)
+	@ApiResponses(value = {
+			@ApiResponse(response = StatusUpdateResponse.class, code = 200, message = &quot;A successful response is an instance of the StatusUpdateResponse class.&quot;) })
+	@PostMapping(value = &quot;/updateProfileStatus&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; updateProfileStatus(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;Update profie status request json data&quot;, required = true) final @RequestBody StatusUpdateRequest statusUpdateRequest) {
+		String jsonRequestBody;
+		String jsonResponsebody;
+
+<span class="nc" id="L335">		jsonRequestBody = JsonConverterUtil.convertToJsonWithoutNull(statusUpdateRequest);</span>
+<span class="nc" id="L336">		LOGGER.warn(&quot;\n-----------Update Profile Status Request Start--------\n{}&quot;, jsonRequestBody);</span>
+<span class="nc" id="L337">		LOGGER.warn(&quot;\n-----------Update Profile Status Request END----------&quot;);</span>
+
+<span class="nc" id="L339">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L340">				ServiceInterfaceType.PROFILE, OperationEnum.STATUS_UPDATE, statusUpdateRequest.getOrgCode(),</span>
+				statusUpdateRequest);
+
+<span class="nc" id="L343">		KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt; principal = (KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt;) httpRequest</span>
+<span class="nc" id="L344">				.getUserPrincipal();</span>
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;
+<span class="nc bnc" id="L346" title="All 2 branches missed.">		if (null != principal) {</span>
+<span class="nc" id="L347">			deferredResult = super.executeWorkflow(messageContext, principal.getKeycloakSecurityContext().getToken());</span>
+		} else {
+<span class="nc" id="L349">			deferredResult = new DeferredResult&lt;&gt;();</span>
+<span class="nc" id="L350">			BaseResponse baseResponse = new BaseResponse();</span>
+<span class="nc" id="L351">			ResponseEntity&lt;BaseResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(baseResponse, HttpStatus.UNAUTHORIZED);</span>
+<span class="nc" id="L352">			deferredResult.setResult(responseEntity);</span>
+
+<span class="nc" id="L354">			jsonResponsebody = JsonConverterUtil.convertToJsonWithoutNull(responseEntity.getBody());</span>
+<span class="nc" id="L355">			LOGGER.warn(&quot;\n-------------Update Profile Status Response--------\n{}&quot;, jsonResponsebody);</span>
+		}
+<span class="nc" id="L357">		return deferredResult;</span>
+	}
+
+	/**
+	 * Delete contact.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param deleteContactRequest
+	 *            the delete contact request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Called when SalesForce sends a Delete Contact&quot;, value = &quot;Called when SalesForce sends a Delete Contact&quot;, nickname = &quot;deleteContact&quot;)
+	@ApiImplicitParams({
+			@ApiImplicitParam(name = &quot;Authorization&quot;, value = &quot;Add bearer token&quot;, defaultValue = &quot;Bearer &lt;&lt;AbCdEf123456&gt;&gt;&quot;, required = true, dataType = &quot;string&quot;, paramType = &quot;header&quot;) })
+	@RolesAllowed(&quot;compliance_api_access&quot;)
+	@ApiResponses(value = {
+			@ApiResponse(response = RegistrationResponse.class, code = 200, message = &quot;A successful response is an instance of the RegistrationResponse class.&quot;) })
+	@PostMapping(value = &quot;/deleteContact&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; deleteContact(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;delete contact request JSON data&quot;, required = true) final @RequestBody DeleteContactRequest deleteContactRequest) {
+<span class="nc" id="L378">		String jsonContactDeleteRequest = JsonConverterUtil.convertToJsonWithoutNull(deleteContactRequest);</span>
+<span class="nc" id="L379">		LOGGER.warn(&quot;\n ------- Delete Contact Request Start -------- \n  {}&quot;, jsonContactDeleteRequest);</span>
+<span class="nc" id="L380">		LOGGER.warn(&quot; \n ----------- Delete Contact Request End ---------&quot;);</span>
+
+<span class="nc" id="L382">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L383">				ServiceInterfaceType.PROFILE, OperationEnum.DELETE_CONTACT, deleteContactRequest.getOrgCode(),</span>
+				deleteContactRequest);
+
+<span class="nc" id="L386">		KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt; principal = (KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt;) httpRequest</span>
+<span class="nc" id="L387">				.getUserPrincipal();</span>
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;
+<span class="nc bnc" id="L389" title="All 2 branches missed.">		if (null != principal) {</span>
+<span class="nc" id="L390">			deferredResult = super.executeWorkflow(messageContext, principal.getKeycloakSecurityContext().getToken());</span>
+		} else {
+<span class="nc" id="L392">			deferredResult = new DeferredResult&lt;&gt;();</span>
+<span class="nc" id="L393">			BaseResponse baseResponse = new BaseResponse();</span>
+<span class="nc" id="L394">			ResponseEntity&lt;BaseResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(baseResponse, HttpStatus.UNAUTHORIZED);</span>
+<span class="nc" id="L395">			deferredResult.setResult(responseEntity);</span>
+		}
+
+<span class="nc" id="L398">		return deferredResult;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

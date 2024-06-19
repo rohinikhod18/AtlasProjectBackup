@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataEnricher.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring</a> &gt; <span class="el_source">DataEnricher.java</span></div><h1>DataEnricher.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring;
+
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.Header;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInTrade;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsin.response.FundsInCreateResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.Beneficiary;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.FundsOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionPaymentStatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringUpdatePaymentStatusRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringUpdateRegStatusRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.AbstractDataEnricher;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsInDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+<span class="nc" id="L33">public class DataEnricher extends AbstractDataEnricher {</span>
+
+	/** The Constant LOGGER. */
+<span class="nc" id="L36">	private static final Logger LOGGER = LoggerFactory.getLogger(DataEnricher.class);</span>
+	@Autowired
+	protected NewRegistrationDBServiceImpl newRegDBServiceImpl;
+	
+	/** The funds in DB service impl. */
+	@Autowired
+	protected FundsInDBServiceImpl fundsInDBServiceImpl;
+	
+	/** The funds out DB service impl. */
+	@Autowired
+	protected FundsOutDBServiceImpl fundsOutDBServiceImpl;
+	
+	/** The Constant GATEWAY_MESSAGE. */
+	private static final String GATEWAY_MESSAGE = &quot;Gateway message headers=[{}], payload=[{}] validated!!&quot;;
+	
+	/** The Constant INVALID_REQUEST_MSG. */
+	private static final String INVALID_REQUEST_MSG = &quot;Request is not valid&quot;;
+	
+	/** The Constant UPDATE_INTUITION_REQUEST. */
+	private static final String UPDATE_INTUITION_REQUEST = &quot;updateIntuitionRequest&quot;;
+	
+	/** The Constant ACCOUNT. */
+	private static final String ACCOUNT = &quot;account&quot;;
+
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+<span class="nc" id="L62">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L63">		TransactionMonitoringSignupResponse response = messageExchange</span>
+<span class="nc" id="L64">				.getResponse(TransactionMonitoringSignupResponse.class);</span>
+<span class="nc" id="L65">		LOGGER.debug(GATEWAY_MESSAGE, message.getHeaders(),</span>
+<span class="nc" id="L66">				message.getPayload());</span>
+<span class="nc" id="L67">		TransactionMonitoringUpdateRegStatusRequest request = messageExchange</span>
+<span class="nc" id="L68">				.getRequest(TransactionMonitoringUpdateRegStatusRequest.class);</span>
+<span class="nc" id="L69">		RegistrationServiceRequest registrationrequest = new RegistrationServiceRequest();</span>
+<span class="nc" id="L70">		RegistrationResponse regResponse = new RegistrationResponse();</span>
+		try {
+<span class="nc" id="L72">			getUserTableId(message);</span>
+			
+<span class="nc" id="L74">			Account account = new Account();</span>
+<span class="nc" id="L75">			account.setTradeAccountNumber(request.getTradeAccountNumber());</span>
+<span class="nc" id="L76">			account.setId(request.getAccountId());</span>
+<span class="nc" id="L77">			account.setVersion(request.getAccountVersion());</span>
+			
+<span class="nc" id="L79">			registrationrequest.setOrgCode(request.getOrgCode());</span>
+			
+<span class="nc" id="L81">			registrationrequest.setAccount(account);</span>
+			
+<span class="nc" id="L83">			messageExchange.setRequest(registrationrequest);</span>
+<span class="nc" id="L84">			ComplianceAccount compAcc = new ComplianceAccount();</span>
+<span class="nc" id="L85">			compAcc.setId(request.getAccountId());</span>
+<span class="nc" id="L86">			regResponse.setAccount(compAcc);</span>
+<span class="nc" id="L87">			messageExchange.setResponse(regResponse);</span>
+<span class="nc" id="L88">		} catch (Exception e) {</span>
+<span class="nc" id="L89">			LOGGER.error(INVALID_REQUEST_MSG, e);</span>
+<span class="nc" id="L90">			response.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L91">			response.setErrorDescription(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L92">		}</span>
+<span class="nc" id="L93">		messageExchange.getRequest().addAttribute(UPDATE_INTUITION_REQUEST, request);</span>
+
+<span class="nc" id="L95">		return message;</span>
+	}
+	
+	//AT-4451
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; enrichDataForPaymentIn(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+<span class="nc" id="L101">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L102">		TransactionMonitoringSignupResponse response = messageExchange</span>
+<span class="nc" id="L103">				.getResponse(TransactionMonitoringSignupResponse.class);</span>
+<span class="nc" id="L104">		LOGGER.debug(GATEWAY_MESSAGE, message.getHeaders(),</span>
+<span class="nc" id="L105">				message.getPayload());</span>
+<span class="nc" id="L106">		TransactionMonitoringUpdatePaymentStatusRequest request = messageExchange</span>
+<span class="nc" id="L107">				.getRequest(TransactionMonitoringUpdatePaymentStatusRequest.class);</span>
+<span class="nc" id="L108">		FundsInCreateRequest fundsInCreateRequest = new FundsInCreateRequest();</span>
+<span class="nc" id="L109">		FundsInCreateResponse fundsInCreateResponse = new FundsInCreateResponse();</span>
+		try {
+<span class="nc" id="L111">			getUserTableId(message);</span>
+<span class="nc" id="L112">			FundsInTrade trade = new FundsInTrade();</span>
+<span class="nc" id="L113">			trade.setPaymentFundsInId(request.getTradePaymentId());</span>
+			
+<span class="nc" id="L115">			fundsInCreateRequest.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L116">			fundsInCreateRequest.setFundsInId(request.getPaymentInId());</span>
+<span class="nc" id="L117">			fundsInCreateRequest.setTrade(trade);</span>
+
+<span class="nc" id="L119">			Account account = new Account();</span>
+<span class="nc" id="L120">			account.setId(request.getAccountId());</span>
+<span class="nc" id="L121">			account.setVersion(request.getAccountVersion());</span>
+			
+<span class="nc" id="L123">			fundsInCreateRequest.addAttribute(ACCOUNT, account);</span>
+			
+<span class="nc" id="L125">			messageExchange.setRequest(fundsInCreateRequest);</span>
+<span class="nc" id="L126">			messageExchange.setResponse(fundsInCreateResponse);</span>
+<span class="nc" id="L127">		} catch (Exception e) {</span>
+<span class="nc" id="L128">			LOGGER.error(INVALID_REQUEST_MSG, e);</span>
+<span class="nc" id="L129">			response.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L130">			response.setErrorDescription(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L131">		}</span>
+<span class="nc" id="L132">		messageExchange.getRequest().addAttribute(UPDATE_INTUITION_REQUEST, request);</span>
+
+<span class="nc" id="L134">		return message;</span>
+	}
+	
+	//AT-4451
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; enrichDataForPaymentOut(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+<span class="nc" id="L140">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L141">		TransactionMonitoringSignupResponse response = messageExchange</span>
+<span class="nc" id="L142">				.getResponse(TransactionMonitoringSignupResponse.class);</span>
+<span class="nc" id="L143">		LOGGER.debug(GATEWAY_MESSAGE, message.getHeaders(),</span>
+<span class="nc" id="L144">				message.getPayload());</span>
+<span class="nc" id="L145">		TransactionMonitoringUpdatePaymentStatusRequest request = messageExchange</span>
+<span class="nc" id="L146">				.getRequest(TransactionMonitoringUpdatePaymentStatusRequest.class);</span>
+<span class="nc" id="L147">		FundsOutRequest fundsOutRequest = new FundsOutRequest();</span>
+<span class="nc" id="L148">		FundsOutResponse fundsOutResponse = new FundsOutResponse();</span>
+		try {
+<span class="nc" id="L150">			getUserTableId(message);</span>
+			
+<span class="nc" id="L152">			Beneficiary beneficiary = new Beneficiary();</span>
+<span class="nc" id="L153">			beneficiary.setPaymentFundsoutId(request.getTradePaymentId());</span>
+			
+<span class="nc" id="L155">			fundsOutRequest.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L156">			fundsOutRequest.setFundsOutId(request.getPaymentOutId());</span>
+<span class="nc" id="L157">			fundsOutRequest.setBeneficiary(beneficiary);</span>
+			
+<span class="nc" id="L159">			Account account = new Account();</span>
+<span class="nc" id="L160">			account.setId(request.getAccountId());</span>
+<span class="nc" id="L161">			account.setVersion(request.getAccountVersion());</span>
+			
+<span class="nc" id="L163">			fundsOutRequest.addAttribute(ACCOUNT, account);</span>
+			
+<span class="nc" id="L165">			messageExchange.setRequest(fundsOutRequest);</span>
+<span class="nc" id="L166">			messageExchange.setResponse(fundsOutResponse);</span>
+<span class="nc" id="L167">		} catch (Exception e) {</span>
+<span class="nc" id="L168">			LOGGER.error(INVALID_REQUEST_MSG, e);</span>
+<span class="nc" id="L169">			response.setErrorCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L170">			response.setErrorDescription(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L171">		}</span>
+<span class="nc" id="L172">		messageExchange.getRequest().addAttribute(UPDATE_INTUITION_REQUEST, request);</span>
+
+<span class="nc" id="L174">		return message;</span>
+	}
+	
+	/**
+	 * Enrich data for intuition payment.
+	 *
+	 * @param message the message
+	 * @param correlationID the correlation ID
+	 * @return the message
+	 */
+	//AT-4749
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; enrichDataForIntuitionPayment(Message&lt;MessageContext&gt; message,
+			@Header UUID correlationID) {
+<span class="nc" id="L188">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L189">		IntuitionPaymentStatusUpdateRequest request = messageExchange.getRequest(IntuitionPaymentStatusUpdateRequest.class);</span>
+<span class="nc" id="L190">		LOGGER.debug(GATEWAY_MESSAGE, message.getHeaders(),</span>
+<span class="nc" id="L191">				message.getPayload());</span>
+		
+<span class="nc" id="L193">		FundsInCreateRequest fundsInCreateRequest = null;</span>
+<span class="nc" id="L194">		FundsOutRequest fundsOutRequest = null;</span>
+<span class="nc" id="L195">		Account account = new Account();</span>
+<span class="nc" id="L196">		String orgCode= null;</span>
+		
+		try {
+<span class="nc bnc" id="L199" title="All 2 branches missed.">			if (request.getTrxType().equalsIgnoreCase(&quot;FUNDSIN&quot;)) {</span>
+<span class="nc" id="L200">				fundsInCreateRequest = fundsInDBServiceImpl.getFundsInDetailsForIntuition(Integer.parseInt(request.getTradePaymentID()));</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">				if(fundsInCreateRequest != null) {</span>
+<span class="nc" id="L202">				account.setId(fundsInCreateRequest.getAccId());</span>
+<span class="nc" id="L203">				account.setVersion((Integer) fundsInCreateRequest.getAdditionalAttribute(&quot;AccountVersion&quot;));</span>
+<span class="nc" id="L204">				orgCode = (String) fundsInCreateRequest.getAdditionalAttribute(&quot;orgcode&quot;);</span>
+				
+<span class="nc" id="L206">				request.addAttribute(&quot;fundsInRequest&quot;, fundsInCreateRequest);</span>
+<span class="nc" id="L207">				request.addAttribute(ACCOUNT, account);</span>
+				} else {
+<span class="nc" id="L209">					throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR);</span>
+				}
+				
+			} else {
+<span class="nc" id="L213">				fundsOutRequest = fundsOutDBServiceImpl.getFundsOutDetailsForIntuition(Integer.parseInt(request.getTradePaymentID()));</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">				if (fundsOutRequest != null) {</span>
+<span class="nc" id="L215">					account.setId(fundsOutRequest.getAccId());</span>
+<span class="nc" id="L216">					account.setVersion((Integer) fundsOutRequest.getAdditionalAttribute(&quot;AccountVersion&quot;));</span>
+<span class="nc" id="L217">					orgCode = (String) fundsOutRequest.getAdditionalAttribute(&quot;orgcode&quot;);</span>
+
+<span class="nc" id="L219">					request.addAttribute(&quot;fundsOutRequest&quot;, fundsOutRequest);</span>
+<span class="nc" id="L220">					request.addAttribute(ACCOUNT, account);</span>
+				} else {
+<span class="nc" id="L222">					throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR);</span>
+				}
+			}
+			
+<span class="nc" id="L226">			message.getPayload().setOrgCode(orgCode);</span>
+
+<span class="nc" id="L228">		} catch (Exception e) {</span>
+<span class="nc" id="L229">			LOGGER.error(INVALID_REQUEST_MSG, e);</span>
+<span class="nc" id="L230">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L231">		}</span>
+		
+
+<span class="nc" id="L234">		return message;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IntuitionHistoricPaymentCSVTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.intuitionpaymentcsv</a> &gt; <span class="el_source">IntuitionHistoricPaymentCSVTransformer.java</span></div><h1>IntuitionHistoricPaymentCSVTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.intuitionpaymentcsv;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionHistoricPaymentsRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionHistoricPaymentRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.opencsv.CSVWriter;
+
+<span class="nc" id="L20">public class IntuitionHistoricPaymentCSVTransformer {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L23">	private static final Logger LOG = LoggerFactory.getLogger(IntuitionHistoricPaymentCSVTransformer.class);</span>
+	
+	/** The email alert. */
+	@Autowired
+	private IntuitionHistoricPaymentEmailAlert emailAlert;
+	
+	/** The Constant EMAIL_BODY_DATE_FORMAT. */
+	private static final String EMAIL_BODY_DATE_FORMAT = &quot;yyyy-MM-dd&quot;;
+	
+	/** The Constant TIME_STRING. */
+	private static final String TIME_STRING = &quot; 00:00:00&quot;;
+	
+	/** The Constant PAYMENT_IN_LOCAL_SAVE_FLAG. */
+	private static final String PAYMENT_IN_LOCAL_SAVE_FLAG = &quot;IntuitionHistoricPaymentInLocalSave&quot;;
+	
+	/** The Constant PAYMENT_OUT_LOCAL_SAVE_FLAG. */
+	private static final String PAYMENT_OUT_LOCAL_SAVE_FLAG = &quot;IntuitionHistoricPaymentOutLocalSave&quot;;
+
+	public Message&lt;MessageContext&gt; saveCsvFileToLocalServer(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="nc" id="L43">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L44">			IntuitionHistoricPaymentsRequest intuitionPaymentRequest = (IntuitionHistoricPaymentsRequest) messageExchange</span>
+<span class="nc" id="L45">					.getRequest();</span>
+
+<span class="nc" id="L47">			transformIntuitionHistoricPaymentInCSVData(intuitionPaymentRequest);</span>
+<span class="nc" id="L48">			transformIntuitionHistoricPaymentOutCSVData(intuitionPaymentRequest);</span>
+<span class="nc" id="L49">		} catch (Exception e) {</span>
+<span class="nc" id="L50">			LOG.error(&quot;Error in IntuitionHistoricPaymentCSVTransformer saveCsvFileToLocalServer(): &quot;, e);</span>
+<span class="nc" id="L51">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L52">		}</span>
+
+<span class="nc" id="L54">		return message;</span>
+	}
+
+	private void transformIntuitionHistoricPaymentInCSVData(IntuitionHistoricPaymentsRequest intuitionPaymentRequest) {
+		try {
+<span class="nc" id="L59">			List&lt;IntuitionHistoricPaymentRequest&gt; intuitionPaymentInRequest = intuitionPaymentRequest</span>
+<span class="nc" id="L60">					.getIntuitionHistoricPaymentInRequest();</span>
+
+<span class="nc" id="L62">			String localDirectory = System.getProperty(&quot;intuition.historic.payment.csv.local.directory&quot;);</span>
+<span class="nc" id="L63">			String fileName = &quot;Payment_In_Historic_Data_&quot;</span>
+<span class="nc" id="L64">					+ new java.text.SimpleDateFormat(&quot;yyyyMMdd&quot;).format(new java.util.Date()) + &quot;.csv&quot;;</span>
+<span class="nc" id="L65">			String trimLocation = localDirectory.trim();</span>
+<span class="nc" id="L66">			String localFileLocation = trimLocation + fileName;</span>
+			
+<span class="nc bnc" id="L68" title="All 4 branches missed.">			if (intuitionPaymentInRequest != null &amp;&amp; !intuitionPaymentInRequest.isEmpty()) {</span>
+<span class="nc" id="L69">				File file = new File(localFileLocation);</span>
+<span class="nc" id="L70">				writeDataLineByLine(file, intuitionPaymentInRequest);</span>
+<span class="nc" id="L71">				LOG.info(</span>
+						&quot;--------------------------------Intuition Historic Payment In File saved with a name : {}-------------------------&quot;,
+						fileName);
+<span class="nc" id="L74">				intuitionPaymentRequest.addAttribute(&quot;IntuitionHistoricPaymentInLocalFile&quot;, localFileLocation);</span>
+<span class="nc" id="L75">				intuitionPaymentRequest.addAttribute(&quot;IntuitionHistoricPaymentInLocalFileName&quot;, fileName);</span>
+<span class="nc" id="L76">				intuitionPaymentRequest.addAttribute(PAYMENT_IN_LOCAL_SAVE_FLAG, Boolean.TRUE);</span>
+<span class="nc" id="L77">			} else {</span>
+<span class="nc" id="L78">				intuitionPaymentRequest.addAttribute(PAYMENT_IN_LOCAL_SAVE_FLAG, Boolean.FALSE);</span>
+			}
+
+<span class="nc" id="L81">		} catch (Exception e) {</span>
+<span class="nc" id="L82">			emailAlert.sendEmailAlertForHistoricPaymentError(</span>
+                    &quot;Intuition Historic Payment In upload error - batch file save&quot;,
+                    &quot;Intuition (Transaction monitoring) Historical Payment In upload failed due to batch file save error on &quot;
+<span class="nc" id="L85">                            + new java.text.SimpleDateFormat(EMAIL_BODY_DATE_FORMAT).format(new java.util.Date())</span>
+                            + &quot;. Please alert compliance team for support.&quot;);
+<span class="nc" id="L87">			intuitionPaymentRequest.addAttribute(PAYMENT_IN_LOCAL_SAVE_FLAG, Boolean.FALSE);</span>
+<span class="nc" id="L88">			LOG.error(&quot;Error in IntuitionHistoricPaymentCSVTransformer transformIntuitionHistoricPaymentInCSVData() : &quot;,</span>
+					e);
+<span class="nc" id="L90">		}</span>
+
+<span class="nc" id="L92">	}</span>
+
+	private void writeDataLineByLine(File file, List&lt;IntuitionHistoricPaymentRequest&gt; intuitionPaymentInRequests)
+			throws IOException {
+<span class="nc" id="L96">		FileWriter outputfile = new FileWriter(file);</span>
+<span class="nc" id="L97">		CSVWriter writer = new CSVWriter(outputfile);</span>
+		try {
+<span class="nc" id="L99">			String[] header = { &quot;TradeIdentificationNumber&quot;, &quot;TradeContractNumber&quot;, &quot;TradePaymentID&quot;,</span>
+					&quot;trade_account_number&quot;, &quot;timestamp&quot;, &quot;deal_date&quot;, &quot;cust_type&quot;, &quot;purpose_of_trade&quot;, &quot;buying_amount&quot;,
+					&quot;buy_currency&quot;, &quot;selling_amount&quot;, &quot;sell_currency&quot;, &quot;transaction_currency&quot;, &quot;customer_legal_entity&quot;,
+					&quot;payment_Method&quot;, &quot;amount&quot;, &quot;first_name&quot;, &quot;last_name&quot;, &quot;country&quot;, &quot;email&quot;, &quot;phone&quot;,
+					&quot;account_number&quot;, &quot;currency_code&quot;, &quot;beneficiary_id&quot;, &quot;beneficiary_bankid&quot;, &quot;beneficary_bank_name&quot;,
+					&quot;beneficary_bank_address&quot;, &quot;payment_reference&quot;, &quot;payment_ref_matched_keyword&quot;, &quot;debtor_name&quot;,
+					&quot;debtor_account_number&quot;, &quot;bill_address_line&quot;, &quot;country_of_fund&quot;, &quot;watchlist&quot;,
+					&quot;Transactional.0.trade_account_number&quot;, &quot;Transactional.0.trade_contact_id&quot;,
+					&quot;Transactional.0.trx_type&quot;, &quot;Transactional.0.purpose_of_trade&quot;, &quot;Transactional.0.contract_number&quot;,
+					&quot;Transactional.0.deal_date&quot;, &quot;Transactional.0.third_party_payment&quot;,
+					&quot;Transactional.0.buying_amount_base_value&quot;, &quot;Transactional.0.selling_amount_base_value&quot;,
+					&quot;Transactional.0.channel&quot;, &quot;Debit_Card.0.debtor_name&quot;, &quot;Debit_Card.0.debtor_account_number&quot;,
+					&quot;Debit_Card.0.cc_first_name&quot;, &quot;Debit_Card.0.bill_ad_zip&quot;, &quot;Debit_Card.0.country_of_fund&quot;,
+					&quot;Debit_Card.0.is_threeds&quot;, &quot;Debit_Card.0.avs_result&quot;, &quot;Debit_Card.0.debit_card_added_date&quot;,
+					&quot;Debit_Card.0.message&quot;, &quot;Debit_Card.0.RGID&quot;, &quot;Debit_Card.0.tScore&quot;, &quot;Debit_Card.0.tRisk&quot;,
+					&quot;Debit_Card.0.fraudsight_risk_level&quot;, &quot;Debit_Card.0.fraudsight_reason&quot;,
+					&quot;Debit_Card.0.CVC_CVV_Result&quot;, &quot;Device_and_IP.0.brwsr_type&quot;, &quot;Device_and_IP.0.brwsr_version&quot;,
+					&quot;Device_and_IP.0.brwsr_lang&quot;, &quot;Device_and_IP.0.browser_online&quot;, &quot;Device_and_IP.0.version&quot;,
+					&quot;Device_and_IP.0.status_update_reason&quot;, &quot;Device_and_IP.0.device_name&quot;,
+					&quot;Device_and_IP.0.device_version&quot;, &quot;Device_and_IP.0.device_id&quot;,
+					&quot;Device_and_IP.0.device_manufacturer&quot;, &quot;Device_and_IP.0.device_type&quot;, &quot;Device_and_IP.0.os_type&quot;,
+					&quot;Device_and_IP.0.screen_resolution&quot;, &quot;Atlas_Flags.0.update_status&quot;, &quot;Atlas_Flags.0.blacklist&quot;,
+					&quot;Atlas_Flags.0.country_check&quot;, &quot;Atlas_Flags.0.sanctions_contact&quot;,
+					&quot;Atlas_Flags.0.sanctions_beneficiary&quot;, &quot;Atlas_Flags.0.sanctions_bank&quot;,
+					&quot;Atlas_Flags.0.sanctions_3rd_party&quot;, &quot;Atlas_Flags.0.payment_reference_check&quot;,
+					&quot;Atlas_Flags.0.fraud_predict&quot;, &quot;Atlas_Flags.0.custom_check&quot;, &quot;Atlas_Flags.0.atlas_STP_codes&quot; };
+
+<span class="nc" id="L126">			writer.writeNext(header);</span>
+
+<span class="nc" id="L128">			List&lt;String[]&gt; datas = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">			for (IntuitionHistoricPaymentRequest intuitionPaymentInRequest : intuitionPaymentInRequests) {</span>
+<span class="nc" id="L130">				String[] data = { intuitionPaymentInRequest.getTradeIdentificationNumber(),</span>
+<span class="nc" id="L131">						intuitionPaymentInRequest.getTradeContractNumber(),</span>
+<span class="nc" id="L132">						intuitionPaymentInRequest.getTradePaymentID(),</span>
+<span class="nc" id="L133">						intuitionPaymentInRequest.getTradeAccountNumber(), intuitionPaymentInRequest.getTimestamp(),</span>
+<span class="nc" id="L134">						intuitionPaymentInRequest.getDealDate(), intuitionPaymentInRequest.getCustType(),</span>
+<span class="nc" id="L135">						intuitionPaymentInRequest.getPurposeOfTrade(),</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">						intuitionPaymentInRequest.getBuyingAmount() != null</span>
+<span class="nc" id="L137">								? intuitionPaymentInRequest.getBuyingAmount().toString()</span>
+								: &quot;&quot;,
+<span class="nc" id="L139">						intuitionPaymentInRequest.getBuyCurrency(),</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">						intuitionPaymentInRequest.getSellingAmount() != null</span>
+<span class="nc" id="L141">								? intuitionPaymentInRequest.getSellingAmount().toString()</span>
+								: &quot;&quot;,
+<span class="nc" id="L143">						intuitionPaymentInRequest.getSellCurrency(), intuitionPaymentInRequest.getTransactionCurrency(),</span>
+<span class="nc" id="L144">						intuitionPaymentInRequest.getCustomerLegalEntity(),</span>
+<span class="nc" id="L145">						intuitionPaymentInRequest.getPaymentMethod(),</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">						intuitionPaymentInRequest.getAmount() != null ? intuitionPaymentInRequest.getAmount().toString()</span>
+								: &quot;&quot;,
+<span class="nc" id="L148">						intuitionPaymentInRequest.getFirstName(), intuitionPaymentInRequest.getLastName(),</span>
+<span class="nc" id="L149">						intuitionPaymentInRequest.getCountry(), intuitionPaymentInRequest.getEmail(),</span>
+<span class="nc" id="L150">						intuitionPaymentInRequest.getPhone(), intuitionPaymentInRequest.getAccountNumber(),</span>
+<span class="nc" id="L151">						intuitionPaymentInRequest.getCurrencyCode(), intuitionPaymentInRequest.getBeneficiaryId(),</span>
+<span class="nc" id="L152">						intuitionPaymentInRequest.getBeneficiaryBankid(),</span>
+<span class="nc" id="L153">						intuitionPaymentInRequest.getBeneficaryBankName(),</span>
+<span class="nc" id="L154">						intuitionPaymentInRequest.getBeneficaryBankAddress(),</span>
+<span class="nc" id="L155">						intuitionPaymentInRequest.getPaymentReference(),</span>
+<span class="nc" id="L156">						intuitionPaymentInRequest.getPaymentRefMatchedKeyword(),</span>
+<span class="nc" id="L157">						intuitionPaymentInRequest.getDebtorName(), intuitionPaymentInRequest.getDebtorAccountNumber(),</span>
+<span class="nc" id="L158">						intuitionPaymentInRequest.getBillAddressLine(), intuitionPaymentInRequest.getCountryOfFund(),</span>
+<span class="nc" id="L159">						intuitionPaymentInRequest.getWatchlist(), intuitionPaymentInRequest.getTradeAccountNumber(),</span>
+<span class="nc" id="L160">						intuitionPaymentInRequest.getTradeContactId(), intuitionPaymentInRequest.getTrxType(),</span>
+<span class="nc" id="L161">						intuitionPaymentInRequest.getPurposeOfTrade(),</span>
+<span class="nc" id="L162">						intuitionPaymentInRequest.getTradeContractNumber(), intuitionPaymentInRequest.getDealDate(),</span>
+<span class="nc" id="L163">						String.valueOf(intuitionPaymentInRequest.isThirdPartyPayment()),</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">						intuitionPaymentInRequest.getBuyingAmountBaseValue() != null</span>
+<span class="nc" id="L165">								? intuitionPaymentInRequest.getBuyingAmountBaseValue().toString()</span>
+								: &quot;&quot;,
+<span class="nc bnc" id="L167" title="All 2 branches missed.">						intuitionPaymentInRequest.getSellingAmountBaseValue() != null</span>
+<span class="nc" id="L168">								? intuitionPaymentInRequest.getSellingAmountBaseValue().toString()</span>
+								: &quot;&quot;,
+<span class="nc" id="L170">						intuitionPaymentInRequest.getChannel(), intuitionPaymentInRequest.getDebtorName(),</span>
+<span class="nc" id="L171">						intuitionPaymentInRequest.getDebtorAccountNumber(), intuitionPaymentInRequest.getCcFirstName(),</span>
+<span class="nc" id="L172">						intuitionPaymentInRequest.getBillAdZip(), intuitionPaymentInRequest.getCountryOfFund(),</span>
+<span class="nc" id="L173">						intuitionPaymentInRequest.getIsThreeds(), intuitionPaymentInRequest.getAvsResult(),</span>
+<span class="nc" id="L174">						intuitionPaymentInRequest.getDebitCardAddedDate(), intuitionPaymentInRequest.getMessage(),</span>
+<span class="nc" id="L175">						intuitionPaymentInRequest.getRGID(),</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">						intuitionPaymentInRequest.gettScore() != null ? intuitionPaymentInRequest.gettScore().toString()</span>
+								: &quot;&quot;,
+<span class="nc" id="L178">						intuitionPaymentInRequest.gettRisk(), intuitionPaymentInRequest.getFraudsightRiskLevel(),</span>
+<span class="nc" id="L179">						intuitionPaymentInRequest.getFraudsightReason(), intuitionPaymentInRequest.getCVCCVVResult(),</span>
+<span class="nc" id="L180">						intuitionPaymentInRequest.getBrwsrType(), intuitionPaymentInRequest.getBrwsrVersion(),</span>
+<span class="nc" id="L181">						intuitionPaymentInRequest.getBrwsrLang(), intuitionPaymentInRequest.getBrowserOnline(),</span>
+<span class="nc" id="L182">						intuitionPaymentInRequest.getVersion(), intuitionPaymentInRequest.getStatusUpdateReason(),</span>
+<span class="nc" id="L183">						intuitionPaymentInRequest.getDeviceName(), intuitionPaymentInRequest.getDeviceVersion(),</span>
+<span class="nc" id="L184">						intuitionPaymentInRequest.getDeviceId(), intuitionPaymentInRequest.getDeviceManufacturer(),</span>
+<span class="nc" id="L185">						intuitionPaymentInRequest.getDeviceType(), intuitionPaymentInRequest.getOsType(),</span>
+<span class="nc" id="L186">						intuitionPaymentInRequest.getScreenResolution(), intuitionPaymentInRequest.getUpdateStatus(),</span>
+<span class="nc" id="L187">						intuitionPaymentInRequest.getBlacklist(), intuitionPaymentInRequest.getCountryCheck(),</span>
+<span class="nc" id="L188">						intuitionPaymentInRequest.getSanctionsContact(),</span>
+<span class="nc" id="L189">						intuitionPaymentInRequest.getSanctionsBeneficiary(),</span>
+<span class="nc" id="L190">						intuitionPaymentInRequest.getSanctionsBank(), intuitionPaymentInRequest.getSanctions3rdParty(),</span>
+<span class="nc" id="L191">						intuitionPaymentInRequest.getPaymentReferenceCheck(),</span>
+<span class="nc" id="L192">						intuitionPaymentInRequest.getFraudPredict(), intuitionPaymentInRequest.getCustomCheck(),</span>
+<span class="nc" id="L193">						intuitionPaymentInRequest.getAtlasSTPCodes() };</span>
+
+<span class="nc" id="L195">				datas.add(data);</span>
+<span class="nc" id="L196">			}</span>
+
+<span class="nc" id="L198">			writer.writeAll(datas);</span>
+
+<span class="nc" id="L200">		} catch (Exception e) {</span>
+<span class="nc" id="L201">			emailAlert.sendEmailAlertForHistoricPaymentError(</span>
+					&quot;Intuition Historic Payment In upload error - batch file generation&quot;,
+					&quot;Intuition (Transaction monitoring) Historical Payment In upload failed due to batch file generation error on &quot;
+<span class="nc" id="L204">							+ new java.text.SimpleDateFormat(EMAIL_BODY_DATE_FORMAT).format(new java.util.Date())</span>
+							+ &quot;. Please alert compliance officer.&quot;);
+			
+<span class="nc" id="L207">			LOG.error(&quot;Error in IntuitionHistoricPaymentCSVTransformer writeDataLineByLine(): &quot;, e);</span>
+		} finally {
+<span class="nc" id="L209">			writer.close();</span>
+<span class="nc" id="L210">			outputfile.close();</span>
+		}
+<span class="nc" id="L212">	}</span>
+	private void transformIntuitionHistoricPaymentOutCSVData(IntuitionHistoricPaymentsRequest intuitionPaymentRequest) {
+		try {
+<span class="nc" id="L215">			List&lt;IntuitionHistoricPaymentRequest&gt; intuitionPaymentOutRequest = intuitionPaymentRequest.getIntuitionHistoricPaymentOutRequest();</span>
+
+<span class="nc" id="L217">			String localDirectory = System.getProperty(&quot;intuition.historic.payment.csv.local.directory&quot;);</span>
+<span class="nc" id="L218">			String fileName = &quot;Payment_Out_Historic_Data_&quot;</span>
+<span class="nc" id="L219">					+ new java.text.SimpleDateFormat(&quot;yyyyMMdd&quot;).format(new java.util.Date()) + &quot;.csv&quot;;</span>
+<span class="nc" id="L220">			String trimLocation = localDirectory.trim();</span>
+<span class="nc" id="L221">			String localFileLocation = trimLocation + fileName;</span>
+
+<span class="nc bnc" id="L223" title="All 4 branches missed.">			if (intuitionPaymentOutRequest != null &amp;&amp; !intuitionPaymentOutRequest.isEmpty()) {</span>
+<span class="nc" id="L224">				File file = new File(localFileLocation);</span>
+
+<span class="nc" id="L226">				writeDataLineByLinePaymentOut(file, intuitionPaymentOutRequest);</span>
+<span class="nc" id="L227">				LOG.info(</span>
+						&quot;--------------------------------Intuition Historic Payment Out File saved with a name : {}-------------------------&quot;,
+						fileName);
+<span class="nc" id="L230">				intuitionPaymentRequest.addAttribute(&quot;IntuitionHistoricPaymentOutLocalFile&quot;, localFileLocation);</span>
+<span class="nc" id="L231">				intuitionPaymentRequest.addAttribute(&quot;IntuitionHistoricPaymentOutLocalFileName&quot;, fileName);</span>
+<span class="nc" id="L232">				intuitionPaymentRequest.addAttribute(PAYMENT_OUT_LOCAL_SAVE_FLAG, Boolean.TRUE);</span>
+<span class="nc" id="L233">			} else {</span>
+<span class="nc" id="L234">				intuitionPaymentRequest.addAttribute(PAYMENT_OUT_LOCAL_SAVE_FLAG, Boolean.FALSE);</span>
+			}
+
+<span class="nc" id="L237">		} catch (Exception e) {</span>
+<span class="nc" id="L238">			emailAlert.sendEmailAlertForHistoricPaymentError(</span>
+                    &quot;Intuition Historic Payment Out upload error - batch file save&quot;,
+                    &quot;Intuition (Transaction monitoring) Historical Payment Out upload failed due to batch file save error on &quot;
+<span class="nc" id="L241">                            + new java.text.SimpleDateFormat(EMAIL_BODY_DATE_FORMAT).format(new java.util.Date())</span>
+                            + &quot;. Please alert compliance team for support.&quot;);
+<span class="nc" id="L243">			intuitionPaymentRequest.addAttribute(PAYMENT_OUT_LOCAL_SAVE_FLAG, Boolean.FALSE);</span>
+<span class="nc" id="L244">			LOG.error(&quot;Error in IntuitionHistoricPaymentCSVTransformer transformIntuitionHistoricPaymentOutCSVData() : &quot;,</span>
+					e);
+<span class="nc" id="L246">		}</span>
+<span class="nc" id="L247">	}</span>
+		private void writeDataLineByLinePaymentOut(File file,
+				List&lt;IntuitionHistoricPaymentRequest&gt; intuitionPaymentInRequests) throws IOException {
+<span class="nc" id="L250">			FileWriter outputfile = new FileWriter(file);</span>
+<span class="nc" id="L251">			CSVWriter writer = new CSVWriter(outputfile);</span>
+			try {
+<span class="nc" id="L253">				String[] header = { &quot;TradeIdentificationNumber&quot;, &quot;TradeContractNumber&quot;, &quot;TradePaymentID&quot;,</span>
+						&quot;trade_account_number&quot;, &quot;timestamp&quot;, &quot;deal_date&quot;, &quot;cust_type&quot;, &quot;purpose_of_trade&quot;, &quot;buying_amount&quot;,
+						&quot;buy_currency&quot;, &quot;selling_amount&quot;, &quot;sell_currency&quot;, &quot;transaction_currency&quot;, &quot;customer_legal_entity&quot;,
+						&quot;payment_Method&quot;, &quot;amount&quot;, &quot;first_name&quot;, &quot;last_name&quot;, &quot;country&quot;, &quot;email&quot;, &quot;phone&quot;,
+						&quot;account_number&quot;, &quot;currency_code&quot;, &quot;beneficiary_id&quot;, &quot;beneficiary_bankid&quot;, &quot;beneficary_bank_name&quot;,
+						&quot;beneficary_bank_address&quot;, &quot;payment_reference&quot;, &quot;payment_ref_matched_keyword&quot;,&quot;maturity_date&quot;, &quot;debtor_name&quot;,
+						&quot;debtor_account_number&quot;, &quot;bill_address_line&quot;, &quot;country_of_fund&quot;, &quot;watchlist&quot;,
+						&quot;Transactional.0.trade_account_number&quot;, &quot;Transactional.0.trade_contact_id&quot;,
+						&quot;Transactional.0.trx_type&quot;, &quot;Transactional.0.purpose_of_trade&quot;, &quot;Transactional.0.contract_number&quot;,
+						&quot;Transactional.0.deal_date&quot;, &quot;Transactional.0.third_party_payment&quot;,
+						&quot;Transactional.0.buying_amount_base_value&quot;, &quot;Transactional.0.selling_amount_base_value&quot;,
+						&quot;Transactional.0.value_date&quot;,&quot;Transactional.0.opi_created_date&quot;,&quot;Transactional.0.maturity_date&quot;,
+						&quot;Transactional.0.channel&quot;, &quot;Debit_Card.0.debtor_name&quot;, &quot;Debit_Card.0.debtor_account_number&quot;,
+						&quot;Debit_Card.0.cc_first_name&quot;, &quot;Debit_Card.0.bill_ad_zip&quot;, &quot;Debit_Card.0.country_of_fund&quot;,
+						&quot;Debit_Card.0.is_threeds&quot;, &quot;Debit_Card.0.avs_result&quot;, &quot;Debit_Card.0.debit_card_added_date&quot;,
+						&quot;Debit_Card.0.message&quot;, &quot;Debit_Card.0.RGID&quot;, &quot;Debit_Card.0.tScore&quot;, &quot;Debit_Card.0.tRisk&quot;,
+						&quot;Debit_Card.0.fraudsight_risk_level&quot;, &quot;Debit_Card.0.fraudsight_reason&quot;,
+						&quot;Debit_Card.0.CVC_CVV_Result&quot;, &quot;Device_and_IP.0.brwsr_type&quot;, &quot;Device_and_IP.0.brwsr_version&quot;,
+						&quot;Device_and_IP.0.brwsr_lang&quot;, &quot;Device_and_IP.0.browser_online&quot;, &quot;Device_and_IP.0.version&quot;,
+						&quot;Device_and_IP.0.status_update_reason&quot;, &quot;Device_and_IP.0.device_name&quot;,
+						&quot;Device_and_IP.0.device_version&quot;, &quot;Device_and_IP.0.device_id&quot;,
+						&quot;Device_and_IP.0.device_manufacturer&quot;, &quot;Device_and_IP.0.device_type&quot;, &quot;Device_and_IP.0.os_type&quot;,
+						&quot;Device_and_IP.0.screen_resolution&quot;, &quot;Atlas_Flags.0.update_status&quot;, &quot;Atlas_Flags.0.blacklist&quot;,
+						&quot;Atlas_Flags.0.country_check&quot;, &quot;Atlas_Flags.0.sanctions_contact&quot;,
+						&quot;Atlas_Flags.0.sanctions_beneficiary&quot;, &quot;Atlas_Flags.0.sanctions_bank&quot;,
+						&quot;Atlas_Flags.0.sanctions_3rd_party&quot;, &quot;Atlas_Flags.0.payment_reference_check&quot;,
+						&quot;Atlas_Flags.0.fraud_predict&quot;, &quot;Atlas_Flags.0.custom_check&quot;, &quot;Atlas_Flags.0.atlas_STP_codes&quot; };
+
+<span class="nc" id="L281">				writer.writeNext(header);</span>
+
+<span class="nc" id="L283">				List&lt;String[]&gt; datas = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">				for (IntuitionHistoricPaymentRequest intuitionPaymentOutRequest : intuitionPaymentInRequests) {</span>
+<span class="nc" id="L285">					String[] data = { intuitionPaymentOutRequest.getTradeIdentificationNumber(),</span>
+<span class="nc" id="L286">									intuitionPaymentOutRequest.getTradeContractNumber(),</span>
+<span class="nc" id="L287">									intuitionPaymentOutRequest.getTradePaymentID(),</span>
+<span class="nc" id="L288">									intuitionPaymentOutRequest.getTradeAccountNumber(), intuitionPaymentOutRequest.getTimestamp(),</span>
+<span class="nc" id="L289">									intuitionPaymentOutRequest.getDealDate()+TIME_STRING, intuitionPaymentOutRequest.getCustType(),</span>
+<span class="nc" id="L290">									intuitionPaymentOutRequest.getPurposeOfTrade(),</span>
+<span class="nc bnc" id="L291" title="All 2 branches missed.">									intuitionPaymentOutRequest.getBuyingAmount() != null</span>
+<span class="nc" id="L292">									? intuitionPaymentOutRequest.getBuyingAmount().toString()</span>
+									: &quot;&quot;,
+<span class="nc" id="L294">									intuitionPaymentOutRequest.getBuyCurrency(),</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">									intuitionPaymentOutRequest.getSellingAmount() != null</span>
+<span class="nc" id="L296">									? intuitionPaymentOutRequest.getSellingAmount().toString()</span>
+									: &quot;&quot;,
+<span class="nc" id="L298">									intuitionPaymentOutRequest.getSellCurrency(), intuitionPaymentOutRequest.getTransactionCurrency(),</span>
+<span class="nc" id="L299">									intuitionPaymentOutRequest.getCustomerLegalEntity(),</span>
+<span class="nc" id="L300">									intuitionPaymentOutRequest.getPaymentMethod(),</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">									intuitionPaymentOutRequest.getAmount() != null ? intuitionPaymentOutRequest.getAmount().toString()</span>
+									: &quot;&quot;,
+<span class="nc" id="L303">									intuitionPaymentOutRequest.getFirstName(), intuitionPaymentOutRequest.getLastName(),</span>
+<span class="nc" id="L304">									intuitionPaymentOutRequest.getCountry(), intuitionPaymentOutRequest.getEmail(),</span>
+<span class="nc" id="L305">									intuitionPaymentOutRequest.getPhone(), intuitionPaymentOutRequest.getAccountNumber(),</span>
+<span class="nc" id="L306">									intuitionPaymentOutRequest.getCurrencyCode(), intuitionPaymentOutRequest.getBeneficiaryId(),</span>
+<span class="nc" id="L307">									intuitionPaymentOutRequest.getBeneficiaryBankid(),</span>
+<span class="nc" id="L308">									intuitionPaymentOutRequest.getBeneficaryBankName(),</span>
+<span class="nc" id="L309">									intuitionPaymentOutRequest.getBeneficaryBankAddress(),</span>
+<span class="nc" id="L310">									intuitionPaymentOutRequest.getPaymentReference(),</span>
+<span class="nc" id="L311">									intuitionPaymentOutRequest.getPaymentRefMatchedKeyword(), intuitionPaymentOutRequest.getMaturityDate(),</span>
+<span class="nc" id="L312">									intuitionPaymentOutRequest.getDebtorName(), intuitionPaymentOutRequest.getDebtorAccountNumber(),</span>
+<span class="nc" id="L313">									intuitionPaymentOutRequest.getBillAddressLine(), intuitionPaymentOutRequest.getCountryOfFund(),</span>
+<span class="nc" id="L314">									intuitionPaymentOutRequest.getWatchlist(), intuitionPaymentOutRequest.getTradeAccountNumber(),</span>
+<span class="nc" id="L315">									intuitionPaymentOutRequest.getTradeContactId(), intuitionPaymentOutRequest.getTrxType(),</span>
+<span class="nc" id="L316">									intuitionPaymentOutRequest.getPurposeOfTrade(),</span>
+<span class="nc" id="L317">									intuitionPaymentOutRequest.getTradeContractNumber(), </span>
+<span class="nc" id="L318">									intuitionPaymentOutRequest.getDealDate()+TIME_STRING,</span>
+<span class="nc" id="L319">							String.valueOf(intuitionPaymentOutRequest.isThirdPartyPayment()),</span>
+<span class="nc bnc" id="L320" title="All 2 branches missed.">							intuitionPaymentOutRequest.getBuyingAmountBaseValue() != null</span>
+<span class="nc" id="L321">									? intuitionPaymentOutRequest.getBuyingAmountBaseValue().toString()</span>
+									: &quot;&quot;,
+<span class="nc bnc" id="L323" title="All 2 branches missed.">									intuitionPaymentOutRequest.getSellingAmountBaseValue() != null</span>
+<span class="nc" id="L324">									? intuitionPaymentOutRequest.getSellingAmountBaseValue().toString()</span>
+									: &quot;&quot;,
+<span class="nc" id="L326">									intuitionPaymentOutRequest.getValueDate(),intuitionPaymentOutRequest.getOpiCreatedDate(),</span>
+<span class="nc" id="L327">									intuitionPaymentOutRequest.getMaturityDate()+TIME_STRING,</span>
+<span class="nc" id="L328">									intuitionPaymentOutRequest.getChannel(),</span>
+<span class="nc" id="L329">									intuitionPaymentOutRequest.getDebtorName(),</span>
+<span class="nc" id="L330">									intuitionPaymentOutRequest.getDebtorAccountNumber(), intuitionPaymentOutRequest.getCcFirstName(),</span>
+<span class="nc" id="L331">									intuitionPaymentOutRequest.getBillAdZip(), intuitionPaymentOutRequest.getCountryOfFund(),</span>
+<span class="nc" id="L332">									intuitionPaymentOutRequest.getIsThreeds(), intuitionPaymentOutRequest.getAvsResult(),</span>
+<span class="nc" id="L333">									intuitionPaymentOutRequest.getDebitCardAddedDate(), intuitionPaymentOutRequest.getMessage(),</span>
+<span class="nc" id="L334">									intuitionPaymentOutRequest.getRGID(),</span>
+<span class="nc bnc" id="L335" title="All 2 branches missed.">									intuitionPaymentOutRequest.gettScore() != null ? intuitionPaymentOutRequest.gettScore().toString()</span>
+									: &quot;&quot;,
+<span class="nc" id="L337">									intuitionPaymentOutRequest.gettRisk(), intuitionPaymentOutRequest.getFraudsightRiskLevel(),</span>
+<span class="nc" id="L338">									intuitionPaymentOutRequest.getFraudsightReason(), intuitionPaymentOutRequest.getCVCCVVResult(),</span>
+<span class="nc" id="L339">							intuitionPaymentOutRequest.getBrwsrType(), intuitionPaymentOutRequest.getBrwsrVersion(),</span>
+<span class="nc" id="L340">							intuitionPaymentOutRequest.getBrwsrLang(), intuitionPaymentOutRequest.getBrowserOnline(),</span>
+<span class="nc" id="L341">							intuitionPaymentOutRequest.getVersion(), intuitionPaymentOutRequest.getStatusUpdateReason(),</span>
+<span class="nc" id="L342">							intuitionPaymentOutRequest.getDeviceName(), intuitionPaymentOutRequest.getDeviceVersion(),</span>
+<span class="nc" id="L343">							intuitionPaymentOutRequest.getDeviceId(), intuitionPaymentOutRequest.getDeviceManufacturer(),</span>
+<span class="nc" id="L344">							intuitionPaymentOutRequest.getDeviceType(), intuitionPaymentOutRequest.getOsType(),</span>
+<span class="nc" id="L345">							intuitionPaymentOutRequest.getScreenResolution(), intuitionPaymentOutRequest.getUpdateStatus(),</span>
+<span class="nc" id="L346">							intuitionPaymentOutRequest.getBlacklist(), intuitionPaymentOutRequest.getCountryCheck(),</span>
+<span class="nc" id="L347">							intuitionPaymentOutRequest.getSanctionsContact(),</span>
+<span class="nc" id="L348">							intuitionPaymentOutRequest.getSanctionsBeneficiary(),</span>
+<span class="nc" id="L349">							intuitionPaymentOutRequest.getSanctionsBank(), intuitionPaymentOutRequest.getSanctions3rdParty(),</span>
+<span class="nc" id="L350">							intuitionPaymentOutRequest.getPaymentReferenceCheck(),</span>
+<span class="nc" id="L351">							intuitionPaymentOutRequest.getFraudPredict(), intuitionPaymentOutRequest.getCustomCheck(),</span>
+<span class="nc" id="L352">							intuitionPaymentOutRequest.getAtlasSTPCodes() };</span>
+
+<span class="nc" id="L354">					datas.add(data);</span>
+<span class="nc" id="L355">				}</span>
+
+<span class="nc" id="L357">				writer.writeAll(datas);</span>
+
+<span class="nc" id="L359">			} catch (Exception e) {</span>
+<span class="nc" id="L360">				emailAlert.sendEmailAlertForHistoricPaymentError(</span>
+						&quot;Intuition Historic Payment Out upload error - batch file generation&quot;,
+						&quot;Intuition (Transaction monitoring) Historical Payment Out upload failed due to batch file generation error on &quot;
+<span class="nc" id="L363">								+ new java.text.SimpleDateFormat(EMAIL_BODY_DATE_FORMAT).format(new java.util.Date())</span>
+								+ &quot;. Please alert compliance officer.&quot;);
+<span class="nc" id="L365">				LOG.error(&quot;Error  in IntuitionHistoricPaymentCSVTransformer writeDataLineByLine(): &quot;, e);</span>
+			} finally {
+<span class="nc" id="L367">				writer.close();</span>
+<span class="nc" id="L368">				outputfile.close();</span>
+			}
+
+<span class="nc" id="L371">		}</span>
+			
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

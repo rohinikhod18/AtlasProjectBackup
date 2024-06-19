@@ -1,0 +1,350 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.core</a> &gt; <span class="el_source">RegistrationServiceImpl.java</span></div><h1>RegistrationServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.core;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.Contact;
+import com.currenciesdirect.gtg.compliance.core.domain.AccountHistoryRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.AccountHistoryResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.DeviceInfoRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.DeviceInfoResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.IRegistrationDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.LockResourceDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.LockResourceRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.LockResourceResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.ProviderResponseLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ProviderResponseLogResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationCfxDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationViewMoreRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ViewMoreResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.docupload.Document;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegUpdateDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationUpdateRequest;
+import com.currenciesdirect.gtg.compliance.docuploadport.UploadDocumentPort;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+
+/**
+ * The Class RegistrationServiceImpl.
+ */
+@Component(&quot;registrationServiceImpl&quot;)
+<span class="fc" id="L44">public class RegistrationServiceImpl implements IRegistrationService {</span>
+
+<span class="fc" id="L46">	private Logger log = LoggerFactory.getLogger(RegistrationServiceImpl.class);</span>
+
+	@Autowired
+	@Qualifier(&quot;regDBServiceImpl&quot;)
+	private IRegistrationDBService iRegistrationQueueDBService;
+
+	@Autowired
+	@Qualifier(&quot;regUpdateTransformer&quot;)
+	private ITransform&lt;RegUpdateDBDto, RegistrationUpdateRequest&gt; regUpdateTransformer;
+
+	@Autowired
+	@Qualifier(&quot;lockResourceTransformer&quot;)
+	private ITransform&lt;LockResourceDBDto, LockResourceRequest&gt; lockResourceTransformer;
+	
+	@Autowired
+	@Qualifier(&quot;registrationDetailsFactory&quot;)
+	private RegistrationDetailsFactory registrationDetailsFactory;
+	
+	@Autowired
+	@Qualifier(&quot;regCfxDBServiceImpl&quot;)
+	private ICfxDBService iCfxDBService;
+
+	@Override
+	public RegistrationQueueDto getRegistrationQueueWithCriteria(RegistrationSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+		try {
+<span class="fc" id="L72">			return iRegistrationQueueDBService.getRegistrationQueueWithCriteria(searchCriteria);</span>
+<span class="fc" id="L73">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L74">			logError(e.getOrgException());</span>
+<span class="fc" id="L75">			throw e;</span>
+		}
+	}
+
+	@Override
+	public IRegistrationDetails getRegistrationDetails(Integer contactId, String custType, RegistrationSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+		try {
+
+			IRegistrationDetails iRegistrationDetailsDto;
+
+<span class="nc" id="L86">			iRegistrationDetailsDto = registrationDetailsFactory.getRegistrationDetailsFactory(custType)</span>
+<span class="nc" id="L87">					.getRegistrationDetails(contactId, searchCriteria);</span>
+
+<span class="nc bnc" id="L89" title="All 2 branches missed.">			if (iRegistrationDetailsDto == null) {</span>
+<span class="nc" id="L90">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA);</span>
+			}
+<span class="nc" id="L92">			addDocuments(iRegistrationDetailsDto);</span>
+<span class="nc bnc" id="L93" title="All 4 branches missed.">			if (searchCriteria != null &amp;&amp; searchCriteria.getPage() != null) {</span>
+<span class="nc" id="L94">				iRegistrationDetailsDto.setCurrentRecord(searchCriteria.getPage().getCurrentRecord());</span>
+<span class="nc" id="L95">				iRegistrationDetailsDto.setTotalRecords(searchCriteria.getPage().getTotalRecords());</span>
+			}
+<span class="nc" id="L97">			return iRegistrationDetailsDto;</span>
+<span class="nc" id="L98">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L99">			logError(e.getOrgException());</span>
+<span class="nc" id="L100">			throw e;</span>
+		}
+	}
+
+	@Override
+	public ActivityLogs updateContact(RegistrationUpdateRequest registrationUpdateRequest)
+			throws CompliancePortalException {
+		try {
+
+<span class="nc bnc" id="L109" title="All 4 branches missed.">			if (null == registrationUpdateRequest.getCustType() &amp;&amp; registrationUpdateRequest.getCustType().isEmpty()) {</span>
+<span class="nc" id="L110">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+			
+<span class="nc" id="L113">			RegUpdateDBDto updateRequestHandlerDto = regUpdateTransformer.transform(registrationUpdateRequest);</span>
+
+<span class="nc" id="L115">			return registrationDetailsFactory.getRegistrationDetailsFactory(registrationUpdateRequest.getCustType())</span>
+<span class="nc" id="L116">					.updateContact(updateRequestHandlerDto);</span>
+			
+<span class="nc" id="L118">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L119">			logError(e);</span>
+<span class="nc" id="L120">			throw e;</span>
+
+<span class="nc" id="L122">		} catch (Exception e) {</span>
+<span class="nc" id="L123">			logError(e);</span>
+<span class="nc" id="L124">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_UPDATING_DATA, e);</span>
+		}
+	}
+
+	@Override
+	public LockResourceResponse lockResource(LockResourceRequest lockResourceRequest) throws CompliancePortalException {
+<span class="fc" id="L130">		LockResourceResponse lockResourceResponse = null;</span>
+		try {
+<span class="fc" id="L132">			LockResourceDBDto updatelockResourceDBDto = lockResourceTransformer.transform(lockResourceRequest);</span>
+<span class="pc bpc" id="L133" title="2 of 4 branches missed.">			if (lockResourceRequest.getUserResourceId() == null &amp;&amp; lockResourceRequest.getLock()) {</span>
+<span class="fc" id="L134">				lockResourceResponse = iRegistrationQueueDBService.insertLockResource(updatelockResourceDBDto);</span>
+			} else {
+<span class="nc" id="L136">				lockResourceResponse = iRegistrationQueueDBService.updateLockResource(updatelockResourceDBDto);</span>
+			}
+<span class="fc" id="L138">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L139">			logError(e);</span>
+<span class="fc" id="L140">			throw e;</span>
+
+<span class="nc" id="L142">		} catch (Exception e) {</span>
+<span class="nc" id="L143">			logError(e);</span>
+<span class="nc" id="L144">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L145">		}</span>
+<span class="fc" id="L146">		return lockResourceResponse;</span>
+	}
+	
+	@Override
+	public ActivityLogs getActivityLogs(ActivityLogRequest request) throws CompliancePortalException{
+		try {
+<span class="nc bnc" id="L152" title="All 4 branches missed.">			if (null == request || null == request.getCustType()) {</span>
+<span class="nc" id="L153">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			} else {
+<span class="nc" id="L155">				return registrationDetailsFactory.getRegistrationDetailsFactory(request.getCustType()).getActivityLogs(request);</span>
+			}
+			
+<span class="nc" id="L158">		}catch (CompliancePortalException e) {</span>
+<span class="nc" id="L159">			logError(e);</span>
+<span class="nc" id="L160">			throw e;</span>
+
+<span class="nc" id="L162">		} catch (Exception e) {</span>
+<span class="nc" id="L163">			logError(e);</span>
+<span class="nc" id="L164">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		}
+	}
+
+	private void logError(Throwable t) {
+<span class="fc" id="L169">		log.error(&quot;Exception: &quot;, t);</span>
+<span class="fc" id="L170">	}</span>
+
+	private void addDocuments(IRegistrationDetails registrationDetailsDto) {
+
+<span class="nc bnc" id="L174" title="All 2 branches missed.">		if (registrationDetailsDto instanceof RegistrationDetailsDto) {</span>
+<span class="nc" id="L175">			addDocumentsForPfx(registrationDetailsDto);</span>
+		} else {
+<span class="nc" id="L177">			addDocumentsForCfx(registrationDetailsDto);</span>
+		}
+<span class="nc" id="L179">	}</span>
+	
+	private void addDocumentsForPfx(IRegistrationDetails registrationDetailsDto) {
+		try {
+<span class="nc bnc" id="L183" title="All 4 branches missed.">			if (registrationDetailsDto.getAccount() != null &amp;&amp; registrationDetailsDto.getCurrentContact() != null) {</span>
+<span class="nc" id="L184">				List&lt;Document&gt; documents = UploadDocumentPort.getAttachedDocument(</span>
+<span class="nc" id="L185">						registrationDetailsDto.getCurrentContact().getCrmAccountId(),</span>
+<span class="nc" id="L186">						registrationDetailsDto.getCurrentContact().getCrmContactId(),</span>
+<span class="nc" id="L187">						registrationDetailsDto.getAccount().getOrgCode(),Constants.SOURCE_SALESFORCE);</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">				if (documents != null) {</span>
+<span class="nc" id="L189">					registrationDetailsDto.setDocuments(UploadDocumentPort.updateDocumentDateFormat(documents));</span>
+				} else {
+<span class="nc" id="L191">					registrationDetailsDto.setDocuments(new ArrayList&lt;&gt;());</span>
+				}
+			}
+<span class="nc" id="L194">		} catch (Exception e) {</span>
+<span class="nc" id="L195">			log.debug(&quot;Error : &quot;, e);</span>
+<span class="nc" id="L196">			registrationDetailsDto.setDocuments(new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L197">		}</span>
+<span class="nc" id="L198">	}</span>
+	
+	private void addDocumentsForCfx(IRegistrationDetails registrationDetailsDto) {
+<span class="nc" id="L201">		RegistrationCfxDetailsDto regCfxDetailsDto = (RegistrationCfxDetailsDto) registrationDetailsDto;</span>
+		try {
+<span class="nc bnc" id="L203" title="All 2 branches missed.">				if (regCfxDetailsDto.getCurrentContact() != null) {</span>
+				/**get list of document uploaded on account,
+				 *  set source as salesforce for cfx to get list documents attached to respective CRMAccountid : Abhijit G*/
+<span class="nc" id="L206">				List&lt;Document&gt; documents = UploadDocumentPort.getAttachedDocument(</span>
+<span class="nc" id="L207">						regCfxDetailsDto.getCurrentContact().getCrmAccountId(),</span>
+<span class="nc" id="L208">						regCfxDetailsDto.getCurrentContact().getCrmContactId(),</span>
+<span class="nc" id="L209">						regCfxDetailsDto.getAccount().getOrgCode(),Constants.SOURCE_SALESFORCE);</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">				if (documents != null) {</span>
+<span class="nc" id="L211">					registrationDetailsDto.setDocuments(UploadDocumentPort.updateDocumentDateFormat(documents));</span>
+				} else {
+<span class="nc" id="L213">					registrationDetailsDto.setDocuments(new ArrayList&lt;&gt;());</span>
+				}
+			}
+				
+<span class="nc" id="L217">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L218">			log.debug(&quot;Error : &quot;, e);</span>
+<span class="nc" id="L219">			registrationDetailsDto.setDocuments(new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L220">		}</span>
+<span class="nc" id="L221">	}</span>
+
+	@Override
+	public ViewMoreResponse viewMoreDetails(RegistrationViewMoreRequest viewMoreRequest) throws CompliancePortalException {
+<span class="nc" id="L225">		ViewMoreResponse viewMoreResponse = null;</span>
+		try {
+			
+<span class="nc bnc" id="L228" title="All 2 branches missed.">			if (&quot;KYC&quot;.equalsIgnoreCase(viewMoreRequest.getServiceType())){</span>
+				
+<span class="nc" id="L230">				viewMoreResponse = iRegistrationQueueDBService.getMoreKycDetails(viewMoreRequest);</span>
+			    
+<span class="nc bnc" id="L232" title="All 2 branches missed.">			}else if (&quot;SANCTION&quot;.equalsIgnoreCase(viewMoreRequest.getServiceType())){</span>
+				
+<span class="nc" id="L234">				viewMoreResponse = iRegistrationQueueDBService.getMoreSanctionDetails(viewMoreRequest);</span>
+			    
+<span class="nc bnc" id="L236" title="All 2 branches missed.">			}else if (&quot;CUSTOMCHECK&quot;.equalsIgnoreCase(viewMoreRequest.getServiceType())){ </span>
+				
+<span class="nc" id="L238">				viewMoreResponse = iRegistrationQueueDBService.getMoreCustomCheckDetails(viewMoreRequest);</span>
+
+<span class="nc bnc" id="L240" title="All 2 branches missed.">			}else if (&quot;FRAUGSTER&quot;.equalsIgnoreCase(viewMoreRequest.getServiceType())){</span>
+				
+<span class="nc" id="L242">				viewMoreResponse = iRegistrationQueueDBService.getMoreFraugsterDetails(viewMoreRequest);</span>
+				
+<span class="nc bnc" id="L244" title="All 2 branches missed.">			}else if (&quot;ONFIDO&quot;.equalsIgnoreCase(viewMoreRequest.getServiceType())){</span>
+				
+<span class="nc" id="L246">				viewMoreResponse = iRegistrationQueueDBService.getMoreOnfidoDetails(viewMoreRequest);</span>
+			    
+<span class="nc bnc" id="L248" title="All 2 branches missed.">			}else if (&quot;TRANSACTION_MONITORING&quot;.equalsIgnoreCase(viewMoreRequest.getServiceType())){ //AT-4114</span>
+				
+<span class="nc" id="L250">				viewMoreResponse = iRegistrationQueueDBService.getMoreIntuitionDetails(viewMoreRequest);</span>
+			    
+			}
+			
+<span class="nc" id="L254">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L255">			logError(e);</span>
+<span class="nc" id="L256">			throw e;</span>
+<span class="nc" id="L257">		} catch (Exception e) {</span>
+<span class="nc" id="L258">			logError(e);</span>
+<span class="nc" id="L259">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L260">		}</span>
+<span class="nc" id="L261">		return viewMoreResponse;</span>
+	}
+
+	@Override
+	public ProviderResponseLogResponse getProviderResponse(ProviderResponseLogRequest logRequest)
+			throws CompliancePortalException {
+<span class="fc" id="L267">		ProviderResponseLogResponse providerResponseLogResponse = null;</span>
+		try {
+<span class="fc" id="L269">			providerResponseLogResponse = iRegistrationQueueDBService.getProviderResponse(logRequest);</span>
+<span class="fc" id="L270">		}catch (CompliancePortalException e) {</span>
+<span class="fc" id="L271">			logError(e);</span>
+<span class="fc" id="L272">			throw e;</span>
+
+<span class="nc" id="L274">		} catch (Exception e) {</span>
+<span class="nc" id="L275">			logError(e);</span>
+<span class="nc" id="L276">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_GETTING_PROVIDER_RESPONSE, e);</span>
+<span class="fc" id="L277">		}</span>
+<span class="fc" id="L278">		return providerResponseLogResponse;</span>
+	}
+
+	@Override
+	public LockResourceResponse lockResourceMultiContacts(LockResourceRequest lockResourceRequest)
+			throws CompliancePortalException {
+
+<span class="fc" id="L285">		LockResourceResponse lockResourceResponse = null;</span>
+		try {
+<span class="fc" id="L287">			LockResourceDBDto updatelockResourceDBDto = lockResourceTransformer.transform(lockResourceRequest);</span>
+<span class="pc bpc" id="L288" title="2 of 4 branches missed.">			if (lockResourceRequest.getUserResourceId() == null &amp;&amp; lockResourceRequest.getLock()) {</span>
+<span class="fc" id="L289">				lockResourceResponse = iCfxDBService.insertLockResourceForMultiContact(updatelockResourceDBDto);</span>
+			} else {
+<span class="nc" id="L291">				lockResourceResponse = iCfxDBService.updateLockResourceForMultiContact(updatelockResourceDBDto);</span>
+			}
+<span class="fc" id="L293">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L294">			logError(e);</span>
+<span class="fc" id="L295">			throw e;</span>
+
+<span class="nc" id="L297">		} catch (Exception e) {</span>
+<span class="nc" id="L298">			logError(e);</span>
+<span class="nc" id="L299">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L300">		}</span>
+<span class="fc" id="L301">		return lockResourceResponse;</span>
+	
+	}
+	
+	@Override
+	public DeviceInfoResponse getDeviceInfo(DeviceInfoRequest deviceInfoRequest)
+			throws CompliancePortalException {
+<span class="fc" id="L308">		DeviceInfoResponse deviceInfoResponse = null;</span>
+		try {
+<span class="fc" id="L310">			deviceInfoResponse = iRegistrationQueueDBService.getDeviceInfo(deviceInfoRequest);</span>
+<span class="fc" id="L311">		}catch (CompliancePortalException e) {</span>
+<span class="fc" id="L312">			logError(e);</span>
+<span class="fc" id="L313">			throw e;</span>
+
+<span class="nc" id="L315">		} catch (Exception e) {</span>
+<span class="nc" id="L316">			logError(e);</span>
+<span class="nc" id="L317">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_GETTING_DEVICE_INFO_DATA, e);</span>
+<span class="fc" id="L318">		}</span>
+<span class="fc" id="L319">		return deviceInfoResponse;</span>
+	}
+	
+	@Override
+	public AccountHistoryResponse getAccountHistory(AccountHistoryRequest accountHistoryRequest) throws CompliancePortalException{
+<span class="nc" id="L324">		AccountHistoryResponse accountHistoryResponse = null;</span>
+		try {
+<span class="nc" id="L326">			accountHistoryResponse = iRegistrationQueueDBService.getAccountHistory(accountHistoryRequest);</span>
+<span class="nc" id="L327">		}catch (CompliancePortalException e) {</span>
+<span class="nc" id="L328">			logError(e);</span>
+<span class="nc" id="L329">			throw e;</span>
+
+<span class="nc" id="L331">		} catch (Exception e) {</span>
+<span class="nc" id="L332">			logError(e);</span>
+<span class="nc" id="L333">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_GETTING_DEVICE_INFO_DATA, e);</span>
+<span class="nc" id="L334">		}</span>
+<span class="nc" id="L335">		return accountHistoryResponse;</span>
+	}
+	
+	public boolean setPoiExistsFlag(UserProfile user, Contact contact) throws CompliancePortalException{
+<span class="nc" id="L339">		boolean poiExists = false;</span>
+		try {
+<span class="nc" id="L341">			poiExists = iRegistrationQueueDBService.setPoiExistsFlag(user,contact);</span>
+<span class="nc" id="L342">		}catch (Exception e) {</span>
+<span class="nc" id="L343">			logError(e);</span>
+<span class="nc" id="L344">			throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST, e);</span>
+<span class="nc" id="L345">		}</span>
+<span class="nc" id="L346">		return poiExists;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

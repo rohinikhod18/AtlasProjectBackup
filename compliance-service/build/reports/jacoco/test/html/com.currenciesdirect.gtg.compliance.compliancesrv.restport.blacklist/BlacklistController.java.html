@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BlacklistController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.restport.blacklist</a> &gt; <span class="el_source">BlacklistController.java</span></div><h1>BlacklistController.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.restport.blacklist;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.keycloak.representations.AccessToken;
+
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.context.request.async.DeferredResult;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistResendResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsInBlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsOutBlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsOutPaymentReferenceResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.PaymentReferenceResendResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.restport.BaseController;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
+
+/**
+ * The Class BlacklistController.
+ */
+@Controller
+@RequestMapping(&quot;/repeatcheck&quot;)
+<span class="nc" id="L39">public class BlacklistController extends BaseController {</span>
+
+	/** The Constant BLACKLIST_RESEND_REQUEST_REQUEST_RECEIVED. */
+	private static final String BLACKLIST_RESEND_REQUEST_REQUEST_RECEIVED = &quot;\n --Blacklist ResendRequest request received-- \n {}&quot;;
+	// added for  AT-3658
+	/** The Constant PAYMENT_REFERENCE_RESEND_REQUEST_REQUEST_RECEIVED. */
+	private static final String PAYMENT_REFERENCE_RESEND_REQUEST_REQUEST_RECEIVED = &quot;\n --Payment Reference ResendRequest request received-- \n {}&quot;;
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L48">	private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(BlacklistController.class);</span>
+
+	@ApiOperation(notes = &quot;Perform repeat check blacklist for registrations from Compliance portal UI.\n\n&quot;
+			+ &quot;This is an internal check in ATLAS which checks the Customer Information on the basis of various parameters like:\n\n&quot;
+			+ &quot; - Name: (it should be whole name - first name plus last name fully matched)\n&quot;
+			+ &quot; - Phone number: (last 9 digits)\n&quot; + &quot; - IP\n&quot; + &quot; - Domain\n&quot; + &quot; - Email\n\n&quot;
+			+ &quot;If there is a validation failure the relevant MatchedData field will contain the data which was matched to the &quot;
+			+ &quot;blacklist. With this information being displayed on the UI.\n\n&quot;
+			+ &quot;This request is asynchronous. To avoid blocking, we use callbacks-based programming model where instead of the actual result, we will return a DeferredResult to the servlet container.&quot;, value = &quot;Call this api to Repeat Blacklist Check&quot;, nickname = &quot;blacklistResend&quot;, response = BlacklistResendResponse.class)
+	@ApiResponses(value = {
+	@ApiResponse(response = BlacklistResendResponse.class, code = 200, message = &quot;A successful response is an instance of the BlacklistResendResponse class.&quot;) })
+	@PostMapping(value = &quot;/blacklist&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; blacklistResend(final HttpServletRequest httpRequest,
+			final @RequestBody BlacklistResendRequest blacklistResendRequest) {
+<span class="nc" id="L62">		LOGGER.warn(BLACKLIST_RESEND_REQUEST_REQUEST_RECEIVED, blacklistResendRequest);</span>
+<span class="nc" id="L63">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class, httpRequest.getHeader(&quot;user&quot;));</span>
+<span class="nc" id="L64">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L65">				ServiceInterfaceType.PROFILE, OperationEnum.BLACKLIST_RESEND, blacklistResendRequest.getOrgCode(),</span>
+				blacklistResendRequest);
+<span class="nc" id="L67">		AccessToken userToken = new AccessToken();</span>
+<span class="nc" id="L68">		userToken.setPreferredUsername(user.getName());</span>
+
+<span class="nc" id="L70">		return super.executeWorkflow(messageContext, userToken);</span>
+	}
+
+	/**
+	 * Funds in blacklist resend.
+	 *
+	 * @param blacklistResendRequest
+	 *            the blacklist resend request
+	 * @param httpRequest
+	 *            the http request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Retry a blacklisted Funds In request.\n\n&quot;, value = &quot;Call this api to retry a blacklisted Funds In request&quot;, nickname = &quot;fundsInBlacklistResend&quot;, response = BlacklistResendResponse.class)
+	// @ApiResponses(value = { @ApiResponse(response =
+	// BlacklistResendResponse.class, code = 200, message = &quot;A successful
+	// response is an instance of the BlacklistResendResponse class.&quot;) })
+	@PostMapping(value = &quot;/blacklistCheckfundsIn&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; fundsInBlacklistResend(
+			@ApiParam(value = &quot;Funds In Blacklist Resend Request JSON object&quot;, required = true) @RequestBody final FundsInBlacklistResendRequest blacklistResendRequest,
+			final HttpServletRequest httpRequest) {
+<span class="nc" id="L90">		LOGGER.debug(BLACKLIST_RESEND_REQUEST_REQUEST_RECEIVED, blacklistResendRequest);</span>
+<span class="nc" id="L91">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class, httpRequest.getHeader(&quot;user&quot;));</span>
+<span class="nc" id="L92">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L93">				ServiceInterfaceType.FUNDSIN, OperationEnum.BLACKLIST_RESEND, blacklistResendRequest.getOrgCode(),</span>
+				blacklistResendRequest);
+
+<span class="nc" id="L96">		AccessToken userToken = new AccessToken();</span>
+<span class="nc" id="L97">		userToken.setPreferredUsername(user.getName());</span>
+
+<span class="nc" id="L99">		return super.executeWorkflow(messageContext, userToken);</span>
+	}
+
+	/**
+	 * Funds in blacklist resend.
+	 *
+	 * @param blacklistResendRequest
+	 *            the blacklist resend request
+	 * @param httpRequest
+	 *            the http request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Retry a blacklisted Funds Out request.\n\n&quot;, value = &quot;Call this api to retry a blacklisted Funds Out request&quot;, nickname = &quot;fundsOutBlacklistResend&quot;, response = BlacklistResendResponse.class)
+	// @ApiResponses(value = { @ApiResponse(response =
+	// BlacklistResendResponse.class, code = 200, message = &quot;A successful
+	// response is an instance of the BlacklistResendResponse class.&quot;) })
+	@PostMapping(value = &quot;/blacklistCheckfundsOut&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; fundsOutBlacklistResend(
+			@ApiParam(value = &quot;Funds Out Blacklist Resend Request JSON data&quot;, required = true) @RequestBody final FundsOutBlacklistResendRequest blacklistResendRequest,
+			final HttpServletRequest httpRequest) {
+<span class="nc" id="L119">		LOGGER.debug(BLACKLIST_RESEND_REQUEST_REQUEST_RECEIVED, blacklistResendRequest);</span>
+<span class="nc" id="L120">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class, httpRequest.getHeader(&quot;user&quot;));</span>
+<span class="nc" id="L121">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L122">				ServiceInterfaceType.FUNDSOUT, OperationEnum.BLACKLIST_RESEND, blacklistResendRequest.getOrgCode(),</span>
+				blacklistResendRequest);
+
+<span class="nc" id="L125">		AccessToken userToken = new AccessToken();</span>
+<span class="nc" id="L126">		userToken.setPreferredUsername(user.getName());</span>
+
+<span class="nc" id="L128">		return super.executeWorkflow(messageContext, userToken);</span>
+	}
+	
+	/**
+	 * Funds in reference resend.
+	 *
+	 * @param referenceResendRequest
+	 *            the reference resend request
+	 * @param httpRequest
+	 *            the http request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Retry a reference Funds Out request.\n\n&quot;, value = &quot;Call this api to retry a reference Funds Out request&quot;, nickname = &quot;fundsOuteferenceResend&quot;, response = PaymentReferenceResendResponse.class)
+	// @ApiResponses(value = { @ApiResponse(response =
+	// PaymentReferenceResendResponse.class, code = 200, message = &quot;A successful
+	// response is an instance of the PaymentReferenceResendResponse class.&quot;) })
+	@PostMapping(value = &quot;/referenceCheckfundsOut&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; fundsOutReferenceResend(
+			@ApiParam(value = &quot;Funds Out Payment Reference Resend Request JSON data&quot;, required = true) @RequestBody final FundsOutPaymentReferenceResendRequest paymentReferenceResendRequest,
+			final HttpServletRequest httpRequest) {
+<span class="nc" id="L148">		LOGGER.debug(PAYMENT_REFERENCE_RESEND_REQUEST_REQUEST_RECEIVED, paymentReferenceResendRequest);</span>
+<span class="nc" id="L149">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class, httpRequest.getHeader(&quot;user&quot;));</span>
+<span class="nc" id="L150">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L151">				ServiceInterfaceType.FUNDSOUT, OperationEnum.PAYMENT_REFERENCE_RESEND, paymentReferenceResendRequest.getOrgCode(),</span>
+				paymentReferenceResendRequest);
+
+<span class="nc" id="L154">		AccessToken userToken = new AccessToken();</span>
+<span class="nc" id="L155">		userToken.setPreferredUsername(user.getName());</span>
+
+<span class="nc" id="L157">		return super.executeWorkflow(messageContext, userToken);</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

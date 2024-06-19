@@ -1,0 +1,2822 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>EventDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">EventDBServiceImpl.java</span></div><h1>EventDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FundsInFraugsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FundsOutFruagsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsInBlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsOutBlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsOutPaymentReferenceResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.IntuitionPaymentStatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringFundsProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsSummary;
+import com.currenciesdirect.gtg.compliance.commons.enums.EventServiceLogServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.EntityDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.delete.contact.DeleteContactRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLogSummary;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.TransactionMonitoringMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchangeWrapper;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.LongAndIntegerUtils;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class EventDBServiceImpl.
+ */
+@SuppressWarnings(&quot;squid:S2095&quot;)
+<span class="fc" id="L66">public class EventDBServiceImpl extends AbstractDBServiceImpl implements IEventDBService {</span>
+	
+	/** The Constant LOG. */
+<span class="fc" id="L69">	private static final Logger LOG = LoggerFactory.getLogger(EventDBServiceImpl.class);</span>
+
+	/** The Constant CONTACT_NAME2. */
+	private static final String CONTACT_NAME2 = &quot;ContactName&quot;;
+
+	/** The Constant ENTITY_TYPE. */
+	private static final String ENTITY_TYPE = &quot;EntityType&quot;;
+
+	/** The Constant CREATED_ON. */
+	private static final String CREATED_ON = &quot;CreatedOn&quot;;
+
+	/** The Constant EVENT_ID. */
+	private static final String EVENT_ID = &quot;EventID&quot;;
+
+	/** The Constant PROVIDER_RESPONSE. */
+	private static final String PROVIDER_RESPONSE = &quot;ProviderResponse&quot;;
+
+	/** The Constant STATUS. */
+	private static final String STATUS = &quot;Status&quot;;
+
+	/** The Constant SUMMARY. */
+	private static final String SUMMARY = &quot;Summary&quot;;
+
+	/** The Constant UPDATED_BY. */
+	private static final String UPDATED_BY = &quot;UpdatedBy&quot;;
+
+	/** The Constant UPDATED_ON. */
+	private static final String UPDATED_ON = &quot;UpdatedOn&quot;;
+
+	/** The Constant ENTITYID. */
+	private static final String ENTITYID = &quot;entityid&quot;;
+
+	/** The Constant CREATED_BY. */
+	private static final String CREATED_BY = &quot;CreatedBy&quot;;
+
+	/** The Constant CONTACT_NAME. */
+	private static final String CONTACT_NAME = CONTACT_NAME2;
+
+	/** The Constant ACCOUNT_NAME. */
+	private static final String ACCOUNT_NAME = &quot;AccountName&quot;;
+
+	/** The Constant ACCOUNT. */
+	private static final String ACCOUNT = &quot;account&quot;;
+	
+	/** The Constant IS_SANCTION_ELIGIBLE. */
+	private static final String IS_SANCTION_ELIGIBLE =&quot;isSanctionEligible&quot;;
+	
+	/** The Constant IS_FRAUGSTER_ELIGIBLE. */
+	private static final String IS_FRAUGSTER_ELIGIBLE =	&quot;isFraugsterEligible&quot;;
+	
+	/** The Constant IS_BLACKLIST_ELIGIBLE. */
+	private static final String IS_BLACKLIST_ELIGIBLE =	&quot;isBlacklistEligible&quot;;
+	
+	/** The Constant IS_COUNTRY_CHECK_ELIGIBLE. */
+	private static final String IS_COUNTRY_CHECK_ELIGIBLE =	&quot;isCountryCheckEligible&quot;;
+	
+	/** The Constant IS_Custom_CHECK_ELIGIBLE. */
+	private static final String IS_CUSTOM_CHECK_ELIGIBLE =	&quot;isCustomCheckEligible&quot;;
+	
+	/** The Constant IS_EID_ELIGIBLE. */
+	private static final String IS_EID_ELIGIBLE = &quot;isEidEligible&quot;;
+	
+	/** The Constant FUNDS_IN. */
+	private static final String FUNDS_IN = &quot;FUNDSIN&quot;;
+	
+	/** The service name. */
+	private String serviceName;
+
+	/**
+	 * Gets the service name.
+	 *
+	 * @return the service name
+	 */
+	public String getServiceName() {
+<span class="nc" id="L143">		return serviceName;</span>
+	}
+
+	/**
+	 * Sets the service name.
+	 *
+	 * @param serviceName
+	 *            the new service name
+	 */
+	public void setServiceName(String serviceName) {
+<span class="nc" id="L153">		this.serviceName = serviceName;</span>
+<span class="nc" id="L154">	}</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * createEvent(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; createEvent(Message&lt;MessageContext&gt; message) {
+
+<span class="fc" id="L166">		Connection connection = null;</span>
+		try {
+<span class="fc" id="L168">			String orgCode = message.getPayload().getOrgCode();</span>
+<span class="fc" id="L169">			ServiceInterfaceType eventType = message.getPayload().getGatewayMessageExchange().getServiceInterface();</span>
+<span class="fc" id="L170">			OperationEnum operation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+
+<span class="fc" id="L172">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="fc" id="L173">			String dbEventName = eventType + &quot;_&quot; + operation;</span>
+<span class="fc" id="L174">			Integer createdBy = token.getUserID();</span>
+<span class="fc" id="L175">			connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L176">			Integer eventId = null;</span>
+<span class="fc" id="L177">			beginTransaction(connection);</span>
+<span class="fc" id="L178">			eventId = getEventIdForProfileAndFundsIn(eventType, operation, message, connection, orgCode, dbEventName,</span>
+					createdBy);
+<span class="pc bpc" id="L180" title="1 of 2 branches missed.">			if (eventId == null) {</span>
+<span class="nc bnc" id="L181" title="All 16 branches missed.">				switch (eventType + &quot;_&quot; + operation) {</span>
+				case &quot;FUNDSOUT_FUNDS_OUT&quot;:
+<span class="nc" id="L183">					eventId = handleFundsOutCreate(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L184">					break;</span>
+				case &quot;FUNDSOUT_UPDATE_OPI&quot;:
+<span class="nc" id="L186">					eventId = handleFundsOutUpdate(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L187">					break;</span>
+				case &quot;FUNDSOUT_DELETE_OPI&quot;:
+<span class="nc" id="L189">					eventId = handleFundsOutDelete(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L190">					break;</span>
+				case &quot;FUNDSOUT_SANCTION_RESEND&quot;:
+<span class="nc" id="L192">					eventId = handleFundsOutSanctionResend(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L193">					break;</span>
+				case &quot;FUNDSOUT_CUSTOMCHECK_RESEND&quot;:
+<span class="nc" id="L195">					eventId = handleFundsOutCCResend(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L196">					break;</span>
+				case &quot;FUNDSOUT_FRAUGSTER_RESEND&quot;:
+<span class="nc" id="L198">					eventId = handleFundsOutFraugsterResend(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L199">					break;</span>
+				case &quot;FUNDSOUT_BLACKLIST_RESEND&quot;:
+<span class="nc" id="L201">					eventId = handleFundsOutBlacklistResend(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L202">					break;</span>
+				case &quot;FUNDSIN_SANCTION_RESEND&quot;:
+<span class="nc" id="L204">					eventId = handleFundsInSanctionResend(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L205">					break;</span>
+				case &quot;FUNDSIN_FRAUGSTER_RESEND&quot;:
+<span class="nc" id="L207">					eventId = handleFundsInFraugsterResend(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L208">					break;</span>
+				case &quot;FUNDSIN_BLACKLIST_RESEND&quot;:
+<span class="nc" id="L210">					eventId = handleFundsInBlacklistResend(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L211">					break;</span>
+				case &quot;FUNDSOUT_RECHECK_FAILURES&quot;:
+<span class="nc" id="L213">					eventId = handleFailedFundsOutRecheck(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L214">					break;</span>
+				case &quot;FUNDSIN_RECHECK_FAILURES&quot;:
+<span class="nc" id="L216">					eventId = handleFailedFundsInRecheck(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L217">					break;</span>
+				//Added for AT-3658
+				case &quot;FUNDSOUT_PAYMENT_REFERENCE_RESEND&quot;:
+<span class="nc" id="L220">					eventId = handleFundsOutPaymentReferenceResend(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L221">					break;</span>
+				case &quot;FUNDSOUT_REPEAT_CHECK_STATUS_UPDATE&quot;:
+<span class="nc" id="L223">					eventId = handleFundsOutIntuitionRepeatCheck(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L224">					break;</span>
+				//AT-4749
+				case &quot;INTUITION_STATUS_UPDATE&quot;:
+<span class="nc" id="L227">					eventId = handlePaymentIntuitionManualUpdate(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L228">					break;</span>
+				default:
+					break;
+				}
+			}
+<span class="fc" id="L233">			commitTransaction(connection);</span>
+<span class="fc" id="L234">			message.getPayload().getGatewayMessageExchange().getRequest().addAttribute(Constants.FIELD_EVENTID,</span>
+					eventId);
+<span class="nc" id="L236">		} catch (Exception e) {</span>
+<span class="nc" id="L237">			LOG.error(&quot;error in createEvent:&quot;, e);</span>
+<span class="nc" id="L238">			message.getPayload().setFailed(true);</span>
+		} finally {
+			try {
+<span class="fc" id="L241">				closeConnection(connection);</span>
+<span class="nc" id="L242">			} catch (ComplianceException e) {</span>
+<span class="nc" id="L243">				LOG.error(&quot;error in createEvent:&quot;, e);</span>
+<span class="nc" id="L244">				message.getPayload().setFailed(true);</span>
+<span class="fc" id="L245">			}</span>
+		}
+<span class="fc" id="L247">		return message;</span>
+	}
+
+	/**
+	 * Gets the event id for profile and funds in.
+	 *
+	 * @param eventType
+	 *            the event type
+	 * @param operation
+	 *            the operation
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param dbEventName
+	 *            the db event name
+	 * @param createdBy
+	 *            the created by
+	 * @return the event id for profile and funds in
+	 */
+	private Integer getEventIdForProfileAndFundsIn(ServiceInterfaceType eventType, OperationEnum operation,
+			Message&lt;MessageContext&gt; message, Connection connection, String orgCode, String dbEventName,
+			Integer createdBy) {
+<span class="fc" id="L272">		Integer eventId = null;</span>
+		try {
+<span class="pc bpc" id="L274" title="10 of 11 branches missed.">			switch (eventType + &quot;_&quot; + operation) {</span>
+			case &quot;PROFILE_NEW_REGISTRATION&quot;:
+			case &quot;PROFILE_ADD_CONTACT&quot;:
+			case &quot;PROFILE_UPDATECONTACT&quot;:
+			case &quot;PROFILE_UPDATE_ACCOUNT&quot;:
+			case &quot;PROFILE_KYC_RESEND&quot;:
+			case &quot;PROFILE_SANCTION_RESEND&quot;:
+			case &quot;PROFILE_BLACKLIST_RESEND&quot;:
+<span class="fc" id="L282">				eventId = handleProfileEvents(message, connection, orgCode, dbEventName, createdBy);</span>
+<span class="fc" id="L283">				break;</span>
+			case &quot;PROFILE_FRAUGSTER_RESEND&quot;:
+<span class="nc" id="L285">				eventId = handleProfileFraugsterResend(message, connection, orgCode, dbEventName, createdBy);</span>
+<span class="nc" id="L286">				break;</span>
+			case &quot;FUNDSIN_FUNDS_IN&quot;:
+<span class="nc" id="L288">				eventId = handleFundsInCreate(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L289">				break;</span>
+			case &quot;FUNDSIN_CUSTOMCHECK_RESEND&quot;:
+<span class="nc" id="L291">				eventId = handleFundsInCCResend(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L292">				break;</span>
+			case &quot;PROFILE_RECHECK_FAILURES&quot;:
+<span class="nc" id="L294">				eventId = handleFailedProfileRecheck(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L295">				break;</span>
+			case &quot;PROFILE_DELETE_CONTACT&quot;:
+<span class="nc" id="L297">				eventId = handleDeleteContact(message, connection, createdBy);</span>
+<span class="nc" id="L298">				break;</span>
+			case &quot;INTUITION_UPDATE_ACCOUNT&quot;:
+			case &quot;PROFILE_REPEAT_CHECK_STATUS_UPDATE&quot;:
+			case &quot;CARD_CARD_STATUS_UPDATE&quot;:
+			case &quot;INTUITION_NEW_REGISTRATION&quot;: //AT-5256
+<span class="nc" id="L303">				eventId = handleIntuitionUpdateAccount(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L304">				break;</span>
+			case &quot;FUNDSIN_REPEAT_CHECK_STATUS_UPDATE&quot;:
+<span class="nc" id="L306">				eventId = handleIntuitionUpdateFundsIn(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L307">				break;</span>
+			case &quot;FUNDSIN_DELETE_OPI&quot;: 
+<span class="nc" id="L309">				eventId = handleFundsInDelete(message, connection, orgCode, createdBy);//Add for AT-4699</span>
+<span class="nc" id="L310">				break;</span>
+			case &quot;CARD_CHECK_CARD_ELIGIBILITY&quot;: //Add for AT-5424
+<span class="nc" id="L312">				eventId = handleCardCheckEligibility(message, connection, orgCode, createdBy);</span>
+<span class="nc" id="L313">				break;</span>
+			default:
+				break;
+			}
+<span class="nc" id="L317">		} catch (Exception e) {</span>
+<span class="nc" id="L318">			LOG.error(&quot;Error in createEvent for Profile:&quot;, e);</span>
+<span class="nc" id="L319">			message.getPayload().setFailed(true);</span>
+<span class="fc" id="L320">		}</span>
+<span class="fc" id="L321">		return eventId;</span>
+	}
+	
+	/**
+	 * Handle funds in delete.
+	 *
+	 * @param message the message
+	 * @param connection the connection
+	 * @param orgCode the org code
+	 * @param createdBy the created by
+	 * @return the integer
+	 * @throws ComplianceException the compliance exception
+	 */
+	//Add for AT-4699
+	private Integer handleFundsInDelete(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L339">		FundsInDeleteRequest fundsInDeleteRequest = (FundsInDeleteRequest) message.getPayload()</span>
+<span class="nc" id="L340">				.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L341">		account = (Account) fundsInDeleteRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L342">		Integer payInId = (Integer) fundsInDeleteRequest.getAdditionalAttribute(&quot;payInId&quot;);</span>
+<span class="nc" id="L343">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSIN_DELETE&quot;, account, payInId, null, createdBy);</span>
+<span class="nc" id="L344">		return eventId;</span>
+	}
+	
+	//AT-4451
+	private Integer handleIntuitionUpdateFundsIn(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L352">		FundsInCreateRequest fundsInCreateRequest = (FundsInCreateRequest) message.getPayload()</span>
+<span class="nc" id="L353">				.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L354">		account = (Account) fundsInCreateRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L355">		eventId = saveIntoEvent(connection, orgCode, FUNDS_IN, account, fundsInCreateRequest.getFundsInId(), null,</span>
+				createdBy);
+<span class="nc" id="L357">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds in create.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsInCreate(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L379">		FundsInCreateRequest fundsInCreateRequest = (FundsInCreateRequest) message.getPayload()</span>
+<span class="nc" id="L380">				.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L381">		account = (Account) fundsInCreateRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L382">		eventId = saveIntoEvent(connection, orgCode, FUNDS_IN, account, fundsInCreateRequest.getFundsInId(), null,</span>
+				createdBy);
+<span class="nc" id="L384">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds in sanction resend.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsInSanctionResend(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L406">		FundsInCreateRequest finSanctionResend = (FundsInCreateRequest) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L407">				.getRequest();</span>
+<span class="nc" id="L408">		account = (Account) finSanctionResend.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L409">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSIN_SANCTION_RESEND&quot;, account,</span>
+<span class="nc" id="L410">				finSanctionResend.getFundsInId(), null, createdBy);</span>
+<span class="nc" id="L411">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds in CC resend.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsInCCResend(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L433">		FundsInCreateRequest finCustomCheckResend = (FundsInCreateRequest) message.getPayload()</span>
+<span class="nc" id="L434">				.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L435">		account = (Account) finCustomCheckResend.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L436">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSIN_CUSTOMCHECK_RESEND&quot;, account,</span>
+<span class="nc" id="L437">				finCustomCheckResend.getFundsInId(), null, createdBy);</span>
+<span class="nc" id="L438">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds out CC resend.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsOutCCResend(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L460">		FundsOutRequest fCustomCheckResend = (FundsOutRequest) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L461">				.getRequest();</span>
+<span class="nc" id="L462">		account = (Account) fCustomCheckResend.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L463">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSOUT_CUSTOMCHECK_RESEND&quot;, account, null,</span>
+<span class="nc" id="L464">				fCustomCheckResend.getFundsOutId(), createdBy);</span>
+<span class="nc" id="L465">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds out CC resend.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsOutFraugsterResend(Message&lt;MessageContext&gt; message, Connection connection,
+			String orgCode, Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L487">		FundsOutFruagsterResendRequest ffResend = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L488">				.getRequest(FundsOutFruagsterResendRequest.class);</span>
+<span class="nc" id="L489">		FundsOutRequest fRequest = (FundsOutRequest) ffResend.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+<span class="nc" id="L490">		account = (Account) fRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L491">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSOUT_FRAUGSTER_RESEND&quot;, account, null,</span>
+<span class="nc" id="L492">				fRequest.getFundsOutId(), createdBy);</span>
+<span class="nc" id="L493">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds out sanction resend.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsOutSanctionResend(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L515">		FundsOutRequest sanctionResendfundsOutRequest = (FundsOutRequest) message.getPayload()</span>
+<span class="nc" id="L516">				.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L517">		account = (Account) sanctionResendfundsOutRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L518">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSOUT_SANCTION_RESEND&quot;, account, null,</span>
+<span class="nc" id="L519">				sanctionResendfundsOutRequest.getFundsOutId(), createdBy);</span>
+<span class="nc" id="L520">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds out delete.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsOutDelete(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L542">		FundsOutDeleteRequest fDeleteRequest = (FundsOutDeleteRequest) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L543">				.getRequest();</span>
+<span class="nc" id="L544">		account = (Account) fDeleteRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L545">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSOUT_DELETE&quot;, account, null, fDeleteRequest.getFundsOutId(),</span>
+				createdBy);
+<span class="nc" id="L547">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds out update.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsOutUpdate(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L569">		FundsOutUpdateRequest fUpdateRequest = (FundsOutUpdateRequest) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L570">				.getRequest();</span>
+<span class="nc" id="L571">		account = (Account) fUpdateRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L572">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSOUT_UPDATE&quot;, account, null, fUpdateRequest.getFundsOutId(),</span>
+				createdBy);
+<span class="nc" id="L574">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds out create.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsOutCreate(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L596">		FundsOutRequest fundsOutRequest = (FundsOutRequest) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L597">				.getRequest();</span>
+<span class="nc" id="L598">		account = (Account) fundsOutRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L599">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSOUT_CREATE&quot;, account, null, fundsOutRequest.getFundsOutId(),</span>
+				createdBy);
+<span class="nc" id="L601">		return eventId;</span>
+	}
+
+	/**
+	 * Handle profile events.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param dbEventName
+	 *            the db event name
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleProfileEvents(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			String dbEventName, Integer createdBy) throws ComplianceException {
+		Integer eventId;
+<span class="fc" id="L624">		RegistrationServiceRequest request = message.getPayload().getGatewayMessageExchange()</span>
+<span class="fc" id="L625">				.getRequest(RegistrationServiceRequest.class);</span>
+<span class="fc" id="L626">		eventId = saveIntoEvent(connection, orgCode, dbEventName, request.getAccount(), null, null, createdBy);</span>
+<span class="fc" id="L627">		return eventId;</span>
+	}
+
+	/**
+	 * Save into event.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param eventType
+	 *            the event type
+	 * @param account
+	 *            the account
+	 * @param paymentInID
+	 *            the payment in ID
+	 * @param paymentOutID
+	 *            the payment out ID
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer saveIntoEvent(Connection connection, String orgCode, String eventType, Account account,
+			Integer paymentInID, Integer paymentOutID, Integer createdBy) throws ComplianceException {
+<span class="fc" id="L653">		ResultSet rs = null;</span>
+<span class="fc" id="L654">		try (PreparedStatement statement = connection.prepareStatement(</span>
+<span class="fc" id="L655">				DBQueryConstant.INSERT_INTO_EVENT_REGISTRATION.getQuery(), Statement.RETURN_GENERATED_KEYS)) {</span>
+<span class="fc" id="L656">			statement.setString(1, orgCode);</span>
+<span class="fc" id="L657">			statement.setString(2, eventType);</span>
+<span class="pc bpc" id="L658" title="1 of 2 branches missed.">			if (null == account.getId())</span>
+<span class="fc" id="L659">				statement.setNull(3, java.sql.Types.INTEGER);</span>
+			else
+<span class="nc" id="L661">				statement.setInt(3, account.getId());</span>
+
+<span class="pc bpc" id="L663" title="1 of 2 branches missed.">			if (null == account.getVersion())</span>
+<span class="nc" id="L664">				statement.setNull(4, java.sql.Types.INTEGER);</span>
+			else
+<span class="fc" id="L666">				statement.setInt(4, account.getVersion());</span>
+
+<span class="pc bpc" id="L668" title="1 of 2 branches missed.">			if (null == paymentInID)</span>
+<span class="fc" id="L669">				statement.setNull(5, java.sql.Types.INTEGER);</span>
+			else
+<span class="nc" id="L671">				statement.setInt(5, paymentInID);</span>
+
+<span class="pc bpc" id="L673" title="1 of 2 branches missed.">			if (null == paymentOutID)</span>
+<span class="fc" id="L674">				statement.setNull(6, java.sql.Types.INTEGER);</span>
+			else
+<span class="nc" id="L676">				statement.setInt(6, paymentOutID);</span>
+<span class="fc" id="L677">			statement.setInt(7, createdBy);</span>
+<span class="fc" id="L678">			statement.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L679">			statement.executeUpdate();</span>
+<span class="fc" id="L680">			rs = statement.getGeneratedKeys();</span>
+<span class="pc bpc" id="L681" title="1 of 2 branches missed.">			if (rs.next()) {</span>
+<span class="fc" id="L682">				return rs.getInt(1);</span>
+
+			}
+<span class="nc" id="L685">		} catch (Exception e) {</span>
+<span class="nc" id="L686">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L688">			closeResultset(rs);</span>
+		}
+<span class="nc" id="L690">		return null;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * updateEvent(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; updateEvent(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L702">		ServiceInterfaceType eventType = message.getPayload().getGatewayMessageExchange().getServiceInterface();</span>
+<span class="nc bnc" id="L703" title="All 2 branches missed.">		if (ServiceInterfaceType.PROFILE.compareTo(eventType) == 0) {</span>
+<span class="nc" id="L704">			udpateIntoRegistrationEvent(message);</span>
+		}
+<span class="nc" id="L706">		return message;</span>
+	}
+
+	/**
+	 * Udpate into registration event.
+	 *
+	 * @param message
+	 *            the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void udpateIntoRegistrationEvent(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L718">		Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L719">				.getAdditionalAttribute(&quot;eventId&quot;);</span>
+<span class="nc" id="L720">		PreparedStatement statement = null;</span>
+<span class="nc" id="L721">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L723">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L724">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_EVENT_REGISTRATION.getQuery());</span>
+<span class="nc" id="L725">			beginTransaction(connection);</span>
+<span class="nc" id="L726">			String status = &quot;SUCCESS&quot;;</span>
+<span class="nc" id="L727">			String summary = &quot;{\&quot;KYC\&quot;:\&quot;PASS\&quot;,\&quot;BLACKLIST\&quot;:\&quot;PASS\&quot;}&quot;;</span>
+<span class="nc" id="L728">			statement.setString(1, status);</span>
+<span class="nc" id="L729">			statement.setString(2, summary);</span>
+<span class="nc" id="L730">			statement.setInt(3, eventId);</span>
+<span class="nc" id="L731">			statement.executeUpdate();</span>
+<span class="nc" id="L732">			commitTransaction(connection);</span>
+<span class="nc" id="L733">		} catch (Exception e) {</span>
+<span class="nc" id="L734">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L736">			closePrepareStatement(statement);</span>
+<span class="nc" id="L737">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L740">	}</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * createEventSerivceLog(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; createEventSerivceLog(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="fc" id="L753">			List&lt;EventServiceLog&gt; eventServiceLogs = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="fc" id="L754">			OperationEnum operation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+
+<span class="fc bfc" id="L756" title="All 2 branches covered.">			for (MessageExchangeWrapper exchange : message.getPayload().getMessageCollection()) {</span>
+<span class="pc bpc" id="L757" title="3 of 8 branches missed.">				switch (exchange.getMessageExchange().getServiceTypeEnum()) {</span>
+				case KYC_SERVICE:
+<span class="fc" id="L759">					eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.KYC_SERVICE));</span>
+<span class="fc" id="L760">					break;</span>
+				case INTERNAL_RULE_SERVICE:
+<span class="fc" id="L762">					eventServiceLogs</span>
+<span class="fc" id="L763">							.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.INTERNAL_RULE_SERVICE));</span>
+<span class="fc" id="L764">					break;</span>
+				case FRAUGSTER_SERVICE:
+<span class="fc" id="L766">					eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.FRAUGSTER_SERVICE));</span>
+<span class="fc" id="L767">					break;</span>
+				case SANCTION_SERVICE:
+<span class="fc" id="L769">					eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.SANCTION_SERVICE));</span>
+<span class="fc" id="L770">					break;</span>
+				case CUSTOM_CHECKS_SERVICE:
+<span class="nc" id="L772">					eventServiceLogs</span>
+<span class="nc" id="L773">							.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.CUSTOM_CHECKS_SERVICE));</span>
+<span class="nc" id="L774">					break;</span>
+				//Add for AT-3995
+				case TRANSACTION_MONITORING_SERVICE:
+<span class="nc" id="L777">					eventServiceLogs</span>
+<span class="nc" id="L778">							.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE));</span>
+<span class="nc" id="L779">					break;</span>
+				case TRANSACTION_MONITORING_MQ_RESEND:
+<span class="nc" id="L781">					eventServiceLogs</span>
+<span class="nc" id="L782">							.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND));</span>
+<span class="nc" id="L783">					break;</span>
+				default:
+					break;
+				}
+<span class="fc" id="L787">			}</span>
+
+<span class="pc bpc" id="L789" title="5 of 10 branches missed.">			if (OperationEnum.SANCTION_RESEND==operation || OperationEnum.KYC_RESEND==operation</span>
+					|| OperationEnum.FRAUGSTER_RESEND==operation
+					|| OperationEnum.BLACKLIST_RESEND==operation
+					|| OperationEnum.PAYMENT_REFERENCE_RESEND == operation) {
+<span class="nc" id="L793">				saveIntoEventServiceLogReturnsId(eventServiceLogs);</span>
+			} else {
+<span class="fc" id="L795">				saveIntoEventServiceLog(eventServiceLogs);</span>
+			}
+<span class="fc" id="L797">			saveIntoEventServiceLogSummary(eventServiceLogs);</span>
+<span class="nc" id="L798">		} catch (Exception e) {</span>
+<span class="nc" id="L799">			LOG.error(&quot;Error in EventDBServiceImpl createEventServiceLog()&quot;, e);</span>
+<span class="nc" id="L800">			message.getPayload().setFailed(true);</span>
+<span class="fc" id="L801">		}</span>
+<span class="fc" id="L802">		return message;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * createUpdateEventSerivceLog(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; createUpdateEventSerivceLog(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L816">			List&lt;EventServiceLog&gt; eventServiceLogs = new CopyOnWriteArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L818" title="All 2 branches missed.">			for (MessageExchangeWrapper exchange : message.getPayload().getMessageCollection()) {</span>
+<span class="nc bnc" id="L819" title="All 7 branches missed.">				switch (exchange.getMessageExchange().getServiceTypeEnum()) {</span>
+				case KYC_SERVICE:
+<span class="nc" id="L821">					eventServiceLogs.addAll(</span>
+<span class="nc" id="L822">							getEventServiceWithoutNotRequiredLogsByService(message, ServiceTypeEnum.KYC_SERVICE));</span>
+<span class="nc" id="L823">					break;</span>
+				case INTERNAL_RULE_SERVICE:
+<span class="nc" id="L825">					eventServiceLogs</span>
+<span class="nc" id="L826">							.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.INTERNAL_RULE_SERVICE));</span>
+<span class="nc" id="L827">					break;</span>
+				case FRAUGSTER_SERVICE:
+<span class="nc" id="L829">					eventServiceLogs.addAll(</span>
+<span class="nc" id="L830">							getEventServiceWithoutNotRequiredLogsByService(message, ServiceTypeEnum.FRAUGSTER_SERVICE));</span>
+<span class="nc" id="L831">					break;</span>
+				case SANCTION_SERVICE:
+<span class="nc" id="L833">					eventServiceLogs.addAll(</span>
+<span class="nc" id="L834">							getEventServiceWithoutNotRequiredLogsByService(message, ServiceTypeEnum.SANCTION_SERVICE));</span>
+<span class="nc" id="L835">					break;</span>
+				case CUSTOM_CHECKS_SERVICE:
+<span class="nc" id="L837">					eventServiceLogs</span>
+<span class="nc" id="L838">							.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.CUSTOM_CHECKS_SERVICE));</span>
+<span class="nc" id="L839">					break;</span>
+				//Added for AT-4014
+				case TRANSACTION_MONITORING_UPDATE_SERVICE:
+<span class="nc" id="L842">					eventServiceLogs</span>
+<span class="nc" id="L843">							.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.TRANSACTION_MONITORING_UPDATE_SERVICE));</span>
+<span class="nc" id="L844">					break;</span>
+				default:
+					break;
+				}
+<span class="nc" id="L848">			}</span>
+<span class="nc" id="L849">			saveIntoEventServiceLog(eventServiceLogs);</span>
+<span class="nc" id="L850">			saveIntoEventServiceLogSummary(eventServiceLogs);</span>
+<span class="nc" id="L851">		} catch (Exception e) {</span>
+<span class="nc" id="L852">			LOG.error(&quot;Error in EventDBServiceImpl reateEventServiceLog()&quot;, e);</span>
+<span class="nc" id="L853">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L854">		}</span>
+<span class="nc" id="L855">		return message;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * updateEventSerivceLog(org.springframework.messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; updateEventSerivceLog(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L867">		List&lt;EventServiceLog&gt; eventServiceLogs = new CopyOnWriteArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L869" title="All 2 branches missed.">		for (MessageExchangeWrapper exchange : message.getPayload().getMessageCollection()) {</span>
+<span class="nc" id="L870">			eventServiceLogs.addAll(exchange.getMessageExchange().getEventServiceLogAsList());</span>
+<span class="nc" id="L871">		}</span>
+<span class="nc" id="L872">		updateEvent(eventServiceLogs);</span>
+<span class="nc" id="L873">		return message;</span>
+	}
+
+	/**
+	 * Update event.
+	 *
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void updateEvent(List&lt;EventServiceLog&gt; eventServiceLogs) throws ComplianceException {
+<span class="nc" id="L886">		Connection connection = null;</span>
+<span class="nc" id="L887">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L889">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L890">			statement = connection</span>
+<span class="nc" id="L891">					.prepareStatement(DBQueryConstant.UPDATE_EVENT_BY_EVENT_SERVICE_ID_AND_SERVICE_TYPE.getQuery());</span>
+<span class="nc" id="L892">			beginTransaction(connection);</span>
+<span class="nc" id="L893">			LOG.debug(&quot;::::::::::::::: updateEvent : {}&quot;, eventServiceLogs);</span>
+<span class="nc bnc" id="L894" title="All 2 branches missed.">			for (EventServiceLog eventServiceLog : eventServiceLogs) {</span>
+<span class="nc" id="L895">				statement.setString(1, &quot;&quot; + eventServiceLog.getProviderResponse());</span>
+<span class="nc" id="L896">				statement.setInt(2, ServiceStatus.getStatusAsInteger(eventServiceLog.getStatus()));</span>
+<span class="nc" id="L897">				statement.setString(3, &quot;&quot; + eventServiceLog.getSummary());</span>
+<span class="nc" id="L898">				statement.setInt(4, eventServiceLog.getUpdatedBy());</span>
+<span class="nc" id="L899">				statement.setTimestamp(5, eventServiceLog.getUpdatedOn());</span>
+<span class="nc" id="L900">				statement.setInt(6, eventServiceLog.getEventServiceLogId());</span>
+<span class="nc" id="L901">				statement.setString(7, eventServiceLog.getServiceName());</span>
+<span class="nc" id="L902">				statement.addBatch();</span>
+<span class="nc" id="L903">			}</span>
+<span class="nc" id="L904">			int[] count = statement.executeBatch();</span>
+<span class="nc bnc" id="L905" title="All 2 branches missed.">			for (int c : count) {</span>
+<span class="nc bnc" id="L906" title="All 2 branches missed.">				if (c == 0) {</span>
+<span class="nc" id="L907">					throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR,</span>
+							new Exception(&quot;Fail to update EventServiceLog&quot;));
+				}
+			}
+<span class="nc" id="L911">			statement.close();</span>
+<span class="nc" id="L912">			commitTransaction(connection);</span>
+<span class="nc" id="L913">		} catch (Exception e) {</span>
+<span class="nc" id="L914">			transactionRolledBack(connection);</span>
+<span class="nc" id="L915">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L917">			closePrepareStatement(statement);</span>
+<span class="nc" id="L918">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L920">	}</span>
+
+	/**
+	 * Save into event service log.
+	 *
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void saveIntoEventServiceLog(List&lt;EventServiceLog&gt; eventServiceLogs) throws ComplianceException {
+
+<span class="fc" id="L932">		Connection connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L933">		try (PreparedStatement eslStmt = connection</span>
+<span class="fc" id="L934">				.prepareStatement(DBQueryConstant.INSERT_INTO_EVENT_SERVICE_LOG.getQuery())) {</span>
+<span class="fc" id="L935">			beginTransaction(connection);</span>
+<span class="fc" id="L936">			LOG.debug(&quot;::::::::::::::: saveIntoEventServiceLog : {}&quot;, eventServiceLogs);</span>
+<span class="fc bfc" id="L937" title="All 2 branches covered.">			for (EventServiceLog oneEventLog : eventServiceLogs) {</span>
+
+<span class="fc bfc" id="L939" title="All 2 branches covered.">				if (!StringUtils.isNullOrTrimEmpty(oneEventLog.getEntityType())</span>
+<span class="pc bpc" id="L940" title="1 of 2 branches missed.">						&amp;&amp; !StringUtils.isNullOrTrimEmpty(oneEventLog.getServiceName())</span>
+<span class="pc bpc" id="L941" title="1 of 2 branches missed.">						&amp;&amp; !StringUtils.isNullOrTrimEmpty(oneEventLog.getStatus())</span>
+<span class="pc bpc" id="L942" title="1 of 2 branches missed.">						&amp;&amp; !StringUtils.isNullOrTrimEmpty(oneEventLog.getServiceProviderName())) {</span>
+
+<span class="fc" id="L944">					setValuesToEventLog(eslStmt, oneEventLog);</span>
+				}
+<span class="fc" id="L946">			}</span>
+<span class="fc" id="L947">			eslStmt.executeBatch();</span>
+<span class="fc" id="L948">			commitTransaction(connection);</span>
+<span class="nc" id="L949">		} catch (Exception e) {</span>
+
+<span class="nc" id="L951">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L953">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L955">	}</span>
+
+	/**
+	 * Sets the values to event log.
+	 *
+	 * @param eslStmt
+	 *            the esl stmt
+	 * @param oneEventLog
+	 *            the one event log
+	 * @throws SQLException
+	 *             the SQL exception
+	 */
+	private void setValuesToEventLog(PreparedStatement eslStmt, EventServiceLog oneEventLog) throws SQLException {
+<span class="fc" id="L968">		eslStmt.setInt(1, oneEventLog.getEventId());</span>
+<span class="fc" id="L969">		eslStmt.setInt(2, EntityEnum.getEntityTypeAsInteger(oneEventLog.getEntityType()));</span>
+<span class="pc bpc" id="L970" title="1 of 2 branches missed.">		if (oneEventLog.getEntityId() != null)</span>
+<span class="fc" id="L971">			eslStmt.setInt(3, oneEventLog.getEntityId());</span>
+		else
+<span class="nc" id="L973">			eslStmt.setNull(3, Types.INTEGER);</span>
+<span class="pc bpc" id="L974" title="1 of 2 branches missed.">		if (oneEventLog.getEntityVersion() != null)</span>
+<span class="fc" id="L975">			eslStmt.setInt(4, oneEventLog.getEntityVersion());</span>
+		else
+<span class="nc" id="L977">			eslStmt.setNull(4, Types.INTEGER);</span>
+<span class="fc" id="L978">		eslStmt.setString(5, oneEventLog.getServiceProviderName());</span>
+<span class="fc" id="L979">		eslStmt.setString(6, oneEventLog.getServiceName());</span>
+<span class="fc" id="L980">		eslStmt.setString(7, &quot;&quot; + oneEventLog.getProviderResponse());</span>
+<span class="fc" id="L981">		eslStmt.setInt(8, ServiceStatus.getStatusAsInteger(oneEventLog.getStatus()));</span>
+<span class="fc" id="L982">		eslStmt.setString(9, &quot;&quot; + oneEventLog.getSummary());</span>
+<span class="fc" id="L983">		eslStmt.setInt(10, oneEventLog.getCratedBy());</span>
+<span class="fc" id="L984">		eslStmt.setTimestamp(11, oneEventLog.getCreatedOn());</span>
+<span class="fc" id="L985">		eslStmt.setInt(12, oneEventLog.getUpdatedBy());</span>
+<span class="fc" id="L986">		eslStmt.setTimestamp(13, oneEventLog.getUpdatedOn());</span>
+<span class="fc" id="L987">		eslStmt.addBatch();</span>
+<span class="fc" id="L988">	}</span>
+
+	/**
+	 * Gets the event service logs by service.
+	 *
+	 * @param message
+	 *            the message
+	 * @param service
+	 *            the service
+	 * @return the event service logs by service
+	 */
+	private Collection&lt;EventServiceLog&gt; getEventServiceLogsByService(Message&lt;MessageContext&gt; message,
+			ServiceTypeEnum service) {
+<span class="fc" id="L1001">		return message.getPayload().getMessageExchange(service).getEventServiceLogAsList();</span>
+	}
+
+	/**
+	 * Gets the event service without not required logs by service.
+	 *
+	 * @param message
+	 *            the message
+	 * @param service
+	 *            the service
+	 * @return the event service without not required logs by service
+	 */
+	private Collection&lt;EventServiceLog&gt; getEventServiceWithoutNotRequiredLogsByService(Message&lt;MessageContext&gt; message,
+			ServiceTypeEnum service) {
+<span class="nc" id="L1015">		ArrayList&lt;EventServiceLog&gt; eventSeriveLogs = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1016">		Collection&lt;EventServiceLog&gt; eventServiceLogs = message.getPayload().getMessageExchange(service)</span>
+<span class="nc" id="L1017">				.getEventServiceLogAsList();</span>
+<span class="nc bnc" id="L1018" title="All 2 branches missed.">		for (EventServiceLog eventLog : eventServiceLogs) {</span>
+<span class="nc bnc" id="L1019" title="All 2 branches missed.">			if (!ServiceStatus.NOT_REQUIRED.name().equals(eventLog.getStatus())) {</span>
+<span class="nc" id="L1020">				eventSeriveLogs.add(eventLog);</span>
+			}
+<span class="nc" id="L1022">		}</span>
+<span class="nc" id="L1023">		return eventSeriveLogs;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * getEventSerivceLog(java.util.List, java.lang.String, java.lang.Integer)
+	 */
+	@Override
+	public Map&lt;String, EventServiceLog&gt; getEventSerivceLog(List&lt;Integer&gt; eventIds, String serviceName,
+			Integer contactId) throws ComplianceException {
+<span class="nc" id="L1036">		String eventIdsStr = eventIds.toString();</span>
+<span class="nc" id="L1037">		eventIdsStr = eventIdsStr.substring(1, eventIdsStr.length() - 1).replace(&quot;, &quot;, &quot;,&quot;);</span>
+<span class="nc" id="L1038">		String query = DBQueryConstant.GET_EVENT_LOGS_BY_EVENT_IDS_AND_SERVICE_TYPE.getQuery().replace(&quot;{EVENT_IDS}&quot;,</span>
+				eventIdsStr);
+<span class="nc" id="L1040">		Map&lt;String, EventServiceLog&gt; mapOfEventLogByEventId = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L1041">		Connection connection = null;</span>
+<span class="nc" id="L1042">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L1043">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L1045">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1046">			preparedStatement = connection.prepareStatement(query);</span>
+<span class="nc" id="L1047">			preparedStatement.setInt(1, contactId);</span>
+<span class="nc" id="L1048">			preparedStatement.setString(2, serviceName);</span>
+<span class="nc" id="L1049">			rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L1050" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L1051">				EventServiceLog eventServiceLog = new EventServiceLog();</span>
+<span class="nc" id="L1052">				eventServiceLog.setEventId(rs.getInt(Constants.FIELD_EVENTID));</span>
+<span class="nc" id="L1053">				eventServiceLog.setEntityId(rs.getInt(Constants.ENTITY_ID));</span>
+<span class="nc" id="L1054">				eventServiceLog.setServiceName(serviceName);</span>
+<span class="nc" id="L1055">				eventServiceLog.setProviderResponse(rs.getNString(Constants.PROVIDER_RESPONSE));</span>
+<span class="nc" id="L1056">				eventServiceLog.setStatus(rs.getNString(Constants.STATUS));</span>
+<span class="nc" id="L1057">				eventServiceLog.setSummary(rs.getNString(Constants.SUMMARY));</span>
+<span class="nc" id="L1058">				eventServiceLog.setCratedBy(rs.getInt(Constants.CREATED_BY));</span>
+<span class="nc" id="L1059">				eventServiceLog.setUpdatedBy(rs.getInt(Constants.UPDATED_BY));</span>
+<span class="nc" id="L1060">				eventServiceLog.setUpdatedOn(rs.getTimestamp(Constants.UPDATED_ON));</span>
+<span class="nc" id="L1061">				eventServiceLog.setCreatedOn(rs.getTimestamp(Constants.CREATED_ON));</span>
+<span class="nc" id="L1062">				mapOfEventLogByEventId.put(&quot;&quot; + eventServiceLog.getEventId(), eventServiceLog);</span>
+<span class="nc" id="L1063">			}</span>
+<span class="nc" id="L1064">		} catch (Exception e) {</span>
+<span class="nc" id="L1065">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1067">			closeResultset(rs);</span>
+<span class="nc" id="L1068">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L1069">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L1072">		return mapOfEventLogByEventId;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * isEventExistByDBId(java.lang.Integer)
+	 */
+	@Override
+	public Boolean isEventExistByDBId(Integer eventId) throws ComplianceException {
+<span class="nc" id="L1084">		Connection conn = null;</span>
+<span class="nc" id="L1085">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1086">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L1088">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1089">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_EVENT_BY_ID.getQuery());</span>
+<span class="nc" id="L1090">			preparedStatment.setInt(1, eventId);</span>
+<span class="nc" id="L1091">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1092" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L1093">				return Boolean.TRUE;</span>
+			}
+
+<span class="nc" id="L1096">		} catch (Exception e) {</span>
+<span class="nc" id="L1097">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1099">			closeResultset(rs);</span>
+<span class="nc" id="L1100">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1101">			closeConnection(conn);</span>
+
+		}
+<span class="nc" id="L1104">		return Boolean.FALSE;</span>
+	}
+
+	/**
+	 * Purpose : When user is performing repeat check for SANCTION then there
+	 * must be atleast one record available previously. We need the status of
+	 * such records to decide which method (SLLookupMulti or SLGetStatus) should
+	 * be called by provider for repeat check. 1) This method will give the
+	 * previous details of Sanction check. 2) Depending upon those statuses we
+	 * decide which method should get call.
+	 * 
+	 * This method is called at the time of - PFX Registration SANCTION repeat
+	 * check - CFX Registration SANCTION repeat check (for account and contact)
+	 * - Funds out SANCTION repeat check (PFX / CFX) - Funds in SANCTION repeat
+	 * check (PFX / CFX)
+	 *
+	 * @param entityId
+	 *            the entity id
+	 * @param entityType
+	 *            the entity type
+	 * @return the previous sanction details
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+
+	@Override
+	public EntityDetails getPreviousSanctionDetails(Integer entityId, String entityType) throws ComplianceException {
+
+<span class="nc" id="L1132">		EntityDetails entityDetails = new EntityDetails();</span>
+<span class="nc" id="L1133">		Connection conn = null;</span>
+<span class="nc" id="L1134">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1135">		String status = null;</span>
+<span class="nc" id="L1136">		String summary = null;</span>
+<span class="nc" id="L1137">		ResultSet rs = null;</span>
+<span class="nc" id="L1138">		int count = 0;</span>
+<span class="nc" id="L1139">		int failcount = 0;</span>
+<span class="nc" id="L1140">		int passcount = 0;</span>
+		String providerResponse;
+<span class="nc" id="L1142">		List&lt;String&gt; providerResponseList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L1145">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1146">			preparedStatment = conn</span>
+<span class="nc" id="L1147">					.prepareStatement(DBQueryConstant.GET_PREVIOUS_SANCTION_DETAILS_BY_ENTITY_ID.getQuery());</span>
+<span class="nc" id="L1148">			preparedStatment.setString(1, &quot;&quot; + entityId);</span>
+<span class="nc" id="L1149">			preparedStatment.setInt(2, EntityEnum.getEntityTypeAsInteger(entityType));</span>
+<span class="nc" id="L1150">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L1152" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L1153">				providerResponse = rs.getString(Constants.PROVIDER_RESPONSE);</span>
+<span class="nc" id="L1154">				providerResponseList.add(providerResponse);</span>
+<span class="nc bnc" id="L1155" title="All 2 branches missed.">				if (count == 0) {</span>
+<span class="nc" id="L1156">					status = ServiceStatus.getStatusAsString(rs.getInt(Constants.STATUS));</span>
+<span class="nc" id="L1157">					summary = rs.getString(Constants.SUMMARY);</span>
+<span class="nc" id="L1158">					entityDetails.setPrevStatus(status);</span>
+<span class="nc" id="L1159">					entityDetails.setSummary(summary);</span>
+<span class="nc" id="L1160">					count++;</span>
+				}
+			}
+<span class="nc" id="L1163">			setProviderResponseInEntity(entityDetails, providerResponseList);</span>
+
+<span class="nc" id="L1165">			entityDetails.setEntityId(entityId);</span>
+<span class="nc" id="L1166">			entityDetails.setEntityType(entityType);</span>
+
+<span class="nc bnc" id="L1168" title="All 2 branches missed.">			for (String currentProviderResponse : providerResponseList) {</span>
+<span class="nc bnc" id="L1169" title="All 2 branches missed.">				if (currentProviderResponse.contains(ServiceStatus.NOT_PERFORMED.name())</span>
+<span class="nc bnc" id="L1170" title="All 2 branches missed.">						|| currentProviderResponse.contains(ServiceStatus.NOT_REQUIRED.name())</span>
+<span class="nc bnc" id="L1171" title="All 2 branches missed.">						|| currentProviderResponse.contains(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L1172">					failcount++;</span>
+				} else {
+<span class="nc" id="L1174">					passcount++;</span>
+				}
+<span class="nc" id="L1176">			}</span>
+<span class="nc" id="L1177">			checkEntityAlreadyExists(entityDetails, failcount, passcount);</span>
+
+<span class="nc" id="L1179">		} catch (Exception e) {</span>
+<span class="nc" id="L1180">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1182">			closeResultset(rs);</span>
+<span class="nc" id="L1183">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1184">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1186">		return entityDetails;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * getPreviousFraugsterDetails(java.lang.Integer, java.lang.String)
+	 */
+	@Override
+	public EntityDetails getPreviousFraugsterDetails(Integer entityId, String entityType) throws ComplianceException {
+
+<span class="nc" id="L1199">		EntityDetails entityDetails = new EntityDetails();</span>
+<span class="nc" id="L1200">		Connection conn = null;</span>
+<span class="nc" id="L1201">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1202">		String status = null;</span>
+<span class="nc" id="L1203">		String summary = null;</span>
+<span class="nc" id="L1204">		ResultSet rs = null;</span>
+<span class="nc" id="L1205">		int count = 0;</span>
+<span class="nc" id="L1206">		int failcount = 0;</span>
+<span class="nc" id="L1207">		int passcount = 0;</span>
+		String providerResponse;
+<span class="nc" id="L1209">		List&lt;String&gt; providerResponseList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L1212">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1213">			preparedStatment = conn</span>
+<span class="nc" id="L1214">					.prepareStatement(DBQueryConstant.GET_PREVIOUS_FRAUGSTER_DETAILS_BY_ENTITY_ID.getQuery());</span>
+<span class="nc" id="L1215">			preparedStatment.setString(1, &quot;&quot; + entityId);</span>
+<span class="nc" id="L1216">			preparedStatment.setInt(2, EntityEnum.getEntityTypeAsInteger(entityType));</span>
+<span class="nc" id="L1217">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L1219" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L1220">				providerResponse = rs.getString(Constants.PROVIDER_RESPONSE);</span>
+<span class="nc" id="L1221">				providerResponseList.add(providerResponse);</span>
+<span class="nc bnc" id="L1222" title="All 2 branches missed.">				if (count == 0) {</span>
+<span class="nc" id="L1223">					status = ServiceStatus.getStatusAsString(rs.getInt(Constants.STATUS));</span>
+<span class="nc" id="L1224">					summary = rs.getString(Constants.SUMMARY);</span>
+<span class="nc" id="L1225">					entityDetails.setPrevStatus(status);</span>
+<span class="nc" id="L1226">					entityDetails.setSummary(summary);</span>
+<span class="nc" id="L1227">					count++;</span>
+				}
+			}
+<span class="nc" id="L1230">			setProviderResponseInEntity(entityDetails, providerResponseList);</span>
+
+<span class="nc" id="L1232">			entityDetails.setEntityId(entityId);</span>
+<span class="nc" id="L1233">			entityDetails.setEntityType(entityType);</span>
+
+<span class="nc bnc" id="L1235" title="All 2 branches missed.">			for (String currentProviderResponse : providerResponseList) {</span>
+<span class="nc bnc" id="L1236" title="All 2 branches missed.">				if (currentProviderResponse.contains(ServiceStatus.NOT_PERFORMED.name())</span>
+<span class="nc bnc" id="L1237" title="All 2 branches missed.">						|| currentProviderResponse.contains(ServiceStatus.NOT_REQUIRED.name())</span>
+<span class="nc bnc" id="L1238" title="All 2 branches missed.">						|| currentProviderResponse.contains(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L1239">					failcount++;</span>
+				} else {
+<span class="nc" id="L1241">					passcount++;</span>
+				}
+<span class="nc" id="L1243">			}</span>
+<span class="nc" id="L1244">			checkEntityAlreadyExists(entityDetails, failcount, passcount);</span>
+
+<span class="nc" id="L1246">		} catch (Exception e) {</span>
+<span class="nc" id="L1247">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1249">			closeResultset(rs);</span>
+<span class="nc" id="L1250">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1251">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1253">		return entityDetails;</span>
+	}
+
+	/**
+	 * Sets the provider response in entity.
+	 *
+	 * @param entityDetails
+	 *            the entity details
+	 * @param providerResponseList
+	 *            the provider response list
+	 */
+	private void setProviderResponseInEntity(EntityDetails entityDetails, List&lt;String&gt; providerResponseList) {
+		String providerResponse;
+<span class="nc bnc" id="L1266" title="All 2 branches missed.">		if (null != providerResponseList) {</span>
+<span class="nc bnc" id="L1267" title="All 2 branches missed.">			if (!providerResponseList.isEmpty()) {</span>
+<span class="nc" id="L1268">				entityDetails.setProviderResponse(providerResponseList.get(0));</span>
+			} else {
+<span class="nc" id="L1270">				providerResponse = ServiceStatus.NOT_PERFORMED.name();</span>
+<span class="nc" id="L1271">				providerResponseList.add(providerResponse);</span>
+<span class="nc" id="L1272">				entityDetails.setPrevStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L1273">				entityDetails.setProviderResponse(providerResponseList.get(0));</span>
+			}
+		}
+<span class="nc" id="L1276">	}</span>
+
+	/**
+	 * Check entity already exists.
+	 *
+	 * @param entityDetails
+	 *            the entity details
+	 * @param failcount
+	 *            the failcount
+	 * @param passcount
+	 *            the passcount
+	 */
+	private void checkEntityAlreadyExists(EntityDetails entityDetails, int failcount, int passcount) {
+<span class="nc bnc" id="L1289" title="All 2 branches missed.">		if (passcount &gt; 0)</span>
+<span class="nc" id="L1290">			entityDetails.setIsExist(Boolean.TRUE);</span>
+<span class="nc bnc" id="L1291" title="All 2 branches missed.">		else if (failcount &gt; 0)</span>
+<span class="nc" id="L1292">			entityDetails.setIsExist(Boolean.FALSE);</span>
+<span class="nc" id="L1293">	}</span>
+
+	/**
+	 * This method is called to save details of previously performed KYC check
+	 * for any contact. (Status, provider response, summary, contact name etc.
+	 * fetched from recent KYC check )
+	 *
+	 * @param entityId
+	 *            the entity id
+	 * @param entityType
+	 *            the entity type
+	 * @return the entity details
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@Override
+	public EntityDetails isKycServicePerformed(Integer entityId, String entityType) throws ComplianceException {
+
+<span class="nc" id="L1311">		EntityDetails entityDetails = new EntityDetails();</span>
+<span class="nc" id="L1312">		Connection conn = null;</span>
+<span class="nc" id="L1313">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1314">		String status = null;</span>
+<span class="nc" id="L1315">		String providerResponse = null;</span>
+<span class="nc" id="L1316">		String summary = null;</span>
+<span class="nc" id="L1317">		ResultSet rs = null;</span>
+
+		try {
+<span class="nc" id="L1320">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1321">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_KYC_SERVICE_STATUS_BY_ENTITY_ID.getQuery());</span>
+<span class="nc" id="L1322">			preparedStatment.setString(1, &quot;&quot; + entityId);</span>
+<span class="nc" id="L1323">			preparedStatment.setInt(2, EntityEnum.getEntityTypeAsInteger(entityType));</span>
+
+<span class="nc" id="L1325">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L1327" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L1328">				status = ServiceStatus.getStatusAsString(rs.getInt(Constants.STATUS));</span>
+<span class="nc" id="L1329">				providerResponse = rs.getString(Constants.PROVIDER_RESPONSE);</span>
+<span class="nc" id="L1330">				summary = rs.getString(Constants.SUMMARY);</span>
+<span class="nc" id="L1331">				entityDetails.setContactName(rs.getString(CONTACT_NAME2));</span>
+<span class="nc" id="L1332">				entityDetails.setPrevStatus(status.toLowerCase());</span>
+<span class="nc" id="L1333">				entityDetails.setProviderResponse(providerResponse);</span>
+<span class="nc" id="L1334">				entityDetails.setSummary(summary);</span>
+			}
+<span class="nc" id="L1336">			entityDetails.setEntityId(entityId);</span>
+<span class="nc" id="L1337">			entityDetails.setEntityType(entityType);</span>
+
+<span class="nc" id="L1339">		} catch (Exception e) {</span>
+<span class="nc" id="L1340">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1342">			closeResultset(rs);</span>
+<span class="nc" id="L1343">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1344">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1346">		return entityDetails;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * isEventServiceLogId(java.lang.Integer)
+	 */
+	@Override
+	public Boolean isEventServiceLogId(Integer eventServiceLogId) throws ComplianceException {
+
+<span class="nc" id="L1359">		Connection conn = null;</span>
+<span class="nc" id="L1360">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1361">		Integer id = null;</span>
+<span class="nc" id="L1362">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L1364">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1365">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_EVENT_SERVICE_LOG_ID.getQuery());</span>
+<span class="nc" id="L1366">			preparedStatment.setInt(1, eventServiceLogId);</span>
+<span class="nc" id="L1367">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1368" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L1369">				id = rs.getInt(&quot;ID&quot;);</span>
+			}
+<span class="nc bnc" id="L1371" title="All 4 branches missed.">			if (id != null &amp;&amp; id.equals(eventServiceLogId)) {</span>
+<span class="nc" id="L1372">				return Boolean.TRUE;</span>
+			}
+<span class="nc" id="L1374">		} catch (Exception e) {</span>
+<span class="nc" id="L1375">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1377">			closeResultset(rs);</span>
+<span class="nc" id="L1378">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1379">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1381">		return Boolean.FALSE;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * getEventSerivceLogById(java.lang.Integer)
+	 */
+	@Override
+	public Map&lt;String, EventServiceLog&gt; getEventSerivceLogById(Integer eventServiceLogId) throws ComplianceException {
+<span class="nc" id="L1393">		Map&lt;String, EventServiceLog&gt; mapOfEventLogByEventId = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L1394">		Connection connection = null;</span>
+<span class="nc" id="L1395">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L1396">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L1398">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1399">			preparedStatement = connection.prepareStatement(DBQueryConstant.GET_EVENT_SERVICE_LOG_ID.getQuery());</span>
+<span class="nc" id="L1400">			preparedStatement.setInt(1, eventServiceLogId);</span>
+<span class="nc" id="L1401">			rs = preparedStatement.executeQuery();</span>
+<span class="nc" id="L1402">			EventServiceLog eventServiceLog = new EventServiceLog();</span>
+<span class="nc" id="L1403">			eventServiceLog.setEventServiceLogId(eventServiceLogId);</span>
+<span class="nc" id="L1404">			eventServiceLog.setServiceName(serviceName);</span>
+<span class="nc bnc" id="L1405" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L1406">				eventServiceLog.setEventId(rs.getInt(EVENT_ID));</span>
+<span class="nc" id="L1407">				eventServiceLog.setEntityId(rs.getInt(ENTITYID));</span>
+
+<span class="nc" id="L1409">				eventServiceLog.setProviderResponse(rs.getNString(PROVIDER_RESPONSE));</span>
+<span class="nc" id="L1410">				eventServiceLog.setStatus(rs.getNString(STATUS));</span>
+<span class="nc" id="L1411">				eventServiceLog.setSummary(rs.getNString(SUMMARY));</span>
+<span class="nc" id="L1412">				eventServiceLog.setCratedBy(rs.getInt(CREATED_BY));</span>
+<span class="nc" id="L1413">				eventServiceLog.setUpdatedBy(rs.getInt(UPDATED_BY));</span>
+<span class="nc" id="L1414">				eventServiceLog.setUpdatedOn(rs.getTimestamp(UPDATED_ON));</span>
+<span class="nc" id="L1415">				eventServiceLog.setCreatedOn(rs.getTimestamp(CREATED_ON));</span>
+<span class="nc" id="L1416">				mapOfEventLogByEventId.put(&quot;&quot; + eventServiceLog.getEventServiceLogId(), eventServiceLog);</span>
+			}
+<span class="nc" id="L1418">		} catch (Exception e) {</span>
+<span class="nc" id="L1419">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1421">			closeResultset(rs);</span>
+<span class="nc" id="L1422">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L1423">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L1426">		return mapOfEventLogByEventId;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * getEventSerivceLogByIdAndService(java.lang.Integer, java.lang.String,
+	 * org.springframework.messaging.Message)
+	 */
+	@Override
+	public void getEventSerivceLogByIdAndService(Integer eventServiceLogId, String serviceName,
+			Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L1440">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1441">		Connection connection = null;</span>
+<span class="nc" id="L1442">		PreparedStatement preparedStmt = null;</span>
+<span class="nc" id="L1443">		EntityDetails entityDetails = null;</span>
+<span class="nc" id="L1444">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L1446">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1447">			preparedStmt = connection</span>
+<span class="nc" id="L1448">					.prepareStatement(DBQueryConstant.PROFILE_GET_EVENT_SERVICE_LOG_ID_AND_SERVICE.getQuery());</span>
+<span class="nc" id="L1449">			preparedStmt.setInt(1, eventServiceLogId);</span>
+<span class="nc" id="L1450">			preparedStmt.setString(2, serviceName);</span>
+<span class="nc" id="L1451">			rs = preparedStmt.executeQuery();</span>
+<span class="nc" id="L1452">			EventServiceLog eventLog = new EventServiceLog();</span>
+<span class="nc" id="L1453">			entityDetails = new EntityDetails();</span>
+<span class="nc" id="L1454">			eventLog.setEventServiceLogId(eventServiceLogId);</span>
+<span class="nc" id="L1455">			eventLog.setServiceName(serviceName);</span>
+<span class="nc bnc" id="L1456" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L1457">				eventLog.setEventId(rs.getInt(Constants.FIELD_EVENTID));</span>
+<span class="nc" id="L1458">				eventLog.setEntityId(rs.getInt(Constants.ENTITY_ID));</span>
+<span class="nc" id="L1459">				eventLog.setEntityType(EntityEnum.getEntityTypeAsString(rs.getInt(Constants.ENTITY_TYPE)));</span>
+
+<span class="nc" id="L1461">				eventLog.setProviderResponse(rs.getNString(Constants.PROVIDER_RESPONSE));</span>
+<span class="nc" id="L1462">				eventLog.setStatus(ServiceStatus.getStatusAsString(rs.getInt(Constants.STATUS)));</span>
+<span class="nc" id="L1463">				eventLog.setSummary(rs.getNString(Constants.SUMMARY));</span>
+<span class="nc" id="L1464">				eventLog.setCratedBy(rs.getInt(Constants.CREATED_BY));</span>
+<span class="nc" id="L1465">				eventLog.setUpdatedBy(rs.getInt(Constants.UPDATED_BY));</span>
+<span class="nc" id="L1466">				eventLog.setUpdatedOn(rs.getTimestamp(Constants.UPDATED_ON));</span>
+<span class="nc" id="L1467">				eventLog.setCreatedOn(rs.getTimestamp(Constants.CREATED_ON));</span>
+<span class="nc" id="L1468">				entityDetails.setEntityId(rs.getInt(Constants.ENTITY_ID));</span>
+<span class="nc" id="L1469">				entityDetails.setEntityType(EntityEnum.getEntityTypeAsString(rs.getInt(Constants.ENTITY_TYPE)));</span>
+<span class="nc bnc" id="L1470" title="All 2 branches missed.">				if (null != EntityEnum.getEntityTypeAsString(rs.getInt(Constants.ENTITY_TYPE)) &amp;&amp; EntityEnum.CONTACT</span>
+<span class="nc bnc" id="L1471" title="All 2 branches missed.">						.name().equalsIgnoreCase(EntityEnum.getEntityTypeAsString(rs.getInt(Constants.ENTITY_TYPE)))) {</span>
+<span class="nc" id="L1472">					entityDetails.setContactName(rs.getNString(CONTACT_NAME));</span>
+<span class="nc bnc" id="L1473" title="All 2 branches missed.">				} else if (null != EntityEnum.getEntityTypeAsString(rs.getInt(Constants.ENTITY_TYPE))</span>
+<span class="nc" id="L1474">						&amp;&amp; EntityEnum.ACCOUNT.name()</span>
+<span class="nc bnc" id="L1475" title="All 2 branches missed.">								.equalsIgnoreCase(EntityEnum.getEntityTypeAsString(rs.getInt(Constants.ENTITY_TYPE)))) {</span>
+<span class="nc" id="L1476">					entityDetails.setAccountName(rs.getNString(ACCOUNT_NAME));</span>
+				}
+<span class="nc" id="L1478">				messageExchange.addEventServiceLog(eventLog);</span>
+			}
+<span class="nc" id="L1480">		} catch (Exception e) {</span>
+<span class="nc" id="L1481">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1483">			closeResultset(rs);</span>
+<span class="nc" id="L1484">			closePrepareStatement(preparedStmt);</span>
+<span class="nc" id="L1485">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L1488">		message.getPayload().getGatewayMessageExchange().getRequest().addAttribute(Constants.FIELD_ENTITY_DETAILS,</span>
+				entityDetails);
+
+<span class="nc" id="L1491">	}</span>
+
+	/**
+	 * Save into event service log returns id.
+	 *
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void saveIntoEventServiceLogReturnsId(List&lt;EventServiceLog&gt; eventServiceLogs) throws ComplianceException {
+<span class="nc" id="L1502">		Connection connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1503">		ResultSet rs = null;</span>
+<span class="nc" id="L1504">		try (PreparedStatement statement = connection.prepareStatement(</span>
+<span class="nc" id="L1505">				DBQueryConstant.INSERT_INTO_EVENT_SERVICE_LOG.getQuery(), Statement.RETURN_GENERATED_KEYS)) {</span>
+<span class="nc" id="L1506">			beginTransaction(connection);</span>
+<span class="nc" id="L1507">			LOG.debug(&quot;saveIntoEventServiceLogReturnsId : {}&quot;, eventServiceLogs);</span>
+<span class="nc bnc" id="L1508" title="All 2 branches missed.">			for (EventServiceLog eventServiceLog : eventServiceLogs) {</span>
+<span class="nc" id="L1509">				statement.setInt(1, eventServiceLog.getEventId());</span>
+<span class="nc" id="L1510">				statement.setInt(2, EntityEnum.getEntityTypeAsInteger(eventServiceLog.getEntityType()));</span>
+<span class="nc bnc" id="L1511" title="All 2 branches missed.">				if (eventServiceLog.getEntityId() != null)</span>
+<span class="nc" id="L1512">					statement.setInt(3, eventServiceLog.getEntityId());</span>
+				else
+<span class="nc" id="L1514">					statement.setNull(3, Types.INTEGER);</span>
+<span class="nc bnc" id="L1515" title="All 2 branches missed.">				if (eventServiceLog.getEntityVersion() != null)</span>
+<span class="nc" id="L1516">					statement.setInt(4, eventServiceLog.getEntityVersion());</span>
+				else
+<span class="nc" id="L1518">					statement.setNull(4, Types.INTEGER);</span>
+<span class="nc" id="L1519">				statement.setString(5, eventServiceLog.getServiceProviderName());</span>
+<span class="nc" id="L1520">				statement.setString(6, eventServiceLog.getServiceName());</span>
+<span class="nc" id="L1521">				statement.setString(7, &quot;&quot; + eventServiceLog.getProviderResponse());</span>
+<span class="nc" id="L1522">				statement.setInt(8, ServiceStatus.getStatusAsInteger(eventServiceLog.getStatus()));</span>
+<span class="nc" id="L1523">				statement.setString(9, &quot;&quot; + eventServiceLog.getSummary());</span>
+<span class="nc" id="L1524">				statement.setInt(10, eventServiceLog.getCratedBy());</span>
+<span class="nc" id="L1525">				statement.setTimestamp(11, eventServiceLog.getCreatedOn());</span>
+<span class="nc" id="L1526">				statement.setInt(12, eventServiceLog.getUpdatedBy());</span>
+<span class="nc" id="L1527">				statement.setTimestamp(13, eventServiceLog.getUpdatedOn());</span>
+<span class="nc" id="L1528">				statement.executeUpdate();</span>
+<span class="nc" id="L1529">				rs = statement.getGeneratedKeys();</span>
+<span class="nc bnc" id="L1530" title="All 2 branches missed.">				while (rs.next()) {</span>
+<span class="nc" id="L1531">					eventServiceLog.setEventServiceLogId(rs.getInt(1));</span>
+				}
+<span class="nc" id="L1533">			}</span>
+<span class="nc" id="L1534">			commitTransaction(connection);</span>
+<span class="nc" id="L1535">		} catch (Exception e) {</span>
+<span class="nc" id="L1536">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1538">			closeResultset(rs);</span>
+<span class="nc" id="L1539">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L1541">	}</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * getFundsOutEventSerivceLogByIdAndService(java.lang.Integer,
+	 * java.lang.String, org.springframework.messaging.Message)
+	 */
+	@Override
+	public void getFundsOutEventSerivceLogByIdAndService(Integer eventServiceLogId, String serviceName,
+			Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L1554">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1555">		Connection connection = null;</span>
+<span class="nc" id="L1556">		PreparedStatement poLogStmt = null;</span>
+<span class="nc" id="L1557">		EntityDetails entityDetails = null;</span>
+<span class="nc" id="L1558">		ResultSet poEventRs = null;</span>
+		try {
+<span class="nc" id="L1560">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1561">			poLogStmt = connection</span>
+<span class="nc" id="L1562">					.prepareStatement(DBQueryConstant.FUNDS_OUT_GET_EVENT_SERVICE_LOG_ID_AND_SERVICE.getQuery());</span>
+<span class="nc" id="L1563">			poLogStmt.setInt(1, eventServiceLogId);</span>
+<span class="nc" id="L1564">			poLogStmt.setString(2, serviceName);</span>
+<span class="nc" id="L1565">			poEventRs = poLogStmt.executeQuery();</span>
+<span class="nc" id="L1566">			EventServiceLog poEventLog = new EventServiceLog();</span>
+<span class="nc" id="L1567">			entityDetails = new EntityDetails();</span>
+<span class="nc" id="L1568">			poEventLog.setEventServiceLogId(eventServiceLogId);</span>
+<span class="nc" id="L1569">			poEventLog.setServiceName(serviceName);</span>
+<span class="nc bnc" id="L1570" title="All 2 branches missed.">			if (poEventRs.next()) {</span>
+<span class="nc" id="L1571">				poEventLog.setEventId(poEventRs.getInt(EVENT_ID));</span>
+<span class="nc" id="L1572">				poEventLog.setEntityId(poEventRs.getInt(ENTITYID));</span>
+<span class="nc" id="L1573">				poEventLog.setEntityType(EntityEnum.getEntityTypeAsString(poEventRs.getInt(ENTITY_TYPE)));</span>
+<span class="nc" id="L1574">				poEventLog.setProviderResponse(poEventRs.getNString(PROVIDER_RESPONSE));</span>
+<span class="nc" id="L1575">				poEventLog.setStatus(ServiceStatus.getStatusAsString(poEventRs.getInt(STATUS)));</span>
+<span class="nc" id="L1576">				poEventLog.setSummary(poEventRs.getNString(SUMMARY));</span>
+<span class="nc" id="L1577">				poEventLog.setCratedBy(poEventRs.getInt(CREATED_BY));</span>
+<span class="nc" id="L1578">				poEventLog.setUpdatedBy(poEventRs.getInt(UPDATED_BY));</span>
+<span class="nc" id="L1579">				poEventLog.setUpdatedOn(poEventRs.getTimestamp(UPDATED_ON));</span>
+<span class="nc" id="L1580">				poEventLog.setCreatedOn(poEventRs.getTimestamp(CREATED_ON));</span>
+
+<span class="nc" id="L1582">				entityDetails.setEntityId(poEventRs.getInt(ENTITYID));</span>
+<span class="nc" id="L1583">				entityDetails.setEntityType(EntityEnum.getEntityTypeAsString(poEventRs.getInt(ENTITY_TYPE)));</span>
+<span class="nc" id="L1584">				entityDetails.setContactName(poEventRs.getNString(CONTACT_NAME));</span>
+<span class="nc" id="L1585">				entityDetails.setAccountName(poEventRs.getNString(ACCOUNT_NAME));</span>
+<span class="nc" id="L1586">				entityDetails.setBankName(poEventRs.getNString(&quot;BankName&quot;));</span>
+<span class="nc" id="L1587">				entityDetails.setBeneficiaryName(poEventRs.getNString(&quot;BeneficiaryName&quot;));</span>
+<span class="nc" id="L1588">				messageExchange.addEventServiceLog(poEventLog);</span>
+			}
+<span class="nc" id="L1590">		} catch (Exception e) {</span>
+<span class="nc" id="L1591">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1593">			closeResultset(poEventRs);</span>
+<span class="nc" id="L1594">			closePrepareStatement(poLogStmt);</span>
+<span class="nc" id="L1595">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L1598">		message.getPayload().getGatewayMessageExchange().getRequest().addAttribute(&quot;entityDetails&quot;, entityDetails);</span>
+<span class="nc" id="L1599">	}</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * getFundsInEventSerivceLogByIdAndService(java.lang.Integer,
+	 * java.lang.String, org.springframework.messaging.Message)
+	 */
+	@Override
+	public void getFundsInEventSerivceLogByIdAndService(Integer eventServiceLogId, String serviceName,
+			Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L1612">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1613">		Connection connection = null;</span>
+<span class="nc" id="L1614">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L1615">		EntityDetails entityDetails = null;</span>
+<span class="nc" id="L1616">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L1618">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1619">			preparedStatement = connection</span>
+<span class="nc" id="L1620">					.prepareStatement(DBQueryConstant.FUNDS_IN_GET_EVENT_SERVICE_LOG_ID_AND_SERVICE.getQuery());</span>
+<span class="nc" id="L1621">			preparedStatement.setInt(1, eventServiceLogId);</span>
+<span class="nc" id="L1622">			preparedStatement.setString(2, serviceName);</span>
+<span class="nc" id="L1623">			rs = preparedStatement.executeQuery();</span>
+<span class="nc" id="L1624">			EventServiceLog eventServiceLog = new EventServiceLog();</span>
+<span class="nc" id="L1625">			entityDetails = new EntityDetails();</span>
+<span class="nc" id="L1626">			eventServiceLog.setEventServiceLogId(eventServiceLogId);</span>
+<span class="nc" id="L1627">			eventServiceLog.setServiceName(serviceName);</span>
+<span class="nc bnc" id="L1628" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L1629">				eventServiceLog.setEventId(rs.getInt(EVENT_ID));</span>
+<span class="nc" id="L1630">				eventServiceLog.setEntityId(rs.getInt(ENTITYID));</span>
+<span class="nc" id="L1631">				eventServiceLog.setEntityType(EntityEnum.getEntityTypeAsString(rs.getInt(ENTITY_TYPE)));</span>
+<span class="nc" id="L1632">				eventServiceLog.setProviderResponse(rs.getNString(PROVIDER_RESPONSE));</span>
+<span class="nc" id="L1633">				eventServiceLog.setStatus(ServiceStatus.getStatusAsString(rs.getInt(STATUS)));</span>
+<span class="nc" id="L1634">				eventServiceLog.setSummary(rs.getNString(SUMMARY));</span>
+<span class="nc" id="L1635">				eventServiceLog.setCratedBy(rs.getInt(CREATED_BY));</span>
+<span class="nc" id="L1636">				eventServiceLog.setUpdatedBy(rs.getInt(UPDATED_BY));</span>
+<span class="nc" id="L1637">				eventServiceLog.setUpdatedOn(rs.getTimestamp(UPDATED_ON));</span>
+<span class="nc" id="L1638">				eventServiceLog.setCreatedOn(rs.getTimestamp(CREATED_ON));</span>
+<span class="nc" id="L1639">				entityDetails.setEntityId(rs.getInt(ENTITYID));</span>
+<span class="nc" id="L1640">				entityDetails.setEntityType(EntityEnum.getEntityTypeAsString(rs.getInt(ENTITY_TYPE)));</span>
+<span class="nc" id="L1641">				entityDetails.setContactName(rs.getNString(CONTACT_NAME));</span>
+<span class="nc" id="L1642">				entityDetails.setAccountName(rs.getNString(ACCOUNT_NAME));</span>
+
+<span class="nc" id="L1644">				messageExchange.addEventServiceLog(eventServiceLog);</span>
+			}
+<span class="nc" id="L1646">		} catch (Exception e) {</span>
+<span class="nc" id="L1647">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1649">			closeResultset(rs);</span>
+<span class="nc" id="L1650">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L1651">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L1654">		message.getPayload().getGatewayMessageExchange().getRequest().addAttribute(&quot;entityDetails&quot;, entityDetails);</span>
+
+<span class="nc" id="L1656">	}</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * isServicePerformedForFundsOutCustomCheck(java.lang.Integer,
+	 * java.lang.String)
+	 */
+	@Override
+	public EntityDetails isServicePerformedForFundsOutCustomCheck(Integer paymentOutId, String serviceName)
+			throws ComplianceException {
+<span class="nc" id="L1669">		EntityDetails entityDetails = new EntityDetails();</span>
+<span class="nc" id="L1670">		Connection conn = null;</span>
+<span class="nc" id="L1671">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1672">		String status = null;</span>
+<span class="nc" id="L1673">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L1675">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1676">			preparedStatment = conn</span>
+<span class="nc" id="L1677">					.prepareStatement(DBQueryConstant.GET_FUNDS_OUT_CUSTOMCHECK_SERVICE_STATUS_BY_ENTITY_ID.getQuery());</span>
+<span class="nc" id="L1678">			preparedStatment.setString(1, serviceName);</span>
+<span class="nc" id="L1679">			preparedStatment.setInt(2, paymentOutId);</span>
+<span class="nc" id="L1680">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1681" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L1682">				status = ServiceStatus.getStatusAsString(rs.getInt(STATUS));</span>
+<span class="nc" id="L1683">				entityDetails.setPrevStatus(status.toLowerCase());</span>
+			}
+<span class="nc bnc" id="L1685" title="All 4 branches missed.">			if (status != null &amp;&amp; (status.equals(ServiceStatus.NOT_PERFORMED.name())</span>
+<span class="nc bnc" id="L1686" title="All 2 branches missed.">					|| status.equals(ServiceStatus.SERVICE_FAILURE.name()))) {</span>
+<span class="nc" id="L1687">				entityDetails.setIsExist(Boolean.FALSE);</span>
+<span class="nc" id="L1688">				return entityDetails;</span>
+			}
+
+<span class="nc" id="L1691">			entityDetails.setIsExist(Boolean.TRUE);</span>
+
+<span class="nc" id="L1693">		} catch (Exception e) {</span>
+<span class="nc" id="L1694">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1696">			closeResultset(rs);</span>
+<span class="nc" id="L1697">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1698">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1700">		return entityDetails;</span>
+
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * isServicePerformedForFundsInCustomCheck(java.lang.Integer,
+	 * java.lang.String)
+	 */
+	@Override
+	public EntityDetails isServicePerformedForFundsInCustomCheck(Integer paymentInId, String serviceName)
+			throws ComplianceException {
+<span class="nc" id="L1715">		EntityDetails entityDetails = new EntityDetails();</span>
+<span class="nc" id="L1716">		Connection conn = null;</span>
+<span class="nc" id="L1717">		PreparedStatement ccStmt = null;</span>
+<span class="nc" id="L1718">		String ccStatus = null;</span>
+<span class="nc" id="L1719">		ResultSet ccRS = null;</span>
+		try {
+<span class="nc" id="L1721">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1722">			ccStmt = conn</span>
+<span class="nc" id="L1723">					.prepareStatement(DBQueryConstant.GET_FUNDS_IN_CUSTOMCHECK_SERVICE_STATUS_BY_ENTITY_ID.getQuery());</span>
+<span class="nc" id="L1724">			ccStmt.setString(1, serviceName);</span>
+<span class="nc" id="L1725">			ccStmt.setInt(2, paymentInId);</span>
+<span class="nc" id="L1726">			ccRS = ccStmt.executeQuery();</span>
+<span class="nc bnc" id="L1727" title="All 2 branches missed.">			if (ccRS.next()) {</span>
+<span class="nc" id="L1728">				ccStatus = ServiceStatus.getStatusAsString(ccRS.getInt(STATUS));</span>
+<span class="nc" id="L1729">				entityDetails.setPrevStatus(ccStatus.toLowerCase());</span>
+			}
+<span class="nc bnc" id="L1731" title="All 4 branches missed.">			if (ccStatus != null &amp;&amp; (ccStatus.equals(ServiceStatus.NOT_PERFORMED.name())</span>
+<span class="nc bnc" id="L1732" title="All 2 branches missed.">					|| ccStatus.equals(ServiceStatus.SERVICE_FAILURE.name()))) {</span>
+<span class="nc" id="L1733">				entityDetails.setIsExist(Boolean.FALSE);</span>
+<span class="nc" id="L1734">				return entityDetails;</span>
+			}
+
+<span class="nc" id="L1737">			entityDetails.setIsExist(Boolean.TRUE);</span>
+
+<span class="nc" id="L1739">		} catch (Exception e) {</span>
+<span class="nc" id="L1740">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1742">			closeResultset(ccRS);</span>
+<span class="nc" id="L1743">			closePrepareStatement(ccStmt);</span>
+<span class="nc" id="L1744">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1746">		return entityDetails;</span>
+
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * isSanctionPerformed(java.lang.Integer, java.lang.String)
+	 */
+	@Override
+	public EntityDetails isSanctionPerformed(Integer entityId, String entityType) throws ComplianceException {
+
+<span class="nc" id="L1760">		EntityDetails entityDetails = new EntityDetails();</span>
+<span class="nc" id="L1761">		Connection conn = null;</span>
+<span class="nc" id="L1762">		PreparedStatement sanctionStmt = null;</span>
+<span class="nc" id="L1763">		String status = null;</span>
+<span class="nc" id="L1764">		String sanctionResponse = null;</span>
+<span class="nc" id="L1765">		String summary = null;</span>
+<span class="nc" id="L1766">		ResultSet sanctionRs = null;</span>
+<span class="nc" id="L1767">		Long entityServiceHash = null;</span>
+		try {
+<span class="nc" id="L1769">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1770">			sanctionStmt = conn.prepareStatement(DBQueryConstant.GET_RECENT_SPECIFIC_EVENT_SERVICE_DATA.getQuery());</span>
+			//AT-3118
+<span class="nc" id="L1772">			entityServiceHash = LongAndIntegerUtils.getEntityServiceHash(entityId,EntityEnum.getEntityTypeAsInteger(entityType),</span>
+<span class="nc" id="L1773">					EventServiceLogServiceTypeEnum.SANCTION.getEventServiceTypeAsInteger());</span>
+<span class="nc" id="L1774">			LOG.info(&quot;Entity Service Hash for {} : {}&quot;,entityType,entityServiceHash);</span>
+<span class="nc" id="L1775">			sanctionStmt.setLong(1, entityServiceHash);</span>
+<span class="nc" id="L1776">			sanctionRs = sanctionStmt.executeQuery();</span>
+<span class="nc bnc" id="L1777" title="All 2 branches missed.">			if (sanctionRs.next()) {</span>
+<span class="nc" id="L1778">				status = ServiceStatus.getStatusAsString(sanctionRs.getInt(STATUS));</span>
+<span class="nc" id="L1779">				sanctionResponse = sanctionRs.getString(PROVIDER_RESPONSE);</span>
+<span class="nc" id="L1780">				summary = sanctionRs.getString(SUMMARY);</span>
+<span class="nc" id="L1781">				entityDetails.setPrevStatus(status.toLowerCase());</span>
+<span class="nc" id="L1782">				entityDetails.setProviderResponse(sanctionResponse);</span>
+<span class="nc" id="L1783">				entityDetails.setSummary(summary);</span>
+			}
+			/**
+			 * Added condition if we manually pass record then we take updated
+			 * providerResponse and set IsExist flag to false when serviceStatus
+			 * is Not_Performed,Service_Failure or Not_Required Changes made by
+			 * - Saylee
+			 */
+<span class="nc bnc" id="L1791" title="All 4 branches missed.">			if (sanctionResponse == null || sanctionResponse.contains(ServiceStatus.NOT_PERFORMED.name())</span>
+<span class="nc bnc" id="L1792" title="All 2 branches missed.">					|| sanctionResponse.contains(ServiceStatus.SERVICE_FAILURE.name())</span>
+<span class="nc bnc" id="L1793" title="All 2 branches missed.">					|| sanctionResponse.contains(ServiceStatus.NOT_REQUIRED.name())) {</span>
+<span class="nc" id="L1794">				entityDetails.setIsExist(Boolean.FALSE);</span>
+			} else {
+<span class="nc" id="L1796">				entityDetails.setIsExist(Boolean.TRUE);</span>
+			}
+<span class="nc" id="L1798">		} catch (Exception e) {</span>
+<span class="nc" id="L1799">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1801">			closeResultset(sanctionRs);</span>
+<span class="nc" id="L1802">			closePrepareStatement(sanctionStmt);</span>
+<span class="nc" id="L1803">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1805">		return entityDetails;</span>
+	}
+
+	/**
+	 * Handle profile fraugster resend.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param dbEventName
+	 *            the db event name
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleProfileFraugsterResend(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			String dbEventName, Integer createdBy) throws ComplianceException {
+		Integer eventId;
+<span class="nc" id="L1828">		FraugsterResendRequest request = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L1829">				.getRequest(FraugsterResendRequest.class);</span>
+<span class="nc" id="L1830">		RegistrationServiceRequest oldRequest = request.getAdditionalAttribute(Constants.OLD_REQUEST,</span>
+				RegistrationServiceRequest.class);
+<span class="nc" id="L1832">		eventId = saveIntoEvent(connection, orgCode, dbEventName, oldRequest.getAccount(), null, null, createdBy);</span>
+<span class="nc" id="L1833">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds in fraugster resend.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return event id
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	protected Integer handleFundsInFraugsterResend(Message&lt;MessageContext&gt; message, Connection connection,
+			String orgCode, Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L1855">		FundsInFraugsterResendRequest ffResend = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L1856">				.getRequest(FundsInFraugsterResendRequest.class);</span>
+<span class="nc" id="L1857">		FundsInCreateRequest fRequset = (FundsInCreateRequest) ffResend.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+<span class="nc" id="L1858">		account = (Account) fRequset.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L1859">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSIN_FRAUGSTER_RESEND&quot;, account, fRequset.getFundsInId(), null,</span>
+				createdBy);
+<span class="nc" id="L1861">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds in blacklist resend.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return event id
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsInBlacklistResend(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L1883">		FundsInBlacklistResendRequest fbResend = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L1884">				.getRequest(FundsInBlacklistResendRequest.class);</span>
+<span class="nc" id="L1885">		FundsInCreateRequest fRequset = (FundsInCreateRequest) fbResend.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+<span class="nc" id="L1886">		account = (Account) fRequset.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L1887">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSIN_BLACKLIST_RESEND&quot;, account, fRequset.getFundsInId(), null,</span>
+				createdBy);
+<span class="nc" id="L1889">		return eventId;</span>
+	}
+
+	/**
+	 * Handle funds out blacklist resend.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return event id
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsOutBlacklistResend(Message&lt;MessageContext&gt; message, Connection connection,
+			String orgCode, Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L1911">		FundsOutBlacklistResendRequest fbResend = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L1912">				.getRequest(FundsOutBlacklistResendRequest.class);</span>
+<span class="nc" id="L1913">		FundsOutRequest fRequest = (FundsOutRequest) fbResend.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+<span class="nc" id="L1914">		account = (Account) fRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L1915">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSOUT_BLACKLIST_RESEND&quot;, account, null,</span>
+<span class="nc" id="L1916">				fRequest.getFundsOutId(), createdBy);</span>
+<span class="nc" id="L1917">		return eventId;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService#
+	 * getPreviousBlacklistDetails(java.lang.Integer, java.lang.String)
+	 */
+	@Override
+	public EntityDetails getPreviousBlacklistDetails(Integer entityId, String entityType) throws ComplianceException {
+
+<span class="nc" id="L1930">		EntityDetails entityDetails = new EntityDetails();</span>
+<span class="nc" id="L1931">		Connection conn = null;</span>
+<span class="nc" id="L1932">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1933">		String status = null;</span>
+<span class="nc" id="L1934">		String summary = null;</span>
+<span class="nc" id="L1935">		ResultSet rs = null;</span>
+<span class="nc" id="L1936">		int count = 0;</span>
+<span class="nc" id="L1937">		int failcount = 0;</span>
+<span class="nc" id="L1938">		int passcount = 0;</span>
+		String providerResponse;
+<span class="nc" id="L1940">		List&lt;String&gt; providerResponseList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L1943">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1944">			preparedStatment = conn</span>
+<span class="nc" id="L1945">					.prepareStatement(DBQueryConstant.GET_PREVIOUS_BLACKLIST_DETAILS_BY_ENTITY_ID.getQuery());</span>
+<span class="nc" id="L1946">			preparedStatment.setString(1, &quot;&quot; + entityId);</span>
+<span class="nc" id="L1947">			preparedStatment.setInt(2, EntityEnum.getEntityTypeAsInteger(entityType));</span>
+<span class="nc" id="L1948">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L1950" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L1951">				providerResponse = rs.getString(Constants.PROVIDER_RESPONSE);</span>
+<span class="nc" id="L1952">				providerResponseList.add(providerResponse);</span>
+<span class="nc bnc" id="L1953" title="All 2 branches missed.">				if (count == 0) {</span>
+<span class="nc" id="L1954">					status = ServiceStatus.getStatusAsString(rs.getInt(Constants.STATUS));</span>
+<span class="nc" id="L1955">					summary = rs.getString(Constants.SUMMARY);</span>
+<span class="nc" id="L1956">					entityDetails.setPrevStatus(status);</span>
+<span class="nc" id="L1957">					entityDetails.setSummary(summary);</span>
+<span class="nc" id="L1958">					count++;</span>
+				}
+			}
+<span class="nc" id="L1961">			setProviderResponseInEntity(entityDetails, providerResponseList);</span>
+
+<span class="nc" id="L1963">			entityDetails.setEntityId(entityId);</span>
+<span class="nc" id="L1964">			entityDetails.setEntityType(entityType);</span>
+
+<span class="nc bnc" id="L1966" title="All 2 branches missed.">			for (String currentProviderResponse : providerResponseList) {</span>
+<span class="nc bnc" id="L1967" title="All 2 branches missed.">				if (currentProviderResponse.contains(ServiceStatus.NOT_PERFORMED.name())</span>
+<span class="nc bnc" id="L1968" title="All 2 branches missed.">						|| currentProviderResponse.contains(ServiceStatus.NOT_REQUIRED.name())</span>
+<span class="nc bnc" id="L1969" title="All 2 branches missed.">						|| currentProviderResponse.contains(ServiceStatus.SERVICE_FAILURE.name())) {</span>
+<span class="nc" id="L1970">					failcount++;</span>
+				} else {
+<span class="nc" id="L1972">					passcount++;</span>
+				}
+<span class="nc" id="L1974">			}</span>
+<span class="nc" id="L1975">			checkEntityAlreadyExists(entityDetails, failcount, passcount);</span>
+
+<span class="nc" id="L1977">		} catch (Exception e) {</span>
+<span class="nc" id="L1978">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1980">			closeResultset(rs);</span>
+<span class="nc" id="L1981">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1982">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1984">		return entityDetails;</span>
+	}
+
+	/**
+	 * Handle failed profile recheck.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFailedProfileRecheck(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+<span class="nc" id="L2005">		RegistrationServiceRequest registrationDetails = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2006">				.getRequest(RegistrationServiceRequest.class);</span>
+<span class="nc" id="L2007">		eventId = saveIntoEvent(connection, orgCode, &quot;PROFILE_RECHECK_FAILURES&quot;, registrationDetails.getAccount(), null,</span>
+				null, createdBy);
+<span class="nc" id="L2009">		return eventId;</span>
+	}
+
+	/**
+	 * Handle failed funds out recheck.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFailedFundsOutRecheck(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L2031">		FundsOutRequest fundsOutRequest = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2032">				.getRequest(FundsOutRequest.class);</span>
+<span class="nc" id="L2033">		account = (Account) fundsOutRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L2034">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSOUT_RECHECK_FAILURES&quot;, account, null,</span>
+<span class="nc" id="L2035">				fundsOutRequest.getFundsOutId(), createdBy);</span>
+<span class="nc" id="L2036">		return eventId;</span>
+	}
+
+	/**
+	 * Handle failed funds in recheck.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFailedFundsInRecheck(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L2058">		FundsInCreateRequest fundsInRequest = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2059">				.getRequest(FundsInCreateRequest.class);</span>
+<span class="nc" id="L2060">		account = (Account) fundsInRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L2061">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSIN_RECHECK_FAILURES&quot;, account, fundsInRequest.getFundsInId(),</span>
+				null, createdBy);
+<span class="nc" id="L2063">		return eventId;</span>
+	}
+
+	/**
+	 * Creates the event serivce log for service failed funds out.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; createEventSerivceLogForServiceFailedFundsOut(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L2076">			List&lt;EventServiceLog&gt; eventServiceLogs = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="nc" id="L2077">			FundsOutRequest fundsOutRequest = (FundsOutRequest) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2078">					.getRequest();</span>
+
+<span class="nc bnc" id="L2080" title="All 2 branches missed.">			for (MessageExchangeWrapper exchange : message.getPayload().getMessageCollection()) {</span>
+<span class="nc bnc" id="L2081" title="All 6 branches missed.">				switch (exchange.getMessageExchange().getServiceTypeEnum()) {</span>
+				case INTERNAL_RULE_SERVICE:
+<span class="nc" id="L2083">					addIntrenalRuleServiceLog(message, eventServiceLogs, fundsOutRequest);</span>
+<span class="nc" id="L2084">					break;</span>
+				case FRAUGSTER_SERVICE:
+<span class="nc" id="L2086">					addFraugsterLog(message, eventServiceLogs, fundsOutRequest);</span>
+<span class="nc" id="L2087">					break;</span>
+				case SANCTION_SERVICE:
+<span class="nc" id="L2089">					addSanctionLog(message, eventServiceLogs, fundsOutRequest);</span>
+<span class="nc" id="L2090">					break;</span>
+				case CUSTOM_CHECKS_SERVICE:
+<span class="nc" id="L2092">					addCustomCheckLog(message, eventServiceLogs, fundsOutRequest);</span>
+<span class="nc" id="L2093">					break;</span>
+				case TRANSACTION_MONITORING_SERVICE:
+<span class="nc" id="L2095">					eventServiceLogs</span>
+<span class="nc" id="L2096">							.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE));</span>
+<span class="nc" id="L2097">					break;</span>
+				default:
+					break;
+				}
+<span class="nc" id="L2101">			}</span>
+<span class="nc" id="L2102">			saveIntoEventServiceLog(eventServiceLogs);</span>
+<span class="nc" id="L2103">		} catch (Exception e) {</span>
+<span class="nc" id="L2104">			LOG.error(&quot;Error in EventDBServiceImpl createEventSerivceLogForServiceFailedFundsOut()&quot;, e);</span>
+<span class="nc" id="L2105">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L2106">		}</span>
+<span class="nc" id="L2107">		return message;</span>
+	}
+
+	/**
+	 * Adds the custom check log.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param fundsOutRequest
+	 *            the funds out request
+	 */
+	private void addCustomCheckLog(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			FundsOutRequest fundsOutRequest) {
+<span class="nc" id="L2122">		Boolean isCustomCheckEligible = (Boolean) fundsOutRequest.getAdditionalAttribute(IS_CUSTOM_CHECK_ELIGIBLE);</span>
+<span class="nc bnc" id="L2123" title="All 2 branches missed.">		if (Boolean.TRUE.equals(isCustomCheckEligible)) {</span>
+<span class="nc" id="L2124">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.CUSTOM_CHECKS_SERVICE));</span>
+		}
+<span class="nc" id="L2126">	}</span>
+
+	/**
+	 * Adds the sanction log.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param fundsOutRequest
+	 *            the funds out request
+	 */
+	private void addSanctionLog(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			FundsOutRequest fundsOutRequest) {
+<span class="nc" id="L2140">		Boolean isSanctionEligible = (Boolean) fundsOutRequest.getAdditionalAttribute(IS_SANCTION_ELIGIBLE);</span>
+<span class="nc bnc" id="L2141" title="All 2 branches missed.">		if (Boolean.TRUE.equals(isSanctionEligible)) {</span>
+<span class="nc" id="L2142">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.SANCTION_SERVICE));</span>
+		}
+<span class="nc" id="L2144">	}</span>
+
+	/**
+	 * Adds the fraugster log.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param fundsOutRequest
+	 *            the funds out request
+	 */
+	private void addFraugsterLog(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			FundsOutRequest fundsOutRequest) {
+<span class="nc" id="L2158">		Boolean isFraugsterEligible = (Boolean) fundsOutRequest.getAdditionalAttribute(IS_FRAUGSTER_ELIGIBLE);</span>
+<span class="nc bnc" id="L2159" title="All 2 branches missed.">		if (Boolean.TRUE.equals(isFraugsterEligible)) {</span>
+<span class="nc" id="L2160">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.FRAUGSTER_SERVICE));</span>
+		}
+<span class="nc" id="L2162">	}</span>
+
+	/**
+	 * Adds the intrenal rule service log.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param fundsOutRequest
+	 *            the funds out request
+	 */
+	private void addIntrenalRuleServiceLog(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			FundsOutRequest fundsOutRequest) {
+<span class="nc bnc" id="L2176" title="All 2 branches missed.">		if ((Boolean) fundsOutRequest.getAdditionalAttribute(IS_BLACKLIST_ELIGIBLE)</span>
+<span class="nc bnc" id="L2177" title="All 2 branches missed.">				|| (Boolean) fundsOutRequest.getAdditionalAttribute(IS_COUNTRY_CHECK_ELIGIBLE)) {</span>
+<span class="nc" id="L2178">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.INTERNAL_RULE_SERVICE));</span>
+		}
+<span class="nc" id="L2180">	}</span>
+
+	/**
+	 * Creates the event serivce log for service failed registration.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; createEventSerivceLogForServiceFailedRegistration(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L2192">			List&lt;EventServiceLog&gt; eventServiceLogs = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="nc" id="L2193">			RegistrationServiceRequest registrationDetails = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L2194">					.getGatewayMessageExchange().getRequest();</span>
+
+<span class="nc bnc" id="L2196" title="All 2 branches missed.">			for (MessageExchangeWrapper exchange : message.getPayload().getMessageCollection()) {</span>
+<span class="nc bnc" id="L2197" title="All 6 branches missed.">				switch (exchange.getMessageExchange().getServiceTypeEnum()) {</span>
+				case INTERNAL_RULE_SERVICE:
+<span class="nc" id="L2199">					addIntrenalRuleServiceLog(message, eventServiceLogs, registrationDetails);</span>
+<span class="nc" id="L2200">					break;</span>
+				case FRAUGSTER_SERVICE:
+<span class="nc" id="L2202">					addFraugsterLog(message, eventServiceLogs, registrationDetails);</span>
+<span class="nc" id="L2203">					break;</span>
+				case SANCTION_SERVICE:
+<span class="nc" id="L2205">					addSanctionLog(message, eventServiceLogs, registrationDetails);</span>
+<span class="nc" id="L2206">					break;</span>
+				case KYC_SERVICE:
+<span class="nc" id="L2208">					addKYCLog(message, eventServiceLogs, registrationDetails);</span>
+<span class="nc" id="L2209">					break;</span>
+				case TRANSACTION_MONITORING_UPDATE_SERVICE:
+<span class="nc" id="L2211">					eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.TRANSACTION_MONITORING_UPDATE_SERVICE));</span>
+<span class="nc" id="L2212">					break;</span>
+				default:
+					break;
+				}
+<span class="nc" id="L2216">			}</span>
+<span class="nc" id="L2217">			saveIntoEventServiceLog(eventServiceLogs);</span>
+<span class="nc" id="L2218">		} catch (Exception e) {</span>
+<span class="nc" id="L2219">			LOG.error(&quot;Error in EventDBServiceImpl createEventSerivceLogForServiceFailedFundsOut()&quot;, e);</span>
+<span class="nc" id="L2220">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L2221">		}</span>
+<span class="nc" id="L2222">		return message;</span>
+	}
+
+	/**
+	 * Adds the custom check log.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param registrationDetails
+	 *            the registration details
+	 */
+	private void addKYCLog(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			RegistrationServiceRequest registrationDetails) {
+<span class="nc" id="L2237">		Boolean isEidEligible = (Boolean) registrationDetails.getAdditionalAttribute(IS_EID_ELIGIBLE);</span>
+<span class="nc bnc" id="L2238" title="All 2 branches missed.">		if (Boolean.TRUE.equals(isEidEligible)) {</span>
+<span class="nc" id="L2239">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.KYC_SERVICE));</span>
+		}
+<span class="nc" id="L2241">	}</span>
+
+	/**
+	 * Adds the sanction log.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param registrationDetails
+	 *            the registration details
+	 */
+	private void addSanctionLog(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			RegistrationServiceRequest registrationDetails) {
+<span class="nc" id="L2255">		Boolean isSanctionEligible = (Boolean) registrationDetails.getAdditionalAttribute(IS_SANCTION_ELIGIBLE);</span>
+<span class="nc bnc" id="L2256" title="All 2 branches missed.">		if (Boolean.TRUE.equals(isSanctionEligible)) {</span>
+<span class="nc" id="L2257">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.SANCTION_SERVICE));</span>
+		}
+<span class="nc" id="L2259">	}</span>
+
+	/**
+	 * Adds the fraugster log.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param registrationDetails
+	 *            the registration details
+	 */
+	private void addFraugsterLog(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			RegistrationServiceRequest registrationDetails) {
+<span class="nc" id="L2273">		Boolean isFraugsterEligible = (Boolean) registrationDetails.getAdditionalAttribute(IS_FRAUGSTER_ELIGIBLE);</span>
+<span class="nc bnc" id="L2274" title="All 2 branches missed.">		if (Boolean.TRUE.equals(isFraugsterEligible)) {</span>
+<span class="nc" id="L2275">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.FRAUGSTER_SERVICE));</span>
+		}
+<span class="nc" id="L2277">	}</span>
+
+	/**
+	 * Adds the intrenal rule service log.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param registrationDetails
+	 *            the registration details
+	 */
+	private void addIntrenalRuleServiceLog(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			RegistrationServiceRequest registrationDetails) {
+<span class="nc bnc" id="L2291" title="All 2 branches missed.">		if ((Boolean) registrationDetails.getAdditionalAttribute(IS_BLACKLIST_ELIGIBLE)</span>
+<span class="nc bnc" id="L2292" title="All 2 branches missed.">				|| (Boolean) registrationDetails.getAdditionalAttribute(IS_COUNTRY_CHECK_ELIGIBLE)) {</span>
+<span class="nc" id="L2293">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.INTERNAL_RULE_SERVICE));</span>
+		}
+<span class="nc" id="L2295">	}</span>
+
+	/**
+	 * Creates the event serivce log for service failed funds in.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; createEventSerivceLogForServiceFailedFundsIn(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L2307">			List&lt;EventServiceLog&gt; eventServiceLogs = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="nc" id="L2308">			FundsInCreateRequest fundsInRequest = (FundsInCreateRequest) message.getPayload()</span>
+<span class="nc" id="L2309">					.getGatewayMessageExchange().getRequest();</span>
+
+<span class="nc bnc" id="L2311" title="All 2 branches missed.">			for (MessageExchangeWrapper exchange : message.getPayload().getMessageCollection()) {</span>
+<span class="nc bnc" id="L2312" title="All 6 branches missed.">				switch (exchange.getMessageExchange().getServiceTypeEnum()) {</span>
+				case INTERNAL_RULE_SERVICE:
+<span class="nc" id="L2314">					addIntrenalRuleServiceLogForFundsIn(message, eventServiceLogs, fundsInRequest);</span>
+<span class="nc" id="L2315">					break;</span>
+				case FRAUGSTER_SERVICE:
+<span class="nc" id="L2317">					addFraugsterLogForFundsIn(message, eventServiceLogs, fundsInRequest);</span>
+<span class="nc" id="L2318">					break;</span>
+				case SANCTION_SERVICE:
+<span class="nc" id="L2320">					addSanctionLogForFundsIn(message, eventServiceLogs, fundsInRequest);</span>
+<span class="nc" id="L2321">					break;</span>
+				case CUSTOM_CHECKS_SERVICE:
+<span class="nc" id="L2323">					addCustomCheckLogForFundsIn(message, eventServiceLogs, fundsInRequest);</span>
+<span class="nc" id="L2324">					break;</span>
+				case TRANSACTION_MONITORING_SERVICE:
+<span class="nc" id="L2326">					eventServiceLogs</span>
+<span class="nc" id="L2327">							.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE));</span>
+<span class="nc" id="L2328">					break;</span>
+				default:
+					break;
+				}
+<span class="nc" id="L2332">			}</span>
+<span class="nc" id="L2333">			saveIntoEventServiceLog(eventServiceLogs);</span>
+<span class="nc" id="L2334">		} catch (Exception e) {</span>
+<span class="nc" id="L2335">			LOG.error(&quot;Error in EventDBServiceImpl createEventSerivceLogForServiceFailedFundsIn()&quot;, e);</span>
+<span class="nc" id="L2336">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L2337">		}</span>
+<span class="nc" id="L2338">		return message;</span>
+	}
+
+	/**
+	 * Adds the custom check log for funds in.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param fundsInRequest
+	 *            the funds in request
+	 */
+	private void addCustomCheckLogForFundsIn(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			FundsInCreateRequest fundsInRequest) {
+<span class="nc" id="L2353">		Boolean isCustomCheckEligible = (Boolean) fundsInRequest.getAdditionalAttribute(IS_CUSTOM_CHECK_ELIGIBLE);</span>
+<span class="nc bnc" id="L2354" title="All 2 branches missed.">		if (Boolean.TRUE.equals(isCustomCheckEligible)) {</span>
+<span class="nc" id="L2355">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.CUSTOM_CHECKS_SERVICE));</span>
+		}
+<span class="nc" id="L2357">	}</span>
+
+	/**
+	 * Adds the sanction log for funds in.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param fundsInRequest
+	 *            the funds in request
+	 */
+	private void addSanctionLogForFundsIn(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			FundsInCreateRequest fundsInRequest) {
+<span class="nc" id="L2371">		Boolean isSanctionEligible = (Boolean) fundsInRequest.getAdditionalAttribute(IS_SANCTION_ELIGIBLE);</span>
+<span class="nc bnc" id="L2372" title="All 2 branches missed.">		if (Boolean.TRUE.equals(isSanctionEligible)) {</span>
+<span class="nc" id="L2373">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.SANCTION_SERVICE));</span>
+		}
+<span class="nc" id="L2375">	}</span>
+
+	/**
+	 * Adds the fraugster log for funds in.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param fundsInRequest
+	 *            the funds in request
+	 */
+	private void addFraugsterLogForFundsIn(Message&lt;MessageContext&gt; message, List&lt;EventServiceLog&gt; eventServiceLogs,
+			FundsInCreateRequest fundsInRequest) {
+<span class="nc" id="L2389">		Boolean isFraugsterEligible = (Boolean) fundsInRequest.getAdditionalAttribute(IS_FRAUGSTER_ELIGIBLE);</span>
+<span class="nc bnc" id="L2390" title="All 2 branches missed.">		if (Boolean.TRUE.equals(isFraugsterEligible)) {</span>
+<span class="nc" id="L2391">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.FRAUGSTER_SERVICE));</span>
+		}
+<span class="nc" id="L2393">	}</span>
+
+	/**
+	 * Adds the intrenal rule service log for funds in.
+	 *
+	 * @param message
+	 *            the message
+	 * @param eventServiceLogs
+	 *            the event service logs
+	 * @param fundsInRequest
+	 *            the funds in request
+	 */
+	private void addIntrenalRuleServiceLogForFundsIn(Message&lt;MessageContext&gt; message,
+			List&lt;EventServiceLog&gt; eventServiceLogs, FundsInCreateRequest fundsInRequest) {
+<span class="nc bnc" id="L2407" title="All 2 branches missed.">		if ((Boolean) fundsInRequest.getAdditionalAttribute(IS_BLACKLIST_ELIGIBLE)</span>
+<span class="nc bnc" id="L2408" title="All 2 branches missed.">				|| (Boolean) fundsInRequest.getAdditionalAttribute(IS_COUNTRY_CHECK_ELIGIBLE)) {</span>
+<span class="nc" id="L2409">			eventServiceLogs.addAll(getEventServiceLogsByService(message, ServiceTypeEnum.INTERNAL_RULE_SERVICE));</span>
+		}
+<span class="nc" id="L2411">	}</span>
+	
+	private Integer handleDeleteContact(Message&lt;MessageContext&gt; message, Connection connection,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+<span class="nc" id="L2416">		DeleteContactRequest deleteContactRequest = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2417">				.getRequest(DeleteContactRequest.class);</span>
+<span class="nc" id="L2418">		RegistrationServiceRequest regServiceRequest = (RegistrationServiceRequest)deleteContactRequest.getAdditionalAttribute(&quot;regRequest&quot;);</span>
+<span class="nc" id="L2419">		eventId = saveIntoEvent(connection, deleteContactRequest.getOrgCode(), &quot;PROFILE_DELETE_CONTACT&quot;, </span>
+<span class="nc" id="L2420">				regServiceRequest.getAccount(), null, null, createdBy);</span>
+<span class="nc" id="L2421">		return eventId;</span>
+	}
+	
+	/**
+	 * AT-2248 - Comp.Event/EventServiceLog table
+	 * 
+	 * Save into event service log summary.
+	 *
+	 * @param eventServiceLogs the event service logs
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void saveIntoEventServiceLogSummary(List&lt;EventServiceLog&gt; eventServiceLogs) throws ComplianceException {
+<span class="fc" id="L2433">		Connection connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L2434">		List&lt;EventServiceLogSummary&gt; eventServiceLogSummaryList = new ArrayList&lt;&gt;(); </span>
+		try {
+<span class="pc bpc" id="L2436" title="2 of 4 branches missed.">			if(null != eventServiceLogs &amp;&amp; !eventServiceLogs.isEmpty()) {</span>
+<span class="fc" id="L2437">				Integer eventId = eventServiceLogs.get(0).getEventId();</span>
+<span class="fc" id="L2438">				eventServiceLogSummaryList = getEventServiceLogDataForCurrentOperation(eventId);</span>
+<span class="fc" id="L2439">				insertOrUpdateEventServiceLogSummary(eventServiceLogSummaryList);</span>
+			}
+<span class="nc" id="L2441">		} catch(Exception e) {</span>
+<span class="nc" id="L2442">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L2444">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L2446">	}</span>
+	
+	/**
+	 * AT-2248
+	 * Gets the event service log data for current operation.
+	 *
+	 * @param eventId the event id
+	 * @return the event service log data for current operation
+	 * @throws ComplianceException the compliance exception
+	 * @throws SQLException the SQL exception
+	 */
+	private List&lt;EventServiceLogSummary&gt; getEventServiceLogDataForCurrentOperation(Integer eventId) throws ComplianceException, SQLException {
+<span class="fc" id="L2458">		Connection connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L2459">		ResultSet resultSet = null;</span>
+<span class="fc" id="L2460">		List&lt;EventServiceLogSummary&gt; eslSummaryList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L2461">		try(PreparedStatement preparedStatement = connection.prepareStatement(DBQueryConstant.GET_CURRENT_OPERATION_RECENT_DATA_FROM_EVENT_SERVICE_LOG.getQuery())) {</span>
+<span class="fc" id="L2462">			preparedStatement.setInt(1,eventId);</span>
+<span class="fc" id="L2463">			resultSet = preparedStatement.executeQuery();</span>
+<span class="fc bfc" id="L2464" title="All 2 branches covered.">			while(resultSet.next()) {</span>
+<span class="fc" id="L2465">				EventServiceLogSummary eslSummary = new EventServiceLogSummary();</span>
+<span class="fc" id="L2466">				eslSummary.setEventServiceLogId(resultSet.getInt(&quot;EventServiceLogID&quot;));</span>
+<span class="fc" id="L2467">				eslSummary.setEntityType(resultSet.getInt(ENTITY_TYPE));</span>
+<span class="fc" id="L2468">				eslSummary.setServiceType(resultSet.getInt(&quot;ServiceType&quot;));</span>
+<span class="fc" id="L2469">				eslSummary.setStatus(resultSet.getInt(STATUS));</span>
+<span class="fc" id="L2470">				eslSummary.setEntityVersion(resultSet.getInt(&quot;EntityVersion&quot;));</span>
+<span class="fc" id="L2471">				eslSummary.setEntityId(resultSet.getInt(&quot;EntityID&quot;));</span>
+<span class="fc" id="L2472">				eslSummaryList.add(eslSummary);</span>
+<span class="fc" id="L2473">			}</span>
+<span class="nc" id="L2474">		}catch(Exception e) {</span>
+<span class="nc" id="L2475">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		}finally {
+<span class="fc" id="L2477">			closeResultset(resultSet);</span>
+<span class="fc" id="L2478">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L2480">		return eslSummaryList;</span>
+	}
+	
+	/**
+	 * AT-2248
+	 * Insert or update event service log summary.
+	 *
+	 * @param eventServiceLogSummaryList the event service log summary list
+	 * @throws ComplianceException the compliance exception
+	 * @throws SQLException 
+	 */
+	private void insertOrUpdateEventServiceLogSummary(List&lt;EventServiceLogSummary&gt; eventServiceLogSummaryList) throws ComplianceException, SQLException{
+<span class="fc" id="L2492">		Connection connection = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L2493">		try(PreparedStatement preparedStatement = connection.prepareStatement(DBQueryConstant.INSERT_UPDATE_INTO_EVENT_SERVICE_LOG_SUMMARY.getQuery())) {</span>
+<span class="fc" id="L2494">			beginTransaction(connection);</span>
+<span class="fc bfc" id="L2495" title="All 2 branches covered.">			for(EventServiceLogSummary eventServiceLogSummary : eventServiceLogSummaryList) {</span>
+<span class="pc bpc" id="L2496" title="1 of 2 branches missed.">				if(!ServiceStatus.NOT_PERFORMED.getServiceStatusAsInteger().equals(eventServiceLogSummary.getStatus())</span>
+<span class="pc bpc" id="L2497" title="1 of 2 branches missed.">						&amp;&amp; !ServiceStatus.SERVICE_FAILURE.getServiceStatusAsInteger().equals(eventServiceLogSummary.getStatus())</span>
+<span class="pc bpc" id="L2498" title="1 of 2 branches missed.">						&amp;&amp; !ServiceStatus.NOT_REQUIRED.getServiceStatusAsInteger().equals(eventServiceLogSummary.getStatus())) {</span>
+<span class="fc" id="L2499">					preparedStatement.setInt(1,eventServiceLogSummary.getEntityId());</span>
+<span class="fc" id="L2500">					preparedStatement.setInt(2,eventServiceLogSummary.getEntityType());</span>
+<span class="fc" id="L2501">					preparedStatement.setInt(3,eventServiceLogSummary.getServiceType());</span>
+<span class="fc" id="L2502">					preparedStatement.setInt(4,eventServiceLogSummary.getEventServiceLogId());</span>
+<span class="fc" id="L2503">					preparedStatement.setInt(5,eventServiceLogSummary.getStatus());</span>
+<span class="fc" id="L2504">					preparedStatement.addBatch();</span>
+				}
+<span class="fc" id="L2506">			}</span>
+<span class="fc" id="L2507">			preparedStatement.executeBatch();</span>
+<span class="fc" id="L2508">			commitTransaction(connection);</span>
+<span class="nc" id="L2509">		}catch(Exception e) {</span>
+<span class="nc" id="L2510">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		}finally {
+<span class="fc" id="L2512">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L2514">	}</span>
+	
+	//Added for AT-3658
+	/**
+	 * Handle funds out payment reference resend.
+	 *
+	 * @param message
+	 *            the message
+	 * @param connection
+	 *            the connection
+	 * @param orgCode
+	 *            the org code
+	 * @param createdBy
+	 *            the created by
+	 * @return event id
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer handleFundsOutPaymentReferenceResend(Message&lt;MessageContext&gt; message, Connection connection,
+			String orgCode, Integer createdBy) throws ComplianceException {
+		Integer eventId;
+		Account account;
+<span class="nc" id="L2536">		FundsOutPaymentReferenceResendRequest fbResend = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2537">				.getRequest(FundsOutPaymentReferenceResendRequest.class);</span>
+<span class="nc" id="L2538">		FundsOutRequest fRequest = (FundsOutRequest) fbResend.getAdditionalAttribute(Constants.OLD_REQUEST);</span>
+<span class="nc" id="L2539">		account = (Account) fRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L2540">		eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSOUT_PAYMENT_REFERENCE_RESEND&quot;, account, null,</span>
+<span class="nc" id="L2541">				fRequest.getFundsOutId(), createdBy);</span>
+<span class="nc" id="L2542">		return eventId;</span>
+	}
+	
+	/**
+	 * Creates the event TMMQ.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; createEventTMMQ(Message&lt;MessageContext&gt; message) {
+
+<span class="nc" id="L2553">		Connection connection = null;</span>
+		try {
+			
+<span class="nc" id="L2556">			TransactionMonitoringMQRequest request = (TransactionMonitoringMQRequest) message.getPayload().getGatewayMessageExchange().getRequest();			</span>
+			
+<span class="nc" id="L2558">			String orgCode = request.getOrgCode();</span>
+<span class="nc" id="L2559">			Integer createdBy = request.getCreatedBy();</span>
+<span class="nc" id="L2560">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L2561">			Integer eventId = null;</span>
+<span class="nc" id="L2562">			beginTransaction(connection);</span>
+<span class="nc" id="L2563">			eventId = handleTransactionMonitoringResend(message, connection, orgCode, createdBy);</span>
+		
+<span class="nc" id="L2565">			commitTransaction(connection);</span>
+<span class="nc" id="L2566">			message.getPayload().getGatewayMessageExchange().getRequest().addAttribute(Constants.FIELD_EVENTID,</span>
+					eventId);
+<span class="nc" id="L2568">		} catch (Exception e) {</span>
+<span class="nc" id="L2569">			LOG.error(&quot;error in createEventTMMQ:&quot;, e);</span>
+<span class="nc" id="L2570">			message.getPayload().setFailed(true);</span>
+		} finally {
+			try {
+<span class="nc" id="L2573">				closeConnection(connection);</span>
+<span class="nc" id="L2574">			} catch (ComplianceException e) {</span>
+<span class="nc" id="L2575">				LOG.error(&quot;error in createEventTMMQ:&quot;, e);</span>
+<span class="nc" id="L2576">				message.getPayload().setFailed(true);</span>
+<span class="nc" id="L2577">			}</span>
+		}
+<span class="nc" id="L2579">		return message;</span>
+	}
+	
+	/**
+	 * Handle transaction monitoring resend.
+	 *
+	 * @param message the message
+	 * @param connection the connection
+	 * @param orgCode the org code
+	 * @param createdBy the created by
+	 * @return the integer
+	 * @throws ComplianceException the compliance exception
+	 */
+	private Integer handleTransactionMonitoringResend(Message&lt;MessageContext&gt; message, Connection connection,
+			String orgCode, Integer createdBy) throws ComplianceException {
+		Integer eventId;
+<span class="nc" id="L2595">		Account account = new Account();</span>
+<span class="nc" id="L2596">		TransactionMonitoringMQRequest request = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2597">				.getRequest(TransactionMonitoringMQRequest.class);</span>
+<span class="nc" id="L2598">		account.setId(request.getAccountID());</span>
+<span class="nc" id="L2599">		account.setVersion(1);</span>
+<span class="nc bnc" id="L2600" title="All 2 branches missed.">		Integer payInId = request.getRequestType().equalsIgnoreCase(&quot;payment_in&quot;) ||</span>
+<span class="nc bnc" id="L2601" title="All 2 branches missed.">				request.getRequestType().equalsIgnoreCase(&quot;payment_in_update&quot;)?request.getPaymentInID():null;</span>
+<span class="nc bnc" id="L2602" title="All 2 branches missed.">		Integer payOutId = request.getRequestType().equalsIgnoreCase(&quot;payment_out&quot;) ||</span>
+<span class="nc bnc" id="L2603" title="All 2 branches missed.">				request.getRequestType().equalsIgnoreCase(&quot;payment_out_update&quot;)?request.getPaymentOutID():null;</span>
+		
+<span class="nc" id="L2605">		eventId = saveIntoEvent(connection, orgCode, &quot;TRANSACTION_MONITORING_MQ_RESEND&quot;, account, payInId,</span>
+				payOutId, createdBy);
+<span class="nc" id="L2607">		return eventId;</span>
+	}
+	
+	private Integer handleIntuitionUpdateAccount(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+<span class="nc" id="L2613">		RegistrationServiceRequest updateStatusRequest = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2614">				.getRequest(RegistrationServiceRequest.class);</span>
+<span class="nc" id="L2615">		eventId = saveIntoEvent(connection, orgCode, &quot;PROFILE_UPDATE_ACCOUNT&quot;, </span>
+<span class="nc" id="L2616">				updateStatusRequest.getAccount(), null, null, createdBy);</span>
+<span class="nc" id="L2617">		return eventId;</span>
+	}
+	
+	/**
+	 * add for AT-5424
+	 * 
+	 * Handle card check eligibility.
+	 *
+	 * @param message the message
+	 * @param connection the connectionn
+	 * @param orgCode the org code
+	 * @param createdBy the created by
+	 * @return the integer
+	 * @throws ComplianceException the compliance exception
+	 */
+	private Integer handleCardCheckEligibility(Message&lt;MessageContext&gt; message, Connection connection, String orgCode,
+			Integer createdBy) throws ComplianceException {
+		Integer eventId;
+<span class="nc" id="L2635">		RegistrationServiceRequest updateStatusRequest = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2636">				.getRequest(RegistrationServiceRequest.class);</span>
+<span class="nc" id="L2637">		eventId = saveIntoEvent(connection, orgCode, &quot;CARD_APPLY&quot;, </span>
+<span class="nc" id="L2638">				updateStatusRequest.getAccount(), null, null, createdBy);</span>
+<span class="nc" id="L2639">		return eventId;</span>
+	}
+	
+	/**
+	 * Creates the transaction monitoring event serivce log.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; createTransactionMonitoringEventSerivceLog(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L2651">			List&lt;EventServiceLog&gt; eventServiceLogs = new CopyOnWriteArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L2653" title="All 2 branches missed.">			for (MessageExchangeWrapper exchange : message.getPayload().getMessageCollection()) {</span>
+<span class="nc bnc" id="L2654" title="All 2 branches missed.">				if (exchange.getMessageExchange().getServiceTypeEnum() == ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE) {</span>
+<span class="nc" id="L2655">					eventServiceLogs.addAll(</span>
+<span class="nc" id="L2656">							getEventServiceLogsByService(message, ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE));</span>
+<span class="nc" id="L2657">					break;</span>
+				}
+<span class="nc" id="L2659">			}</span>
+<span class="nc" id="L2660">			saveIntoEventServiceLog(eventServiceLogs);</span>
+<span class="nc" id="L2661">			saveIntoEventServiceLogSummary(eventServiceLogs);</span>
+<span class="nc" id="L2662">		} catch (Exception e) {</span>
+<span class="nc" id="L2663">			LOG.error(&quot;Error in EventDBServiceImpl createTransactionMonitoringEventSerivceLog()&quot;, e);</span>
+<span class="nc" id="L2664">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L2665">		}</span>
+<span class="nc" id="L2666">		return message;</span>
+	}
+	
+	//AT-4451
+		private Integer handleFundsOutIntuitionRepeatCheck(Message&lt;MessageContext&gt; message, Connection connection,
+				String orgCode, Integer createdBy) throws ComplianceException {
+			Integer eventId;
+			Account account;
+<span class="nc" id="L2674">			FundsOutRequest fRequest = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2675">					.getRequest(FundsOutRequest.class);</span>
+<span class="nc" id="L2676">			account = (Account) fRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L2677">			eventId = saveIntoEvent(connection, orgCode, &quot;FUNDSOUT_UPDATE&quot;, account, null,</span>
+<span class="nc" id="L2678">					fRequest.getFundsOutId(), createdBy);</span>
+<span class="nc" id="L2679">			return eventId;</span>
+		}
+		
+		/**
+		 * Handle payment intuition manual update.
+		 *
+		 * @param message the message
+		 * @param connection the connection
+		 * @param orgCode the org code
+		 * @param createdBy the created by
+		 * @return the integer
+		 * @throws ComplianceException 
+		 */
+		//AT-4749
+		private Integer handlePaymentIntuitionManualUpdate(Message&lt;MessageContext&gt; message, Connection connection,
+				String orgCode, Integer createdBy) throws ComplianceException {
+<span class="nc" id="L2695">			IntuitionPaymentStatusUpdateRequest request = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2696">					.getRequest(IntuitionPaymentStatusUpdateRequest.class);</span>
+			Integer eventId;
+<span class="nc" id="L2698">			Account account = (Account) request.getAdditionalAttribute(ACCOUNT);</span>
+
+<span class="nc bnc" id="L2700" title="All 2 branches missed.">			if (request.getTrxType().equalsIgnoreCase(FUNDS_IN)) {</span>
+<span class="nc" id="L2701">				FundsInCreateRequest fundsInRequest = (FundsInCreateRequest) request</span>
+<span class="nc" id="L2702">						.getAdditionalAttribute(&quot;fundsInRequest&quot;);</span>
+<span class="nc" id="L2703">				eventId = saveIntoEvent(connection, orgCode, &quot;INTUITION_UPDATE&quot;, account, fundsInRequest.getFundsInId(),</span>
+						null, createdBy);
+<span class="nc" id="L2705">			} else {</span>
+<span class="nc" id="L2706">				FundsOutRequest fundsOutRequest = (FundsOutRequest) request.getAdditionalAttribute(&quot;fundsOutRequest&quot;);</span>
+<span class="nc" id="L2707">				eventId = saveIntoEvent(connection, orgCode, &quot;INTUITION_UPDATE&quot;, account, null,</span>
+<span class="nc" id="L2708">						fundsOutRequest.getFundsOutId(), createdBy);</span>
+			}
+
+<span class="nc" id="L2711">			return eventId;</span>
+		}
+		
+		/**
+		 * Creates the intuition payment update event serivce log.
+		 *
+		 * @param message the message
+		 * @return the message
+		 */
+		//AT-4749
+		public Message&lt;MessageContext&gt; createIntuitionPaymentUpdateEventSerivceLog(Message&lt;MessageContext&gt; message) {
+
+			try {
+				List&lt;EventServiceLog&gt; eventServiceLogs;
+
+<span class="nc" id="L2726">				IntuitionPaymentStatusUpdateRequest request = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L2727">						.getRequest(IntuitionPaymentStatusUpdateRequest.class);</span>
+<span class="nc" id="L2728">				Integer fundsId = 0;</span>
+
+<span class="nc bnc" id="L2730" title="All 2 branches missed.">				if (request.getTrxType().equalsIgnoreCase(FUNDS_IN)) {</span>
+<span class="nc" id="L2731">					FundsInCreateRequest fundsInRequest = (FundsInCreateRequest) request</span>
+<span class="nc" id="L2732">							.getAdditionalAttribute(&quot;fundsInRequest&quot;);</span>
+<span class="nc" id="L2733">					fundsId = fundsInRequest.getFundsInId();</span>
+<span class="nc" id="L2734">				} else {</span>
+<span class="nc" id="L2735">					FundsOutRequest fundsOutRequest = (FundsOutRequest) request</span>
+<span class="nc" id="L2736">							.getAdditionalAttribute(&quot;fundsOutRequest&quot;);</span>
+<span class="nc" id="L2737">					fundsId = fundsOutRequest.getFundsOutId();</span>
+				}
+
+<span class="nc" id="L2740">				eventServiceLogs = createEventServiceLogEntryForPaymentInIntuitionManualUpdate(message, request,</span>
+						fundsId);
+
+<span class="nc" id="L2743">				saveIntoEventServiceLog(eventServiceLogs);</span>
+<span class="nc" id="L2744">				saveIntoEventServiceLogSummary(eventServiceLogs);</span>
+<span class="nc" id="L2745">			} catch (Exception e) {</span>
+<span class="nc" id="L2746">				LOG.error(&quot;Error in EventDBServiceImpl createTransactionMonitoringEventSerivceLog()&quot;, e);</span>
+<span class="nc" id="L2747">				message.getPayload().setFailed(true);</span>
+<span class="nc" id="L2748">			}</span>
+<span class="nc" id="L2749">			return message;</span>
+		}
+
+		/**
+		 * Creates the event service log entry for payment in intuition manual update.
+		 *
+		 * @param message the message
+		 * @param request the request
+		 * @param fundsId 
+		 * @return 
+		 */
+		//AT-4749
+		private List&lt;EventServiceLog&gt; createEventServiceLogEntryForPaymentInIntuitionManualUpdate(
+				Message&lt;MessageContext&gt; message, IntuitionPaymentStatusUpdateRequest request, Integer fundsId) {
+<span class="nc" id="L2763">			List&lt;EventServiceLog&gt; eventServiceLogs = new ArrayList&lt;&gt;();</span>
+			//UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);
+<span class="nc" id="L2765">			Account account = (Account) request.getAdditionalAttribute(ACCOUNT);</span>
+
+<span class="nc" id="L2767">			TransactionMonitoringPaymentsSummary summary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L2768">			TransactionMonitoringFundsProviderResponse tmProviderResponse = new TransactionMonitoringFundsProviderResponse();</span>
+
+<span class="nc" id="L2770">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L2771">					.getAdditionalAttribute(&quot;eventId&quot;);</span>
+
+<span class="nc" id="L2773">			EventServiceLog eventServiceLog = new EventServiceLog();</span>
+<span class="nc" id="L2774">			summary.setStatus(request.getStatus());</span>
+<span class="nc" id="L2775">			summary.setFundsInId(fundsId);</span>
+<span class="nc" id="L2776">			summary.setRuleScore(request.getRuleScore());</span>
+<span class="nc" id="L2777">			summary.setRuleRiskLevel(request.getRuleRiskLevel());</span>
+<span class="nc" id="L2778">			summary.setClientRiskLevel(request.getClientRiskLevel());</span>
+<span class="nc" id="L2779">			summary.setClientRiskScore(request.getClientRiskScore());</span>
+<span class="nc" id="L2780">			summary.setCorrelationId(request.getCorrelationID().toString());</span>
+<span class="nc" id="L2781">			summary.setUserId(request.getUserId());</span>
+<span class="nc" id="L2782">			summary.setAction(request.getAction());//Add for AT-4880</span>
+
+<span class="nc" id="L2784">			tmProviderResponse.setId(request.getId());</span>
+<span class="nc" id="L2785">			tmProviderResponse.setRulesTriggered(request.getRulesTriggered());</span>
+<span class="nc" id="L2786">			tmProviderResponse.setStatus(request.getStatus());</span>
+<span class="nc" id="L2787">			tmProviderResponse.setRuleScore(request.getRuleScore());</span>
+<span class="nc" id="L2788">			tmProviderResponse.setClientRiskScore(request.getClientRiskScore());</span>
+<span class="nc" id="L2789">			tmProviderResponse.setRuleRiskLevel(request.getRuleRiskLevel());</span>
+<span class="nc" id="L2790">			tmProviderResponse.setClientRiskLevel(request.getClientRiskLevel());</span>
+<span class="nc" id="L2791">			tmProviderResponse.setCorrelationId(request.getCorrelationID().toString());</span>
+<span class="nc" id="L2792">			tmProviderResponse.setAction(request.getAction());//Add for AT-4880</span>
+
+<span class="nc" id="L2794">			String status = &quot;FAIL&quot;;</span>
+<span class="nc bnc" id="L2795" title="All 4 branches missed.">			if (request.getAction().equalsIgnoreCase(&quot;Clean&quot;) || request.getAction().equalsIgnoreCase(&quot;Clear&quot;))</span>
+<span class="nc" id="L2796">				status = &quot;PASS&quot;;</span>
+
+<span class="nc" id="L2798">			eventServiceLog.setEventId(eventId);</span>
+<span class="nc" id="L2799">			eventServiceLog.setEntityType(EntityEnum.ACCOUNT.name());</span>
+<span class="nc" id="L2800">			eventServiceLog.setServiceName(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE.getShortName());</span>
+<span class="nc bnc" id="L2801" title="All 2 branches missed.">			if (request.getTrxType().equalsIgnoreCase(FUNDS_IN)) {</span>
+<span class="nc" id="L2802">				eventServiceLog.setServiceProviderName(ServiceProviderEnum.TRANSACTION_MONITORING_FUNDSIN.name());</span>
+			} else {
+<span class="nc" id="L2804">				eventServiceLog.setServiceProviderName(ServiceProviderEnum.TRANSACTION_MONITORING_FUNDSOUT.name());</span>
+			}
+<span class="nc" id="L2806">			eventServiceLog.setEntityId(fundsId);</span>
+<span class="nc" id="L2807">			eventServiceLog.setEntityVersion(account.getVersion());</span>
+<span class="nc" id="L2808">			eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L2809">			eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmProviderResponse));</span>
+<span class="nc" id="L2810">			eventServiceLog.setStatus(status);</span>
+<span class="nc" id="L2811">			eventServiceLog.setCratedBy(1);</span>
+<span class="nc" id="L2812">			eventServiceLog.setUpdatedBy(1);</span>
+<span class="nc" id="L2813">			eventServiceLog.setCreatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2814">			eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2816">			eventServiceLogs.add(eventServiceLog);</span>
+
+<span class="nc" id="L2818">			return eventServiceLogs;</span>
+
+		}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

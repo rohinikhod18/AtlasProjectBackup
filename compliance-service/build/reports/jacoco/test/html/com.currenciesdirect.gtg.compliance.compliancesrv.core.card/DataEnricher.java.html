@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataEnricher.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.card</a> &gt; <span class="el_source">DataEnricher.java</span></div><h1>DataEnricher.java</h1><pre class="source lang-java linenums">/*
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.core.card;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.AbstractDataEnricher;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.ordercardsrv.OrderCardRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.ordercardsrv.response.OrderCardResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+
+import java.sql.Timestamp;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+import org.apache.commons.lang.BooleanUtils;
+import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.Header;
+
+/**
+ * The Class DataEnricher.
+ */
+<span class="nc" id="L41">public class DataEnricher extends AbstractDataEnricher {</span>
+
+	/** The Constant LOGGER. */
+<span class="nc" id="L44">	private static final Logger LOGGER = LoggerFactory.getLogger(DataEnricher.class);</span>
+
+	/** The new reg DB service impl. */
+	@Autowired
+	protected NewRegistrationDBServiceImpl newRegDBServiceImpl;
+
+	/**
+	 * Process.
+	 *
+	 * @param message the message
+	 * @param correlationID the correlation ID
+	 * @return the message
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message, @Header UUID correlationID) {
+<span class="nc" id="L59">		LOGGER.debug(&quot;Gateway message headers=[{}], payload=[{}]&quot;, message.getHeaders(), message.getPayload());</span>
+
+<span class="nc" id="L61">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L62">		OrderCardResponse orderCardResponse = messageExchange.getResponse(OrderCardResponse.class);</span>
+<span class="nc" id="L63">		OrderCardRequest orderCardRequest = messageExchange.getRequest(OrderCardRequest.class);</span>
+<span class="nc" id="L64">		RegistrationServiceRequest registrationServiceRequest = new RegistrationServiceRequest();</span>
+<span class="nc" id="L65">		RegistrationResponse registrationResponse = new RegistrationResponse();</span>
+<span class="nc" id="L66">		HashMap&lt;String, String&gt; pair = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L67">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+		try {
+
+<span class="nc" id="L70">			Account account = new Account();</span>
+<span class="nc" id="L71">			getUserTableId(message);</span>
+<span class="nc" id="L72">			Map&lt;String, String&gt; accountInfo = getOrgId(orderCardRequest.getTradeAccountNumber(), orderCardRequest.getTradeContactID());</span>
+<span class="nc" id="L73">			account.setTradeAccountNumber(orderCardRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L74">			Boolean loadCriteria = Boolean.FALSE;</span>
+<span class="nc" id="L75">			Timestamp currentDate = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L76">			String registrationLoadCriteria = null;</span>
+			
+<span class="nc bnc" id="L78" title="All 2 branches missed.">			if (accountInfo.isEmpty()) {</span>
+<span class="nc" id="L79">				registrationServiceRequest.setAccount(account);</span>
+<span class="nc" id="L80">				pair.put(orderCardRequest.getTradeAccountNumber(), orderCardRequest.getTradeContactID());</span>
+<span class="nc" id="L81">				registrationServiceRequest.addAttribute(&quot;CONTACT_ID_WRONG&quot;, pair);</span>
+<span class="nc" id="L82">				account.setId(null);</span>
+<span class="nc" id="L83">				throw new Exception();</span>
+			}
+<span class="nc" id="L85">			account.setCardDeliveryToSecondaryAddress(StringUtils</span>
+<span class="nc" id="L86">					.capitalize(BooleanUtils.toStringYesNo(orderCardRequest.getCardDeliveryToSecondaryAddress())));</span>
+<span class="nc" id="L87">			account.setId(Integer.parseInt(accountInfo.get(&quot;id&quot;)));</span>
+<span class="nc" id="L88">			account.setVersion(1);</span>
+			
+<span class="nc" id="L90">			registrationServiceRequest.setOrgCode(accountInfo.get(&quot;orgCode&quot;));</span>
+<span class="nc" id="L91">			registrationServiceRequest.setIsCardApply(&quot;A&quot;);</span>
+<span class="nc" id="L92">			registrationServiceRequest.setIpAddress(orderCardRequest.getRequestIPAddress());</span>
+<span class="nc" id="L93">			registrationServiceRequest.setTradeContractId(orderCardRequest.getTradeContactID());</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">			if(orderCardRequest.getPasswordChangeDate() != null) {</span>
+<span class="nc" id="L95">				registrationServiceRequest.setLastPasswordChangeDate(</span>
+<span class="nc" id="L96">						getFormattedDateForCardEligiblity(orderCardRequest.getPasswordChangeDate()));</span>
+			}
+			else {
+<span class="nc" id="L99">				registrationServiceRequest.setLastPasswordChangeDate(null);</span>
+			}
+			
+<span class="nc bnc" id="L102" title="All 2 branches missed.">			if(orderCardRequest.getApplicationInstallDate() != null) {</span>
+<span class="nc" id="L103">				registrationServiceRequest.setAppInstallDate(</span>
+<span class="nc" id="L104">						getFormattedDateForCardEligiblity(orderCardRequest.getApplicationInstallDate()));</span>
+			}
+			else {
+<span class="nc" id="L107">				registrationServiceRequest.setAppInstallDate(null);</span>
+			}
+			
+<span class="nc" id="L110">			registrationServiceRequest.setDeviceId(orderCardRequest.getApplicationDeviceId());</span>
+<span class="nc" id="L111">			registrationServiceRequest.setAccount(account);</span>
+
+<span class="nc" id="L113">			ComplianceAccount complianceAccount = new ComplianceAccount();</span>
+<span class="nc" id="L114">			complianceAccount.setId(Integer.parseInt(accountInfo.get(&quot;id&quot;)));</span>
+<span class="nc" id="L115">			registrationResponse.setAccount(complianceAccount);</span>
+
+			// AT-5127
+<span class="nc bnc" id="L118" title="All 4 branches missed.">			if(registrationServiceRequest.getIsCardApply().equalsIgnoreCase(&quot;A&quot;) &amp;&amp; Integer.parseInt(accountInfo.get(&quot;accountTMFlag&quot;)) == 0) {</span>
+<span class="nc" id="L119">				loadCriteria = Boolean.TRUE;</span>
+<span class="nc" id="L120">				registrationLoadCriteria = &quot;cardApply-&quot;+currentDate;</span>
+				//update accountTMFlag as 4
+<span class="nc" id="L122">				updateAccountTMFlag(Integer.parseInt(accountInfo.get(&quot;id&quot;)), 4, token.getUserID());</span>
+			}
+			
+<span class="nc" id="L125">			message.getPayload().setOrgCode(accountInfo.get(&quot;orgCode&quot;));</span>
+<span class="nc" id="L126">			messageExchange.setRequest(registrationServiceRequest);</span>
+<span class="nc" id="L127">			messageExchange.setResponse(registrationResponse);</span>
+<span class="nc" id="L128">			messageExchange.getRequest().addAttribute(&quot;loadCriteria&quot;, loadCriteria); //AT-5127</span>
+<span class="nc" id="L129">			messageExchange.getRequest().addAttribute(&quot;registrationLoadCriteria&quot;, registrationLoadCriteria); //AT-5127</span>
+<span class="nc" id="L130">			messageExchange.getRequest().addAttribute(&quot;orderCardEligibilityRequest&quot;, orderCardRequest);</span>
+<span class="nc" id="L131">		} catch (Exception e) {</span>
+
+<span class="nc" id="L133">			LOGGER.error(&quot;Request is not valid&quot;);</span>
+<span class="nc" id="L134">			orderCardResponse.setDecision(BaseResponse.DECISION.FAIL);</span>
+<span class="nc" id="L135">			orderCardResponse.setResponseCode(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L136">			orderCardResponse.setResponseDescription(InternalProcessingCode.INV_REQUEST.toString());</span>
+<span class="nc" id="L137">			messageExchange.setResponse(orderCardResponse);</span>
+<span class="nc" id="L138">			messageExchange.setRequest(registrationServiceRequest);</span>
+<span class="nc" id="L139">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L140">		}</span>
+<span class="nc" id="L141">		return message;</span>
+	}
+
+	/**
+	 * Gets the org id.
+	 *
+	 * @param tradeAccountNumber the trade account number
+	 * @param tradeContactId the trade contact id
+	 * @return the org id
+	 */
+	public Map&lt;String, String&gt; getOrgId(String tradeAccountNumber, String tradeContactId) {
+<span class="nc" id="L152">		Map&lt;String, String&gt; list = null;</span>
+		try {
+<span class="nc" id="L154">			list = newRegistrationDBServiceImpl.getAccountIdByTradeAccountNumber(tradeAccountNumber,</span>
+<span class="nc" id="L155">					Integer.parseInt(tradeContactId));</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">			if (list.isEmpty())</span>
+<span class="nc" id="L157">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST);</span>
+<span class="nc" id="L158">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L159">			LOGGER.error(&quot;Error in getAccountId method:&quot;, e);</span>
+<span class="nc" id="L160">		}</span>
+<span class="nc" id="L161">		return list;</span>
+	}
+
+	/**
+	 * Gets the formatted date for card eligiblity.
+	 *
+	 * @param dateToFormate the date to formate
+	 * @return the formatted date for card eligiblity
+	 */
+	// AT-5071
+	public String getFormattedDateForCardEligiblity(String dateToFormate) {
+<span class="nc" id="L172">		String formattedDate = dateToFormate;</span>
+
+<span class="nc" id="L174">		boolean isDateFormatted = getFormattedDate(dateToFormate);</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">		if (isDateFormatted) {</span>
+			try {
+<span class="nc" id="L177">				DateFormat originalFormat = new SimpleDateFormat(&quot;dd/mm/yyyy&quot;);</span>
+<span class="nc" id="L178">				DateFormat targetFormat = new SimpleDateFormat(&quot;yyyy-mm-dd&quot;);</span>
+<span class="nc" id="L179">				Date date = originalFormat.parse(dateToFormate);</span>
+<span class="nc" id="L180">				formattedDate = targetFormat.format(date);</span>
+<span class="nc" id="L181">			} catch (Exception e) {</span>
+<span class="nc" id="L182">				LOGGER.error(&quot;Exception in getFormattedDateForCardEligiblity() : &quot;, e);</span>
+<span class="nc" id="L183">			}</span>
+		}
+
+<span class="nc" id="L186">		return formattedDate;</span>
+	}
+
+	/**
+	 * Gets the formatted date.
+	 *
+	 * @param isDateFormatted the is date formatted
+	 * @return the formatted date
+	 */
+	private boolean getFormattedDate(String isDateFormatted) {
+<span class="nc" id="L196">		String regex = &quot;[0-9]{1,2}\\/[0-9]{1,2}\\/[0-9]{4}&quot;;</span>
+<span class="nc" id="L197">		return isDateFormatted.matches(regex);</span>
+	}
+	
+	/**
+	 * Update account TM flag.
+	 *
+	 * @param accountId the account id
+	 * @param accountTMFlag the account TM flag
+	 * @param userId the user id
+	 * @throws ComplianceException the compliance exception
+	 */
+	//AT-5127
+	private void updateAccountTMFlag(Integer accountId, Integer accountTMFlag, Integer userId)
+			throws ComplianceException {
+		try {
+<span class="nc" id="L212">			newRegDBServiceImpl.updateIntoAccountTMFlag(accountId, accountTMFlag, userId);</span>
+<span class="nc" id="L213">		} catch (Exception e) {</span>
+<span class="nc" id="L214">			LOGGER.error(&quot;Error in updateAccountTMFlag method:&quot;, e);</span>
+<span class="nc" id="L215">		} </span>
+<span class="nc" id="L216">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

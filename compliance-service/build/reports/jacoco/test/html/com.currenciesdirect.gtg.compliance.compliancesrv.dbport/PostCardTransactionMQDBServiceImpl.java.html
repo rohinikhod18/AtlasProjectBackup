@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PostCardTransactionMQDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">PostCardTransactionMQDBServiceImpl.java</span></div><h1>PostCardTransactionMQDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+
+import org.springframework.messaging.Message;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.BroadCastStatusEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.postcardtransactionmq.PostCardTransactionMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+@SuppressWarnings(&quot;squid:S2095&quot;)
+@Component
+<span class="nc" id="L24">public class PostCardTransactionMQDBServiceImpl extends AbstractDao {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L27">	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory</span>
+<span class="nc" id="L28">			.getLogger(PostCardTransactionMQDBServiceImpl.class);</span>
+
+	/** The Constant RETRYCOUNT. */
+	private static final String RETRYCOUNT = &quot;transactionmonitoring.retrycount&quot;;
+
+	public Boolean isMessageForBroadcast() throws ComplianceException {
+<span class="nc" id="L34">		PreparedStatement statement = null;</span>
+<span class="nc" id="L35">		ResultSet rs = null;</span>
+<span class="nc" id="L36">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L38">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L39">			statement = connection.prepareStatement(DBQueryConstant.GET_POST_CARD_TM_MQ_MESSAGE_FROM_DB.getQuery());</span>
+<span class="nc" id="L40">			statement.setInt(1, Integer.parseInt(System.getProperty(RETRYCOUNT)));</span>
+
+<span class="nc" id="L42">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L43" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L44">				return Boolean.TRUE;</span>
+			}
+
+<span class="nc" id="L47">		} catch (Exception e) {</span>
+<span class="nc" id="L48">			LOG.error(&quot;Error in PostCardTransactionMQDBServiceImpl isMessageForBroadcast method&quot;);</span>
+<span class="nc" id="L49">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L51">			closeResultset(rs);</span>
+<span class="nc" id="L52">			closePrepareStatement(statement);</span>
+<span class="nc" id="L53">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L55">		return Boolean.FALSE;</span>
+	}
+
+	public Message&lt;MessageContext&gt; loadMessageFromDB(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L59">		PreparedStatement statement = null;</span>
+<span class="nc" id="L60">		ResultSet rs = null;</span>
+<span class="nc" id="L61">		Connection connection = null;</span>
+<span class="nc" id="L62">		PostCardTransactionMQRequest postCardMQRequest = new PostCardTransactionMQRequest();</span>
+		try {
+<span class="nc" id="L64">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L65">			statement = connection.prepareStatement(DBQueryConstant.GET_POST_CARD_TM_MQ_MESSAGE_FROM_DB.getQuery());</span>
+<span class="nc" id="L66">			statement.setInt(1, Integer.parseInt(System.getProperty(RETRYCOUNT)));</span>
+
+<span class="nc" id="L68">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L70">				postCardMQRequest.setId(rs.getInt(&quot;ID&quot;));</span>
+<span class="nc" id="L71">				postCardMQRequest.setTransactionID(rs.getString(&quot;TransactionID&quot;));</span>
+<span class="nc" id="L72">				postCardMQRequest.setCardRequestType(rs.getString(&quot;CardRequestType&quot;));</span>
+<span class="nc" id="L73">				postCardMQRequest</span>
+<span class="nc" id="L74">						.setRequestJson(JsonConverterUtil.convertToObject(Object.class, rs.getString(&quot;RequestJson&quot;)));</span>
+<span class="nc" id="L75">				postCardMQRequest.setCreatedBy(rs.getInt(&quot;CreatedBy&quot;));</span>
+<span class="nc" id="L76">				postCardMQRequest.setIsPresent(rs.getInt(&quot;isPresent&quot;));</span>
+<span class="nc" id="L77">				message.getPayload().setRetryCount(rs.getInt(&quot;RetryCount&quot;));</span>
+<span class="nc" id="L78">				message.getPayload().getMessageExchange(ServiceTypeEnum.GATEWAY_SERVICE).setRequest(postCardMQRequest);</span>
+			} else {
+<span class="nc" id="L80">				message.getPayload().setNoMessageLeft(Boolean.TRUE);</span>
+			}
+<span class="nc" id="L82">		} catch (Exception e) {</span>
+<span class="nc" id="L83">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L85">			closeResultset(rs);</span>
+<span class="nc" id="L86">			closePrepareStatement(statement);</span>
+<span class="nc" id="L87">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L89">		return message;</span>
+	}
+
+	/**
+	 * Update MQ status to DB.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; updateMQStatusToDB(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L100">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L101">		PostCardTransactionMQRequest postCardMQRequest = (PostCardTransactionMQRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L102">		MessageExchange messageExch = message.getPayload()</span>
+<span class="nc" id="L103">				.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L104">		TransactionMonitoringPostCardTransactionResponse tmCardResponse = (TransactionMonitoringPostCardTransactionResponse) messageExch</span>
+<span class="nc" id="L105">				.getResponse();</span>
+
+<span class="nc" id="L107">		PreparedStatement statement = null;</span>
+<span class="nc" id="L108">		Connection connection = null;</span>
+<span class="nc" id="L109">		Integer retryCount = null;</span>
+<span class="nc" id="L110">		Boolean isFailedRequest = Boolean.FALSE;</span>
+<span class="nc" id="L111">		Boolean cardStatus = Boolean.FALSE;</span>
+		try {
+<span class="nc" id="L113">			retryCount = message.getPayload().getRetryCount();</span>
+			
+<span class="nc bnc" id="L115" title="All 2 branches missed.">			if (tmCardResponse != null) {</span>
+<span class="nc" id="L116">				isFailedRequest = (Boolean) tmCardResponse.getAdditionalAttribute(&quot;isFailedRequest&quot;);</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">				cardStatus = Constants.PASS.equalsIgnoreCase(tmCardResponse.getStatus())</span>
+<span class="nc bnc" id="L118" title="All 4 branches missed.">						|| Constants.FAIL.equalsIgnoreCase(tmCardResponse.getStatus()) || isFailedRequest;</span>
+			}
+
+<span class="nc" id="L121">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L122">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_POST_CARD_TM_MQ_STATUS.getQuery());</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">			if (Boolean.TRUE.equals(cardStatus)) {</span>
+<span class="nc" id="L124">				statement.setInt(1,</span>
+<span class="nc" id="L125">						BroadCastStatusEnum.getBraodCastStatusAsInteger(BroadCastStatusEnum.DELIVERED.toString()));</span>
+			} else {
+<span class="nc" id="L127">				statement.setInt(1,</span>
+<span class="nc" id="L128">						BroadCastStatusEnum.getBraodCastStatusAsInteger(BroadCastStatusEnum.FAILED.toString()));</span>
+<span class="nc" id="L129">				retryCount++;</span>
+			}
+
+<span class="nc" id="L132">			statement.setInt(2, retryCount);</span>
+<span class="nc" id="L133">			statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L134">			statement.setInt(4, postCardMQRequest.getId());</span>
+<span class="nc" id="L135">			statement.executeUpdate();</span>
+
+<span class="nc" id="L137">			message.getPayload().setRetryCount(retryCount);</span>
+
+<span class="nc" id="L139">		} catch (Exception e) {</span>
+<span class="nc" id="L140">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L142">			closePrepareStatement(statement);</span>
+<span class="nc" id="L143">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L145">		return message;</span>
+	}
+	
+	/**
+	 * Removes the delivered record from TMMQ table.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; removeDeliveredRecordFromTMMQTable(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L156">		PreparedStatement statement = null;</span>
+<span class="nc" id="L157">		Connection connection = null;</span>
+		try {
+<span class="nc" id="L159">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L160">			PostCardTransactionMQRequest postCardMQRequest = (PostCardTransactionMQRequest) messageExchange.getRequest();</span>
+			
+<span class="nc" id="L162">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L163">			statement = connection.prepareStatement(DBQueryConstant.DELETE_DELIVERED_RECORD_FROM_POST_CARD_TMMQ.getQuery());</span>
+<span class="nc" id="L164">			statement.setInt(1, postCardMQRequest.getId());</span>
+<span class="nc" id="L165">			Integer count =  statement.executeUpdate();</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">			if(count &gt; 0) {</span>
+<span class="nc" id="L167">				LOG.warn(&quot;Deleted Record From PostCardTransactionMonitoringMQ Where ID : {}&quot;,postCardMQRequest.getTransactionID());</span>
+			}
+<span class="nc" id="L169">		} catch (Exception e) {</span>
+<span class="nc" id="L170">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+
+<span class="nc" id="L173">			closePrepareStatement(statement);</span>
+<span class="nc" id="L174">			closeConnection(connection);</span>
+
+		}
+<span class="nc" id="L177">		return message;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

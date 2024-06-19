@@ -1,0 +1,122 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	
+
+	<int:channel id="PUSH.MQ.IN.CHANNEL" />
+	<int:channel id="PUSH.MQ.OUT.CHANNEL" />
+	<int:channel id="MQ.SERVICE.IN.CHANNEL" />
+	
+	<int:chain
+		id="mq.initChain"
+		input-channel="PUSH.MQ.IN.CHANNEL">
+		<int:service-activator
+			ref="BroadCastQueueDBServiceImpl"
+			id="MQ.DB.LOAD" 
+				method="loadMessageFromDB"/>
+					<int:router
+					id="mq.checkmessageleft"
+			default-output-channel="PUSH.MQ.OUT.CHANNEL"
+			expression="payload.getNoMessageLeft()">
+			<int:mapping
+				value="true"
+				channel="PUSH.MQ.OUT.CHANNEL" />
+			<int:mapping
+				value="false"
+				channel="MQ.SERVICE.IN.CHANNEL" />
+		</int:router>
+		
+	</int:chain>
+	
+	<int:chain
+		id="mq.servicechain"
+		input-channel="MQ.SERVICE.IN.CHANNEL">
+		<int:service-activator 
+			ref="mqdataenricher"
+			id="MQ.DataEnricher"
+			method="process"/>
+		<int:transformer
+			ref="mqbroadcastTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="MQ"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.MQHttpClient"
+				p:urlBase="#{providerProperties.getEndPointUrl('MQ_SERVICE')}"
+				p:method="POST"/>
+		</int:service-activator>
+			<int:service-activator
+			ref="BroadCastQueueDBServiceImpl"
+			id="MQ.DB.UPDATE" 
+				method="updateBroadCastStatusToDB"/>
+				
+				<int:router
+			default-output-channel="PUSH.MQ.OUT.CHANNEL"
+			expression="payload.isDatalakeEligible()">
+			<int:mapping
+				value="true"
+				channel="DATA_LAKE.IN.CHANNEL" />
+			<int:mapping
+				value="false"
+				channel="PUSH.MQ.OUT.CHANNEL" />
+		</int:router>
+			</int:chain>
+			
+				<int:chain
+		id="dataLakeChain"
+		input-channel="DATA_LAKE.IN.CHANNEL"
+		output-channel="PUSH.MQ.OUT.CHANNEL">
+		<int:service-activator
+			id="DATA_LAKE"
+			method="sendRequestToDataLake">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.MQHttpClient"
+				p:urlBase="#{providerProperties.getEndPointUrl('DATA_LAKE')}"
+				p:method="POST"/>
+		</int:service-activator>
+			</int:chain>
+			
+			
+			
+	<int:chain
+		id="mq.responsechain"
+		input-channel="PUSH.MQ.OUT.CHANNEL"
+		output-channel="nullChannel">
+		<int:service-activator
+			ref="broadCastQueueService"
+			method="handleResponse" />
+		</int:chain>
+	<bean
+		id="BroadCastQueueDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.BroadCastQueueDBServiceImpl" />
+	<bean
+		id="mqbroadcastTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.mqbroadcast.MQTransformer" />
+		
+	<bean
+		id="broadCastQueueService"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.BroadCastQueueService" />
+	<bean 
+		id="mqdataenricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.mqbroadcast.DataEnricher" />
+
+</beans>

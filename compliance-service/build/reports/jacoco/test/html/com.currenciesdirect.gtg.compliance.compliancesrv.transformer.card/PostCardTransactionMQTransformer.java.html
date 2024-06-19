@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PostCardTransactionMQTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.card</a> &gt; <span class="el_source">PostCardTransactionMQTransformer.java</span></div><h1>PostCardTransactionMQTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.card;
+
+import java.util.Arrays;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailHeaderForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailPayloadForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.SendEmailRequestForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionResponse;
+import com.currenciesdirect.gtg.compliance.commons.externalservice.commhubport.ICommHubServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.postcardtransactionmq.IntuitionPostCardAccountMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.postcardtransactionmq.IntuitionPostCardChargebackMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.postcardtransactionmq.IntuitionPostCardIPDeviceMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.postcardtransactionmq.IntuitionPostCardMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.postcardtransactionmq.IntuitionPostCardTransactionMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.postcardtransactionmq.PostCardTransactionMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionAccountMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionCFXLegalEntityMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionCardMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.IntuitionIPDeviceMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+<span class="nc" id="L33">public class PostCardTransactionMQTransformer extends AbstractTransformer {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L36">	private static final Logger LOG = LoggerFactory.getLogger(PostCardTransactionMQTransformer.class);</span>
+	
+	/** The i comm hub service impl. */
+	@Autowired
+	private ICommHubServiceImpl iCommHubServiceImpl;
+
+	/**
+	 * Transform request.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L50">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L51">		PostCardTransactionMQRequest postCardMQRequest = (PostCardTransactionMQRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L52">		TransactionMonitoringPostCardTransactionRequest tmRequest = new TransactionMonitoringPostCardTransactionRequest();</span>
+<span class="nc" id="L53">		TransactionMonitoringPostCardTransactionResponse tmResponse = new TransactionMonitoringPostCardTransactionResponse();</span>
+
+<span class="nc" id="L55">		MessageExchange ccExchange = new MessageExchange();</span>
+
+		try {
+<span class="nc" id="L58">			String json = JsonConverterUtil.convertToJsonWithoutNull(postCardMQRequest.getRequestJson());</span>
+<span class="nc" id="L59">			IntuitionPostCardMQRequest mqRequest = JsonConverterUtil</span>
+<span class="nc" id="L60">					.convertToObject(IntuitionPostCardMQRequest.class, json);</span>
+
+<span class="nc" id="L62">			transformTransactionMonitoringPostCardMQRequest(mqRequest, tmRequest);</span>
+<span class="nc" id="L63">			tmRequest.setRequestType(postCardMQRequest.getCardRequestType());</span>
+<span class="nc" id="L64">			tmRequest.setIsPresent(postCardMQRequest.getIsPresent());</span>
+
+<span class="nc" id="L66">			ccExchange.setRequest(tmRequest);</span>
+<span class="nc" id="L67">			ccExchange.setResponse(tmResponse);</span>
+<span class="nc" id="L68">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L69">			message.getPayload().appendMessageExchange(ccExchange);</span>
+
+<span class="nc" id="L71">		} catch (Exception e) {</span>
+<span class="nc" id="L72">			LOG.error(&quot;Error in PostCardTransactionMQTransformer transformRequest()&quot;, e);</span>
+<span class="nc" id="L73">		}</span>
+<span class="nc" id="L74">		return message;</span>
+	}
+
+	/**
+	 * Transform transaction monitoring post card MQ request.
+	 *
+	 * @param postCardMQRequest the post card MQ request
+	 * @param tmRequest         the tm request
+	 */
+	private void transformTransactionMonitoringPostCardMQRequest(IntuitionPostCardMQRequest request,
+			TransactionMonitoringPostCardTransactionRequest tmRequest) {
+		
+<span class="nc" id="L86">		tmRequest.setTrxID(request.getTrxID());</span>
+<span class="nc" id="L87">		tmRequest.setgPSDatestamp(request.getGPSDatestamp());</span>
+<span class="nc" id="L88">		tmRequest.setTitanAccountNumber(request.getTitanAccountNumber());</span>
+<span class="nc" id="L89">		tmRequest.setCardToken(request.getCardToken());</span>
+<span class="nc" id="L90">		tmRequest.setBin(request.getBin());</span>
+<span class="nc" id="L91">		tmRequest.setProductID(request.getProductID());</span>
+<span class="nc" id="L92">		tmRequest.setAcqDate(request.getAcqDate());</span>
+<span class="nc" id="L93">		tmRequest.setRequestType(request.getRequestType());</span>
+<span class="nc" id="L94">		tmRequest.setTxnCountry(request.getTxnCountry());</span>
+<span class="nc" id="L95">		tmRequest.setMultiPartInd(request.getMultiPartInd());</span>
+<span class="nc" id="L96">		tmRequest.setMultiPartFinal(request.getMultiPartFinal());</span>
+<span class="nc" id="L97">		tmRequest.setMultiPartMatchingReference(request.getMultiPartMatchingReference());</span>
+<span class="nc" id="L98">		tmRequest.setBillCcy(request.getBillCcy());</span>
+<span class="nc" id="L99">		tmRequest.setBillAmount(request.getBillAmount());</span>
+<span class="nc" id="L100">		tmRequest.setAdditionalAmountCcy(request.getAdditionalAmountCcy());</span>
+<span class="nc" id="L101">		tmRequest.setAdditionalAmount(request.getAdditionalAmount());</span>
+<span class="nc" id="L102">		tmRequest.setMerchID(request.getMerchID());</span>
+<span class="nc" id="L103">		tmRequest.setmCCCode(request.getMCCCode());</span>
+<span class="nc" id="L104">		tmRequest.setAcquirerID(request.getAcquirerID());</span>
+<span class="nc" id="L105">		tmRequest.setTitanDecisionCode(request.getTitanDecisionCode());</span>
+<span class="nc" id="L106">		tmRequest.setTitanDecisionDescription(request.getTitanDecisionDescription());</span>
+<span class="nc" id="L107">		tmRequest.setCardStatusCode(request.getCardStatusCode());</span>
+<span class="nc" id="L108">		tmRequest.setgPSSTIPFlag(request.getGPSSTIPFlag());</span>
+<span class="nc" id="L109">		tmRequest.setaVSResult(request.getAVSResult());</span>
+<span class="nc" id="L110">		tmRequest.setsCAAuthenticationExemptionCode(request.getSCAAuthenticationExemptionCode());</span>
+<span class="nc" id="L111">		tmRequest.setsCAAuthenticationExemptionDescription(request.getSCAAuthenticationExemptionDescription());</span>
+<span class="nc" id="L112">		tmRequest.setAuthenticationMethod(request.getAuthenticationMethod());</span>
+<span class="nc" id="L113">		tmRequest.setAuthenticationMethodDesc(request.getAuthenticationMethodDesc());	</span>
+<span class="nc" id="L114">		tmRequest.setcVVResults(request.getCVVResults());</span>
+<span class="nc" id="L115">		tmRequest.setpOSTerminal(request.getPOSTerminal());</span>
+<span class="nc" id="L116">		tmRequest.setpOSDatestamp(request.getGPSDatestamp());</span>
+<span class="nc" id="L117">		tmRequest.setgPSPOSCapability(request.getGPSPOSCapability());</span>
+<span class="nc" id="L118">		tmRequest.setgPSPOSData(request.getGPSPOSData());</span>
+		
+<span class="nc" id="L120">		IntuitionPostCardTransactionMQRequest transaction = null;</span>
+<span class="nc" id="L121">		IntuitionPostCardAccountMQRequest account = null;</span>
+<span class="nc" id="L122">		IntuitionPostCardChargebackMQRequest chargeback = null;</span>
+<span class="nc" id="L123">		IntuitionPostCardIPDeviceMQRequest ipdevice = null;</span>
+		
+<span class="nc bnc" id="L125" title="All 2 branches missed.">		if(request.getTransaction() != null) {</span>
+<span class="nc" id="L126">			transaction = request.getTransaction().get(0);</span>
+<span class="nc" id="L127">			tmRequest.setCardInputMode(transaction.getCardInputMode());</span>
+<span class="nc" id="L128">			tmRequest.setCardInputModeDesc(transaction.getCardInputModeDesc());</span>
+<span class="nc" id="L129">			tmRequest.setCardPresentIndicator(transaction.getCardPresentIndicator());</span>
+<span class="nc" id="L130">			tmRequest.setCardPresentDescription(transaction.getCardPresentDescription());</span>
+<span class="nc" id="L131">			tmRequest.setTxnCCY(transaction.getTxnCCY());</span>
+<span class="nc" id="L132">			tmRequest.setTxnAmount(transaction.getTxnAmount());</span>
+<span class="nc" id="L133">			tmRequest.setEffectiveAmount(transaction.getEffectiveAmount());</span>
+<span class="nc" id="L134">			tmRequest.setAdditionalAmountType(transaction.getAdditionalAmountType());</span>
+<span class="nc" id="L135">			tmRequest.setMerchantName(transaction.getMerchantName());</span>
+<span class="nc" id="L136">			tmRequest.setMerchantNameOther(transaction.getMerchantNameOther());</span>
+<span class="nc" id="L137">			tmRequest.setmCCCodeDescription(transaction.getMCCCodeDescription());</span>
+<span class="nc" id="L138">			tmRequest.setMerchantCountryCode(transaction.getMerchantCountryCode());</span>
+<span class="nc" id="L139">			tmRequest.setMerchantPostcode(transaction.getMerchantPostcode());</span>
+<span class="nc" id="L140">			tmRequest.setMerchantRegion(transaction.getMerchantRegion());</span>
+<span class="nc" id="L141">			tmRequest.setMerchantAddress(transaction.getMerchantAddress());</span>
+<span class="nc" id="L142">			tmRequest.setMerchantCity(transaction.getMerchantCity());</span>
+<span class="nc" id="L143">			tmRequest.setMerchantContact(transaction.getMerchantContact());</span>
+<span class="nc" id="L144">			tmRequest.setMerchantSecondContact(transaction.getMerchantSecondContact());</span>
+<span class="nc" id="L145">			tmRequest.setMerchantWebsite(transaction.getMerchantWebsite());</span>
+<span class="nc" id="L146">			tmRequest.setgPSDecisionCode(transaction.getGPSDecisionCode());</span>
+<span class="nc" id="L147">			tmRequest.setgPSDecisionCodeDescription(transaction.getGPSDecisionCodeDescription());</span>
+			//AT-5371
+<span class="nc" id="L149">			tmRequest.setPtWallet(transaction.getPtWallet());</span>
+<span class="nc" id="L150">			tmRequest.setPtDeviceType(transaction.getPtDeviceType());</span>
+<span class="nc" id="L151">			tmRequest.setPtDeviceIP(transaction.getPtDeviceIP());</span>
+<span class="nc" id="L152">			tmRequest.setPtDeviceID(transaction.getPtDeviceID());</span>
+		}
+		
+<span class="nc bnc" id="L155" title="All 2 branches missed.">		if(request.getAccount() != null) {</span>
+<span class="nc" id="L156">			account = request.getAccount().get(0);</span>
+<span class="nc" id="L157">			tmRequest.setConsolidatedWalletBalances(account.getConsolidatedWalletBalances());</span>
+		}
+		
+<span class="nc bnc" id="L160" title="All 2 branches missed.">		if(request.getChargeback() != null) {</span>
+<span class="nc" id="L161">			chargeback = request.getChargeback().get(0);</span>
+<span class="nc" id="L162">			tmRequest.setUpdateStatus(chargeback.getUpdateStatus());</span>
+<span class="nc" id="L163">			tmRequest.setUpdateDate(chargeback.getUpdateDate());</span>
+<span class="nc" id="L164">			tmRequest.setUpdateAmount(chargeback.getUpdateAmount());</span>
+<span class="nc" id="L165">			tmRequest.setChargebackReason(chargeback.getChargebackReason());</span>
+		}
+		
+<span class="nc bnc" id="L168" title="All 2 branches missed.">		if(request.getIpDevice() != null) {</span>
+<span class="nc" id="L169">			ipdevice = request.getIpDevice().get(0);</span>
+<span class="nc" id="L170">			tmRequest.setIpAddress(ipdevice.getIpAddress());</span>
+<span class="nc" id="L171">			tmRequest.setContinent(ipdevice.getContinent());</span>
+<span class="nc" id="L172">			tmRequest.setLongitude(ipdevice.getLongitude());</span>
+<span class="nc" id="L173">			tmRequest.setLatitiude(ipdevice.getLatitiude());</span>
+<span class="nc" id="L174">			tmRequest.setRegion(ipdevice.getRegion());</span>
+<span class="nc" id="L175">			tmRequest.setCity(ipdevice.getCity());</span>
+<span class="nc" id="L176">			tmRequest.setTimezone(ipdevice.getTimezone());</span>
+<span class="nc" id="L177">			tmRequest.setOrganization(ipdevice.getOrganization());</span>
+<span class="nc" id="L178">			tmRequest.setCarrier(ipdevice.getCarrier());</span>
+<span class="nc" id="L179">			tmRequest.setConnectionType(ipdevice.getConnectionType());</span>
+<span class="nc" id="L180">			tmRequest.setLineSpeed(ipdevice.getLineSpeed());</span>
+<span class="nc" id="L181">			tmRequest.setIpRoutingType(ipdevice.getIpRoutingType());</span>
+<span class="nc" id="L182">			tmRequest.setCountryName(ipdevice.getCountryName());</span>
+<span class="nc" id="L183">			tmRequest.setCountryCode(ipdevice.getCountryCode());</span>
+<span class="nc" id="L184">			tmRequest.setStateName(ipdevice.getStateName());</span>
+<span class="nc" id="L185">			tmRequest.setStateCode(ipdevice.getStateCode());</span>
+<span class="nc" id="L186">			tmRequest.setPostalCode(ipdevice.getPostalCode());</span>
+<span class="nc" id="L187">			tmRequest.setAreaCode(ipdevice.getAreaCode());</span>
+<span class="nc" id="L188">			tmRequest.setAnonymizerStatus(ipdevice.getAnonymizerStatus());</span>
+<span class="nc" id="L189">			tmRequest.setDeviceID(ipdevice.getDeviceID());</span>
+		}
+<span class="nc" id="L191">	}</span>
+
+	/**
+	 * Transform response.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L201">		MessageExchange messageExchange = message.getPayload()</span>
+<span class="nc" id="L202">				.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L203">		TransactionMonitoringPostCardTransactionRequest tmCardRequest = (TransactionMonitoringPostCardTransactionRequest) messageExchange</span>
+<span class="nc" id="L204">				.getRequest();</span>
+<span class="nc" id="L205">		TransactionMonitoringPostCardTransactionResponse tmCardResponse = (TransactionMonitoringPostCardTransactionResponse) messageExchange</span>
+<span class="nc" id="L206">				.getResponse();</span>
+		
+<span class="nc" id="L208">		Boolean isFailedRequest = Boolean.FALSE;</span>
+
+		try {
+<span class="nc bnc" id="L211" title="All 2 branches missed.">			if (tmCardResponse.getHttpStatus() == 400) {</span>
+<span class="nc" id="L212">				sendAlertEmailForInvalidRequest(tmCardRequest.getTrxID(),tmCardResponse.getErrorDescription());</span>
+<span class="nc" id="L213">				isFailedRequest = Boolean.TRUE;</span>
+			}
+			
+<span class="nc" id="L216">			tmCardResponse.addAttribute(&quot;isFailedRequest&quot;,isFailedRequest);</span>
+<span class="nc" id="L217">			messageExchange.setResponse(tmCardResponse);</span>
+			
+<span class="nc" id="L219">		} catch (Exception e) {</span>
+<span class="nc" id="L220">			LOG.error(&quot;Error in PostCardTransactionMQTransformer transformResponse() method : &quot;, e);</span>
+<span class="nc" id="L221">		}</span>
+
+<span class="nc" id="L223">		return message;</span>
+	}
+
+	/**
+	 * Send alert email for invalid request.
+	 *
+	 * @param instructionNumber the instruction number
+	 */
+	private void sendAlertEmailForInvalidRequest(String instructionNumber, String errorDesc) {
+
+<span class="nc" id="L233">		SendEmailRequestForTM sendTMEmailRequest = new SendEmailRequestForTM();</span>
+<span class="nc" id="L234">		EmailHeaderForTM header = new EmailHeaderForTM();</span>
+<span class="nc" id="L235">		EmailPayloadForTM payload = new EmailPayloadForTM();</span>
+
+<span class="nc" id="L237">		header.setSourceSystem(&quot;Atlas&quot;);</span>
+<span class="nc" id="L238">		header.setOrgCode(&quot;Currencies Direct&quot;);</span>
+<span class="nc" id="L239">		header.setLegalEntity(&quot;CDLGB&quot;);</span>
+
+<span class="nc" id="L241">		String email = System.getProperty(&quot;intuition.sendTo&quot;);</span>
+<span class="nc" id="L242">		List&lt;String&gt; list = Arrays.asList(email.split(&quot;,&quot;));</span>
+
+<span class="nc" id="L244">		payload.setEmailId(list);</span>
+<span class="nc" id="L245">		payload.setSubject(&quot;Intuition Post Card Transaction request failed&quot;);</span>
+<span class="nc" id="L246">		payload.setEmailContent(&quot;Post Card Transaction request for Instruction Number &quot; + instructionNumber</span>
+				+ &quot; to Intuition failed, due to &quot;+errorDesc+&quot;, please alert dev team.&quot;);
+<span class="nc" id="L248">		payload.setFromEmilId(System.getProperty(&quot;intuition.sendFrom&quot;));</span>
+<span class="nc" id="L249">		payload.setReplyToEmailId(System.getProperty(&quot;intuition.sendFrom&quot;));</span>
+
+<span class="nc" id="L251">		sendTMEmailRequest.setTmHeader(header);</span>
+<span class="nc" id="L252">		sendTMEmailRequest.setTmPayload(payload);</span>
+
+<span class="nc" id="L254">		iCommHubServiceImpl.sendEmailForTMAlert(sendTMEmailRequest, true);</span>
+
+<span class="nc" id="L256">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,32 @@
+pipeline {
+    agent any
+    stages {
+        stage('Start') {
+            steps {
+                echo "Job for mainline sonar (no deploy)"
+            }
+        }
+        stage('Gradle Build') {
+            steps {
+               echo "workspace directory is ${env.WORKSPACE}"
+               sh "gradle -b Development/Codebase/build.gradle clean build"
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('Sonarqube-Staging') {
+                    sh 'gradle -b Development/Codebase/build.gradle sonarqube -Dsonar.host.url=http://172.31.4.132:9000 -Dsonar.login=sonar  -Dsonar.password=sonar'
+                }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs deleteDirs: true, notFailBuild: true
+            sendSlackNotifications currentBuild.result
+        }
+        failure{
+            sendEmail("yogeshwar.vhatkar@bnt-soft.com")
+        }
+    }
+}

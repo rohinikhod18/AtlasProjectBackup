@@ -1,0 +1,417 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<int:channel id="FUNDSOUT.FUNDS_OUT.in.channel" />
+	<int:channel id="FUNDS_OUT.DATA_ENRICHMENT" />
+	 
+	<int:channel id="FUNDS_OUT.SAVE_REQUEST" />
+	 
+	<int:channel id="FUNDS_OUT.TRANFROM.REQUESTS" />
+	<int:channel id="FUNDS_OUT.SPLITTER"/>
+		
+	<int:channel id="FUNDS_OUT.SERVICES.IN" >
+		<int:dispatcher task-executor="FUNDS_OUT.SPLITTER.channel.executor" />
+	</int:channel>
+	<int:channel id="FUNDS_OUT.SERVICES.OUT" />
+	<int:channel id="FUNDS_OUT.RULES.IN" />
+	<int:channel id="FUNDS_OUT.RESPONSE" />
+	<int:channel id="FUNDS_OUT.PERFORMCHECK.DECISION" />
+	<int:channel id="FUNDS_OUT.SKIP.REQUESTS" />
+	<int:channel id="FUNDS_OUT.TRANSACTIONMONITORINGSTATUS" />
+	
+	<int:chain
+		id="fundsout.initChain"
+		input-channel="FUNDSOUT.FUNDS_OUT.in.channel">
+		<int:header-enricher id="fundsout.HeaderEnricher">
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+		</int:header-enricher>
+		<int:service-activator
+			ref="fundsout.MsgValidator"
+			id="fundsout.Validator"
+			method="process" />
+		
+		<int:router
+			id="fundsout.postValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="FUNDS_OUT.DATA_ENRICHMENT">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDS_OUT.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDS_OUT.DATA_ENRICHMENT" />
+		</int:router>
+	</int:chain>
+
+	<int:chain
+		id="fundsout.dataEnrichChain"
+		input-channel="FUNDS_OUT.DATA_ENRICHMENT">
+
+		<int:service-activator
+			id="fundsout.dataEnrich"
+			ref="fundsout.dataEnricher"
+			method="enrichData" />
+			
+		<!-- AT-5294 -->
+		<int:service-activator
+			ref="fundsout.dormantCustomerUpdateToIntuition"
+			method="dormantCustomerRegistrationToIntuitionForPaymentOut"/>
+			
+		<int:service-activator
+			ref="fundsout.DataValidator"
+			id="fundsout.DataValidation"
+			method="process" />
+			
+		<int:router
+			id="fundsout.postDataValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="FUNDS_OUT.SAVE_REQUEST">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDS_OUT.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDS_OUT.SAVE_REQUEST" />
+		</int:router>
+			
+	</int:chain>
+ 
+	<int:chain
+		id="fundsout.dbChain"
+		input-channel="FUNDS_OUT.SAVE_REQUEST"
+		output-channel="FUNDS_OUT.TRANFROM.REQUESTS">
+		<int:service-activator
+			id="fundsout.saveRequest"
+			ref="fundsOutDBService"
+			method="saveFundsOutRequest" />
+		<int:service-activator
+			id="fundsout.createEvent"
+			ref="eventDBServiceImpl" 
+			method="createEvent" />	
+		<int:service-activator
+			id="SAVE.DEVICEINFO"
+			method="saveDeviceInfo">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.DeviceInfoImpl" />
+		</int:service-activator>
+		<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+
+	<int:chain
+		id="fundsout.transformations"
+		input-channel="FUNDS_OUT.TRANFROM.REQUESTS"
+		output-channel="FUNDS_OUT.PERFORMCHECK.DECISION">
+		<int:transformer
+			id="fundsout.trans.internalrules"
+			ref="fundsout.internalRulesTransformer"
+			method="transformRequest"
+		/>
+		<int:transformer
+			id="fundsout.trans.sanction"
+			ref="fundsout.sanctionTransformer"
+			method="transformRequest"
+		/>
+		<int:transformer
+			id="fundsout.trans.fraugster"
+			ref="fundsout.fraugsterTransformer"
+			method="transformRequest"
+		/>
+		<int:transformer
+			id="fundsout.trans.customChecks"
+			ref="fundsout.customChecksTransformer"
+			method="transformRequest"
+		/>
+		<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain
+		id="FUNDSOUT.DECISION.CHAIN"
+		input-channel="FUNDS_OUT.PERFORMCHECK.DECISION">
+		<int:router
+			default-output-channel="FUNDS_OUT.SPLITTER"
+			resolution-required="false"
+			expression="payload.doPerformOtherChecks()">
+			<int:mapping
+				value="false"
+				channel="FUNDS_OUT.RULES.IN" />
+			<int:mapping
+				value="true"
+				channel="FUNDS_OUT.SPLITTER" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.splitRequest"
+		input-channel="FUNDS_OUT.SPLITTER"
+		output-channel="FUNDS_OUT.SERVICES.IN">
+		<int:header-enricher>
+			<int:header
+				name="numberOfCopiesToMake"
+				expression="4" />
+		</int:header-enricher>
+		<int:splitter ref="requestSplitter" />
+	</int:chain>
+	<int:chain
+		id="fundsout.InternalRules.CHAIN"
+		input-channel="FUNDS_OUT.SERVICES.IN"
+		output-channel="FUNDS_OUT.SERVICES.OUT">
+		
+		<int:service-activator
+			id="fundsout.InternalRules"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('INTERNAL_RULE_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).INTERNAL_RULE_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.internalRulesTransformer"
+			method="transformResponse" />
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.CustomChecks.CHAIN"
+		input-channel="FUNDS_OUT.SERVICES.IN"
+		output-channel="FUNDS_OUT.SERVICES.OUT">
+		
+		<int:service-activator
+			id="fundsout.CustomChecks"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('VELOCITY_PERFORM_CHECK')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).CUSTOM_CHECKS_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.CustomChecksRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.customChecksTransformer"
+			method="transformResponse" />
+	</int:chain>
+	<int:chain
+		id="fundsout.SANCTION.CHAIN"
+		input-channel="FUNDS_OUT.SERVICES.IN"
+		output-channel="FUNDS_OUT.SERVICES.OUT">
+		
+		<int:service-activator
+			id="fundsout.SANCTION"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('SANCTION_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).SANCTION_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.ContactRegSanctionRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.sanctionTransformer"
+			method="transformResponse" />
+	</int:chain>
+	
+	
+	<int:chain
+		id="fundsout.FRAUD.CHAIN"
+		input-channel="FUNDS_OUT.SERVICES.IN"
+		output-channel="FUNDS_OUT.SERVICES.OUT">
+		
+		<int:service-activator
+			id="fundsout.FRAUDCHECK"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('FRAUGSTER_FUNDSOUT_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).FRAUGSTER_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.fraugsterTransformer"
+			method="transformResponse" />
+	</int:chain>
+	<int:chain
+		id="fundsout.AggregatorChain"
+		input-channel="FUNDS_OUT.SERVICES.OUT"
+		output-channel="FUNDS_OUT.RULES.IN">
+		<int:aggregator
+			id="fundsout.Aggregator"
+			ref="fundsout.responseMessageAggregator"
+			method="complieResponse"
+			correlation-strategy="responseMessageAggregator"
+			correlation-strategy-method="correlatingResponseMsgs"
+			expire-groups-upon-timeout="false"
+			send-partial-result-on-expiry="true"
+			expire-groups-upon-completion="false"
+			discard-channel="FUNDS_OUT.ERROR.CHANNEL">
+		</int:aggregator>
+		<int:filter discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain input-channel="FUNDS_IN.SKIP.REQUESTS"
+	output-channel="nullChannel">
+		<int:service-activator
+			ref="fundsout.replyHandler"
+			method="processSkippedMessages" />
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.RuleServiceChain"
+		input-channel="FUNDS_OUT.RULES.IN"
+		output-channel="FUNDS_OUT.INTUITIONSTATUS">
+		
+		<!-- Add for AT-4752 -->
+		<int:service-activator
+			ref="fundsout.RulesService"
+			method="createShortResponseCode">
+		</int:service-activator>
+		<int:service-activator
+			ref="fundsOutDBService"
+			method="updateShortResponseCode" />
+		
+		<int:transformer
+			ref="fundsout.transactionMonitoringTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsout.TRANSACTIONMONITORING"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_FUNDSOUT_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.transactionMonitoringTransformer"
+			method="transformResponse" />
+		
+		<int:service-activator
+			id="fundsout.SAVE.EVENT.SERVICE"
+			ref="eventDBServiceImpl"
+			method="createEventSerivceLog">
+		</int:service-activator>
+		
+		<int:service-activator
+			id="fundsout.Exec.Rules"
+			ref="fundsout.RulesService"
+			method="process">
+		</int:service-activator>
+		
+		<int:service-activator
+			id="fundsout.updateStatus"
+			ref="fundsOutDBService"
+			method="updatePaymentOutStatus" />
+			
+		<int:service-activator
+			ref="fundsOutDBService"
+			method="updateAccountIntuitionClientRiskLevel">
+		</int:service-activator>
+		
+				
+		<int:service-activator
+			id="fundsout.activitylog"
+			ref="activityDBServiceImpl"
+			method="createSTPPaymentOutActivity" />
+		<int:service-activator id="fundsout.kafkaTxExecutor" ref="kafkaTxExecutorServiceImpl" method="executeKafkaTx" />
+		<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain
+		input-channel="FUNDS_OUT.INTUITIONSTATUS"> <!-- AT-4716 -->
+		<int:router
+			default-output-channel="FUNDS_OUT.RESPONSE"
+			resolution-required="false"
+			expression="payload.isIntuitionFundsOutStatusHold()">
+			<int:mapping
+				value="true"
+				channel="FUNDS_OUT.TRANSACTIONMONITORINGSTATUS" />
+			<int:mapping
+				value="false"
+				channel="FUNDS_OUT.RESPONSE" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain input-channel="FUNDS_OUT.TRANSACTIONMONITORINGSTATUS"
+	output-channel="FUNDS_OUT.RESPONSE"> <!-- AT-4716 --> <!-- AT-4846 -->
+		<int:service-activator
+			id="fundsout.TRANSACTIONMONITORINGSTATUS"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_FUNDSOUT_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse" />
+		</int:service-activator>
+	</int:chain>
+	
+	<bean id="fundsout.MsgValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsout.MessageValidator"/>
+		
+	<bean id="fundsout.dataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.DataEnricher"/>
+		
+	<bean id="fundsout.DataValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsout.DataValidator"/>
+		
+	<bean id="fundsout.internalRulesTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.InternalRuleServiceTransformer"/>
+		
+	<bean id="fundsout.customChecksTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.CustomChecksTransformer"/>
+		
+	<bean id="fundsout.fraugsterTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.FraugsterTransformer"/>
+		
+	<bean id="fundsout.sanctionTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.SanctionTransformer"/>
+
+	<bean id="fundsout.RulesService"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.rules.FundsOutRulesService"/>
+		
+	<bean id="fundsOutDBService" 
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl"/>
+	
+	<bean id="activityDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl"/>
+		
+	<bean id="fundsout.replyHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.ReplyHandler"/>
+		
+	<bean id="fundsout.transactionMonitoringTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.TransactionMonitoringTransformer"/>
+		
+	<bean id="fundsout.dormantCustomerUpdateToIntuition"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.restport.transactionmonitoring.DormantCustomerUpdateToIntuition"/>
+	
+</beans>

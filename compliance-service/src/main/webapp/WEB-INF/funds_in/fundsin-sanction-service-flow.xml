@@ -1,0 +1,127 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="FUNDSIN.SANCTION_RESEND.in.channel"/>
+	<int:channel id="FUNDSIN.SANCTIONRESEND.out.channel"/>
+	<int:channel id="FUNDSIN.SANCTION.RESEND.CHANNEL"></int:channel>
+	<int:channel id="FUNDSIN.SANCTIONRESEND.CREATE.EVENT"/>
+	<int:channel id="FUNDSIN.SANCTIONRESEND.REQUEST.SENDER"/>
+	<int:channel id="FUNDSIN.SANCTIONRESEND.RESPONSE"/>
+	<int:channel id="FUNDSIN.SANCTIONRESEND.ACTIVITY.LOG"/>
+	<int:chain id="resendFundsInSanctionService" input-channel="FUNDSIN.SANCTION_RESEND.in.channel">
+	<int:header-enricher>
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header
+				name="username"
+				expression="headers['username']" />
+			<int:header
+				name="password"
+				expression="headers['password']" />
+	</int:header-enricher>
+	<int:service-activator ref="fundsin.MsgValidator" />	
+		<int:router
+			id="fundsinSanctionResendValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDSIN.SANCTIONRESEND.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDSIN.SANCTION.RESEND.CHANNEL" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain id="fundsInsanctionDataEnrich" input-channel="FUNDSIN.SANCTION.RESEND.CHANNEL">
+		<int:service-activator
+			id="FUNDSIN.SanctionResend.ENRICH"
+			ref="fundsin.DataEnrich"
+			method="enrichData" />
+			<int:service-activator
+			id="fundsin.SANCTION.RESEND.dataValidations"
+			ref="fundsin.DataValidator"
+			method="process" />	
+			<int:router
+			id="fundsin.postValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="FUNDSIN.SANCTIONRESEND.CREATE.EVENT">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDSIN.SANCTIONRESEND.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDSIN.SANCTIONRESEND.CREATE.EVENT" />
+		</int:router>
+	</int:chain>
+	
+	
+	<int:chain id="fundsInsanctionEventCreater" input-channel="FUNDSIN.SANCTIONRESEND.CREATE.EVENT" output-channel="FUNDSIN.SANCTIONRESEND.REQUEST.SENDER">
+		<int:service-activator
+			id="fundsin.SANCTIONRESEND.event"
+			method="createEvent" ref="eventDBServiceImpl">
+		</int:service-activator>
+	</int:chain>
+	
+		<int:chain id="fundsInsanctionRequestSender" input-channel="FUNDSIN.SANCTIONRESEND.REQUEST.SENDER" output-channel="FUNDSIN.SANCTIONRESEND.out.channel">
+		<int:transformer
+			ref="fundsin.sanctionTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsin.SANCTION.RESEND"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('SANCTION_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).SANCTION_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.ContactRegSanctionRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsin.sanctionTransformer"
+			method="transformResponse" />
+	</int:chain>
+	
+	 <int:chain input-channel="FUNDSIN.SANCTIONRESEND.out.channel" output-channel="FUNDSIN.SANCTIONRESEND.ACTIVITY.LOG">
+		<int:service-activator id="fundsin.SANCTIONRESEND.SAVE.EVENT.SERVICE"
+			method="createEventSerivceLog" ref= "eventDBServiceImpl">
+		</int:service-activator>
+	</int:chain> 
+	
+	<int:chain id="fundsin.sanctionRepeatcreateActivity" input-channel="FUNDSIN.SANCTIONRESEND.ACTIVITY.LOG" output-channel="FUNDSIN.SANCTIONRESEND.RESPONSE">
+		<int:service-activator id="fundsin.sanctionResendActivityBuilder" ref="sanctionResendActivityBuilder"  method="buildActivityLogs" />
+		<int:service-activator id="fundsin.sanctionResendSetServiceStatus" ref="fundsInDBService"  method="updateServiceStatusIntoPaymentIn" />
+		<int:service-activator
+			id="fundsin.kafkaTxExecutor"
+			ref="kafkaTxExecutorServiceImpl"
+			method="executeKafkaTx" />	   
+		<int:service-activator id="fundsin.sanctionResendActivity"  method="createPaymentInActivity" >
+	    <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl" />
+	    </int:service-activator>
+	</int:chain>
+	
+	<int:chain input-channel="FUNDSIN.SANCTIONRESEND.RESPONSE" output-channel="nullChannel">
+	<int:service-activator id="fundsin.SANCTIONRESEND.RES" ref="sanctionResendResponse" method="process" />
+	</int:chain>
+	
+	<bean id="fundsin.sanctionResendResponse" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanction.PrepareSanctionResendResponse"/>
+	<bean id="sanctionResendActivityBuilder" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanction.SanctionRepeatCheckAtivityLogBuilder"/>
+</beans>

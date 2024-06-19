@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FraugsterSessionHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">fraugster-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.fraugster.core.sessionhandler</a> &gt; <span class="el_source">FraugsterSessionHandler.java</span></div><h1>FraugsterSessionHandler.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.fraugster.core.sessionhandler;
+
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.fraugster.core.FraugsterConcreteDataBuilder;
+import com.currenciesdirect.gtg.compliance.fraugster.core.IFraugsterProviderService;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterProviderProperty;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterSessionToken;
+import com.currenciesdirect.gtg.compliance.fraugster.exception.FraugsterErrors;
+import com.currenciesdirect.gtg.compliance.fraugster.exception.FraugsterException;
+import com.currenciesdirect.gtg.compliance.fraugster.fraugsterport.FraugsterPort;
+import com.currenciesdirect.gtg.compliance.fraugster.util.Constants;
+
+/**
+ * The Class FraugsterSessionHandler.
+ */
+public class FraugsterSessionHandler {
+
+	/** The Constant LOG. */
+<span class="nc" id="L25">	private static final Logger LOG = LoggerFactory.getLogger(FraugsterSessionHandler.class);</span>
+
+	/** The fraugster session handler. */
+<span class="nc" id="L28">	private static FraugsterSessionHandler fraugsterSessionHandler = null;</span>
+
+	/** The Constant scheduledExecutorService. */
+<span class="nc" id="L31">	public static final ScheduledExecutorService scheduledExecutorService = Executors</span>
+<span class="nc" id="L32">			.newSingleThreadScheduledExecutor();</span>
+
+	/** The fraugster provider property. */
+<span class="nc" id="L35">	private FraugsterProviderProperty fraugsterProviderProperty = null;</span>
+
+	/** The concrete data builder. */
+<span class="nc" id="L38">	private FraugsterConcreteDataBuilder concreteDataBuilder = FraugsterConcreteDataBuilder.getInstance();</span>
+
+	/** The fraugster port. */
+<span class="nc" id="L41">	private IFraugsterProviderService fraugsterPort = FraugsterPort.getInstance();</span>
+
+	/** The is refresh in progress.   */
+	@SuppressWarnings(&quot;squid:S3077&quot;)
+	private volatile Boolean isRefreshInProgress;
+	
+	/** The lock object used for obtaining thread locks*/
+<span class="nc" id="L48">	private final Object lockObject = new Object();</span>
+
+	/** The session token. */
+<span class="nc" id="L51">	private FraugsterSessionToken sessionToken = new FraugsterSessionToken();</span>
+
+	/**
+	 * Instantiates a new fraugster session handler.
+	 */
+<span class="nc" id="L56">	private FraugsterSessionHandler() {</span>
+
+<span class="nc" id="L58">	}</span>
+
+	/**
+	 * Gets the single instance of FraugsterSessionHandler.
+	 *
+	 * @return single instance of FraugsterSessionHandler
+	 */
+	public static FraugsterSessionHandler getInstance() {
+<span class="nc bnc" id="L66" title="All 2 branches missed.">		if (fraugsterSessionHandler == null) {</span>
+<span class="nc" id="L67">			fraugsterSessionHandler = new FraugsterSessionHandler();</span>
+		}
+<span class="nc" id="L69">		return fraugsterSessionHandler;</span>
+
+	}
+
+	/**
+	 * Gets the session token.
+	 *
+	 * @return the session token
+	 */
+	public FraugsterSessionToken getSessionToken() {
+<span class="nc bnc" id="L79" title="All 2 branches missed.">		if(Boolean.FALSE.equals(isRefreshInProgress)){</span>
+<span class="nc" id="L80">			return sessionToken;</span>
+		}else{
+<span class="nc" id="L82">			synchronized (lockObject) {</span>
+<span class="nc" id="L83">				return sessionToken;</span>
+			}
+		}
+	}
+
+	/**
+	 * Start fraugster session.
+	 *
+	 * @throws FraugsterException the fraugster exception
+	 */
+	public void startFraugsterSession() throws FraugsterException {
+		try {
+<span class="nc" id="L95">			fraugsterProviderProperty = concreteDataBuilder.getProviderInitConfigProperty(Constants.LOGIN_LOGOUT);</span>
+<span class="nc" id="L96">			fraugsterSessionHandler.doLogin(false);</span>
+<span class="nc" id="L97">			runscheduler();</span>
+<span class="nc" id="L98">		} catch (FraugsterException e ) {</span>
+<span class="nc" id="L99">			LOG.error(&quot;Error in FraugsterSessionHandler class startFraugsterSession() method:&quot;, e);</span>
+<span class="nc" id="L100">		} catch (Exception e) {</span>
+<span class="nc" id="L101">			LOG.error(&quot;Error in FraugsterSessionHandler class startFraugsterSession() method:&quot;, e);</span>
+<span class="nc" id="L102">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_LOADING_FRAUGSTER_SESSION);</span>
+<span class="nc" id="L103">		}</span>
+
+<span class="nc" id="L105">	}</span>
+
+	/**
+	 * Runscheduler.
+	 */
+	public void runscheduler() {
+<span class="nc" id="L111">		Integer timeIntervel = fraugsterProviderProperty.getFraugsterInactivityRefreshTime();</span>
+
+<span class="nc" id="L113">		final Runnable startSchedular = () -&gt; {</span>
+
+<span class="nc" id="L115">			LOG.debug(&quot;Fraugster  Schedular started&quot;);</span>
+			try {
+<span class="nc" id="L117">				doLogin(true);</span>
+<span class="nc" id="L118">			} catch (Exception ce) {</span>
+<span class="nc" id="L119">				LOG.error(&quot;Error in scheduling&quot;, ce);</span>
+<span class="nc" id="L120">			}</span>
+<span class="nc" id="L121">		};</span>
+<span class="nc" id="L122">		scheduledExecutorService.scheduleAtFixedRate(startSchedular, timeIntervel, timeIntervel, TimeUnit.MINUTES);</span>
+
+<span class="nc" id="L124">	}</span>
+
+	/**
+	 * Do logout.
+	 *
+	 * @return true, if successful
+	 * @throws FraugsterException the fraugster exception
+	 */
+	private synchronized boolean doLogout() throws FraugsterException {
+<span class="nc" id="L133">		synchronized (lockObject) {</span>
+<span class="nc" id="L134">			return fraugsterPort.doLogout(fraugsterProviderProperty, sessionToken);</span>
+		}
+		
+
+	}
+
+	/**
+	 * Do login.
+	 *
+	 * @param refresh the refresh
+	 * @throws FraugsterException the fraugster exception
+	 */
+	private synchronized void doLogin(boolean refresh) throws FraugsterException {
+		try {
+
+<span class="nc bnc" id="L149" title="All 4 branches missed.">			if (!refresh &amp;&amp; null != sessionToken.getSessionToken()) {</span>
+<span class="nc" id="L150">				return;</span>
+			}
+<span class="nc" id="L152">			updateSessionToken();</span>
+<span class="nc" id="L153">			LOG.warn(&quot;Fraugster Session Token: {} &quot;, sessionToken.getSessionToken());</span>
+<span class="nc" id="L154">		} catch (FraugsterException e) {</span>
+<span class="nc" id="L155">			throw e;</span>
+<span class="nc" id="L156">		} catch (Exception e) {</span>
+<span class="nc" id="L157">			LOG.error(&quot;Error in fraugsterSession handler DoLogin() method :&quot;, e);</span>
+<span class="nc" id="L158">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_LOGIN);</span>
+<span class="nc" id="L159">		}</span>
+<span class="nc" id="L160">	}</span>
+
+	private void updateSessionToken() throws FraugsterException {
+<span class="nc" id="L163">		synchronized (lockObject) {</span>
+<span class="nc" id="L164">			isRefreshInProgress = Boolean.TRUE;</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">			if (sessionToken.getSessionToken() != null) {</span>
+<span class="nc" id="L166">				doLogout();</span>
+			}
+<span class="nc" id="L168">			sessionToken = fraugsterPort.doLogin(fraugsterProviderProperty);</span>
+<span class="nc" id="L169">			isRefreshInProgress = Boolean.FALSE;</span>
+<span class="nc" id="L170">		}</span>
+<span class="nc" id="L171">	}</span>
+
+	/**
+	 * Stopscheduler.
+	 *
+	 * @return true, if successful
+	 */
+	public boolean stopscheduler() {
+<span class="nc" id="L179">		boolean result = false;</span>
+<span class="nc" id="L180">		scheduledExecutorService.shutdown();</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">		if (scheduledExecutorService.isShutdown()) {</span>
+<span class="nc" id="L182">			result = true;</span>
+		}
+<span class="nc" id="L184">		return result;</span>
+	}
+
+	/**
+	 * Repeat login.
+	 *
+	 * @return the session token
+	 * @throws FraugsterException the fraugster exception
+	 */
+	public FraugsterSessionToken repeatLogin() throws FraugsterException {
+<span class="nc" id="L194">		doLogin(true);</span>
+<span class="nc" id="L195">		return sessionToken;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

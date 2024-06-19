@@ -1,0 +1,1216 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UpdateRegistrationDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">UpdateRegistrationDBServiceImpl.java</span></div><h1>UpdateRegistrationDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.statusupdate.StatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ContactComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.IUpdateRegistrationDBService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OnfidoStatusEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.WatchListDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.ObjectCloner;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.PropertyHandler;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class UpdateRegistrationDBServiceImpl.
+ */
+<span class="fc" id="L47">public class UpdateRegistrationDBServiceImpl extends AbstractRegistrationDBService</span>
+		implements IUpdateRegistrationDBService {
+	
+	/** The Constant LOG. */
+<span class="fc" id="L51">	private static final Logger LOG = LoggerFactory.getLogger(UpdateRegistrationDBServiceImpl.class);</span>
+
+	/** The Constant ERROR_WHILE_UPDATING_COMPLIANCE_STATUS_UPDATE_COMPLIANCE_STATUS. */
+	private static final String ERROR_WHILE_UPDATING_COMPLIANCE_STATUS_UPDATE_COMPLIANCE_STATUS = &quot;Error while updating compliance status updateComplianceStatus() &quot;;
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.
+	 * IRegistrationDBService#updateAccountDetails(org.springframework.messaging
+	 * .Message)
+	 */
+	@SuppressWarnings(&quot;unchecked&quot;)
+	@Override
+	public Message&lt;MessageContext&gt; updateAccountDetails(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L66">		RegistrationServiceRequest request = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L67">				.getGatewayMessageExchange().getRequest();</span>
+
+<span class="nc" id="L69">		List&lt;Contact&gt; contactAttibutes = (List&lt;Contact&gt;) request.getAdditionalAttribute(Constants.FIELD_OLD_CONTACTS);</span>
+<span class="nc" id="L70">		Account accountAttributes = (Account) request.getAdditionalAttribute(&quot;oldAccount&quot;);</span>
+<span class="nc" id="L71">		boolean isAccountModified = (boolean) request.getAdditionalAttribute(&quot;isAccountModified&quot;);</span>
+<span class="nc" id="L72">		String defaultStatus = ContactComplianceStatus.NOT_PERFORMED.name();</span>
+<span class="nc" id="L73">		Boolean doPerformCheck = (Boolean) request.getAdditionalAttribute(Constants.PERFORM_CHECKS);</span>
+<span class="nc bnc" id="L74" title="All 4 branches missed.">		if (doPerformCheck != null &amp;&amp; !doPerformCheck) {</span>
+<span class="nc" id="L75">			defaultStatus = accountAttributes.getAccountStatus();</span>
+		}
+<span class="nc" id="L77">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L78">		Connection connection = getConnection(Boolean.FALSE);</span>
+		try {
+<span class="nc" id="L80">			beginTransaction(connection);</span>
+<span class="nc" id="L81">			Integer accountId = getAccountIdByCrmAccountId(request.getAccount().getAccSFID());</span>
+<span class="nc" id="L82">			request.getAccount().setId(accountId);</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">			if (!request.getAccount().getContacts().isEmpty()) {</span>
+<span class="nc" id="L84">				updateIntoContact(request.getAccount().getContacts(), connection, token.getUserID());</span>
+				//For CDSA Migration AT-4474
+<span class="nc bnc" id="L86" title="All 6 branches missed.">				if(request.getEvent() != null &amp;&amp; request.getOrgCode().equalsIgnoreCase(&quot;CD SA&quot;) &amp;&amp; request.getEvent().equalsIgnoreCase(&quot;migrate_customer&quot;)) {</span>
+<span class="nc" id="L87">                    updateIntoContactLegacyNumber(request.getAccount().getContacts(), connection, token.getUserID());</span>
+				}
+<span class="nc" id="L89">				updateIntoContactAttribute(connection, request.getAccount().getContacts(), token.getUserID());</span>
+<span class="nc" id="L90">				saveIntoContactAttributeHistory(connection, contactAttibutes, token.getUserID());</span>
+			}
+<span class="nc bnc" id="L92" title="All 2 branches missed.">			if (isAccountModified) {</span>
+<span class="nc" id="L93">				updateIntoAccount(connection, request, token.getUserID(), defaultStatus);</span>
+				//For CDSA Migration AT-4474
+<span class="nc bnc" id="L95" title="All 6 branches missed.">				if(request.getEvent() != null &amp;&amp; request.getOrgCode().equalsIgnoreCase(&quot;CD SA&quot;) &amp;&amp; request.getEvent().equalsIgnoreCase(&quot;migrate_customer&quot;)) {</span>
+<span class="nc" id="L96">                    updateIntoAccountLegacyNumber(connection, request, token.getUserID());</span>
+				}
+<span class="nc" id="L98">				updateIntoAccountAttribute(connection, request.getAccount(), token.getUserID());</span>
+<span class="nc" id="L99">				saveIntoAccountAttributeHistory(connection, accountAttributes, token.getUserID());</span>
+			}	
+<span class="nc" id="L101">			commitTransaction(connection);</span>
+<span class="nc" id="L102">			LOG.warn(&quot;\n -------Old Account details in update registration -------- \n  {}&quot;, JsonConverterUtil.convertToJsonWithoutNull(accountAttributes));</span>
+<span class="nc" id="L103">			LOG.warn(&quot;\n -------New Contact details in update registration -------- \n  {}&quot;, JsonConverterUtil.convertToJsonWithoutNull(request.getAccount().getContacts()));</span>
+<span class="nc" id="L104">		} catch (Exception e) {</span>
+<span class="nc" id="L105">			LOG.error(&quot;Error in updateAccountDetails {1}&quot;,e);</span>
+<span class="nc" id="L106">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L108">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L110">		return message;</span>
+	}
+
+	/**
+	 * Update into contact.
+	 *
+	 * @param contacts
+	 *            the contacts
+	 * @param connection
+	 *            the connection
+	 * @param user
+	 *            the user
+	 * @return true, if successful
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private boolean updateIntoContact(List&lt;Contact&gt; contacts, Connection connection, Integer user)
+			throws ComplianceException {
+
+<span class="nc" id="L129">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L131">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_CONTACT_BY_ID.getQuery());</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc" id="L133">				statement.setString(1, contact.getFullName());</span>
+<span class="nc" id="L134">				statement.setString(2, contact.getContactSFID());</span>
+<span class="nc" id="L135">				statement.setInt(3, contact.getTradeContactID());</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">				if (null != contact.getPrimaryContact())</span>
+<span class="nc" id="L137">					statement.setBoolean(4, contact.getPrimaryContact());</span>
+				else
+<span class="nc" id="L139">					statement.setBoolean(4, true);</span>
+<span class="nc" id="L140">				statement.setInt(5, user);</span>
+<span class="nc" id="L141">				statement.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L142">				statement.setInt(7, contact.getVersion());</span>
+<span class="nc" id="L143">				statement.setString(8, contact.getCountry());</span>
+<span class="nc" id="L144">				statement.setInt(9, contact.getId());</span>
+<span class="nc" id="L145">				statement.addBatch();</span>
+<span class="nc" id="L146">			}</span>
+<span class="nc" id="L147">			statement.executeBatch();</span>
+<span class="nc" id="L148">			return true;</span>
+<span class="nc" id="L149">		} catch (Exception e) {</span>
+<span class="nc" id="L150">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L152">			closePrepareStatement(statement);</span>
+		}
+	}
+	
+	/**
+	 * Update into contact legacy id.
+	 *
+	 * @param contacts the contacts
+	 * @param connection the connection
+	 * @param user the user
+	 * @return true, if successful
+	 * @throws ComplianceException the compliance exception
+	 */
+	private boolean updateIntoContactLegacyNumber(List&lt;Contact&gt; contacts, Connection connection, Integer user)
+            throws ComplianceException {
+
+<span class="nc" id="L168">       PreparedStatement statement = null;</span>
+        try {
+<span class="nc" id="L170">            statement = connection.prepareStatement(DBQueryConstant.UPDATE_CONTACT_BY_ID_FOR_LEGACY_NUMBER.getQuery());</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">            for (Contact contact : contacts) {</span>
+<span class="nc" id="L172">                statement.setInt(1, user);</span>
+<span class="nc" id="L173">                statement.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L174">                statement.setInt(3, contact.getLegacyTradeContactID());</span>
+<span class="nc" id="L175">                statement.setInt(4, contact.getId());</span>
+<span class="nc" id="L176">                statement.addBatch();</span>
+<span class="nc" id="L177">            }</span>
+<span class="nc" id="L178">            statement.executeBatch();</span>
+<span class="nc" id="L179">            return true;</span>
+<span class="nc" id="L180">        } catch (Exception e) {</span>
+<span class="nc" id="L181">            throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+        } finally {
+<span class="nc" id="L183">            closePrepareStatement(statement);</span>
+        }
+    }
+
+	/**
+	 * Update into account.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param request
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @param defaultStatus
+	 *            the default status
+	 * @return true, if successful
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private boolean updateIntoAccount(Connection connection, RegistrationServiceRequest request, Integer user,
+			String defaultStatus) throws ComplianceException {
+
+<span class="nc" id="L205">		PreparedStatement statement = null;</span>
+<span class="nc" id="L206">		Boolean accountStatusActive = Boolean.FALSE;</span>
+		try {
+<span class="nc" id="L208">			Integer custType = getCustomerType(request.getAccount());</span>
+<span class="nc" id="L209">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_INTO_ACCOUNT.getQuery());</span>
+<span class="nc" id="L210">			statement.setString(1, request.getOrgCode());</span>
+<span class="nc" id="L211">			statement.setString(2, request.getAccount().getAccountName());</span>
+<span class="nc" id="L212">			statement.setString(3, request.getAccount().getAccSFID());</span>
+<span class="nc" id="L213">			statement.setInt(4, request.getAccount().getTradeAccountID());</span>
+<span class="nc" id="L214">			statement.setString(5, request.getAccount().getTradeAccountNumber());</span>
+<span class="nc" id="L215">			statement.setInt(6, custType);</span>
+<span class="nc" id="L216">			statement.setString(7, request.getAccount().getAccountStatus());</span>
+<span class="nc" id="L217">			statement.setString(8, defaultStatus);</span>
+<span class="nc" id="L218">			statement.setInt(9, user);</span>
+<span class="nc" id="L219">			statement.setTimestamp(10, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L220">			statement.setInt(11, request.getAccount().getVersion());</span>
+			// Need to merge this code with migration branch
+<span class="nc bnc" id="L222" title="All 2 branches missed.">			if (StringUtils.isNullOrEmpty(request.getAccount().getCustLegalEntity()))</span>
+<span class="nc" id="L223">				statement.setNull(12, Types.NVARCHAR);</span>
+			else
+<span class="nc" id="L225">				statement.setString(12, request.getAccount().getCustLegalEntity());</span>
+<span class="nc" id="L226">			accountStatusActive = request.getAccount().getAccountStatus().equals(ContactComplianceStatus.ACTIVE.name());</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">			if (Boolean.TRUE.equals(accountStatusActive)) {</span>
+<span class="nc" id="L228">				statement.setTimestamp(13, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L229">				Calendar c = Calendar.getInstance();</span>
+<span class="nc" id="L230">				c.setTime(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L231">				c.add(Calendar.YEAR, 3);</span>
+<span class="nc" id="L232">				statement.setTimestamp(14, new Timestamp(c.getTimeInMillis()));</span>
+<span class="nc" id="L233">			} else {</span>
+<span class="nc" id="L234">				statement.setNull(13, Types.TIMESTAMP);</span>
+<span class="nc" id="L235">				statement.setNull(14, Types.TIMESTAMP);</span>
+			}
+<span class="nc" id="L237">			statement.setString(15, request.getAccount().getCustLegalEntity());</span>
+<span class="nc" id="L238">			statement.setInt(16, request.getAccount().getId());</span>
+			
+<span class="nc" id="L240">			statement.executeUpdate();</span>
+<span class="nc" id="L241">			return true;</span>
+<span class="nc" id="L242">		} catch (Exception e) {</span>
+<span class="nc" id="L243">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L245">			closePrepareStatement(statement);</span>
+		}
+	}
+	
+	/**
+	 * Update into account legacy number.
+	 *
+	 * @param connection the connection
+	 * @param request the request
+	 * @param user the user
+	 * @return true, if successful
+	 * @throws ComplianceException the compliance exception
+	 */
+	private boolean updateIntoAccountLegacyNumber(Connection connection, RegistrationServiceRequest request, Integer user
+            ) throws ComplianceException {
+
+<span class="nc" id="L261">       PreparedStatement statement = null;</span>
+        try {
+<span class="nc" id="L263">            statement = connection.prepareStatement(DBQueryConstant.UPDATE_INTO_ACCOUNT_FOR_LEGACY_NUMBER.getQuery());</span>
+<span class="nc" id="L264">            statement.setInt(1, user);</span>
+<span class="nc" id="L265">            statement.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L266">            statement.setString(3, request.getAccount().getLegacyTradeAccountNumber());</span>
+<span class="nc" id="L267">            statement.setInt(4, request.getAccount().getLegacyTradeAccountID());</span>
+<span class="nc" id="L268">            statement.setInt(5, request.getAccount().getId());</span>
+            
+<span class="nc" id="L270">            statement.executeUpdate();</span>
+<span class="nc" id="L271">            return true;</span>
+<span class="nc" id="L272">        } catch (Exception e) {</span>
+<span class="nc" id="L273">            throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+        } finally {
+<span class="nc" id="L275">            closePrepareStatement(statement);</span>
+        }
+    }
+
+	/**
+	 * Update into account attribute.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param acc
+	 *            the acc
+	 * @param user
+	 *            the user
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void updateIntoAccountAttribute(Connection connection, Account acc, Integer user)
+			throws ComplianceException {
+<span class="nc" id="L293">		List&lt;Contact&gt; contacts = acc.getContacts();</span>
+<span class="nc" id="L294">		acc.setContacts(null);</span>
+<span class="nc" id="L295">		String objJson = JsonConverterUtil.convertToJsonWithoutNull(acc);</span>
+<span class="nc" id="L296">		acc.setContacts(contacts);</span>
+<span class="nc" id="L297">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L299">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_INTO_ACCOUNT_ATTRIBUTE.getQuery());</span>
+<span class="nc" id="L300">			statement.setString(1, objJson);</span>
+<span class="nc" id="L301">			statement.setInt(2, user);</span>
+<span class="nc" id="L302">			statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L303">			statement.setInt(4, acc.getVersion());</span>
+<span class="nc" id="L304">			statement.setInt(5, acc.getId());</span>
+<span class="nc" id="L305">			statement.executeUpdate();</span>
+<span class="nc" id="L306">		} catch (Exception e) {</span>
+<span class="nc" id="L307">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L309">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L311">	}</span>
+
+	/**
+	 * Save into account attribute history.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param acc
+	 *            the acc
+	 * @param user
+	 *            the user
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void saveIntoAccountAttributeHistory(Connection connection, Account acc, Integer user)
+			throws ComplianceException {
+<span class="nc" id="L327">		List&lt;Contact&gt; contacts = acc.getContacts();</span>
+<span class="nc" id="L328">		acc.setContacts(null);</span>
+<span class="nc" id="L329">		String objJson = JsonConverterUtil.convertToJsonWithoutNull(acc);</span>
+<span class="nc" id="L330">		acc.setContacts(contacts);</span>
+<span class="nc" id="L331">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L333">			statement = connection.prepareStatement(DBQueryConstant.INSERT_INTO_ACCOUNT_ATTRIBUTE_HISTORY.getQuery());</span>
+<span class="nc" id="L334">			statement.setInt(1, acc.getId());</span>
+<span class="nc" id="L335">			statement.setString(2, objJson);</span>
+<span class="nc" id="L336">			statement.setInt(3, user);</span>
+<span class="nc" id="L337">			statement.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L338">			statement.setInt(5, acc.getVersion());</span>
+<span class="nc" id="L339">			int count = statement.executeUpdate();</span>
+<span class="nc bnc" id="L340" title="All 2 branches missed.">			if (count &lt;= 0) {</span>
+<span class="nc" id="L341">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR);</span>
+			}
+<span class="nc" id="L343">		} catch (Exception e) {</span>
+<span class="nc" id="L344">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L346">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L348">	}</span>
+
+	/**
+	 * Update into contact attribute.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param contacts
+	 *            the contacts
+	 * @param user
+	 *            the user
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void updateIntoContactAttribute(Connection connection, List&lt;Contact&gt; contacts, Integer user)
+			throws ComplianceException {
+<span class="nc bnc" id="L364" title="All 2 branches missed.">		for (Contact contact : contacts) {</span>
+<span class="nc" id="L365">			String contactJson = JsonConverterUtil.convertToJsonWithoutNull(contact);</span>
+<span class="nc" id="L366">			PreparedStatement statement = null;</span>
+			try {
+<span class="nc" id="L368">				statement = connection.prepareStatement(DBQueryConstant.UPDATE_INTO_CONTACT_ATTRIBUTE.getQuery());</span>
+<span class="nc" id="L369">				statement.setString(1, contactJson);</span>
+<span class="nc" id="L370">				statement.setInt(2, user);</span>
+<span class="nc" id="L371">				statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L372">				statement.setInt(4, contact.getVersion());</span>
+<span class="nc" id="L373">				statement.setInt(5, contact.getId());</span>
+
+<span class="nc" id="L375">				statement.executeUpdate();</span>
+<span class="nc" id="L376">			} catch (Exception e) {</span>
+<span class="nc" id="L377">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+			} finally {
+<span class="nc" id="L379">				closePrepareStatement(statement);</span>
+			}
+<span class="nc" id="L381">		}</span>
+<span class="nc" id="L382">	}</span>
+
+	/**
+	 * Save into contact attribute history.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param contacts
+	 *            the contacts
+	 * @param user
+	 *            the user
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void saveIntoContactAttributeHistory(Connection connection, List&lt;Contact&gt; contacts, Integer user)
+			throws ComplianceException {
+<span class="nc bnc" id="L398" title="All 2 branches missed.">		for (Contact contact : contacts) {</span>
+<span class="nc" id="L399">			String contactJson = JsonConverterUtil.convertToJsonWithoutNull(contact);</span>
+<span class="nc" id="L400">			PreparedStatement statement = null;</span>
+			try {
+<span class="nc" id="L402">				statement = connection</span>
+<span class="nc" id="L403">						.prepareStatement(DBQueryConstant.INSERT_INTO_CONTACT_ATTRIBUTE_HISTORY.getQuery());</span>
+<span class="nc" id="L404">				statement.setInt(1, contact.getId());</span>
+<span class="nc" id="L405">				statement.setString(2, contactJson);</span>
+<span class="nc" id="L406">				statement.setInt(3, user);</span>
+<span class="nc" id="L407">				statement.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L408">				statement.setInt(5, contact.getVersion());</span>
+<span class="nc" id="L409">				int count = statement.executeUpdate();</span>
+<span class="nc bnc" id="L410" title="All 2 branches missed.">				if (count &lt;= 0) {</span>
+<span class="nc" id="L411">					throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR);</span>
+				}
+<span class="nc" id="L413">			} catch (Exception e) {</span>
+<span class="nc" id="L414">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+			} finally {
+<span class="nc" id="L416">				closePrepareStatement(statement);</span>
+			}
+<span class="nc" id="L418">		}</span>
+<span class="nc" id="L419">	}</span>
+
+	/**
+	 * Update compliance status for reg update.
+	 *
+	 * @param updMessage
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; updateComplianceStatusForRegUpdate(Message&lt;MessageContext&gt; updMessage) {
+<span class="nc" id="L429">		Connection updConnection = null;</span>
+		try {
+			
+			//AT-5396
+<span class="nc" id="L433">			Boolean activeFlag = Boolean.parseBoolean(System.getProperty(&quot;persistActiveAccountStatusPostBRC&quot;));</span>
+			//AT-5395
+<span class="nc" id="L435">			Boolean inactiveFlag = Boolean.parseBoolean(System.getProperty(&quot;persistInactiveAccountStatusPostBRC&quot;));</span>
+			
+<span class="nc" id="L437">			RegistrationResponse updateResponse = (RegistrationResponse) updMessage.getPayload()</span>
+<span class="nc" id="L438">					.getGatewayMessageExchange().getResponse();</span>
+
+<span class="nc" id="L440">			RegistrationServiceRequest updateRequest = (RegistrationServiceRequest) updMessage.getPayload()</span>
+<span class="nc" id="L441">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L442">			updateRequest.getAccount().setAccountStatus(updateResponse.getAccount().getAcs().name());</span>
+
+<span class="nc" id="L444">			Integer accountId = updateRequest.getAccount().getId();</span>
+<span class="nc" id="L445">			Integer accountIdOfBulkRepeatCheck = (Integer) updateRequest.getAdditionalAttribute(&quot;accountId&quot;);</span>
+
+<span class="nc" id="L447">			UserProfile userToken = (UserProfile) updMessage.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L448">			updConnection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L449">			Boolean isContactModified = (Boolean) updateRequest.getAdditionalAttribute(&quot;isContactModified&quot;);</span>
+<span class="nc bnc" id="L450" title="All 2 branches missed.">			isContactModified = isContactModified == null ? Boolean.FALSE : isContactModified;</span>
+<span class="nc" id="L451">			String oldAccountStatus = (String) updateRequest.getAdditionalAttribute(&quot;OldAccountStatus&quot;); // AT-5396</span>
+			
+<span class="nc" id="L453">			beginTransaction(updConnection);</span>
+<span class="nc" id="L454">			OperationEnum registrationOperation = updMessage.getPayload().getGatewayMessageExchange().getOperation();</span>
+<span class="nc bnc" id="L455" title="All 4 branches missed.">			if (OperationEnum.RECHECK_FAILURES==registrationOperation &amp;&amp; null != accountIdOfBulkRepeatCheck</span>
+<span class="nc bnc" id="L456" title="All 2 branches missed.">					&amp;&amp; 0 != accountIdOfBulkRepeatCheck) {</span>
+<span class="nc" id="L457">				ComplianceAccount account = updateResponse.getAccount();</span>
+				
+				//AT-5395 &amp; AT-5396
+<span class="nc" id="L460">				setAccountStatusPostBRCForAccount(activeFlag, inactiveFlag, oldAccountStatus, updateResponse);</span>
+				
+<span class="nc" id="L462">				updateAccountComplianceStatusForRegUpdate(updConnection, updateResponse, userToken.getUserID(),</span>
+<span class="nc" id="L463">					updateRequest.getAccount().getCustType());</span>
+			}
+			
+<span class="nc bnc" id="L466" title="All 2 branches missed.">			if(OperationEnum.RECHECK_FAILURES!=registrationOperation)</span>
+<span class="nc" id="L467">				updateAccountComplianceStatusForRegUpdate(updConnection, updateResponse, userToken.getUserID(),</span>
+<span class="nc" id="L468">						updateRequest.getAccount().getCustType());</span>
+
+<span class="nc" id="L470">			Account updateAccount = null;</span>
+<span class="nc bnc" id="L471" title="All 2 branches missed.">			if (registrationOperation == OperationEnum.ADD_CONTACT) {</span>
+<span class="nc" id="L472">				updateAccount = getAccountFromAccountAttribute(updateRequest.getAccount().getId());</span>
+			} else {
+<span class="nc" id="L474">				updateAccount = (Account) ObjectCloner.deepCopy(updateRequest.getAccount());</span>
+			}
+<span class="nc" id="L476">			updateAccount.setAccountStatus(updateResponse.getAccount().getAcs().name());</span>
+			
+			//AT-5395 &amp; AT-5396
+<span class="nc" id="L479">			setAccountStatusPostBRC(activeFlag, inactiveFlag, oldAccountStatus, updateResponse, registrationOperation, updateAccount);</span>
+			
+<span class="nc" id="L481">			updateAccount.setId(accountId);</span>
+<span class="nc bnc" id="L482" title="All 2 branches missed.">			if (Boolean.TRUE.equals(isContactModified)) {</span>
+<span class="nc" id="L483">				List&lt;Contact&gt; contactList = updateContactAttributesFields(updateRequest, updateResponse);</span>
+<span class="nc" id="L484">				updateContactAttributes(contactList);</span>
+				// Clone request object, remove contacts so that does not get
+				// serialized to DB
+				// also update Account status, so next update will have it
+				// readily
+				// available
+<span class="nc" id="L490">				updateContactComplianceStatusForRegUpdate(updConnection, updateResponse, userToken.getUserID(),</span>
+						updateRequest, registrationOperation, activeFlag, inactiveFlag); //AT-5395 &amp; AT-5396
+<span class="nc" id="L492">				saveIntoContactComplianceHistory(updConnection, updateResponse, userToken.getUserID());</span>
+<span class="nc" id="L493">				saveIntoProfileStatusReason(updConnection, updateResponse, updateAccount.getId(),</span>
+<span class="nc" id="L494">						updateRequest.getOrgCode(), userToken.getUserID());</span>
+			}
+			
+			//Add For AT-2986 payIN/OUT watchlist status update in contact
+<span class="nc" id="L498">			updateContactPaymentsWatchListStatusForUpdateAccOperation(updConnection, updateResponse, updateRequest,</span>
+					userToken, isContactModified, registrationOperation);
+			
+			/**
+			 * Code added to change Contact status as per Account Status for CFX - Vishal J
+			 * */
+<span class="nc bnc" id="L504" title="All 2 branches missed.">			if(!CustomerTypeEnum.PFX.getCustTypeAsString().equalsIgnoreCase(updateRequest.getAccount().getCustType())){</span>
+<span class="nc bnc" id="L505" title="All 2 branches missed.">				for(ComplianceContact contact: updateResponse.getAccount().getContacts()) {</span>
+<span class="nc" id="L506">					updateContactComplianceStatusForCFX(updConnection, contact);</span>
+<span class="nc" id="L507">				}</span>
+			}
+<span class="nc" id="L509">			updateAccount.getContacts().clear();</span>
+<span class="nc" id="L510">			updateIntoAccountAttributeStatus(updConnection, updateAccount, userToken.getUserID());</span>
+<span class="nc" id="L511">			saveIntoAccountComplianceHistory(updConnection, updateResponse, userToken.getUserID());</span>
+
+<span class="nc" id="L513">			commitTransaction(updConnection);</span>
+<span class="nc" id="L514">		} catch (Exception e) {</span>
+<span class="nc" id="L515">			updMessage.getPayload().setFailed(true);</span>
+<span class="nc" id="L516">			LOG.error(ERROR_WHILE_UPDATING_COMPLIANCE_STATUS_UPDATE_COMPLIANCE_STATUS, e);</span>
+		} finally {
+			try {
+<span class="nc" id="L519">				closeConnection(updConnection);</span>
+<span class="nc" id="L520">			} catch (ComplianceException e) {</span>
+<span class="nc" id="L521">				updMessage.getPayload().setFailed(true);</span>
+<span class="nc" id="L522">				LOG.error(ERROR_WHILE_UPDATING_COMPLIANCE_STATUS_UPDATE_COMPLIANCE_STATUS, e);</span>
+<span class="nc" id="L523">			}</span>
+		}
+<span class="nc" id="L525">		return updMessage;</span>
+	}
+
+	private void updateContactPaymentsWatchListStatusForUpdateAccOperation(Connection updConnection,
+			RegistrationResponse updateResponse, RegistrationServiceRequest updateRequest, UserProfile userToken,
+			Boolean isContactModified, OperationEnum registrationOperation) throws ComplianceException {
+<span class="nc bnc" id="L531" title="All 4 branches missed.">		if(OperationEnum.UPDATE_ACCOUNT==registrationOperation &amp;&amp; Boolean.FALSE.equals(isContactModified) &amp;&amp; </span>
+<span class="nc bnc" id="L532" title="All 2 branches missed.">				CustomerTypeEnum.PFX.getCustTypeAsString().equalsIgnoreCase(updateRequest.getAccount().getCustType())){</span>
+<span class="nc" id="L533">			updateContactPaymentsWatchListStatusForRegUpdate(updConnection, updateResponse, userToken.getUserID());</span>
+		}
+<span class="nc" id="L535">	}</span>
+
+	private void setAccountStatusPostBRCForAccount(Boolean activeFlag, Boolean inactiveFlag, String oldAccountStatus, RegistrationResponse updateResponse) {
+<span class="nc bnc" id="L538" title="All 4 branches missed.">		if(Boolean.TRUE.equals(activeFlag) &amp;&amp; oldAccountStatus.equalsIgnoreCase(ContactComplianceStatus.ACTIVE.getComplianceStatusAsString())) {</span>
+<span class="nc" id="L539">			ComplianceAccount account = updateResponse.getAccount();</span>
+<span class="nc" id="L540">			account.setAcs(ContactComplianceStatus.ACTIVE);</span>
+		}
+<span class="nc bnc" id="L542" title="All 4 branches missed.">		if(Boolean.TRUE.equals(inactiveFlag) &amp;&amp; oldAccountStatus.equalsIgnoreCase(ContactComplianceStatus.INACTIVE.getComplianceStatusAsString())) {</span>
+<span class="nc" id="L543">			ComplianceAccount account = updateResponse.getAccount();</span>
+<span class="nc" id="L544">			account.setAcs(ContactComplianceStatus.INACTIVE);</span>
+		}
+<span class="nc" id="L546">	}</span>
+	
+	private void setAccountStatusPostBRC(Boolean activeFlag, Boolean inactiveFlag, String oldAccountStatus, RegistrationResponse updateResponse,
+			OperationEnum registrationOperation, Account updateAccount) {
+<span class="nc bnc" id="L550" title="All 2 branches missed.">		if(OperationEnum.RECHECK_FAILURES==registrationOperation) {</span>
+<span class="nc bnc" id="L551" title="All 4 branches missed.">			if(Boolean.TRUE.equals(activeFlag) &amp;&amp; oldAccountStatus.equalsIgnoreCase(ContactComplianceStatus.ACTIVE.getComplianceStatusAsString())) {</span>
+<span class="nc" id="L552">				updateAccount.setAccountStatus(ContactComplianceStatus.getComplianceAsString(1));</span>
+<span class="nc" id="L553">				ComplianceAccount account = updateResponse.getAccount();</span>
+<span class="nc" id="L554">				account.setAcs(ContactComplianceStatus.ACTIVE);</span>
+			}
+<span class="nc bnc" id="L556" title="All 4 branches missed.">			if(Boolean.TRUE.equals(inactiveFlag) &amp;&amp; oldAccountStatus.equalsIgnoreCase(ContactComplianceStatus.INACTIVE.getComplianceStatusAsString())) {</span>
+<span class="nc" id="L557">				updateAccount.setAccountStatus(ContactComplianceStatus.getComplianceAsString(4));</span>
+<span class="nc" id="L558">				ComplianceAccount account = updateResponse.getAccount();</span>
+<span class="nc" id="L559">				account.setAcs(ContactComplianceStatus.INACTIVE);</span>
+			}
+		}
+<span class="nc" id="L562">	}</span>
+	/**
+	 * Update contact attributes fields.
+	 *
+	 * @param request
+	 *            the request
+	 * @param response
+	 *            the response
+	 * @return the list
+	 */
+	private List&lt;Contact&gt; updateContactAttributesFields(RegistrationServiceRequest request,
+			RegistrationResponse response) {
+<span class="nc" id="L574">		List&lt;Contact&gt; contactList = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">		if (response.getAccount().getContacts() != null) {</span>
+<span class="nc bnc" id="L576" title="All 2 branches missed.">			for (ComplianceContact contactResponse : response.getAccount().getContacts()) {</span>
+<span class="nc bnc" id="L577" title="All 2 branches missed.">				for (Contact req : request.getAccount().getContacts()) {</span>
+<span class="nc" id="L578">					setContactStatusToRequest(contactList, contactResponse, req);</span>
+<span class="nc" id="L579">				}</span>
+<span class="nc" id="L580">			}</span>
+		}
+<span class="nc" id="L582">		return contactList;</span>
+	}
+
+	/**
+	 * Update account compliance status for reg update.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param response
+	 *            the response
+	 * @param user
+	 *            the user
+	 * @param customerType
+	 *            the customer type
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void updateAccountComplianceStatusForRegUpdate(Connection connection, RegistrationResponse response,
+			Integer user, String customerType) throws ComplianceException {
+<span class="nc" id="L601">		PreparedStatement statement = null;</span>
+<span class="nc" id="L602">		Boolean isOnQueue = Boolean.FALSE;</span>
+		try {
+<span class="nc" id="L604">			ComplianceAccount account = response.getAccount();</span>
+<span class="nc bnc" id="L605" title="All 2 branches missed.">			if (account.getAcs().name().equals(ContactComplianceStatus.INACTIVE.name())</span>
+<span class="nc bnc" id="L606" title="All 2 branches missed.">					&amp;&amp; customerType.equalsIgnoreCase(CustomerTypeEnum.CFX.name())) {</span>
+<span class="nc" id="L607">				isOnQueue = Boolean.TRUE;</span>
+			}
+<span class="nc" id="L609">			statement = getPreparedStatementAsPerStatus(connection, response, user, account, isOnQueue);</span>
+<span class="nc" id="L610">			statement.executeUpdate();</span>
+<span class="nc" id="L611">		} catch (Exception e) {</span>
+<span class="nc" id="L612">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+
+<span class="nc" id="L615">			closePrepareStatement(statement);</span>
+
+		}
+<span class="nc" id="L618">	}</span>
+
+	/**
+	 * Gets the prepared statement as per status.
+	 *
+	 * @param connection            the connection
+	 * @param response            the response
+	 * @param user            the user
+	 * @param account            the account
+	 * @param isOnQueue the is on queue
+	 * @return the prepared statement as per status
+	 * @throws SQLException             the SQL exception
+	 */
+	private PreparedStatement getPreparedStatementAsPerStatus(Connection connection, RegistrationResponse response,
+			Integer user, ComplianceAccount account, Boolean isOnQueue) throws SQLException {
+		PreparedStatement statement;
+<span class="nc bnc" id="L634" title="All 2 branches missed.">		if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(account.getKycStatus())</span>
+<span class="nc bnc" id="L635" title="All 2 branches missed.">				&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(account.getSanctionStatus())) {</span>
+<span class="nc" id="L636">			statement = connection.prepareStatement(</span>
+<span class="nc" id="L637">					DBQueryConstant.UPDATE_ACCOUNT_WITHOUT_SANCTION_AND_KYC_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L638">			setCommonValuesForUpdate(user, account, isOnQueue, statement);</span>
+<span class="nc" id="L639">			statement.setInt(12, response.getAccount().getId());</span>
+<span class="nc bnc" id="L640" title="All 2 branches missed.">		} else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(account.getKycStatus())) {</span>
+<span class="nc" id="L641">			statement = connection</span>
+<span class="nc" id="L642">					.prepareStatement(DBQueryConstant.UPDATE_ACCOUNT_WITHOUT_KYC_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L643">			setCommonValuesForUpdate(user, account, isOnQueue, statement);</span>
+<span class="nc" id="L644">			statement.setInt(12, ServiceStatus.getStatusAsInteger(account.getSanctionStatus()));</span>
+<span class="nc" id="L645">			statement.setInt(13, response.getAccount().getId());</span>
+<span class="nc bnc" id="L646" title="All 2 branches missed.">		} else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(account.getSanctionStatus())) {</span>
+<span class="nc" id="L647">			statement = connection</span>
+<span class="nc" id="L648">					.prepareStatement(DBQueryConstant.UPDATE_ACCOUNT_WITHOUT_SANCTION_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L649">			setCommonValuesForUpdate(user, account, isOnQueue, statement);</span>
+<span class="nc" id="L650">			statement.setInt(12, ServiceStatus.getStatusAsInteger(account.getKycStatus()));</span>
+<span class="nc" id="L651">			statement.setInt(13, response.getAccount().getId());</span>
+		} else {
+<span class="nc" id="L653">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_ACCOUNT_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L654">			setCommonValuesForUpdate(user, account, isOnQueue, statement);</span>
+<span class="nc" id="L655">			statement.setInt(12, ServiceStatus.getStatusAsInteger(account.getKycStatus()));</span>
+<span class="nc" id="L656">			statement.setInt(13, ServiceStatus.getStatusAsInteger(account.getSanctionStatus()));</span>
+<span class="nc" id="L657">			statement.setInt(14, response.getAccount().getId());</span>
+		}
+
+<span class="nc" id="L660">		return statement;</span>
+	}
+
+	/**
+	 * Sets the common values for update.
+	 *
+	 * @param user the user
+	 * @param account the account
+	 * @param isOnQueue the is on queue
+	 * @param statement the statement
+	 * @throws SQLException the SQL exception
+	 */
+	private void setCommonValuesForUpdate(Integer user, ComplianceAccount account, Boolean isOnQueue,
+			PreparedStatement statement) throws SQLException {
+<span class="nc" id="L674">		statement.setString(1, account.getAcs().name());</span>
+<span class="nc" id="L675">		statement.setString(2, account.getAcs().name());</span>
+<span class="nc" id="L676">		statement.setInt(3, user);</span>
+<span class="nc" id="L677">		statement.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L678">		statement.setInt(5, ServiceStatus.getStatusAsInteger(account.getFraugsterStatus()));</span>
+<span class="nc" id="L679">		statement.setInt(6, ServiceStatus.getStatusAsInteger(account.getBlacklistStatus()));</span>
+<span class="nc" id="L680">		statement.setInt(7, ServiceStatus.getStatusAsInteger(account.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L681">		statement.setInt(8, ServiceStatus.getStatusAsInteger(account.getPaymentoutWatchlistStatus()));</span>
+<span class="nc bnc" id="L682" title="All 2 branches missed.">		if (null != account.getRegisteredDate()) {</span>
+<span class="nc" id="L683">			statement.setTimestamp(9, account.getRegisteredDate());</span>
+<span class="nc" id="L684">			statement.setTimestamp(10, account.getExpiryDate());</span>
+		} else {
+<span class="nc" id="L686">			statement.setNull(9, Types.TIMESTAMP);</span>
+<span class="nc" id="L687">			statement.setNull(10, Types.TIMESTAMP);</span>
+		}
+<span class="nc" id="L689">		statement.setBoolean(11, isOnQueue);</span>
+<span class="nc" id="L690">	}</span>
+
+	/**
+	 * Update contact compliance status for reg update.
+	 *
+	 * @param connection            the connection
+	 * @param response            the response
+	 * @param user            the user
+	 * @param request the request
+	 * @param registrationOperation the registration operation
+	 * @throws ComplianceException             the compliance exception
+	 */
+	private void updateContactComplianceStatusForRegUpdate(Connection connection, RegistrationResponse response,
+			Integer user, RegistrationServiceRequest request, OperationEnum registrationOperation, Boolean activeFlag, Boolean inactiveFlag) throws ComplianceException {
+<span class="nc" id="L704">		Boolean isOnQueue = Boolean.FALSE;</span>
+<span class="nc bnc" id="L705" title="All 2 branches missed.">		for (ComplianceContact contact : response.getAccount().getContacts()) {</span>
+			try {
+<span class="nc" id="L707">				String oldContactStatus = (String) request.getAdditionalAttribute(&quot;OldContactStatus&quot;);//AT-5396</span>
+<span class="nc bnc" id="L708" title="All 2 branches missed.">				if(CustomerTypeEnum.PFX.name().equalsIgnoreCase(request.getAccount().getCustType())) {</span>
+<span class="nc" id="L709">					Contact c = request.getAccount().getContactByID(contact.getId());</span>
+<span class="nc" id="L710">					isOnQueue = c.isOnQueue();</span>
+<span class="nc" id="L711">					isOnQueue = setIsOnQueueStatusForPFXContacts(request, contact, c, isOnQueue);</span>
+				}
+<span class="nc bnc" id="L713" title="All 2 branches missed.">				if(registrationOperation == OperationEnum.RECHECK_FAILURES){</span>
+<span class="nc" id="L714">					Integer contactId = (Integer) request.getAdditionalAttribute(&quot;contactId&quot;);</span>
+<span class="nc bnc" id="L715" title="All 4 branches missed.">					if (null != contactId &amp;&amp; contactId.equals(contact.getId())) {</span>
+<span class="nc" id="L716">						setContactStatusPostBRC(activeFlag, inactiveFlag, oldContactStatus, contact); // AT-5395 &amp; AT-5396</span>
+<span class="nc" id="L717">						updateStatusAsPerContactServiceStatus(connection, user, contact, isOnQueue);</span>
+					}
+<span class="nc" id="L719">				} else {</span>
+<span class="nc" id="L720">					updateStatusAsPerContactServiceStatus(connection, user, contact, isOnQueue);</span>
+				}
+<span class="nc" id="L722">			} catch (Exception e) {</span>
+<span class="nc" id="L723">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+<span class="nc" id="L724">			}</span>
+<span class="nc" id="L725">		}</span>
+<span class="nc" id="L726">	}</span>
+	
+	// AT-5395 &amp; AT-5396
+	private void setContactStatusPostBRC(Boolean activeFlag, Boolean inactiveFlag, String oldContactStatus, ComplianceContact contact) {
+<span class="nc bnc" id="L730" title="All 4 branches missed.">		if(Boolean.TRUE.equals(activeFlag) &amp;&amp; oldContactStatus.equalsIgnoreCase(&quot;ACTIVE&quot;)) {</span>
+<span class="nc" id="L731">			contact.setCcs(ContactComplianceStatus.ACTIVE);</span>
+		}
+<span class="nc bnc" id="L733" title="All 4 branches missed.">		if(Boolean.TRUE.equals(inactiveFlag) &amp;&amp; oldContactStatus.equalsIgnoreCase(&quot;INACTIVE&quot;)) {</span>
+<span class="nc" id="L734">			contact.setCcs(ContactComplianceStatus.INACTIVE);</span>
+		}
+<span class="nc" id="L736">	}</span>
+	
+	private Boolean setIsOnQueueStatusForPFXContacts(RegistrationServiceRequest request, ComplianceContact contact,
+			Contact c, Boolean isOnQueue) {
+<span class="nc bnc" id="L740" title="All 2 branches missed.">		if (CustomerTypeEnum.PFX.name().equalsIgnoreCase(request.getAccount().getCustType())</span>
+<span class="nc bnc" id="L741" title="All 2 branches missed.">				&amp;&amp; ContactComplianceStatus.INACTIVE==contact.getCcs()</span>
+<span class="nc bnc" id="L742" title="All 2 branches missed.">				&amp;&amp; (ComplianceReasonCode.KYC==contact.getCrc()</span>
+<span class="nc bnc" id="L743" title="All 2 branches missed.">						|| ComplianceReasonCode.KYC_NA==contact.getCrc())) {</span>
+<span class="nc" id="L744">			isOnQueue = Boolean.FALSE;</span>
+<span class="nc bnc" id="L745" title="All 2 branches missed.">		} else if (CustomerTypeEnum.PFX.name().equalsIgnoreCase(request.getAccount().getCustType())</span>
+<span class="nc bnc" id="L746" title="All 2 branches missed.">				&amp;&amp; ContactComplianceStatus.INACTIVE==contact.getCcs()</span>
+<span class="nc bnc" id="L747" title="All 4 branches missed.">				&amp;&amp; (!c.isKYCEligible() &amp;&amp; checkContactReasonCodes(contact))) {</span>
+<span class="nc" id="L748">			isOnQueue = Boolean.TRUE;</span>
+		}
+<span class="nc" id="L750">		return isOnQueue;</span>
+	}
+
+	/**
+	 * Update contact compliance status for CFX.
+	 *
+	 * @param connection the connection
+	 * @param contact the contact
+	 * @param request the request
+	 * @throws ComplianceException 
+	 */
+	private void updateContactComplianceStatusForCFX(Connection connection, ComplianceContact contact) throws ComplianceException {
+<span class="nc" id="L762">		PreparedStatement preparedStatement = null;</span>
+		try{
+<span class="nc" id="L764">			preparedStatement = connection.prepareStatement(DBQueryConstant.UPDATE_CONTACT_STATUS_FOR_CFX.getQuery());</span>
+<span class="nc" id="L765">			preparedStatement.setString(1, contact.getCcs().name());</span>
+<span class="nc" id="L766">			preparedStatement.setInt(2, contact.getId());</span>
+<span class="nc" id="L767">			preparedStatement.executeUpdate();</span>
+		}
+<span class="nc" id="L769">		catch (Exception e) {</span>
+<span class="nc" id="L770">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L772">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L774">	}</span>
+
+	// AT-878 changes
+	/**
+	 * Check contact reason codes.
+	 *
+	 * @param contact the contact
+	 * @return true, if successful
+	 */
+	// When KYC_NA, and onlu phone updated, should not be on queue
+	private boolean checkContactReasonCodes(ComplianceContact contact) {
+<span class="nc" id="L785">		boolean result = false;</span>
+<span class="nc bnc" id="L786" title="All 4 branches missed.">		if (null != contact.getCrc() &amp;&amp; !isContactOnWatchList(contact))</span>
+<span class="nc" id="L787">			result = true;</span>
+<span class="nc" id="L788">		return result;</span>
+	}
+
+	/**
+	 * Checks if is contact on watch list.
+	 *
+	 * @param contact the contact
+	 * @return true, if is contact on watch list
+	 */
+	private boolean isContactOnWatchList(ComplianceContact contact) {
+<span class="nc" id="L798">		boolean result = false;</span>
+<span class="nc bnc" id="L799" title="All 2 branches missed.">		if (ComplianceReasonCode.FRAUGSTER_WATCHLIST==contact.getCrc()</span>
+<span class="nc bnc" id="L800" title="All 2 branches missed.">				|| ComplianceReasonCode.USGLOBAL_WATCHLIST==contact.getCrc()</span>
+<span class="nc bnc" id="L801" title="All 2 branches missed.">				|| ComplianceReasonCode.IPDISTANCECHECK==contact.getCrc()</span>
+<span class="nc bnc" id="L802" title="All 2 branches missed.">				|| ComplianceReasonCode.HIGHRISK_WATCHLIST==contact.getCrc())</span>
+<span class="nc" id="L803">			result = true;</span>
+<span class="nc" id="L804">		return result;</span>
+
+	}
+
+	/**
+	 * Update status as per contact service status.
+	 *
+	 * @param connection            the connection
+	 * @param user            the user
+	 * @param contact            the contact
+	 * @param isOnQueue the is on queue
+	 * @throws SQLException             the SQL exception
+	 * @throws ComplianceException             the compliance exception
+	 */
+	private void updateStatusAsPerContactServiceStatus(Connection connection, Integer user, ComplianceContact contact,
+			Boolean isOnQueue) throws SQLException, ComplianceException {
+<span class="nc" id="L820">		PreparedStatement contactStmt = null;</span>
+		try {
+			//Add payment IN/Out watchlist staus fro AT-2986
+<span class="nc" id="L823">			WatchListDetails watchlistdet = getPaymentWatchListReasons(contact);</span>
+<span class="nc" id="L824">			processWatchList(contact, watchlistdet);</span>
+			
+<span class="nc bnc" id="L826" title="All 2 branches missed.">			if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getKycStatus())</span>
+<span class="nc bnc" id="L827" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getSanctionStatus())</span>
+<span class="nc bnc" id="L828" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getFraugsterStatus())) {</span>
+<span class="nc" id="L829">				contactStmt = connection.prepareStatement(</span>
+<span class="nc" id="L830">						DBQueryConstant.UPDATE_CONTACT_WITHOUT_SANCTION_AND_KYC_AND_FRAUDPREDICT_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L831">				contactStmt.setString(1, contact.getCcs().name());</span>
+<span class="nc" id="L832">				contactStmt.setInt(2, user);</span>
+<span class="nc" id="L833">				contactStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L834">				contactStmt.setInt(4, ServiceStatus.getStatusAsInteger(contact.getBlacklistStatus()));</span>
+<span class="nc" id="L835">				contactStmt.setInt(5, ServiceStatus.getStatusAsInteger(contact.getCustomCheckStatus()));</span>
+<span class="nc" id="L836">				contactStmt.setBoolean(6, isOnQueue);</span>
+<span class="nc" id="L837">				contactStmt.setInt(7, ServiceStatus.getStatusAsInteger(contact.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L838">				contactStmt.setInt(8, ServiceStatus.getStatusAsInteger(contact.getPaymentoutWatchlistStatus()));</span>
+<span class="nc" id="L839">				contactStmt.setInt(9, contact.getId());</span>
+<span class="nc bnc" id="L840" title="All 2 branches missed.">			} else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getKycStatus())</span>
+<span class="nc bnc" id="L841" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getFraugsterStatus())) {</span>
+<span class="nc" id="L842">				contactStmt = connection</span>
+<span class="nc" id="L843">						.prepareStatement(DBQueryConstant.UPDATE_CONTACT_WITHOUT_KYC_AND_FRAUDPREDICT_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L844">				contactStmt.setString(1, contact.getCcs().name());</span>
+<span class="nc" id="L845">				contactStmt.setInt(2, user);</span>
+<span class="nc" id="L846">				contactStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L847">				contactStmt.setInt(4, ServiceStatus.getStatusAsInteger(contact.getSanctionStatus()));</span>
+<span class="nc" id="L848">				contactStmt.setInt(5, ServiceStatus.getStatusAsInteger(contact.getBlacklistStatus()));</span>
+<span class="nc" id="L849">				contactStmt.setInt(6, ServiceStatus.getStatusAsInteger(contact.getCustomCheckStatus()));</span>
+<span class="nc" id="L850">				contactStmt.setBoolean(7, isOnQueue);</span>
+<span class="nc" id="L851">				contactStmt.setInt(8, ServiceStatus.getStatusAsInteger(contact.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L852">				contactStmt.setInt(9, ServiceStatus.getStatusAsInteger(contact.getPaymentoutWatchlistStatus()));</span>
+<span class="nc" id="L853">				contactStmt.setInt(10, contact.getId());</span>
+<span class="nc bnc" id="L854" title="All 2 branches missed.">			} else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getSanctionStatus())</span>
+<span class="nc bnc" id="L855" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getFraugsterStatus())) {</span>
+<span class="nc" id="L856">				contactStmt = connection</span>
+<span class="nc" id="L857">						.prepareStatement(DBQueryConstant.UPDATE_CONTACT_WITHOUT_SANCTION_AND_FRAUDPREDICT_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L858">				contactStmt.setString(1, contact.getCcs().name());</span>
+<span class="nc" id="L859">				contactStmt.setInt(2, user);</span>
+<span class="nc" id="L860">				contactStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L861">				contactStmt.setInt(4, ServiceStatus.getStatusAsInteger(contact.getKycStatus()));</span>
+<span class="nc" id="L862">				contactStmt.setInt(5, ServiceStatus.getStatusAsInteger(contact.getBlacklistStatus()));</span>
+<span class="nc" id="L863">				contactStmt.setInt(6, ServiceStatus.getStatusAsInteger(contact.getCustomCheckStatus()));</span>
+<span class="nc" id="L864">				contactStmt.setBoolean(7, isOnQueue);</span>
+<span class="nc" id="L865">				contactStmt.setInt(8, ServiceStatus.getStatusAsInteger(contact.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L866">				contactStmt.setInt(9, ServiceStatus.getStatusAsInteger(contact.getPaymentoutWatchlistStatus()));</span>
+<span class="nc" id="L867">				contactStmt.setInt(10, contact.getId());</span>
+<span class="nc bnc" id="L868" title="All 2 branches missed.">			} else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getKycStatus())</span>
+<span class="nc bnc" id="L869" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getSanctionStatus())) {</span>
+<span class="nc" id="L870">				contactStmt = connection</span>
+<span class="nc" id="L871">						.prepareStatement(DBQueryConstant.UPDATE_CONTACT_WITHOUT_KYC_AND_SANCTION_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L872">				contactStmt.setString(1, contact.getCcs().name());</span>
+<span class="nc" id="L873">				contactStmt.setInt(2, user);</span>
+<span class="nc" id="L874">				contactStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L875">				contactStmt.setInt(4, ServiceStatus.getStatusAsInteger(contact.getFraugsterStatus()));</span>
+<span class="nc" id="L876">				contactStmt.setInt(5, ServiceStatus.getStatusAsInteger(contact.getBlacklistStatus()));</span>
+<span class="nc" id="L877">				contactStmt.setInt(6, ServiceStatus.getStatusAsInteger(contact.getCustomCheckStatus()));</span>
+<span class="nc" id="L878">				contactStmt.setBoolean(7, isOnQueue);</span>
+<span class="nc" id="L879">				contactStmt.setInt(8, ServiceStatus.getStatusAsInteger(contact.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L880">				contactStmt.setInt(9, ServiceStatus.getStatusAsInteger(contact.getPaymentoutWatchlistStatus()));</span>
+<span class="nc" id="L881">				contactStmt.setInt(10, contact.getId());</span>
+<span class="nc bnc" id="L882" title="All 2 branches missed.">			} else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getKycStatus())) {</span>
+<span class="nc" id="L883">				contactStmt = connection</span>
+<span class="nc" id="L884">						.prepareStatement(DBQueryConstant.UPDATE_CONTACT_WITHOUT_KYC_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L885">				contactStmt.setString(1, contact.getCcs().name());</span>
+<span class="nc" id="L886">				contactStmt.setInt(2, user);</span>
+<span class="nc" id="L887">				contactStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L888">				contactStmt.setInt(4, ServiceStatus.getStatusAsInteger(contact.getFraugsterStatus()));</span>
+<span class="nc" id="L889">				contactStmt.setInt(5, ServiceStatus.getStatusAsInteger(contact.getSanctionStatus()));</span>
+<span class="nc" id="L890">				contactStmt.setInt(6, ServiceStatus.getStatusAsInteger(contact.getBlacklistStatus()));</span>
+<span class="nc" id="L891">				contactStmt.setInt(7, ServiceStatus.getStatusAsInteger(contact.getCustomCheckStatus()));</span>
+<span class="nc" id="L892">				contactStmt.setBoolean(8, isOnQueue);</span>
+<span class="nc" id="L893">				contactStmt.setInt(9, ServiceStatus.getStatusAsInteger(contact.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L894">				contactStmt.setInt(10, ServiceStatus.getStatusAsInteger(contact.getPaymentoutWatchlistStatus()));</span>
+<span class="nc" id="L895">				contactStmt.setInt(11, contact.getId());</span>
+<span class="nc bnc" id="L896" title="All 2 branches missed.">			} else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getSanctionStatus())) {</span>
+<span class="nc" id="L897">				contactStmt = connection</span>
+<span class="nc" id="L898">						.prepareStatement(DBQueryConstant.UPDATE_CONTACT_WITHOUT_SANCTION_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L899">				contactStmt.setString(1, contact.getCcs().name());</span>
+<span class="nc" id="L900">				contactStmt.setInt(2, user);</span>
+<span class="nc" id="L901">				contactStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L902">				contactStmt.setInt(4, ServiceStatus.getStatusAsInteger(contact.getKycStatus()));</span>
+<span class="nc" id="L903">				contactStmt.setInt(5, ServiceStatus.getStatusAsInteger(contact.getFraugsterStatus()));</span>
+<span class="nc" id="L904">				contactStmt.setInt(6, ServiceStatus.getStatusAsInteger(contact.getBlacklistStatus()));</span>
+<span class="nc" id="L905">				contactStmt.setInt(7, ServiceStatus.getStatusAsInteger(contact.getCustomCheckStatus()));</span>
+<span class="nc" id="L906">				contactStmt.setBoolean(8, isOnQueue);</span>
+<span class="nc" id="L907">				contactStmt.setInt(9, ServiceStatus.getStatusAsInteger(contact.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L908">				contactStmt.setInt(10, ServiceStatus.getStatusAsInteger(contact.getPaymentoutWatchlistStatus()));</span>
+<span class="nc" id="L909">				contactStmt.setInt(11, contact.getId());</span>
+<span class="nc bnc" id="L910" title="All 2 branches missed.">			}  else if (ServiceStatus.NOT_REQUIRED.name().equalsIgnoreCase(contact.getFraugsterStatus())) {</span>
+<span class="nc" id="L911">				contactStmt = connection</span>
+<span class="nc" id="L912">						.prepareStatement(DBQueryConstant.UPDATE_CONTACT_WITHOUT_FRAUDPREDICT_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L913">				contactStmt.setString(1, contact.getCcs().name());</span>
+<span class="nc" id="L914">				contactStmt.setInt(2, user);</span>
+<span class="nc" id="L915">				contactStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L916">				contactStmt.setInt(4, ServiceStatus.getStatusAsInteger(contact.getKycStatus()));</span>
+<span class="nc" id="L917">				contactStmt.setInt(5, ServiceStatus.getStatusAsInteger(contact.getSanctionStatus()));</span>
+<span class="nc" id="L918">				contactStmt.setInt(6, ServiceStatus.getStatusAsInteger(contact.getBlacklistStatus()));</span>
+<span class="nc" id="L919">				contactStmt.setInt(7, ServiceStatus.getStatusAsInteger(contact.getCustomCheckStatus()));</span>
+<span class="nc" id="L920">				contactStmt.setBoolean(8, isOnQueue);</span>
+<span class="nc" id="L921">				contactStmt.setInt(9, ServiceStatus.getStatusAsInteger(contact.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L922">				contactStmt.setInt(10, ServiceStatus.getStatusAsInteger(contact.getPaymentoutWatchlistStatus()));</span>
+<span class="nc" id="L923">				contactStmt.setInt(11, contact.getId());</span>
+			} else {
+<span class="nc" id="L925">				contactStmt = connection.prepareStatement(DBQueryConstant.UPDATE_CONTACT_COMPLIANCE_STATUS.getQuery());</span>
+<span class="nc" id="L926">				contactStmt.setString(1, contact.getCcs().name());</span>
+<span class="nc" id="L927">				contactStmt.setInt(2, user);</span>
+<span class="nc" id="L928">				contactStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L929">				contactStmt.setInt(4, ServiceStatus.getStatusAsInteger(contact.getKycStatus()));</span>
+<span class="nc" id="L930">				contactStmt.setInt(5, ServiceStatus.getStatusAsInteger(contact.getFraugsterStatus()));</span>
+<span class="nc" id="L931">				contactStmt.setInt(6, ServiceStatus.getStatusAsInteger(contact.getSanctionStatus()));</span>
+<span class="nc" id="L932">				contactStmt.setInt(7, ServiceStatus.getStatusAsInteger(contact.getBlacklistStatus()));</span>
+<span class="nc" id="L933">				contactStmt.setInt(8, ServiceStatus.getStatusAsInteger(contact.getCustomCheckStatus()));</span>
+<span class="nc" id="L934">				contactStmt.setBoolean(9, isOnQueue);</span>
+<span class="nc" id="L935">				contactStmt.setInt(10, ServiceStatus.getStatusAsInteger(contact.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L936">				contactStmt.setInt(11, ServiceStatus.getStatusAsInteger(contact.getPaymentoutWatchlistStatus()));</span>
+<span class="nc" id="L937">				contactStmt.setInt(12, contact.getId());</span>
+			}
+<span class="nc" id="L939">			contactStmt.executeUpdate();</span>
+<span class="nc" id="L940">		} catch (Exception e) {</span>
+<span class="nc" id="L941">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L943">			closePrepareStatement(contactStmt);</span>
+		}
+
+<span class="nc" id="L946">	}</span>
+	
+	@SuppressWarnings(&quot;squid:S2095&quot;)
+	private WatchListDetails getPaymentWatchListReasons(ComplianceContact contact)
+			throws ComplianceException {
+<span class="nc" id="L951">		Connection readOnlyConn = null;</span>
+<span class="nc" id="L952">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L953">		ResultSet resultSet = null;</span>
+<span class="nc" id="L954">		WatchListDetails watchlist = new WatchListDetails();</span>
+		
+		
+<span class="nc" id="L957">		String query = DBQueryConstant.GET_WATCHLIST_REASON_LIST_FOR_PAYMENTOUT_AND_PAYMENTIN_WITH_CON.getQuery();</span>
+		try {
+<span class="nc" id="L959">			readOnlyConn = getConnection(Boolean.TRUE);</span>
+
+			// the query check for new reasons added as well as old contacts on
+			// watchlist
+			// and inclusive of all watchlist reason, if anything stops payment
+			// In and Out
+			// also highet risk category
+<span class="nc" id="L966">			preparedStatement = readOnlyConn.prepareStatement(query);</span>
+<span class="nc" id="L967">			preparedStatement.setInt(1, contact.getId());</span>
+<span class="nc" id="L968">			resultSet = preparedStatement.executeQuery();</span>
+
+<span class="nc bnc" id="L970" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L971">				watchlist.setStopPaymentIn(resultSet.getBoolean(&quot;StopPaymentIn&quot;));</span>
+<span class="nc" id="L972">				watchlist.setStopPaymentOut(resultSet.getBoolean(&quot;StopPaymentOut&quot;));</span>
+<span class="nc" id="L973">				watchlist.setCategory(resultSet.getInt(&quot;Category&quot;));</span>
+			}
+
+<span class="nc" id="L976">		} catch (Exception e) {</span>
+<span class="nc" id="L977">			throw new ComplianceException(InternalProcessingCode.SERVICE_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L979">			closeResultset(resultSet);</span>
+<span class="nc" id="L980">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L981">			closeConnection(readOnlyConn);</span>
+		}
+<span class="nc" id="L983">		return watchlist;</span>
+	}
+	
+	private void processWatchList(ComplianceContact contact, WatchListDetails watchDetails) {
+<span class="nc" id="L987">		String paymentInwatchlistStatus = ServiceStatus.PASS.name();</span>
+<span class="nc" id="L988">		String paymentOutwatchlistStatus = ServiceStatus.PASS.name();</span>
+
+<span class="nc bnc" id="L990" title="All 4 branches missed.">		if (watchDetails.isStopPaymentIn() &amp;&amp; watchDetails.getCategory().equals(1))</span>
+<span class="nc" id="L991">			paymentInwatchlistStatus = ServiceStatus.FAIL.name();</span>
+<span class="nc bnc" id="L992" title="All 4 branches missed.">		if (watchDetails.isStopPaymentIn() &amp;&amp; watchDetails.getCategory().equals(2))</span>
+<span class="nc" id="L993">			paymentInwatchlistStatus = ServiceStatus.WATCH_LIST.name();</span>
+
+<span class="nc bnc" id="L995" title="All 4 branches missed.">		if (watchDetails.isStopPaymentOut() &amp;&amp; watchDetails.getCategory().equals(1))</span>
+<span class="nc" id="L996">			paymentOutwatchlistStatus = ServiceStatus.FAIL.name();</span>
+<span class="nc bnc" id="L997" title="All 4 branches missed.">		if (watchDetails.isStopPaymentOut() &amp;&amp; watchDetails.getCategory().equals(2))</span>
+<span class="nc" id="L998">			paymentOutwatchlistStatus = ServiceStatus.WATCH_LIST.name();</span>
+
+<span class="nc" id="L1000">		contact.setPaymentinWatchlistStatus(paymentInwatchlistStatus);</span>
+<span class="nc" id="L1001">		contact.setPaymentoutWatchlistStatus(paymentOutwatchlistStatus);</span>
+<span class="nc" id="L1002">	}</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.compliancesrv.core.
+	 * IRegistrationDBService#updateContactAttributes(org.springframework.
+	 * messaging.Message)
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; updateContactAttributes(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="fc" id="L1014">			RegistrationServiceRequest request = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="fc" id="L1015">					.getGatewayMessageExchange().getRequest();</span>
+<span class="fc" id="L1016">			List&lt;Contact&gt; contacts = request.getAccount().getContacts();</span>
+<span class="fc" id="L1017">			updateContactAttributes(contacts);</span>
+<span class="nc" id="L1018">		} catch (Exception e) {</span>
+<span class="nc" id="L1019">			LOG.error(&quot;Exception in updateContactAttributes()&quot;, e);</span>
+<span class="nc" id="L1020">			message.getPayload().setFailed(true);</span>
+<span class="fc" id="L1021">		}</span>
+<span class="fc" id="L1022">		return message;</span>
+	}
+	
+	/**
+	 * @param message
+	 * @return
+	 * @throws ComplianceException
+	 */
+	public Message&lt;MessageContext&gt; updateAccountStatusAfterPOI(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+
+<span class="nc" id="L1033">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1034">		UserProfile userToken = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L1035">		StatusUpdateRequest statusUpdateRequest = messageExchange.getRequest(StatusUpdateRequest.class);</span>
+<span class="nc" id="L1036">		RegistrationResponse profileUpdateResponse = (RegistrationResponse) statusUpdateRequest</span>
+<span class="nc" id="L1037">				.getAdditionalAttribute(Constants.FIELD_BROADCAST_RESPONSE);</span>
+<span class="nc" id="L1038">		ComplianceAccount account = profileUpdateResponse.getAccount();</span>
+<span class="nc" id="L1039">		Account oldAccount = (Account) statusUpdateRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L1040">		String serviceStatus = (String) statusUpdateRequest.getAdditionalAttribute(Constants.ONFIDO_RESULT_REASON);</span>
+<span class="nc" id="L1041">		Boolean statusUpdateReason = (Boolean) statusUpdateRequest.getAdditionalAttribute(&quot;statusUpdateReason&quot;);</span>
+<span class="nc bnc" id="L1042" title="All 2 branches missed.">		statusUpdateReason = statusUpdateReason == null ? Boolean.FALSE : statusUpdateReason;</span>
+<span class="nc" id="L1043">		Connection connection = null;</span>
+<span class="nc" id="L1044">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L1046">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1047">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_ACCOUNT_STATUS.getQuery());</span>
+<span class="nc" id="L1048">			statement.setString(1, account.getAcs().getComplianceStatusAsString());</span>
+<span class="nc" id="L1049">			statement.setInt(2, account.getAcs().getComplianceStatusAsInteger());</span>
+<span class="nc" id="L1050">			statement.setTimestamp(3, profileUpdateResponse.getAccount().getRegisteredDate());</span>
+<span class="nc" id="L1051">			statement.setTimestamp(4, profileUpdateResponse.getAccount().getExpiryDate());</span>
+<span class="nc" id="L1052">			statement.setInt(5, 1);</span>
+<span class="nc" id="L1053">			statement.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc bnc" id="L1054" title="All 2 branches missed.">			if(null != statusUpdateRequest.getAdditionalAttribute(Constants.PAYMENTIN_WATCHLIST_STATUS)</span>
+<span class="nc bnc" id="L1055" title="All 2 branches missed.">					&amp;&amp; null != statusUpdateRequest.getAdditionalAttribute(Constants.PAYMENTOUT_WATCHLIST_STATUS)) {</span>
+<span class="nc" id="L1056">				statement.setInt(7, ServiceStatus.getStatusAsInteger((String) statusUpdateRequest.getAdditionalAttribute(Constants.PAYMENTIN_WATCHLIST_STATUS)));</span>
+<span class="nc" id="L1057">				statement.setInt(8, ServiceStatus.getStatusAsInteger((String) statusUpdateRequest.getAdditionalAttribute(Constants.PAYMENTOUT_WATCHLIST_STATUS)));</span>
+			}
+			else {
+<span class="nc" id="L1060">				statement.setInt(7,5);</span>
+<span class="nc" id="L1061">				statement.setInt(8,5);</span>
+			}
+<span class="nc" id="L1063">			statement.setInt(9, OnfidoStatusEnum.getStatusAsInteger(serviceStatus));</span>
+<span class="nc" id="L1064">			statement.setString(10, statusUpdateRequest.getCrmAccountId());</span>
+<span class="nc" id="L1065">			statement.executeUpdate();</span>
+<span class="nc" id="L1066">			updateContactStatusAfterPOI(account, statusUpdateRequest, connection);</span>
+<span class="nc bnc" id="L1067" title="All 2 branches missed.">			if(Boolean.TRUE.equals(statusUpdateReason)) {</span>
+<span class="nc" id="L1068">				saveIntoProfileStatusReason(connection, profileUpdateResponse, oldAccount.getId(),</span>
+<span class="nc" id="L1069">						statusUpdateRequest.getOrgCode(), userToken.getUserID());</span>
+			}
+<span class="nc" id="L1071">		} catch (Exception e) {</span>
+<span class="nc" id="L1072">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1074">			closePrepareStatement(statement);</span>
+<span class="nc" id="L1075">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L1077">		return message;</span>
+	}
+
+	/**
+	 * @param account
+	 * @param statusUpdateRequest
+	 * @param connection
+	 * @throws ComplianceException
+	 */
+	public void updateContactStatusAfterPOI(ComplianceAccount account, StatusUpdateRequest statusUpdateRequest,
+			Connection connection) throws ComplianceException {
+		
+<span class="nc" id="L1089">		Timestamp complianceRegistered = (Timestamp) statusUpdateRequest.getAdditionalAttribute(&quot;ContactRegisteredDate&quot;);</span>
+<span class="nc" id="L1090">		Timestamp complianceExpiryDate = (Timestamp) statusUpdateRequest.getAdditionalAttribute(&quot;ContactExpiryDate&quot;);</span>
+<span class="nc" id="L1091">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L1093">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_CONTACT_STATUS.getQuery());</span>
+<span class="nc" id="L1094">			statement.setInt(1, account.getContacts().get(0).getCcs().getComplianceStatusAsInteger());</span>
+<span class="nc bnc" id="L1095" title="All 2 branches missed.">			if(null != complianceRegistered){</span>
+<span class="nc" id="L1096">				statement.setTimestamp(2, complianceRegistered);</span>
+			} else{
+<span class="nc" id="L1098">				statement.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+			}
+			
+<span class="nc bnc" id="L1101" title="All 2 branches missed.">			if(null != complianceExpiryDate){</span>
+<span class="nc" id="L1102">				statement.setTimestamp(3, complianceExpiryDate);</span>
+			}else{
+<span class="nc" id="L1104">				Timestamp time = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L1105">				Calendar c = Calendar.getInstance();</span>
+<span class="nc" id="L1106">				c.setTime(time);</span>
+<span class="nc" id="L1107">				c.add(Calendar.YEAR, PropertyHandler.getComplianceExpiryYears());</span>
+<span class="nc" id="L1108">				statement.setTimestamp(3, new Timestamp(c.getTimeInMillis()));</span>
+			}
+<span class="nc" id="L1110">			statement.setInt(4, 1);</span>
+<span class="nc" id="L1111">			statement.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc bnc" id="L1112" title="All 2 branches missed.">			if(null != statusUpdateRequest.getAdditionalAttribute(Constants.PAYMENTIN_WATCHLIST_STATUS)</span>
+<span class="nc bnc" id="L1113" title="All 2 branches missed.">					&amp;&amp; null != statusUpdateRequest.getAdditionalAttribute(Constants.PAYMENTOUT_WATCHLIST_STATUS)) {</span>
+<span class="nc" id="L1114">				statement.setInt(6, ServiceStatus.getStatusAsInteger((String) statusUpdateRequest.getAdditionalAttribute(Constants.PAYMENTIN_WATCHLIST_STATUS)));</span>
+<span class="nc" id="L1115">				statement.setInt(7, ServiceStatus.getStatusAsInteger((String) statusUpdateRequest.getAdditionalAttribute(Constants.PAYMENTOUT_WATCHLIST_STATUS)));</span>
+			}
+			else {
+<span class="nc" id="L1118">				statement.setInt(6,5);</span>
+<span class="nc" id="L1119">				statement.setInt(7,5);</span>
+			}
+<span class="nc" id="L1121">			statement.setString(8, statusUpdateRequest.getCrmContactId());</span>
+			
+<span class="nc" id="L1123">			statement.executeUpdate();</span>
+
+<span class="nc" id="L1125">		} catch (Exception e) {</span>
+<span class="nc" id="L1126">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1128">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L1130">	}</span>
+	
+	/**
+	 * Update contact payments watch list status for reg update.
+	 *
+	 * @param connection the connection
+	 * @param response the response
+	 * @param user the user
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void updateContactPaymentsWatchListStatusForRegUpdate(Connection connection, RegistrationResponse response,
+			Integer user) throws ComplianceException {
+<span class="nc" id="L1142">		PreparedStatement contactStmt = null;</span>
+		
+<span class="nc bnc" id="L1144" title="All 2 branches missed.">		for (ComplianceContact contact : response.getAccount().getContacts()) {	</span>
+<span class="nc" id="L1145">			WatchListDetails watchlistdet = getPaymentWatchListReasons(contact);</span>
+<span class="nc" id="L1146">			processWatchList(contact, watchlistdet);</span>
+			
+			try{
+<span class="nc" id="L1149">				contactStmt = connection.prepareStatement(DBQueryConstant.UPDATE_CONTACT_PAYMENTS_WATCHLIST_STATUS.getQuery());</span>
+<span class="nc" id="L1150">				contactStmt.setInt(1, user);</span>
+<span class="nc" id="L1151">				contactStmt.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1152">				contactStmt.setInt(3, ServiceStatus.getStatusAsInteger(contact.getPaymentinWatchlistStatus()));</span>
+<span class="nc" id="L1153">				contactStmt.setInt(4, ServiceStatus.getStatusAsInteger(contact.getPaymentoutWatchlistStatus()));</span>
+<span class="nc" id="L1154">				contactStmt.setInt(5, contact.getId());</span>
+<span class="nc" id="L1155">				contactStmt.executeUpdate();</span>
+			}
+<span class="nc" id="L1157">			catch(Exception e){</span>
+<span class="nc" id="L1158">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+			}
+			finally {
+<span class="nc" id="L1161">				closePrepareStatement(contactStmt);</span>
+			}
+<span class="nc" id="L1163">		}</span>
+<span class="nc" id="L1164">	}</span>
+	
+	public Message&lt;MessageContext&gt; updateIntuitionRiskLevelForRegUpdate(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L1167">		Connection connection = null;</span>
+		try {
+
+<span class="nc" id="L1170">			RegistrationResponse response = (RegistrationResponse) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L1171">					.getResponse();</span>
+
+<span class="nc" id="L1173">			RegistrationServiceRequest request = (RegistrationServiceRequest) message.getPayload()</span>
+<span class="nc" id="L1174">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L1175">			Account account = request.getAccount();</span>
+
+<span class="nc" id="L1177">			UserProfile userToken = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L1178">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1179">			beginTransaction(connection);</span>
+<span class="nc" id="L1180">			updateAccountIntuitionRiskLevel(account.getId(), response, userToken, connection);</span>
+<span class="nc" id="L1181">			commitTransaction(connection);</span>
+<span class="nc" id="L1182">		} catch (Exception e) {</span>
+<span class="nc" id="L1183">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L1184">			LOG.error(ERROR_WHILE_UPDATING_COMPLIANCE_STATUS_UPDATE_COMPLIANCE_STATUS, e);</span>
+		} finally {
+			try {
+<span class="nc" id="L1187">				closeConnection(connection);</span>
+<span class="nc" id="L1188">			} catch (ComplianceException e) {</span>
+<span class="nc" id="L1189">				message.getPayload().setFailed(true);</span>
+<span class="nc" id="L1190">				LOG.error(ERROR_WHILE_UPDATING_COMPLIANCE_STATUS_UPDATE_COMPLIANCE_STATUS, e);</span>
+<span class="nc" id="L1191">			}</span>
+		}
+<span class="nc" id="L1193">		return message;</span>
+	}
+
+	private void updateAccountIntuitionRiskLevel(Integer accountId, RegistrationResponse updateResponse,
+			UserProfile userToken, Connection connection) throws ComplianceException {
+<span class="nc" id="L1198">		PreparedStatement statement = null;</span>
+		try {
+<span class="nc" id="L1200">			statement = connection.prepareStatement(DBQueryConstant.UPDATE_ACCOUNT_INTUITION_RISK_LEVEL.getQuery());</span>
+
+<span class="nc" id="L1202">			statement.setString(1, updateResponse.getAccount().getIntuitionRiskLevel());</span>
+<span class="nc" id="L1203">			statement.setInt(2, userToken.getUserID());</span>
+<span class="nc" id="L1204">			statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1205">			statement.setInt(4, accountId);</span>
+
+<span class="nc" id="L1207">			statement.executeUpdate();</span>
+<span class="nc" id="L1208">		} catch (Exception e) {</span>
+<span class="nc" id="L1209">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1211">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L1213">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

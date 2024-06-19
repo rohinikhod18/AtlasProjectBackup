@@ -1,0 +1,370 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserManagementInterceptor.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.iam.intercept</a> &gt; <span class="el_source">UserManagementInterceptor.java</span></div><h1>UserManagementInterceptor.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.iam.intercept;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+import org.keycloak.adapters.saml.SamlPrincipal;
+import org.keycloak.adapters.saml.SamlSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.ModelAndView;
+
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.IIAMService;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.Function;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.Role;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserPermission;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+
+/**
+ * Implementation : 1. Intercept each request. Creates and populates user object
+ * from keycloak principal and database 2. validates user have access for
+ * request from functions 3. if it's have access then goes to respective
+ * controller. 4.if user don't have access then sets status to
+ * 401(UNAUTHORIZED) 5. if user unauthorized and not an ajax request then
+ * redirects to Unauthorzied page.
+ */
+<span class="nc" id="L37">public class UserManagementInterceptor implements HandlerInterceptor {</span>
+
+	@Autowired
+	@Qualifier(&quot;IAMServiceImpl&quot;)
+	private IIAMService service;
+<span class="nc" id="L42">	private static final Logger logger = LoggerFactory.getLogger(UserManagementInterceptor.class);</span>
+
+	private static final String X_REQUESTED_WITH_HDADER = &quot;X-Requested-With&quot;;
+
+	@Autowired
+	private FunctionsMapper requestMapping;
+
+	@Override
+	public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
+			throws Exception {
+		try {
+<span class="nc" id="L53">		logger.warn(&quot;\n-------------- preHandle() Http Request : {} and Http Response : {}&quot;, request, response);</span>
+<span class="nc" id="L54">		UserProfile user = getUserWithPermission(request);</span>
+<span class="nc" id="L55">		request.setAttribute(&quot;user&quot;, user);</span>
+		
+<span class="nc" id="L57">		HttpSession session = request.getSession(false);</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">		if(session != null) {</span>
+<span class="nc" id="L59">			session.setMaxInactiveInterval(360);</span>
+		} else {
+<span class="nc" id="L61">			logger.info(&quot;\n----------------- User session timed out -----------------&quot;); //AT-5315</span>
+<span class="nc" id="L62">			request.getRequestDispatcher(&quot;/logout?GLO=true&quot;).forward(request, response);</span>
+<span class="nc" id="L63">			return false;</span>
+		}
+		
+<span class="nc bnc" id="L66" title="All 4 branches missed.">		if(user == null || user.getId() == null){</span>
+<span class="nc" id="L67">			getUnauthorizedStatus(request,response);</span>
+<span class="nc" id="L68">			return false;</span>
+		}
+<span class="nc" id="L70">		String url = request.getRequestURL().toString();</span>
+<span class="nc" id="L71">		String requestMappingUrl = url</span>
+<span class="nc" id="L72">				.substring(url.indexOf(request.getContextPath()) + request.getContextPath().length());</span>
+<span class="nc" id="L73">		com.currenciesdirect.gtg.compliance.iam.core.domain.FunctionsAllowed function = requestMapping.getAllowedFunctions(requestMappingUrl);</span>
+		
+<span class="nc bnc" id="L75" title="All 4 branches missed.">		if (function != null &amp;&amp; !user.getRole().hasFunctions(function.functions(), function.allRequired())</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">				|| !request.isRequestedSessionIdValid()) {</span>
+<span class="nc" id="L77">			checkRequestSource(request, response, user, requestMappingUrl);</span>
+<span class="nc" id="L78">			return false;</span>
+		}
+<span class="nc" id="L80">		} catch (Exception exception){</span>
+<span class="nc" id="L81">			logger.error(&quot;Exception in preHandle method:&quot;,exception );</span>
+<span class="nc" id="L82">			getUnauthorizedStatus(request,response);</span>
+<span class="nc" id="L83">			return false;</span>
+<span class="nc" id="L84">		}</span>
+<span class="nc" id="L85">		return true;</span>
+	}
+
+	/**
+	 * Check Request Source
+	 * 
+	 * @param request
+	 * @param response
+	 * @param user
+	 * @param requestMappingUrl
+	 */
+	private void checkRequestSource(HttpServletRequest request, HttpServletResponse response, UserProfile user,
+			String requestMappingUrl) {
+<span class="nc bnc" id="L98" title="All 2 branches missed.">		if(isRequestForDasboard(requestMappingUrl)){</span>
+<span class="nc" id="L99">			forwordToRegQueue(request,response,user);</span>
+		} else {
+<span class="nc" id="L101">			getUnauthorizedStatus(request, response);</span>
+		}
+<span class="nc" id="L103">	}</span>
+
+	@Override
+	public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler,
+			ModelAndView modelAndView) throws Exception {
+<span class="nc bnc" id="L108" title="All 4 branches missed.">		if (modelAndView != null &amp;&amp; request != null) {</span>
+<span class="nc" id="L109">			modelAndView.addObject(&quot;userJson&quot;, JsonConverterUtil.convertToJsonWithNull(request.getAttribute(&quot;user&quot;)));</span>
+<span class="nc" id="L110">			modelAndView.addObject(&quot;user&quot;, request.getAttribute(&quot;user&quot;));</span>
+		}
+
+<span class="nc" id="L113">	}</span>
+
+	@Override
+	public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex)
+			throws Exception {
+<span class="nc" id="L118">		logger.debug(&quot;After completion Request URL:: {}&quot;,request.getRequestURL());</span>
+<span class="nc" id="L119">	}</span>
+
+	private UserProfile getUserWithPermission(HttpServletRequest request) throws CompliancePortalException {
+		//UserProfile user = getUserProfile(request);
+<span class="nc" id="L123">		UserProfile user = getUserProfileDummy();</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">		if (user != null) {</span>
+<span class="nc" id="L125">			logger.warn(&quot;\n-------------- username : {}&quot;,user.getName());</span>
+<span class="nc" id="L126">			service.getUserFunctions(user);</span>
+<span class="nc" id="L127">			service.getUserPermissionsByRoleAndView(user);</span>
+		}
+<span class="nc" id="L129">		return user;</span>
+	}
+	
+	private UserProfile getUserProfileDummy() {
+<span class="nc" id="L133">		UserProfile user = new UserProfile();</span>
+<span class="nc" id="L134">		user.setBirthdate(null);</span>
+<span class="nc" id="L135">		user.setEmail(null);</span>
+<span class="nc" id="L136">		user.setFamilyName(null);</span>
+<span class="nc" id="L137">		user.setGender(null);</span>
+<span class="nc" id="L138">		user.setGivenName(null);</span>
+<span class="nc" id="L139">		user.setId(null);</span>
+<span class="nc" id="L140">		user.setLocale(null);</span>
+<span class="nc" id="L141">		user.setMiddleName(null);</span>
+<span class="nc" id="L142">		user.setName(&quot;cd.comp.system&quot;);</span>
+<span class="nc" id="L143">		user.setNickName(null);</span>
+<span class="nc" id="L144">		user.setPhoneNumber(null);</span>
+<span class="nc" id="L145">		user.setPreferredUserName(&quot;cd.comp.system&quot;);</span>
+<span class="nc" id="L146">		user.setWebsite(null);</span>
+<span class="nc" id="L147">		user.setZoneinfo(null);</span>
+<span class="nc" id="L148">		Role r = new Role();</span>
+<span class="nc" id="L149">		Set&lt;String&gt; name = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L150">		name.add(&quot;manage-account&quot;);</span>
+<span class="nc" id="L151">		name.add(&quot;ATLAS_SENIOR_EXECUTIVE&quot;);</span>
+<span class="nc" id="L152">		name.add(&quot;manage-account-links&quot;);</span>
+<span class="nc" id="L153">		name.add(&quot;view-profile&quot;);</span>
+<span class="nc" id="L154">		name.add(&quot;ATLAS_DEPT_HEAD&quot;);</span>
+		//name.add(&quot;ATLAS_SENIOR_EXECUTIVE&quot;);
+<span class="nc" id="L156">		name.add(&quot;ATLAS_DATA_ANON_INITIATOR&quot;);</span>
+<span class="nc" id="L157">		name.add(&quot;ATLAS_DATA_ANON_APPROVER&quot;);</span>
+<span class="nc" id="L158">		List&lt;Function&gt; fun = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L159">		Function f = new Function();</span>
+<span class="nc" id="L160">		f.setHasAccess(true);</span>
+<span class="nc" id="L161">		f.setHasOverrideAccess(false);</span>
+<span class="nc" id="L162">		f.setName(&quot;canWorkOnCFX&quot;);</span>
+<span class="nc" id="L163">		fun.add(f);</span>
+<span class="nc" id="L164">		Function f1 = new Function();</span>
+<span class="nc" id="L165">		f1.setHasAccess(true);</span>
+<span class="nc" id="L166">		f1.setHasOverrideAccess(false);</span>
+<span class="nc" id="L167">		f1.setName(&quot;canWorkOnPFX&quot;);</span>
+<span class="nc" id="L168">		fun.add(f1);</span>
+<span class="nc" id="L169">		Function f2 = new Function();</span>
+<span class="nc" id="L170">		f2.setHasAccess(true);</span>
+<span class="nc" id="L171">		f2.setHasOverrideAccess(false);</span>
+<span class="nc" id="L172">		f2.setName(&quot;canViewRegistrationQueue&quot;);</span>
+<span class="nc" id="L173">		fun.add(f2);</span>
+<span class="nc" id="L174">		Function f3 = new Function();</span>
+<span class="nc" id="L175">		f3.setHasAccess(true);</span>
+<span class="nc" id="L176">		f3.setHasOverrideAccess(false);</span>
+<span class="nc" id="L177">		f3.setName(&quot;canViewPaymentInQueue&quot;);</span>
+<span class="nc" id="L178">		fun.add(f3);</span>
+<span class="nc" id="L179">		Function f4 = new Function();</span>
+<span class="nc" id="L180">		f4.setHasAccess(true);</span>
+<span class="nc" id="L181">		f4.setHasOverrideAccess(false);</span>
+<span class="nc" id="L182">		f4.setName(&quot;canViewPaymentOutQueue&quot;);</span>
+<span class="nc" id="L183">		fun.add(f4);</span>
+<span class="nc" id="L184">		Function f5 = new Function();</span>
+<span class="nc" id="L185">		f5.setHasAccess(true);</span>
+<span class="nc" id="L186">		f5.setHasOverrideAccess(false);</span>
+<span class="nc" id="L187">		f5.setName(&quot;canViewRegistrationReport&quot;);</span>
+<span class="nc" id="L188">		fun.add(f5);</span>
+<span class="nc" id="L189">		Function f6 = new Function();</span>
+<span class="nc" id="L190">		f6.setHasAccess(true);</span>
+<span class="nc" id="L191">		f6.setHasOverrideAccess(false);</span>
+<span class="nc" id="L192">		f6.setName(&quot;canViewPaymentInReport&quot;);</span>
+<span class="nc" id="L193">		fun.add(f6);</span>
+<span class="nc" id="L194">		Function f7 = new Function();</span>
+<span class="nc" id="L195">		f7.setHasAccess(true);</span>
+<span class="nc" id="L196">		f7.setHasOverrideAccess(false);</span>
+<span class="nc" id="L197">		f7.setName(&quot;canViewPaymentOutReport&quot;);</span>
+<span class="nc" id="L198">		fun.add(f7);</span>
+<span class="nc" id="L199">		Function f8 = new Function();</span>
+<span class="nc" id="L200">		f8.setHasAccess(true);</span>
+<span class="nc" id="L201">		f8.setHasOverrideAccess(false);</span>
+<span class="nc" id="L202">		f8.setName(&quot;canViewDashboard&quot;);</span>
+<span class="nc" id="L203">		fun.add(f8);</span>
+<span class="nc" id="L204">		Function f9 = new Function();</span>
+<span class="nc" id="L205">		f9.setHasAccess(true);</span>
+<span class="nc" id="L206">		f9.setHasOverrideAccess(false);</span>
+<span class="nc" id="L207">		f9.setName(&quot;canManageFraud&quot;);</span>
+<span class="nc" id="L208">		fun.add(f9);</span>
+<span class="nc" id="L209">		Function f10 = new Function();</span>
+<span class="nc" id="L210">		f10.setHasAccess(true);</span>
+<span class="nc" id="L211">		f10.setHasOverrideAccess(false);</span>
+<span class="nc" id="L212">		f10.setName(&quot;canManageCustom&quot;);</span>
+<span class="nc" id="L213">		fun.add(f10);</span>
+<span class="nc" id="L214">		Function f11 = new Function();</span>
+<span class="nc" id="L215">		f11.setHasAccess(true);</span>
+<span class="nc" id="L216">		f11.setHasOverrideAccess(false);</span>
+<span class="nc" id="L217">		f11.setName(&quot;canManageEID&quot;);</span>
+<span class="nc" id="L218">		fun.add(f11);</span>
+<span class="nc" id="L219">		Function f12 = new Function();</span>
+<span class="nc" id="L220">		f12.setHasAccess(true);</span>
+<span class="nc" id="L221">		f12.setHasOverrideAccess(false);</span>
+<span class="nc" id="L222">		f12.setName(&quot;canManageSanction&quot;);</span>
+<span class="nc" id="L223">		fun.add(f12);</span>
+<span class="nc" id="L224">		Function f13 = new Function();</span>
+<span class="nc" id="L225">		f13.setHasAccess(true);</span>
+<span class="nc" id="L226">		f13.setHasOverrideAccess(false);</span>
+<span class="nc" id="L227">		f13.setName(&quot;canManageBlackList&quot;);</span>
+<span class="nc" id="L228">		fun.add(f13);</span>
+<span class="nc" id="L229">		Function f14 = new Function();</span>
+<span class="nc" id="L230">		f14.setHasAccess(true);</span>
+<span class="nc" id="L231">		f14.setHasOverrideAccess(false);</span>
+<span class="nc" id="L232">		f14.setName(&quot;canDoAdministration&quot;);</span>
+<span class="nc" id="L233">		fun.add(f14);</span>
+<span class="nc" id="L234">		Function f15 = new Function();</span>
+<span class="nc" id="L235">		f15.setHasAccess(true);</span>
+<span class="nc" id="L236">		f15.setHasOverrideAccess(false);</span>
+<span class="nc" id="L237">		f15.setName(&quot;canViewWorkEfficiancyReport&quot;);</span>
+<span class="nc" id="L238">		fun.add(f15);</span>
+<span class="nc" id="L239">		Function f16 = new Function();</span>
+<span class="nc" id="L240">		f16.setHasAccess(true);</span>
+<span class="nc" id="L241">		f16.setHasOverrideAccess(false);</span>
+<span class="nc" id="L242">		f16.setName(&quot;canManageWatchListCategory1&quot;);</span>
+<span class="nc" id="L243">		fun.add(f16);</span>
+<span class="nc" id="L244">		Function f17 = new Function();</span>
+<span class="nc" id="L245">		f17.setHasAccess(true);</span>
+<span class="nc" id="L246">		f17.setHasOverrideAccess(false);</span>
+<span class="nc" id="L247">		f17.setName(&quot;canManageWatchListCategory2&quot;);</span>
+<span class="nc" id="L248">		fun.add(f17);</span>
+<span class="nc" id="L249">		Function f18 = new Function();</span>
+<span class="nc" id="L250">		f18.setHasAccess(true);</span>
+<span class="nc" id="L251">		f18.setHasOverrideAccess(false);</span>
+<span class="nc" id="L252">		f18.setName(&quot;canInitiateDataAnon&quot;);</span>
+<span class="nc" id="L253">		fun.add(f18);</span>
+<span class="nc" id="L254">		Function f19 = new Function();</span>
+<span class="nc" id="L255">		f19.setHasAccess(true);</span>
+<span class="nc" id="L256">		f19.setHasOverrideAccess(false);</span>
+<span class="nc" id="L257">		f19.setName(&quot;canApproveDataAnon&quot;);</span>
+<span class="nc" id="L258">		fun.add(f19);</span>
+<span class="nc" id="L259">		Function f20 = new Function();</span>
+<span class="nc" id="L260">		f20.setHasAccess(true);</span>
+<span class="nc" id="L261">		f20.setHasOverrideAccess(false);</span>
+<span class="nc" id="L262">		f20.setName(&quot;isReadOnlyUser&quot;);</span>
+<span class="nc" id="L263">		fun.add(f20);</span>
+<span class="nc" id="L264">		Function f21 = new Function();</span>
+<span class="nc" id="L265">		f21.setHasAccess(true);</span>
+<span class="nc" id="L266">		f21.setHasOverrideAccess(false);</span>
+<span class="nc" id="L267">		f21.setName(&quot;canManageBeneficiary&quot;);</span>
+<span class="nc" id="L268">		fun.add(f21);</span>
+<span class="nc" id="L269">		Function f22 = new Function();</span>
+<span class="nc" id="L270">		f22.setHasAccess(true);</span>
+<span class="nc" id="L271">		f22.setHasOverrideAccess(false);</span>
+<span class="nc" id="L272">		f22.setName(&quot;canNotLockAccount&quot;);</span>
+<span class="nc" id="L273">		fun.add(f22);</span>
+		
+<span class="nc" id="L275">		r.setNames(name);</span>
+<span class="nc" id="L276">		r.setFunctions(fun);</span>
+<span class="nc" id="L277">		user.setRole(r);</span>
+		
+<span class="nc" id="L279">		UserPermission userPer = new UserPermission();</span>
+<span class="nc" id="L280">		userPer.setCanApproveDataAnon(false);</span>
+<span class="nc" id="L281">		userPer.setCanDoAdministration(true);</span>
+<span class="nc" id="L282">		userPer.setCanInitiateDataAnon(false);</span>
+<span class="nc" id="L283">		userPer.setCanManageBeneficiary(false);</span>
+<span class="nc" id="L284">		userPer.setCanManageBlackList(true);</span>
+<span class="nc" id="L285">		userPer.setCanManageCustom(true);</span>
+<span class="nc" id="L286">		userPer.setCanManageEID(true);</span>
+<span class="nc" id="L287">		userPer.setCanManageSanction(true);</span>
+<span class="nc" id="L288">		userPer.setCanManageSanction(true);</span>
+<span class="nc" id="L289">		userPer.setCanManageWatchListCategory1(false);</span>
+<span class="nc" id="L290">		userPer.setCanManageWatchListCategory2(false);</span>
+<span class="nc" id="L291">		userPer.setCanNotLockAccount(false);</span>
+<span class="nc" id="L292">		userPer.setCanUnlockRecords(true);</span>
+<span class="nc" id="L293">		userPer.setCanViewDashboard(true);</span>
+<span class="nc" id="L294">		userPer.setCanViewPaymentInDetails(true);</span>
+<span class="nc" id="L295">		userPer.setCanViewPaymentInQueue(true);</span>
+<span class="nc" id="L296">		userPer.setCanViewPaymentInReport(true);</span>
+<span class="nc" id="L297">		userPer.setCanViewPaymentOutDetails(true);</span>
+<span class="nc" id="L298">		userPer.setCanViewRegistrationDetails(true);</span>
+<span class="nc" id="L299">		userPer.setCanViewRegistrationQueue(true);</span>
+<span class="nc" id="L300">		userPer.setCanViewWorkEfficiacyReport(true);</span>
+<span class="nc" id="L301">		userPer.setCanWorkOnCFX(true);</span>
+<span class="nc" id="L302">		userPer.setCanWorkOnPFX(true);</span>
+<span class="nc" id="L303">		userPer.setIsReadOnlyUser(true);</span>
+<span class="nc" id="L304">		user.setPermissions(userPer);</span>
+		
+<span class="nc" id="L306">		return user;</span>
+		
+	}
+
+	/**
+	 * Gets the user profile.
+	 *
+	 * @param request
+	 *            the request
+	 * @return the user profile
+	 */
+	protected UserProfile getUserProfile(HttpServletRequest request) {
+<span class="nc" id="L318">		UserProfile user = new UserProfile();</span>
+<span class="nc bnc" id="L319" title="All 2 branches missed.">		if (request.getUserPrincipal() instanceof SamlPrincipal) {</span>
+<span class="nc" id="L320">			SamlPrincipal userPrincipal = (SamlPrincipal) request.getUserPrincipal();</span>
+
+<span class="nc" id="L322">			SamlSession samlSession = (SamlSession) request.getSession().getAttribute(SamlSession.class.getName());</span>
+<span class="nc" id="L323">			user.setPreferredUserName(userPrincipal.getFriendlyAttribute(&quot;givenName&quot;) + &quot; &quot;</span>
+<span class="nc" id="L324">					+ userPrincipal.getFriendlyAttribute(&quot;surname&quot;));</span>
+<span class="nc" id="L325">			user.setName(userPrincipal.getName());</span>
+<span class="nc" id="L326">			Role role = new Role();</span>
+<span class="nc" id="L327">			role.setNames(samlSession.getRoles());</span>
+<span class="nc" id="L328">			user.setRole(role);</span>
+<span class="nc" id="L329">			return user;</span>
+		}
+<span class="nc" id="L331">		return null;</span>
+	}
+
+	private boolean isAjaxCall(HttpServletRequest request) {
+<span class="nc" id="L335">		return &quot;XMLHttpRequest&quot;.equals(request.getHeader(X_REQUESTED_WITH_HDADER));</span>
+	}
+	
+	private void getUnauthorizedStatus(HttpServletRequest request, HttpServletResponse response) {
+		try {
+<span class="nc" id="L340">			response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">			if (!isAjaxCall(request)) {</span>
+<span class="nc" id="L342">				request.getRequestDispatcher(&quot;/unauthorized&quot;).forward(request, response);</span>
+			}
+<span class="nc" id="L344">		} catch (Exception exception) {</span>
+<span class="nc" id="L345">			logger.error(&quot;Exception in getUnauthorizedStatus() method :&quot;,exception );</span>
+<span class="nc" id="L346">		}</span>
+<span class="nc" id="L347">	}</span>
+	
+	private void forwordToRegQueue(HttpServletRequest request, HttpServletResponse response, 
+			UserProfile user) {
+		String forwardUrl ;
+		try {
+<span class="nc bnc" id="L353" title="All 2 branches missed.">			 if(user.getPermissions().getCanViewRegistrationQueue()){</span>
+<span class="nc" id="L354">				forwardUrl =  &quot;/reg&quot;;</span>
+			}else {
+<span class="nc" id="L356">				forwardUrl = &quot;/dashboard&quot;;</span>
+			}
+			
+<span class="nc" id="L359">			request.getRequestDispatcher(forwardUrl).forward(request, response);</span>
+<span class="nc" id="L360">		} catch (Exception exception) {</span>
+<span class="nc" id="L361">			logger.error(&quot;Exception :&quot;,exception );</span>
+<span class="nc" id="L362">		}</span>
+<span class="nc" id="L363">	}</span>
+	
+	private boolean isRequestForDasboard(String url){
+<span class="nc bnc" id="L366" title="All 4 branches missed.">		return url != null &amp;&amp; (&quot;/&quot;).equalsIgnoreCase(url);</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CardDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">CardDBServiceImpl.java</span></div><h1>CardDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Card;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+
+/**
+ * The Class CardDBServiceImpl.
+ */
+@Component(&quot;cardDBServiceImpl&quot;)
+<span class="nc" id="L27">public class CardDBServiceImpl extends AbstractDao implements ICardDBServiceImpl{</span>
+	
+	/** The Constant LOG. */
+<span class="nc" id="L30">	private static final Logger LOG = LoggerFactory.getLogger(CardDBServiceImpl.class);</span>
+
+	/**
+	 * Save new card.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; saveNewCard(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+			
+<span class="nc" id="L42">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L43">			RegistrationServiceRequest registrationRequest = messageExchange.getRequest(RegistrationServiceRequest.class);</span>
+<span class="nc" id="L44">			Card request = (Card) messageExchange.getRequest().getAdditionalAttribute(&quot;card&quot;);</span>
+<span class="nc bnc" id="L45" title="All 2 branches missed.">			Boolean isTradeAccountNumberExist=request.getTradeAccountNumber()!=null;</span>
+<span class="nc" id="L46">			Boolean isUpdateCard = (Boolean) messageExchange.getRequest().getAdditionalAttribute(&quot;isUpdateCard&quot;);</span>
+<span class="nc" id="L47">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L48">			Integer accountId = registrationRequest.getAccount().getId();</span>
+<span class="nc bnc" id="L49" title="All 2 branches missed.">			if(isTradeAccountNumberExist) {</span>
+<span class="nc bnc" id="L50" title="All 2 branches missed.">				if(Boolean.TRUE.equals(isUpdateCard))</span>
+<span class="nc" id="L51">					updateCard(request, token.getUserID());</span>
+				else	
+<span class="nc" id="L53">					saveNewCard(request, token.getUserID(), accountId);</span>
+			}
+			
+			
+<span class="nc" id="L57">		} catch (Exception e) {</span>
+<span class="nc" id="L58">			LOG.error(&quot;Error in ICardDBServiceImpl saveNewCard()&quot;, e);</span>
+<span class="nc" id="L59">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L60">		}</span>
+<span class="nc" id="L61">		return message;</span>
+	}
+	
+	/**
+	 * Save new card.
+	 *
+	 * @param request the request
+	 * @param user the user
+	 * @param accountId the account id
+	 * @return true, if successful
+	 * @throws ComplianceException the compliance exception
+	 */
+	private boolean saveNewCard(Card request, Integer user, Integer accountId) throws ComplianceException {
+<span class="nc" id="L74">		Connection connection = getConnection(Boolean.FALSE);</span>
+		try {
+<span class="nc" id="L76">			beginTransaction(connection);</span>
+<span class="nc" id="L77">			saveIntoCardAttribute(connection, request, user, accountId);</span>
+<span class="nc" id="L78">			commitTransaction(connection);</span>
+<span class="nc" id="L79">			return true;</span>
+<span class="nc" id="L80">		} catch (Exception e) {</span>
+<span class="nc" id="L81">			transactionRolledBack(connection);</span>
+<span class="nc" id="L82">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L84">			closeConnection(connection);</span>
+		}
+	}
+	
+	/**
+	 * Save into card attribute.
+	 *
+	 * @param connection the connection
+	 * @param request the request
+	 * @param user the user
+	 * @param accountId the account id
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void saveIntoCardAttribute(Connection connection, Card request, Integer user, Integer accountId)
+			throws ComplianceException {
+<span class="nc" id="L99">			String cardJson = JsonConverterUtil.convertToJsonWithoutNull(request);</span>
+<span class="nc" id="L100">			PreparedStatement statement = null;</span>
+			try {
+<span class="nc" id="L102">				statement = connection.prepareStatement(DBQueryConstant.INSERT_INTO_CARD_ATTRIBUTE.getQuery());</span>
+<span class="nc" id="L103">				statement.setString(1,request.getCardID());</span>
+<span class="nc" id="L104">				statement.setInt(2, accountId);</span>
+<span class="nc" id="L105">				statement.setString(3, cardJson);</span>
+<span class="nc" id="L106">				statement.setInt(4, user);</span>
+<span class="nc" id="L107">				statement.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L108">				statement.setInt(6, user);</span>
+<span class="nc" id="L109">				statement.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L110">				statement.setString(8, request.getCardStatusFlag());</span>
+<span class="nc" id="L111">				statement.setInt(9, request.getContactId());</span>
+<span class="nc" id="L112">				statement.executeUpdate();</span>
+<span class="nc" id="L113">			} catch (Exception e) {</span>
+<span class="nc" id="L114">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+			} finally {
+<span class="nc" id="L116">				closePrepareStatement(statement);</span>
+			}
+<span class="nc" id="L118">	}</span>
+	
+	  /**
+  	 * Gets the card details from db.
+  	 *
+  	 * @param cardId the card id
+  	 * @param accountID the account ID
+  	 * @return the card details from db
+  	 * @throws ComplianceException the compliance exception
+  	 */
+	@SuppressWarnings(&quot;java:S2095&quot;)
+  	public Card getCardDetailsFromDb(String cardId) throws ComplianceException {
+<span class="nc" id="L130">        Connection connection = null;</span>
+<span class="nc" id="L131">        PreparedStatement statement = null;</span>
+<span class="nc" id="L132">        ResultSet rs = null;</span>
+<span class="nc" id="L133">        Card oldRequest=null;</span>
+        String json;
+        try {
+<span class="nc" id="L136">            connection=getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L137">            statement = connection.prepareStatement(DBQueryConstant.GET_CARD_DETAILS.getQuery());</span>
+<span class="nc" id="L138">            statement.setString(1,cardId);</span>
+<span class="nc" id="L139">            rs=statement.executeQuery();</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">            if (rs.next()) {</span>
+<span class="nc" id="L141">        		 json = rs.getString(&quot;Attributes&quot;);</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        		 if(json!=null) {</span>
+<span class="nc" id="L143">                     oldRequest=setCardAttribute(json, oldRequest);</span>
+                 }
+<span class="nc" id="L145">        		 return oldRequest;</span>
+             }
+            else {
+<span class="nc" id="L148">                return null;</span>
+            }
+<span class="nc" id="L150">        }catch (Exception e) {</span>
+<span class="nc" id="L151">            throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+        }finally {
+<span class="nc" id="L153">            closeResultset(rs);</span>
+<span class="nc" id="L154">            closePrepareStatement(statement);</span>
+<span class="nc" id="L155">            closeConnection(connection);</span>
+        }
+    }
+    
+    /**
+     * Sets the card attribute.
+     *
+     * @param attribute the attribute
+     * @param request the request
+     * @return the order card status update request
+     */
+    public Card setCardAttribute(String attribute, Card request) {
+<span class="nc bnc" id="L167" title="All 2 branches missed.">        if(attribute!=null) {</span>
+<span class="nc" id="L168">            request = JsonConverterUtil.convertToObject(Card.class, attribute);</span>
+        }
+<span class="nc" id="L170">        return request;</span>
+    }
+    
+    /**
+     * Update card.
+     *
+     * @param request the request
+     * @param user the user
+     * @param accountId the account id
+     * @return true, if successful
+     * @throws ComplianceException the compliance exception
+     */
+    private boolean updateCard(Card request, Integer user) throws ComplianceException {
+<span class="nc" id="L183">		Connection connection = getConnection(Boolean.FALSE);</span>
+		try {
+<span class="nc" id="L185">			beginTransaction(connection);</span>
+<span class="nc" id="L186">			updateIntoCardAttribute(connection, request, user);</span>
+<span class="nc" id="L187">			commitTransaction(connection);</span>
+<span class="nc" id="L188">			return true;</span>
+<span class="nc" id="L189">		} catch (Exception e) {</span>
+<span class="nc" id="L190">			transactionRolledBack(connection);</span>
+<span class="nc" id="L191">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L193">			closeConnection(connection);</span>
+		}
+	}
+    
+    /**
+     * Update into card attribute.
+     *
+     * @param connection the connection
+     * @param request the request
+     * @param user the user
+     * @param accountId the account id
+     * @throws ComplianceException the compliance exception
+     */
+    private void updateIntoCardAttribute(Connection connection, Card request, Integer user)
+			throws ComplianceException {
+<span class="nc" id="L208">			String cardJson = JsonConverterUtil.convertToJsonWithoutNull(request);</span>
+<span class="nc" id="L209">			PreparedStatement statement = null;</span>
+			try {
+<span class="nc" id="L211">				statement = connection.prepareStatement(DBQueryConstant.UPDATE_INTO_CARD_ATTRIBUTE.getQuery());</span>
+<span class="nc" id="L212">				statement.setString(1, cardJson);</span>
+<span class="nc" id="L213">				statement.setInt(2, user);</span>
+<span class="nc" id="L214">				statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L215">				statement.setString(4, request.getCardStatusFlag());</span>
+<span class="nc" id="L216">				statement.setString(5, request.getCardID());</span>
+				
+<span class="nc" id="L218">				statement.executeUpdate();</span>
+<span class="nc" id="L219">			} catch (Exception e) {</span>
+<span class="nc" id="L220">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+			} finally {
+<span class="nc" id="L222">				closePrepareStatement(statement);</span>
+			}
+<span class="nc" id="L224">	}</span>
+    
+    @SuppressWarnings(&quot;java:S2095&quot;)
+  	public Card getCardDetailsByAccountId(Integer accountId) throws ComplianceException {
+<span class="nc" id="L228">        Connection connection = null;</span>
+<span class="nc" id="L229">        PreparedStatement statement = null;</span>
+<span class="nc" id="L230">        ResultSet rs = null;</span>
+<span class="nc" id="L231">        Card cardDetails=null;</span>
+        String json;
+        try {
+<span class="nc" id="L234">            connection=getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L235">            statement = connection.prepareStatement(DBQueryConstant.GET_CARD_DETAILS_BY_ACCOUNT_ID.getQuery());</span>
+<span class="nc" id="L236">            statement.setInt(1,accountId);</span>
+<span class="nc" id="L237">            rs=statement.executeQuery();</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">            if (rs.next()) {</span>
+<span class="nc" id="L239">        		 json = rs.getString(&quot;Attributes&quot;);</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        		 if(json!=null) {</span>
+<span class="nc" id="L241">        			 cardDetails = JsonConverterUtil.convertToObject(Card.class, json);</span>
+                 }
+<span class="nc" id="L243">        		 return cardDetails;</span>
+             }
+            else {
+<span class="nc" id="L246">                return null;</span>
+            }
+<span class="nc" id="L248">        }catch (Exception e) {</span>
+<span class="nc" id="L249">            throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+        }finally {
+<span class="nc" id="L251">            closeResultset(rs);</span>
+<span class="nc" id="L252">            closePrepareStatement(statement);</span>
+<span class="nc" id="L253">            closeConnection(connection);</span>
+        }
+    }    
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

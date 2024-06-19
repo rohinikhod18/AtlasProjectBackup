@@ -1,0 +1,92 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<int:channel
+		id="CARD.TRANSACTION_MONITORING_MQ_RESEND.in.channel" />
+
+	<int:chain id="postcard.tmmq.initChain"
+		input-channel="CARD.TRANSACTION_MONITORING_MQ_RESEND.in.channel">
+
+		<int:service-activator
+			ref="PostCardTransactionMQDBServiceImpl" method="loadMessageFromDB" />
+
+		<int:router id="postcard.tmmq.checkmessageleft"
+			default-output-channel="PUSH.POST_CARD.TMMQ.OUT.CHANNEL"
+			expression="payload.getNoMessageLeft()">
+			<int:mapping value="true"
+				channel="PUSH.POST_CARD.TMMQ.OUT.CHANNEL" />
+			<int:mapping value="false"
+				channel="POST_CARD.TMMQ.SERVICE.IN.CHANNEL" />
+		</int:router>
+
+	</int:chain>
+
+	<int:chain input-channel="POST_CARD.TMMQ.SERVICE.IN.CHANNEL"
+		output-channel="PUSH.POST_CARD.TMMQ.OUT.CHANNEL">
+
+		<int:transformer ref="postCardTransactionMQTransfomer"
+			method="transformRequest" />
+
+		<int:service-activator
+			id="POST_TRANSACTION_MQ.TRANSACTIONMONITORING" method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TM_POST_CARD_TRANSACTION_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionResponse" />
+		</int:service-activator>
+
+		<int:transformer ref="postCardTransactionMQTransfomer"
+			method="transformResponse" />
+
+		<int:service-activator
+			ref="PostCardTransactionMQDBServiceImpl" method="updateMQStatusToDB" />
+
+		<int:service-activator
+			ref="PostCardTransactionMQDBServiceImpl"
+			method="removeDeliveredRecordFromTMMQTable" />
+
+		<!-- If retry count is 5 then we send alert email to support team -->
+		<int:service-activator
+			ref="PostCardTransactionEmailAlertImpl"
+			method="sendEmailAlert" />
+			
+	</int:chain>
+
+	<int:chain input-channel="PUSH.POST_CARD.TMMQ.OUT.CHANNEL"
+		output-channel="nullChannel">
+
+		<int:service-activator
+			ref="transactionMonitoringMqService" method="handleResponse" />
+
+	</int:chain>
+
+	<bean id="PostCardTransactionMQDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.PostCardTransactionMQDBServiceImpl" />
+
+	<bean id="postCardTransactionMQTransfomer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.card.PostCardTransactionMQTransformer" />
+		
+	<bean id="PostCardTransactionEmailAlertImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.tmemailalert.PostCardTransactionEmailAlertImpl"/>
+
+</beans>

@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CustomCheckController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.restport.customcheck</a> &gt; <span class="el_source">CustomCheckController.java</span></div><h1>CustomCheckController.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.restport.customcheck;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.keycloak.representations.AccessToken;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.context.request.async.DeferredResult;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.FundsInCustomCheckResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResendResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.whitelist.UdateWhiteListRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.customchecks.request.FundsOutCustomCheckResendRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.restport.BaseController;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
+
+@Controller
+@RequestMapping(&quot;/repeatcheck&quot;)
+<span class="nc" id="L36">public class CustomCheckController extends BaseController {</span>
+
+<span class="nc" id="L38">	private static final Logger LOGGER = LoggerFactory.getLogger(CustomCheckController.class);</span>
+
+	/**
+	 * Custom check resend.
+	 *
+	 * @param httpRequest the http request
+	 * @param kycResendRequest the kyc resend request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Perform repeat check blacklist for registrations from the Compliance portal UI.\n\n&quot;
+			+ &quot; - IP distance check. Only for Australia and UK (countries of residence). &quot;
+			+ &quot;If the Dealer is within the specified range then it will pass otherwise it will fail\n&quot;
+			+ &quot; - Country Check (Normal/ High Risk/ Extreme High Risk/ Sanctioned)\n&quot; 
+			+ &quot; - Global Check. Only for USA (country of residence)\n\n&quot; 
+			+ &quot;The checks have been divided into 3 types with different provisions and rules:\n\n&quot;
+			+ &quot; - List A: Permisson Provided\n&quot;
+			+ &quot; - List B: Partial Permission with Documents\n&quot;
+			+ &quot; - List C: No Permission\n\n&quot; 
+			+ &quot;This request is asynchronous. To avoid blocking, we use callbacks-based programming model where instead of the actual result, we will return a DeferredResult to the servlet container.&quot;, 
+			value = &quot;Call this api to Repeat the Custom Check&quot;, 
+			nickname = &quot;customCheckResend&quot;)
+	@ApiResponses(value = { @ApiResponse(response = CustomCheckResendResponse.class, code = 200, message = &quot;A successful response is an instance of the CustomCheckResendResponse class.&quot;) })
+	@PostMapping(value = &quot;/customCheck&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; customCheckResend(final HttpServletRequest httpRequest,
+			final @RequestBody FundsOutCustomCheckResendRequest request) {
+<span class="nc" id="L63">		String jsonCustomCheckRequest = JsonConverterUtil.convertToJsonWithoutNull(request); </span>
+<span class="nc" id="L64">		LOGGER.warn(&quot;\n ------- CustomCheckResendRequest Request Start -------- \n  {}&quot;,jsonCustomCheckRequest);</span>
+<span class="nc" id="L65">		LOGGER.warn(&quot;\n ----------- CustomCheckResendRequest Request End ---------&quot;);</span>
+<span class="nc" id="L66">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class,  httpRequest.getHeader(&quot;user&quot;));</span>
+<span class="nc" id="L67">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L68">				ServiceInterfaceType.FUNDSOUT, OperationEnum.CUSTOMCHECK_RESEND, request.getOrgCode(),</span>
+				request);
+		
+<span class="nc" id="L71">		AccessToken userToken =  new AccessToken();</span>
+<span class="nc" id="L72">		userToken.setPreferredUsername(user.getName());</span>
+<span class="nc" id="L73">		return super.executeWorkflow(messageContext, userToken);</span>
+	}
+	
+	@ApiOperation(notes = &quot;This checks the customer as follows\n\n&quot; + 
+			&quot; - Currency Check. The currency should be on the Safe List. If not then Currency Check will fail.\n&quot; + 
+			&quot; - Amount Range Check. Amount should be within the Amount Range.\n&quot; + 
+			&quot; - Reason of transfer check. Checks whether reason matches that stated at the time of registration.\n\n&quot;, 
+			value = &quot;Update White list data after repeat check for FundsOut&quot;,
+			nickname = &quot;updateWhiteListData&quot;)
+	@ApiResponses(value = { @ApiResponse(response = CustomCheckResponse.class, code = 200, message = &quot;A successful response is an instance of the CustomCheckResponse class.&quot;) })
+	@PostMapping(value = &quot;/updateWhiteListData&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; updateWhiteListData(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;payment id to update whitelist dta from&quot;, required = true) 
+			final @RequestBody UdateWhiteListRequest updateWhiteListData){
+<span class="nc" id="L87">		String jsonUpdateWhitelistData = JsonConverterUtil.convertToJsonWithoutNull(updateWhiteListData); </span>
+<span class="nc" id="L88">		LOGGER.warn(&quot;\n ------- UdateWhiteListRequest for fundsout Request Start -------- \n  {}&quot;,jsonUpdateWhitelistData);</span>
+<span class="nc" id="L89">		LOGGER.warn(&quot; \n ----------- UdateWhiteListRequest for fundsout Request End ---------&quot;);</span>
+<span class="nc" id="L90">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class,  httpRequest.getHeader(&quot;user&quot;));</span>
+<span class="nc" id="L91">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L92">				ServiceInterfaceType.FUNDSOUT, OperationEnum.WHITELIST_UPDATE, updateWhiteListData.getOrgCode(),</span>
+				updateWhiteListData);
+		
+<span class="nc" id="L95">		AccessToken userToken =  new AccessToken();</span>
+<span class="nc" id="L96">		userToken.setPreferredUsername(user.getName());</span>
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;
+
+<span class="nc" id="L99">		deferredResult= super.executeWorkflow(messageContext,userToken);</span>
+<span class="nc" id="L100">		return deferredResult;</span>
+	}
+	
+	
+	@ApiOperation(notes = &quot;This checks the customer as follows\n\n&quot; + 
+			&quot; - Currency Check. The currency should be on the Safe List. If not then Currency Check will fail.\n&quot; + 
+			&quot; - Amount Range Check. Amount should be within the Amount Range.\n&quot; + 
+			&quot; - Third Party Check. Debtor Name should match with Client Name.\n\n&quot;, 
+			value = &quot;Repeat check customCheck for FundsIn&quot;,
+			nickname = &quot;customFundsInCheckResend&quot;)
+	@ApiResponses(value = { @ApiResponse(response = CustomCheckResendResponse.class, code = 200, message = &quot;A successful response is an instance of the CustomCheckResendResponse class.&quot;) })
+	@PostMapping(value = &quot;/customCheckfundsIn&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; customFundsInCheckResend(final HttpServletRequest httpRequest,
+			final @RequestBody FundsInCustomCheckResendRequest request) {
+<span class="nc" id="L114">		LOGGER.warn(&quot;CustomCheckResendRequest request received {}&quot;, request);</span>
+<span class="nc" id="L115">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class,  httpRequest.getHeader(&quot;user&quot;));</span>
+<span class="nc" id="L116">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L117">				ServiceInterfaceType.FUNDSIN, OperationEnum.CUSTOMCHECK_RESEND, request.getOrgCode(),</span>
+				request);
+		
+<span class="nc" id="L120">		AccessToken userToken =  new AccessToken();</span>
+<span class="nc" id="L121">		userToken.setPreferredUsername(user.getName());</span>
+<span class="nc" id="L122">		return super.executeWorkflow(messageContext, userToken);</span>
+	}
+	
+	@ApiOperation(notes = &quot;Call this api to update White list data after repeat check for FundsIn.&quot;, 
+			value = &quot;Call this api to update White list data after repeat check for FundsIn&quot;, 
+			nickname = &quot;updateFindsInWhiteListData&quot;)
+	@ApiResponses(value = { @ApiResponse(response = CustomCheckResponse.class, code = 200, message = &quot;A successful response is an instance of the CustomCheckResponse class.&quot;) })
+	@PostMapping(value = &quot;/updateWhiteListDatafundsIn&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; updateFundsInWhiteListData(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;payment id to update whitelist dta from&quot;, required = true) 
+			final @RequestBody UdateWhiteListRequest updateWhiteListData){
+<span class="nc" id="L133">		String jsonUpdateWhitelistData = JsonConverterUtil.convertToJsonWithoutNull(updateWhiteListData); </span>
+<span class="nc" id="L134">		LOGGER.warn(&quot;\n ------- updateWhiteListDatafundsIn Request Start -------- \n  {}&quot;,jsonUpdateWhitelistData);</span>
+<span class="nc" id="L135">		LOGGER.warn(&quot; \n ----------- updateWhiteListDatafundsIn Request End ---------&quot;);</span>
+<span class="nc" id="L136">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class,  httpRequest.getHeader(&quot;user&quot;));</span>
+<span class="nc" id="L137">		AccessToken userToken =  new AccessToken();</span>
+<span class="nc" id="L138">		userToken.setPreferredUsername(user.getName());</span>
+<span class="nc" id="L139">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L140">				ServiceInterfaceType.FUNDSIN, OperationEnum.WHITELIST_UPDATE, updateWhiteListData.getOrgCode(),</span>
+				updateWhiteListData);
+		
+<span class="nc" id="L143">		return  super.executeWorkflow(messageContext,userToken);</span>
+
+
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

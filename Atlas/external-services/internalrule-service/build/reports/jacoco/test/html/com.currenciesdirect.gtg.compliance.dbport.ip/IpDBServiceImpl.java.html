@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IpDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">internalrule-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport.ip</a> &gt; <span class="el_source">IpDBServiceImpl.java</span></div><h1>IpDBServiceImpl.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.dbport.ip;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.codehaus.jackson.map.ObjectMapper;
+
+import com.currenciesdirect.gtg.compliance.core.domain.ip.IpProviderProperty;
+import com.currenciesdirect.gtg.compliance.core.domain.ip.PostCodeLocation;
+import com.currenciesdirect.gtg.compliance.core.ip.IDBService;
+import com.currenciesdirect.gtg.compliance.dbport.AbstractDao;
+import com.currenciesdirect.gtg.compliance.exception.InternalRuleException;
+import com.currenciesdirect.gtg.compliance.exception.ip.IpErrors;
+import com.currenciesdirect.gtg.compliance.exception.ip.IpException;
+
+/**
+ * @author manish
+ * 
+ */
+@SuppressWarnings(&quot;squid:S2095&quot;)
+public class IpDBServiceImpl extends AbstractDao implements IDBService {
+
+<span class="fc" id="L29">	private static IDBService idbService = new IpDBServiceImpl();</span>
+
+	/** The Constant LOG. */
+	private IpDBServiceImpl() {
+
+	}
+
+	public static IDBService getInstance() {
+<span class="nc" id="L37">		return idbService;</span>
+	}
+
+	@Override
+	public Map&lt;String, IpProviderProperty&gt; getIPProviderInitConfigProperty() throws InternalRuleException  {
+<span class="fc" id="L42">		Connection conn = null;</span>
+<span class="fc" id="L43">		PreparedStatement stmt = null;</span>
+<span class="fc" id="L44">		ResultSet resultSet = null;</span>
+<span class="fc" id="L45">		String json = null;</span>
+<span class="fc" id="L46">		ObjectMapper mapper = new ObjectMapper();</span>
+<span class="fc" id="L47">		IpProviderProperty property = null;</span>
+<span class="fc" id="L48">		String providerName = null;</span>
+<span class="fc" id="L49">		Map&lt;String, IpProviderProperty&gt; hm = new ConcurrentHashMap&lt;&gt;();</span>
+		try {
+<span class="fc" id="L51">			conn = getConnection();</span>
+<span class="fc" id="L52">			stmt = conn.prepareStatement(IpQueryConstants.GET_IP_PROVIDER_INIT_CONFIG_PROPERTY);</span>
+<span class="fc" id="L53">			resultSet = stmt.executeQuery();</span>
+<span class="fc bfc" id="L54" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L55">				json = resultSet.getString(&quot;Attribute&quot;);</span>
+<span class="fc" id="L56">				providerName = resultSet.getString(&quot;Code&quot;);</span>
+<span class="fc" id="L57">				property = mapper.readValue(json, IpProviderProperty.class);</span>
+<span class="fc" id="L58">				hm.put(providerName, property);</span>
+			}
+<span class="fc" id="L60">		} catch (Exception e) {</span>
+<span class="fc" id="L61">			throw new InternalRuleException(IpErrors.ERROR_WHILE_LOADING_PROVIDER_INIT_DATA, e);</span>
+		} finally {
+<span class="fc" id="L63">			closeResultset(resultSet);</span>
+<span class="fc" id="L64">			closePrepareStatement(stmt);</span>
+<span class="fc" id="L65">			closeConnection(conn);</span>
+		}
+<span class="fc" id="L67">		return hm;</span>
+
+	}
+
+	@Override
+	public PostCodeLocation getLocationFromPostCode(String postCode) throws InternalRuleException {
+<span class="nc" id="L73">		Connection conn = null;</span>
+<span class="nc" id="L74">		PreparedStatement stmt = null;</span>
+<span class="nc" id="L75">		ResultSet resultSet = null;</span>
+<span class="nc" id="L76">		PostCodeLocation codeLocation = new PostCodeLocation();</span>
+<span class="nc" id="L77">		int count = 0;</span>
+		try {
+<span class="nc" id="L79">			conn = getConnection();</span>
+<span class="nc" id="L80">			stmt = conn.prepareStatement(IpQueryConstants.GET_LOCATION_FROM_POSTCODE);</span>
+<span class="nc" id="L81">			stmt.setString(1, postCode);</span>
+<span class="nc" id="L82">			resultSet = stmt.executeQuery();</span>
+
+<span class="nc bnc" id="L84" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+
+<span class="nc" id="L86">				codeLocation.setLatitude(resultSet.getDouble(&quot;Latitude&quot;));</span>
+<span class="nc" id="L87">				codeLocation.setLongitude(resultSet.getDouble(&quot;Longitude&quot;));</span>
+<span class="nc" id="L88">				count++;</span>
+			}
+<span class="nc bnc" id="L90" title="All 2 branches missed.">			if (count &lt; 1) {</span>
+<span class="nc" id="L91">				throw new InternalRuleException(IpErrors.INVALID_POST_CODE);</span>
+			}
+<span class="nc" id="L93">			codeLocation.setPostcode(postCode);</span>
+<span class="nc" id="L94">		} catch (IpException exception) {</span>
+<span class="nc" id="L95">			throw exception;</span>
+<span class="nc" id="L96">		} catch (Exception e) {</span>
+<span class="nc" id="L97">			throw new InternalRuleException(IpErrors.DATABASE_GENERIC_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L99">			closeResultset(resultSet);</span>
+<span class="nc" id="L100">			closePrepareStatement(stmt);</span>
+<span class="nc" id="L101">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L103">		return codeLocation;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

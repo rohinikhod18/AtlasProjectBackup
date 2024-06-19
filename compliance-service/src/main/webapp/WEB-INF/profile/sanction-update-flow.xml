@@ -1,0 +1,164 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="PROFILE.SANCTION_UPDATE.in.channel"/>
+	<int:channel id="PROFILE.SANCTION_UPDATE.DATAENRICHER"/>
+	<!-- <int:channel id="SANCTIONUPDATE.out.channel"/> -->
+	<int:channel id="PROFILE.SANCTIONUPDATE.RESPONSE"/>
+	<int:channel id="PROFILE.SANCTION.ACTIVITY.LOG"/>
+	<int:channel id="PROFILE.SANCTION.UPDATE.CHANNEL"/>
+	<int:channel id="UPDATE.PROFILE.channel"/>
+	<int:channel id="UPDATE.FUNDSOUT.channel"/>
+	<int:channel id="UPDATE.FUNDSIN.channel"/>
+	<int:channel id="SANCTION.UPDATE.ERROR.HANDLER" />
+	<int:chain id="updateSanctionServcie" input-channel="PROFILE.SANCTION_UPDATE.in.channel">
+	<int:header-enricher>
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header
+				name="username"
+				expression="headers['username']" />
+			<int:header
+				name="password"
+				expression="headers['password']" />
+		</int:header-enricher>
+	<int:service-activator ref="sanctionUpdateMessageValidator" />	
+		<int:router
+			id="sanctionUpdateValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="PROFILE.SANCTIONUPDATE.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="PROFILE.SANCTION_UPDATE.DATAENRICHER" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain id="enrichSanctionUpdateData" input-channel="PROFILE.SANCTION_UPDATE.DATAENRICHER">
+	<int:service-activator ref="sanctionUpdateDataEnricher" method="process" />	
+	<int:service-activator ref="sanctionUpdateDataValidator" />	
+		<int:router
+			id="sanctionDataValidator"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="PROFILE.SANCTIONUPDATE.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="PROFILE.SANCTION.UPDATE.CHANNEL" />
+		</int:router>
+	</int:chain>
+	 
+	<int:chain id="sanctionUpdateChannel" 
+				input-channel="PROFILE.SANCTION.UPDATE.CHANNEL" 
+				>
+		<int:transformer
+			ref="sanctionUpdateTransformer"
+			method="transformRequest" />
+	    <int:service-activator id="sanctionUpdateEvent"  method="updateEventSerivceLog" ref ="eventDBServiceImpl">
+	    </int:service-activator>
+	    <int:transformer
+			ref="sanctionUpdateTransformer"
+			method="transformResponse" />
+		<int:filter discard-channel="SANCTION.UPDATE.ERROR.HANDLER" expression="!payload.isFailed()"/>	
+	<!--Added New Router -->		
+		<int:router
+			id="sanctionUpdate"
+			expression="payload.getRequestResourceType()"
+			default-output-channel="PROFILE.SANCTION.ACTIVITY.LOG">
+			<int:mapping
+				value="PROFILE"
+				channel="UPDATE.PROFILE.channel" />
+		 	<int:mapping
+				value="FUNDSOUT"
+				channel="UPDATE.FUNDSOUT.channel" /> 
+			<int:mapping
+				value="FUNDSIN"
+				channel="UPDATE.FUNDSIN.channel" /> 
+		</int:router>    
+	</int:chain>
+	
+		<int:chain id="updateProfile" input-channel="UPDATE.PROFILE.channel" output-channel="PROFILE.SANCTION.ACTIVITY.LOG">
+			<int:service-activator id="profileSanctionUpdate"  method="updateSanctionStatus" ref ="newRegistrationDBServiceImpl">
+	   <!--  <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl" /> -->
+	    </int:service-activator>
+	    <int:filter discard-channel="SANCTION.UPDATE.ERROR.HANDLER" expression="!payload.isFailed()"/>
+		</int:chain>
+		
+		 <int:chain id="updateFundsOut" input-channel="UPDATE.FUNDSOUT.channel" output-channel="PROFILE.SANCTION.ACTIVITY.LOG">
+			<int:service-activator id="fundsOutSanctionUpdate"  method="updateFundsOutSanctionStatus" ref="fundsOutDBService">
+	    <!-- <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl" /> -->
+	    </int:service-activator>
+	    <int:service-activator id="fundsout.kafkaTxExecutor" ref="kafkaTxExecutorServiceImpl" method="executeKafkaTx" />
+	     
+	    <int:filter discard-channel="SANCTION.UPDATE.ERROR.HANDLER" expression="!payload.isFailed()"/>
+		</int:chain>
+		
+		 <int:chain id="updateFundsIn" input-channel="UPDATE.FUNDSIN.channel" output-channel="PROFILE.SANCTION.ACTIVITY.LOG">
+			<int:service-activator id="fundsInSanctionUpdate"  method="updateFundsInSanctionStatus" ref="fundsInDBService">
+	    <!-- <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl" /> -->
+	    </int:service-activator> 
+	    <int:filter discard-channel="SANCTION.UPDATE.ERROR.HANDLER" expression="!payload.isFailed()"/>
+		</int:chain>
+	
+	<!-- End -->
+	
+	<int:chain id="createActivity" input-channel="PROFILE.SANCTION.ACTIVITY.LOG" output-channel="PROFILE.SANCTIONUPDATE.RESPONSE">
+	    <int:service-activator id="sanctionUpdateActivity"  method="createSanctionUpdateActivity" >
+	    <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl" />
+	    </int:service-activator>
+	    <int:filter discard-channel="SANCTION.UPDATE.ERROR.HANDLER" expression="!payload.isFailed()"/>
+	</int:chain>
+
+	
+
+	
+	<int:chain input-channel="PROFILE.SANCTIONUPDATE.RESPONSE" output-channel="nullChannel">
+	<int:service-activator id="SANCTIONUPDATE.RES" ref="sanctionUpdateResponse" method="process" />
+	<int:filter discard-channel="SANCTION.UPDATE.ERROR.HANDLER" expression="!payload.isFailed()"/>
+	</int:chain>
+	
+	<int:chain input-channel="SANCTION.UPDATE.ERROR.HANDLER" 
+			   output-channel="nullChannel">
+		<int:service-activator
+			ref="sanctionUpdateErrorHandler"
+			method="logError" />
+	</int:chain>
+	
+	<bean id="sanctionUpdateErrorHandler" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanction.SanctionUpdateErrorHandler" />
+	<!-- <bean
+		id="sanctionUpdateRegistrationDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl" /> -->
+	<!-- <bean
+		id="sanctionUpdateEventDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.EventDBServiceImpl" /> -->
+	<bean id="sanctionUpdateTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.SanctionUpdateTransformer"/>
+	<bean id="sanctionUpdateResponse" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.sanction.PrepareSanctionUpdateResponse"/>
+	<bean id="sanctionUpdateMessageValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.sanction.SanctionUpdateMessageValidator">
+	</bean>
+	<bean id="sanctionUpdateDataEnricher" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.sanction.SanctionUpdateDataEnricher">
+	<property name="eventDBService" ref="eventDBServiceImpl" />
+	</bean>
+	<bean id="sanctionUpdateDataValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.sanction.SanctionUpdateDataValidator">
+	<property name="registrationDBService" ref="newRegistrationDBServiceImpl" />
+	</bean>
+</beans>

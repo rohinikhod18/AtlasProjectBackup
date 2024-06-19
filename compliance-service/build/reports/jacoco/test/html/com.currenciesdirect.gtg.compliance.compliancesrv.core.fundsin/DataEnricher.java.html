@@ -1,0 +1,927 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataEnricher.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin</a> &gt; <span class="el_source">DataEnricher.java</span></div><h1>DataEnricher.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.ReprocessFailedDetails;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.CustomChecksRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.FundsInCustomCheckResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FundsInFraugsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInBaseRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.response.FundsInDeleteResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.CardFraudScoreResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.ContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.CountryCheckContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FraudSightScoreResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsInBlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.FundsInSanctionResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.whitelist.UdateWhiteListRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.AbstractDataEnricher;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.IEventDBService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.WatchList;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsInDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.WatchListRules;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.EntityDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsin.response.FundsInCreateResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.StringUtils;
+
+/**
+ * The Class DataEnricher.
+ */
+<span class="nc" id="L64">public class DataEnricher extends AbstractDataEnricher {</span>
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L67">	private static final Logger LOGGER = LoggerFactory.getLogger(DataEnricher.class);</span>
+
+	private static final String WATCHLISTID = &quot;watchlistid&quot;;
+	private static final String FUNDS_IN_REPEAT = &quot;FUNDS_IN_REPEAT&quot;;
+
+	@Autowired
+	private IEventDBService eventDBServiceImpl;
+	@Autowired
+	private FundsInDBServiceImpl fundsInDBService;
+
+	private static final String ERROR = &quot;Exception in enrichData()&quot;;
+
+	/**
+	 * Enrich data.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 */
+	public Message&lt;MessageContext&gt; enrichData(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L90">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L91">			getUserTableId(message);</span>
+<span class="nc" id="L92">			FundsInBaseRequest fundsInBaseRequest = (FundsInBaseRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L93">			FundsInCreateRequest oldReuqest = fundsInDBService.getFundsInDetails(fundsInBaseRequest);</span>
+<span class="nc" id="L94">			Account account = (Account) oldReuqest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+			String custType;
+<span class="nc bnc" id="L96" title="All 4 branches missed.">			if (null != account &amp;&amp; null != account.getCustType()) {</span>
+<span class="nc" id="L97">				custType = account.getCustType().trim();</span>
+				/* old request cust type **/ /* current request cust type */
+<span class="nc bnc" id="L99" title="All 4 branches missed.">				if (!((custType != null &amp;&amp; fundsInBaseRequest.getCustType() != null)</span>
+<span class="nc bnc" id="L100" title="All 2 branches missed.">						&amp;&amp; (custType.equalsIgnoreCase(fundsInBaseRequest.getCustType().trim())))) {</span>
+					/*
+					 * If old and current request doesnot match then set current
+					 * CustType into old request and pass it to data validation
+					 * layer for error response code
+					 */
+<span class="nc" id="L106">					oldReuqest.setCustType(fundsInBaseRequest.getCustType());</span>
+<span class="nc" id="L107">					enrichCommonData(message, oldReuqest);</span>
+				} else  {
+<span class="nc" id="L109">					enrichPFXCFXData(message, oldReuqest);</span>
+				}
+			} else {// No Account exists so forwarding to next validation level for correct error Message
+<span class="nc" id="L112">				enrichCommonData(message, oldReuqest);</span>
+			}
+<span class="nc" id="L114">		} catch (Exception e) {</span>
+<span class="nc" id="L115">			LOGGER.error(ERROR, e);</span>
+<span class="nc" id="L116">		}</span>
+<span class="nc" id="L117">		return message;</span>
+	}
+	
+	
+	/**
+	 * Enrich data for delet opi.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; enrichDataForDeletOpi(Message&lt;MessageContext&gt; message) {
+		
+		try {
+<span class="nc" id="L130">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L131">			getUserTableId(message);</span>
+<span class="nc" id="L132">			FundsInDeleteRequest fundsInDeleteRequest = (FundsInDeleteRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L133">			fundsInDBService.getFundsInContactAccountDetailsForDeleteOpi(fundsInDeleteRequest);</span>
+			
+<span class="nc" id="L135">		} catch (Exception e) {</span>
+<span class="nc" id="L136">			LOGGER.error(ERROR, e);</span>
+<span class="nc" id="L137">		}</span>
+<span class="nc" id="L138">		return message;</span>
+		
+	}
+
+	/**
+	 * Enrich data.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 */
+	public Message&lt;MessageContext&gt; enrichDataForBlacklistRecheck(Message&lt;MessageContext&gt; message) {
+
+		try {
+<span class="nc" id="L153">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L154">			getUserTableId(message);</span>
+<span class="nc" id="L155">			FundsInBaseRequest fundsInBaseRequest = (FundsInBaseRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L156">			FundsInCreateRequest oldReuqest = fundsInDBService.getFundsInDetailsForBlacklistRecheck(fundsInBaseRequest);</span>
+<span class="nc" id="L157">			enrichCommonData(message, oldReuqest);</span>
+<span class="nc" id="L158">		} catch (Exception e) {</span>
+<span class="nc" id="L159">			LOGGER.error(ERROR, e);</span>
+<span class="nc" id="L160">		}</span>
+<span class="nc" id="L161">		return message;</span>
+	}
+
+	/**
+	 * Enrich PFX Data
+	 * 
+	 * @param message
+	 * @return
+	 * @throws ComplianceException
+	 */
+	private Message&lt;MessageContext&gt; enrichPFXCFXData(Message&lt;MessageContext&gt; message, FundsInCreateRequest oldReuqest)
+			throws ComplianceException {
+
+		try {
+<span class="nc" id="L175">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L176">			ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">			if (serviceInterfaceType != ServiceInterfaceType.FUNDSIN)</span>
+<span class="nc" id="L178">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST,</span>
+						new Exception(&quot; Invalid Service Interface Type&quot;));
+<span class="nc" id="L180">			enrichCommonData(message, oldReuqest);</span>
+<span class="nc" id="L181">		} catch (Exception e) {</span>
+<span class="nc" id="L182">			throw new ComplianceException(InternalProcessingCode.SERVICE_ERROR, e);</span>
+<span class="nc" id="L183">		}</span>
+<span class="nc" id="L184">		return message;</span>
+	}
+
+	/**
+	 * Enrich Common Data
+	 * 
+	 * @param message
+	 * @return
+	 * @throws ComplianceException
+	 */
+	private Message&lt;MessageContext&gt; enrichCommonData(Message&lt;MessageContext&gt; message, FundsInCreateRequest oldReuqest)
+			throws ComplianceException {
+
+		try {
+<span class="nc" id="L198">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L199">			ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc" id="L200">			OperationEnum operation = messageExchange.getOperation();</span>
+<span class="nc bnc" id="L201" title="All 4 branches missed.">			if (serviceInterfaceType == ServiceInterfaceType.FUNDSIN &amp;&amp; operation == OperationEnum.FUNDS_IN) {</span>
+<span class="nc" id="L202">				handleFundsInCreate(messageExchange, oldReuqest);</span>
+<span class="nc bnc" id="L203" title="All 4 branches missed.">			} else if (serviceInterfaceType == ServiceInterfaceType.FUNDSIN &amp;&amp; operation == OperationEnum.CUSTOMCHECK_RESEND) {</span>
+<span class="nc" id="L204">				handleRepeatCustomCheck(message, messageExchange, eventDBServiceImpl,oldReuqest);</span>
+<span class="nc bnc" id="L205" title="All 4 branches missed.">			} else if (serviceInterfaceType == ServiceInterfaceType.FUNDSIN &amp;&amp; operation == OperationEnum.SANCTION_RESEND) {</span>
+<span class="nc" id="L206">				handleRepeatSanctionCheck(message, messageExchange, eventDBServiceImpl);</span>
+<span class="nc bnc" id="L207" title="All 4 branches missed.">			} else if (serviceInterfaceType == ServiceInterfaceType.FUNDSIN &amp;&amp; operation == OperationEnum.FRAUGSTER_RESEND) {</span>
+<span class="nc" id="L208">				handleRepeatFraugsterCheck(messageExchange, oldReuqest);</span>
+<span class="nc bnc" id="L209" title="All 4 branches missed.">			} else if (serviceInterfaceType == ServiceInterfaceType.FUNDSIN &amp;&amp; operation == OperationEnum.BLACKLIST_RESEND) {</span>
+<span class="nc" id="L210">				handleRepeatBlacklistCheck(messageExchange, oldReuqest);</span>
+			}
+<span class="nc" id="L212">		} catch (Exception e) {</span>
+<span class="nc" id="L213">			LOGGER.error(ERROR, e);</span>
+<span class="nc" id="L214">		}</span>
+<span class="nc" id="L215">		return message;</span>
+	}
+
+	/**
+	 * This method will enrich the data for blacklist repeat check for funds in
+	 * 
+	 * @param message
+	 * @return message
+	 */
+	private void handleRepeatBlacklistCheck(MessageExchange messageExchange, FundsInCreateRequest oldReuqest)
+			throws ComplianceException {
+
+<span class="nc" id="L227">		FundsInBlacklistResendRequest resendRequest = messageExchange.getRequest(FundsInBlacklistResendRequest.class);</span>
+
+<span class="nc bnc" id="L229" title="All 2 branches missed.">		if (null != oldReuqest.getAccId()) {</span>
+<span class="nc" id="L230">			updateAddtionalAttributesforBlacklist(resendRequest, oldReuqest);</span>
+<span class="nc" id="L231">			Contact contact = (Contact) resendRequest.getAdditionalAttribute(Constants.FIELD_CONTACT);</span>
+<span class="nc" id="L232">			Account account = (Account) resendRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc bnc" id="L233" title="All 4 branches missed.">			if (null == account || null == contact) {</span>
+<span class="nc" id="L234">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST);</span>
+			}
+<span class="nc" id="L236">			oldReuqest.addAttribute(Constants.FIELD_CONTACT, contact);</span>
+<span class="nc" id="L237">			oldReuqest.addAttribute(Constants.FIELD_ACC_ACCOUNT, account);</span>
+<span class="nc" id="L238">			messageExchange.getRequest().addAttribute(Constants.OLD_REQUEST, oldReuqest);</span>
+		}
+<span class="nc" id="L240">	}</span>
+
+	/**
+	 * Update Addtional Attributes
+	 * 
+	 * @param request
+	 * @param details
+	 */
+	private void updateAddtionalAttributesforBlacklist(FundsInBaseRequest request, FundsInCreateRequest details) {
+<span class="nc" id="L249">		request.setOrgId(details.getOrgId());</span>
+<span class="nc" id="L250">		request.addAttribute(Constants.FIELD_ACC_ACCOUNT, details.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT));</span>
+<span class="nc" id="L251">		Integer noOfContacts = (Integer) details.getAdditionalAttribute(Constants.FIELD_NO_OF_CONTACT);</span>
+<span class="nc" id="L252">		request.addAttribute(Constants.FIELD_NO_OF_CONTACT, noOfContacts);</span>
+<span class="nc" id="L253">		Integer tradeContactId = null;</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">		if (null != details.getTrade())</span>
+<span class="nc" id="L255">			tradeContactId = details.getTrade().getTradeContactId();</span>
+<span class="nc" id="L256">		List&lt;Contact&gt; contactList = (List&lt;Contact&gt;) details.getAdditionalAttribute(Constants.FIELD_OLD_CONTACTS);</span>
+
+<span class="nc bnc" id="L258" title="All 2 branches missed.">		if (null != noOfContacts) {</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">			for (Contact contact : contactList) {</span>
+<span class="nc bnc" id="L260" title="All 2 branches missed.">				if (contact.getTradeContactID().equals(tradeContactId)) {</span>
+<span class="nc" id="L261">					request.addAttribute(Constants.FIELD_CONTACT, contact);</span>
+				}
+<span class="nc" id="L263">			}</span>
+		}
+<span class="nc" id="L265">	}</span>
+
+	/**
+	 * This method will enrich the data for fraugster repeat check for funds in
+	 * 
+	 * @param message
+	 * @return message
+	 */
+	private void handleRepeatFraugsterCheck(MessageExchange messageExchange, FundsInCreateRequest oldReuqest)
+			throws ComplianceException {
+
+<span class="nc" id="L276">		FundsInFraugsterResendRequest resendRequest = messageExchange.getRequest(FundsInFraugsterResendRequest.class);</span>
+
+<span class="nc bnc" id="L278" title="All 2 branches missed.">		if (null != oldReuqest.getAccId()) {</span>
+<span class="nc" id="L279">			updateAddtionalAttributesforFraugster(resendRequest, oldReuqest);</span>
+<span class="nc" id="L280">			Contact contact = (Contact) resendRequest.getAdditionalAttribute(Constants.FIELD_CONTACT);</span>
+<span class="nc" id="L281">			Account account = (Account) resendRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc bnc" id="L282" title="All 4 branches missed.">			if (null == account || null == contact) {</span>
+<span class="nc" id="L283">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST);</span>
+			}
+<span class="nc" id="L285">			oldReuqest.addAttribute(Constants.FIELD_CONTACT, contact);</span>
+<span class="nc" id="L286">			oldReuqest.addAttribute(Constants.FIELD_ACC_ACCOUNT, account);</span>
+
+			/**
+			 * fraugster signup score is needed for fraugster payment in
+			 * request
+			 **/
+<span class="nc" id="L292">			FraugsterSummary fraugsterSummary = newRegistrationDBServiceImpl</span>
+<span class="nc" id="L293">					.getFirstFraugsterSignupSummary(contact.getId(), EntityEnum.CONTACT.toString());</span>
+<span class="nc bnc" id="L294" title="All 2 branches missed.">			if (null != fraugsterSummary) {</span>
+<span class="nc" id="L295">				resendRequest.addAttribute(&quot;FraugsterSignupScore&quot;, fraugsterSummary.getScore());</span>
+			}
+<span class="nc" id="L297">			resendRequest.addAttribute(Constants.PERFORM_CHECKS, Boolean.TRUE);</span>
+
+<span class="nc" id="L299">			messageExchange.getRequest().addAttribute(Constants.OLD_REQUEST, oldReuqest);</span>
+		}
+<span class="nc" id="L301">	}</span>
+
+	/**
+	 * Update Addtional Attributes
+	 * 
+	 * @param request
+	 * @param details
+	 */
+	private void updateAddtionalAttributesforFraugster(FundsInBaseRequest request, FundsInCreateRequest details) {
+<span class="nc" id="L310">		request.setOrgId(details.getOrgId());</span>
+<span class="nc" id="L311">		request.addAttribute(Constants.FIELD_ACC_ACCOUNT, details.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT));</span>
+<span class="nc" id="L312">		Integer noOfContacts = (Integer) details.getAdditionalAttribute(Constants.FIELD_NO_OF_CONTACT);</span>
+<span class="nc" id="L313">		request.addAttribute(Constants.FIELD_NO_OF_CONTACT, noOfContacts);</span>
+<span class="nc" id="L314">		Integer tradeContactId = null;</span>
+<span class="nc bnc" id="L315" title="All 2 branches missed.">		if (null != details.getTrade())</span>
+<span class="nc" id="L316">			tradeContactId = details.getTrade().getTradeContactId();</span>
+<span class="nc" id="L317">		List&lt;Contact&gt; contactList = (List&lt;Contact&gt;) details.getAdditionalAttribute(Constants.FIELD_OLD_CONTACTS);</span>
+<span class="nc" id="L318">		int count = 1;</span>
+<span class="nc bnc" id="L319" title="All 2 branches missed.">		if (null != noOfContacts) {</span>
+<span class="nc bnc" id="L320" title="All 2 branches missed.">			for (Contact contact : contactList) {</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">				if (contact.getTradeContactID().equals(tradeContactId)) {</span>
+<span class="nc" id="L322">					request.addAttribute(Constants.FIELD_CONTACT, contact);</span>
+				}
+<span class="nc" id="L324">				request.addAttribute(WATCHLISTID + count, details.getAdditionalAttribute(WATCHLISTID + count));</span>
+<span class="nc" id="L325">				request.addAttribute(&quot;watchlistreasonname&quot; + count,</span>
+<span class="nc" id="L326">						details.getAdditionalAttribute(&quot;watchlistreasonname&quot; + count));</span>
+<span class="nc" id="L327">				count++;</span>
+<span class="nc" id="L328">			}</span>
+
+		}
+<span class="nc" id="L331">	}</span>
+
+	private void handleRepeatSanctionCheck(Message&lt;MessageContext&gt; message, MessageExchange messageExchange,
+			IEventDBService ieventDBService) throws ComplianceException {
+<span class="nc" id="L335">		FundsInSanctionResendRequest request = messageExchange.getRequest(FundsInSanctionResendRequest.class);</span>
+<span class="nc" id="L336">		FundsInCreateRequest fundsInRequest = fundsInDBService.getFundsInDetails(request);</span>
+<span class="nc" id="L337">		fundsInRequest.setFundsInId(request.getPaymentInId());</span>
+<span class="nc" id="L338">		Account account = fundsInDBService.getAccountByTradeAccountNumber(</span>
+<span class="nc" id="L339">				fundsInRequest.getTrade().getTradeAccountNumber(), request.getOrgCode());</span>
+<span class="nc" id="L340">		Contact contact = fundsInDBService.getContactByTradeContactID(fundsInRequest.getTrade().getTradeContactId(),</span>
+<span class="nc" id="L341">				request.getOrgCode());</span>
+<span class="nc" id="L342">		message.getPayload().getGatewayMessageExchange().setRequest(fundsInRequest);</span>
+<span class="nc" id="L343">		EntityDetails entityDetails = ieventDBService.getPreviousSanctionDetails(request.getEntityId(),</span>
+<span class="nc" id="L344">				EntityEnum.DEBTOR.name());</span>
+<span class="nc bnc" id="L345" title="All 2 branches missed.">		if (fundsInRequest.getTrade().getCustType().equals(Constants.PFX))</span>
+<span class="nc" id="L346">			entityDetails.setContactName(contact.getFullName());</span>
+		else
+<span class="nc" id="L348">			entityDetails.setContactName(account.getAccountName());</span>
+<span class="nc" id="L349">		fundsInRequest.addAttribute(Constants.FIELD_ACC_ACCOUNT, account);</span>
+<span class="nc" id="L350">		fundsInRequest.addAttribute(Constants.FIELD_CONTACT, contact);</span>
+<span class="nc" id="L351">		fundsInRequest.addAttribute(FUNDS_IN_REPEAT, request);</span>
+<span class="nc" id="L352">		fundsInRequest.addAttribute(Constants.FIELD_ENTITY_DETAILS, entityDetails);</span>
+<span class="nc" id="L353">		fundsInRequest.addAttribute(Constants.PERFORM_CHECKS, Boolean.TRUE);</span>
+<span class="nc" id="L354">		fundsInRequest.setSanctionEligible(isThirdPartyPayment(fundsInRequest));</span>
+<span class="nc" id="L355">		messageExchange.setRequest(fundsInRequest);</span>
+<span class="nc" id="L356">	}</span>
+
+	private void handleRepeatCustomCheck(Message&lt;MessageContext&gt; message, MessageExchange messageExchange,
+			IEventDBService ieventDBService,FundsInCreateRequest oldReuqest) throws ComplianceException {
+<span class="nc" id="L360">		FundsInCustomCheckResendRequest customCheckResend = messageExchange.getRequest(FundsInCustomCheckResendRequest.class);</span>
+<span class="nc" id="L361">		FundsInCreateRequest fundsInRequest = fundsInDBService.getFundsInRequestById(customCheckResend.getPaymentInId());</span>
+<span class="nc" id="L362">		boolean isFirstFundsIn = fundsInDBService.checkFirstFundsIn(fundsInRequest);//AT-3346</span>
+<span class="nc" id="L363">		Integer eddCountryNumber = getCountryEddNumber(fundsInRequest.getTrade().getCountryOfFund());		//AT-3346</span>
+<span class="nc" id="L364">		Timestamp leUpdatedDate = (Timestamp) oldReuqest.getAdditionalAttribute(Constants.LE_UPDATE_DATE);</span>
+<span class="nc" id="L365">		boolean isAnyFundsCleared = fundsInDBService.checkAnyFundsClearForContact(fundsInRequest,leUpdatedDate);//AT-3349</span>
+<span class="nc" id="L366">		EntityDetails entityDetails = ieventDBService.isServicePerformedForFundsInCustomCheck(customCheckResend.getPaymentInId(), &quot;VELOCITYCHECK&quot;);</span>
+
+<span class="nc" id="L368">		boolean isCDINCFirstFundsIn = fundsInDBService.checkCDINCFirstFundsIn(fundsInRequest); //Add for AT-3738</span>
+		
+<span class="nc" id="L370">		fundsInRequest.setFundsInId(customCheckResend.getPaymentInId());</span>
+<span class="nc" id="L371">		Account account = fundsInDBService.getAccountByTradeAccountNumber(</span>
+<span class="nc" id="L372">				fundsInRequest.getTrade().getTradeAccountNumber(), customCheckResend.getOrgCode());</span>
+<span class="nc" id="L373">		Contact contact = fundsInDBService.getContactByTradeContactID(fundsInRequest.getTrade().getTradeContactId(),</span>
+<span class="nc" id="L374">				customCheckResend.getOrgCode());</span>
+<span class="nc" id="L375">		entityDetails.setAccountName(account.getAccountName());</span>
+<span class="nc" id="L376">		message.getPayload().getGatewayMessageExchange().setRequest(fundsInRequest);</span>
+<span class="nc" id="L377">		fundsInRequest.addAttribute(Constants.FIELD_ACC_ACCOUNT, account);</span>
+<span class="nc" id="L378">		fundsInRequest.addAttribute(Constants.FIELD_CONTACT, contact);</span>
+<span class="nc" id="L379">		fundsInRequest.addAttribute(FUNDS_IN_REPEAT, customCheckResend);</span>
+<span class="nc" id="L380">		fundsInRequest.addAttribute(Constants.FIELD_ENTITY_DETAILS, entityDetails);</span>
+<span class="nc" id="L381">		fundsInRequest.addAttribute(Constants.PERFORM_CHECKS, Boolean.TRUE);</span>
+<span class="nc" id="L382">		fundsInRequest.addAttribute(Constants.EDD_COUNTRY_NUMBER, eddCountryNumber); //AT-3346</span>
+<span class="nc" id="L383">		fundsInRequest.addAttribute(Constants.ZERO_CLEAR_FUNDSIN, isFirstFundsIn);//AT-3346</span>
+<span class="nc" id="L384">		fundsInRequest.addAttribute(Constants.ZERO_EU_FUNDS_CLEARED_AFTER_LE_DATE, isAnyFundsCleared);//AT-3349</span>
+<span class="nc" id="L385">		fundsInRequest.addAttribute(Constants.CONTACT_POI_EXISTS, getPOIExists(oldReuqest,fundsInRequest));//AT-3349</span>
+<span class="nc" id="L386">		fundsInRequest.addAttribute(Constants.CDINC_ZERO_CLEAR_FUNDSIN, isCDINCFirstFundsIn); //Add for AT-3738</span>
+
+<span class="nc" id="L388">		messageExchange.setRequest(fundsInRequest);</span>
+<span class="nc" id="L389">	}</span>
+
+	private void handleFundsInCreate(MessageExchange messageExchange, FundsInCreateRequest oldReuqest)
+			throws ComplianceException {
+<span class="nc" id="L393">		FundsInCreateRequest fundsInRequest = (FundsInCreateRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L394">		boolean isFirstFundsIn = fundsInDBService.checkFirstFundsIn(fundsInRequest);						//AT-3346</span>
+<span class="nc" id="L395">		Integer eddCountryNumber = getCountryEddNumber(fundsInRequest.getTrade().getCountryOfFund());		//AT-3346</span>
+<span class="nc" id="L396">		Timestamp leUpdatedDate = (Timestamp) oldReuqest.getAdditionalAttribute(Constants.LE_UPDATE_DATE);</span>
+<span class="nc" id="L397">		boolean isAnyFundsCleared = fundsInDBService.checkAnyFundsClearForContact(fundsInRequest,leUpdatedDate);//AT-3349</span>
+		
+<span class="nc" id="L399">		boolean isCDINCFirstFundsIn = fundsInDBService.checkCDINCFirstFundsIn(fundsInRequest); //Add for AT-3738</span>
+
+<span class="nc bnc" id="L401" title="All 2 branches missed.">		if (StringUtils.isNullOrEmpty(fundsInRequest.getTrade().getContractNumber())) {</span>
+<span class="nc" id="L402">			fundsInRequest.getTrade().setContractNumber(fundsInRequest.getPaymentFundsInId().toString());</span>
+		}
+
+<span class="nc" id="L405">		fundsInRequest.addAttribute(Constants.PERFORM_CHECKS, Boolean.TRUE);</span>
+		// to get tradecontactId in below method call
+<span class="nc bnc" id="L407" title="All 2 branches missed.">		if (null != oldReuqest.getAccId()) {</span>
+<span class="nc" id="L408">			oldReuqest.setTrade(fundsInRequest.getTrade());</span>
+<span class="nc" id="L409">			updateAddtionalAttributes(fundsInRequest, oldReuqest);</span>
+<span class="nc" id="L410">			Contact contact = (Contact) fundsInRequest.getAdditionalAttribute(Constants.FIELD_CONTACT);</span>
+<span class="nc" id="L411">			Account account = (Account) fundsInRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+			/**
+			 * fraugster signup score is needed for fraugster paymentin request
+			 **/
+<span class="nc bnc" id="L415" title="All 2 branches missed.">			if (null != contact) {</span>
+<span class="nc" id="L416">				FraugsterSummary fraugsterSummary = newRegistrationDBServiceImpl</span>
+<span class="nc" id="L417">						.getFirstFraugsterSignupSummary(contact.getId(), EntityEnum.CONTACT.toString());</span>
+<span class="nc bnc" id="L418" title="All 2 branches missed.">				if (null != fraugsterSummary) {</span>
+<span class="nc" id="L419">					fundsInRequest.addAttribute(&quot;FraugsterSignupScore&quot;, fraugsterSummary.getScore());</span>
+				}
+				/* check Account Contact status in AbstractDataEnricher class */
+				// When account and contact status is inactive set
+				// Do_Perform_Other_Checks to false where
+				// on single check will be performed and status for all check is
+				// set
+				// to NOT_REQUIRED:
+<span class="nc" id="L427">				checkAccountContactStatus(fundsInRequest, account, contact);</span>
+			}
+
+		}
+<span class="nc" id="L431">		fundsInRequest.setSanctionEligible(isThirdPartyPayment(fundsInRequest));</span>
+<span class="nc" id="L432">		fundsInRequest.addAttribute(Constants.ZERO_CLEAR_FUNDSIN, isFirstFundsIn);//AT-3346</span>
+<span class="nc" id="L433">		fundsInRequest.addAttribute(Constants.EDD_COUNTRY_NUMBER, eddCountryNumber);//AT-3346</span>
+<span class="nc" id="L434">		fundsInRequest.addAttribute(Constants.ZERO_EU_FUNDS_CLEARED_AFTER_LE_DATE, isAnyFundsCleared);//AT-3349</span>
+<span class="nc" id="L435">		fundsInRequest.addAttribute(Constants.CONTACT_POI_EXISTS, getPOIExists(oldReuqest,fundsInRequest));//AT-3349</span>
+<span class="nc" id="L436">		fundsInRequest.addAttribute(Constants.CDINC_ZERO_CLEAR_FUNDSIN, isCDINCFirstFundsIn); //Add for AT-3738</span>
+<span class="nc" id="L437">		fundsInRequest.addAttribute(&quot;AccountTMFlag&quot;, oldReuqest.getAdditionalAttribute(&quot;AccountTMFlag&quot;));</span>
+<span class="nc" id="L438">		fundsInRequest.addAttribute(&quot;DormantFlag&quot;, oldReuqest.getAdditionalAttribute(&quot;DormantFlag&quot;));</span>
+		
+<span class="nc" id="L440">		messageExchange.getRequest().addAttribute(Constants.OLD_REQUEST, oldReuqest);</span>
+<span class="nc" id="L441">		LOGGER.debug(Constants.OLD_REQUEST+&quot;{}&quot;, oldReuqest);</span>
+<span class="nc" id="L442">	}</span>
+
+	@SuppressWarnings(&quot;unchecked&quot;)
+	private void updateAddtionalAttributes(FundsInCreateRequest request, FundsInCreateRequest details) {
+<span class="nc" id="L446">		request.setOrgId(details.getOrgId());</span>
+<span class="nc" id="L447">		request.addAttribute(Constants.FIELD_ACC_ACCOUNT, details.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT));</span>
+<span class="nc" id="L448">		Integer noOfContacts = (Integer) details.getAdditionalAttribute(&quot;noOfContacts&quot;);</span>
+<span class="nc" id="L449">		request.addAttribute(&quot;noOfContacts&quot;, noOfContacts);</span>
+<span class="nc" id="L450">		Integer tradeContactId = details.getTrade().getTradeContactId();</span>
+<span class="nc" id="L451">		List&lt;Contact&gt; contacts = (List&lt;Contact&gt;) details.getAdditionalAttribute(Constants.FIELD_OLD_CONTACTS);</span>
+<span class="nc bnc" id="L452" title="All 2 branches missed.">		if (null != contacts) {</span>
+<span class="nc bnc" id="L453" title="All 2 branches missed.">			for (Contact contact : contacts) {</span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">				if (contact.getTradeContactID().equals(tradeContactId)) {</span>
+<span class="nc" id="L455">					request.addAttribute(Constants.FIELD_CONTACT, contact);</span>
+<span class="nc" id="L456">					break;</span>
+				}
+<span class="nc" id="L458">			}</span>
+
+		}
+<span class="nc" id="L461">		String watchListIds = (String) details.getAdditionalAttribute(WATCHLISTID);</span>
+<span class="nc" id="L462">		watchListIds = watchListIds.replace(&quot;0,&quot;, &quot;&quot;);</span>
+<span class="nc bnc" id="L463" title="All 2 branches missed.">		if (watchListIds.length() &gt; 2)</span>
+<span class="nc" id="L464">			request.addAttribute(WATCHLISTID, watchListIds);</span>
+<span class="nc" id="L465">	}</span>
+
+	/**
+	 * Enrich white list data.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; enrichWhiteListData(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L477">		UdateWhiteListRequest request = (UdateWhiteListRequest) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L478">				.getRequest();</span>
+<span class="nc" id="L479">		FundsInCreateRequest fundsInRequest = null;</span>
+<span class="nc" id="L480">		String displayName = null;</span>
+<span class="nc bnc" id="L481" title="All 2 branches missed.">		if (null != request.getPaymentFundsInId()) {</span>
+<span class="nc" id="L482">			fundsInRequest = fundsInDBService.getFundsInRequestById(request.getPaymentFundsInId());</span>
+<span class="nc" id="L483">			displayName = newRegistrationDBServiceImpl</span>
+<span class="nc" id="L484">					.getCountryDisplayName(fundsInRequest.getTrade().getCountryOfFund());</span>
+		}
+<span class="nc bnc" id="L486" title="All 2 branches missed.">		if (null != fundsInRequest) {</span>
+<span class="nc" id="L487">			fundsInRequest.setFundsInId(request.getPaymentFundsInId());</span>
+<span class="nc" id="L488">			request.addAttribute(Constants.OLD_REQUEST, fundsInRequest);</span>
+<span class="nc" id="L489">			request.addAttribute(Constants.COUNTRY_DISPLAY_NAME, displayName);</span>
+<span class="nc" id="L490">			checkWatchlist(request, fundsInRequest.getAccId());</span>
+
+		}
+<span class="nc" id="L493">		return message;</span>
+	}
+
+	private void checkWatchlist(UdateWhiteListRequest request, Integer accId) throws ComplianceException {
+<span class="nc" id="L497">		WatchListRules watchlistsR = new WatchListRules();</span>
+<span class="nc" id="L498">		List&lt;String&gt; watchlists = watchlistsR.getWatchlist(accId);</span>
+<span class="nc bnc" id="L499" title="All 2 branches missed.">		if (null != watchlists) {</span>
+<span class="nc bnc" id="L500" title="All 2 branches missed.">			for (Object ckeckWatchlist : watchlists) {</span>
+<span class="nc bnc" id="L501" title="All 2 branches missed.">				if (ckeckWatchlist.equals(WatchList.E_TAILER_CLIENT_DOCUMENTATIONREQUIRED.getDescription()))</span>
+<span class="nc" id="L502">					request.setDocumentationRequiredWatchlist(true);</span>
+<span class="nc" id="L503">			}</span>
+		}
+
+<span class="nc" id="L506">	}</span>
+
+	/**
+	 * Checks if is account name null.
+	 *
+	 * @param request
+	 *            the request
+	 * @return true, if is account name null
+	 */
+	public boolean isAccountNameNull(FundsInCreateRequest request) {
+<span class="nc" id="L516">		return StringUtils.isNullOrTrimEmpty(request.getTrade().getDebtorName());</span>
+	}
+
+	/**
+	 * Checks if is third party payment.
+	 *
+	 * @param request
+	 *            the request
+	 * @return true, if is third party payment
+	 */
+	public boolean isThirdPartyPayment(FundsInCreateRequest request) {
+<span class="nc bnc" id="L527" title="All 4 branches missed.">		return request.getTrade().getThirdPartyPayment() != null &amp;&amp; request.getTrade().getThirdPartyPayment()</span>
+<span class="nc bnc" id="L528" title="All 4 branches missed.">				&amp;&amp; request.getTrade().getDebtorName() != null &amp;&amp; !request.getTrade().getDebtorName().trim().isEmpty();</span>
+
+	}
+
+	/**
+	 * Checks if is account number null.
+	 *
+	 * @param fundsInRequest
+	 *            the funds in request
+	 * @return true, if is account number null
+	 */
+	public boolean isAccountNumberNull(FundsInCreateRequest fundsInRequest) {
+<span class="nc" id="L540">		return StringUtils.isNullOrTrimEmpty(fundsInRequest.getTrade().getDebtorAccountNumber());</span>
+	}
+
+	/**
+	 * Enrich data for failed funds in.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; enrichDataForFailedFundsIn(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L554">		ReprocessFailedDetails request = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L555">				.getRequest(ReprocessFailedDetails.class);</span>
+		FundsInCreateRequest fundsInDetails;
+<span class="nc" id="L557">		FundsInCreateResponse fundsInResponse = new FundsInCreateResponse();</span>
+<span class="nc" id="L558">		fundsInDetails = fundsInDBService.getFailedFundsInDetails(request.getTransId());</span>
+<span class="nc" id="L559">		message.getPayload().setOrgCode(fundsInDetails.getOrgCode());</span>
+<span class="nc" id="L560">		List&lt;EventServiceLog&gt; eslList = fundsInDBService.getFailedFundsInESLDetails(fundsInDetails);</span>
+<span class="nc" id="L561">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L562">		Integer userID = fundsInDBService.getUserIDFromSSOUserID(token.getPreferredUserName());</span>
+<span class="nc" id="L563">		token.setUserID(userID);</span>
+		
+<span class="nc" id="L565">		boolean isFirstFundsIn = fundsInDBService.checkFirstFundsIn(fundsInDetails);						//AT-3346</span>
+<span class="nc" id="L566">		Integer eddCountryNumber = getCountryEddNumber(fundsInDetails.getTrade().getCountryOfFund());		//AT-3346</span>
+<span class="nc" id="L567">		Timestamp leUpdatedDate = (Timestamp) fundsInDetails.getAdditionalAttribute(Constants.LE_UPDATE_DATE);</span>
+<span class="nc" id="L568">		boolean isAnyFundsCleared = fundsInDBService.checkAnyFundsClearForContact(fundsInDetails,leUpdatedDate);//AT-3349</span>
+<span class="nc" id="L569">		boolean isCDINCFirstFundsIn = fundsInDBService.checkCDINCFirstFundsIn(fundsInDetails); //Add for AT-3738</span>
+
+<span class="nc" id="L571">		SanctionResponse sanctionResponse = new SanctionResponse();</span>
+<span class="nc" id="L572">		List&lt;EventServiceLog&gt; sanctionEntityLogList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L573">		ContactResponse contactResponse = new ContactResponse();</span>
+<span class="nc bnc" id="L574" title="All 2 branches missed.">		for (EventServiceLog esl : eslList) {</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">			if (esl.getServiceType() == 6) {</span>
+<span class="nc" id="L576">				buildFraugsterExchange(message, esl, token);</span>
+			}
+<span class="nc bnc" id="L578" title="All 2 branches missed.">			if (esl.getServiceType() == 7) {</span>
+<span class="nc" id="L579">				buildSanctionExchange(message, esl, sanctionResponse, token, sanctionEntityLogList);</span>
+			}
+<span class="nc bnc" id="L581" title="All 6 branches missed.">			if (esl.getServiceType() == 3 || esl.getServiceType() == 8 || esl.getServiceType() == 11</span>
+<span class="nc bnc" id="L582" title="All 2 branches missed.">					|| esl.getServiceType() == 14) {</span>
+<span class="nc" id="L583">				buildInternalRuleServiceExchange(message, esl, contactResponse, fundsInDetails);</span>
+			}
+<span class="nc bnc" id="L585" title="All 2 branches missed.">			if (esl.getServiceType() == 9) {</span>
+<span class="nc" id="L586">				buildCustomCheckExchange(message, esl, token, fundsInDetails);</span>
+			}
+<span class="nc" id="L588">		}</span>
+<span class="nc bnc" id="L589" title="All 2 branches missed.">		if (Boolean.TRUE.equals(setServiceChecksEligiblity(fundsInDetails))) {</span>
+<span class="nc" id="L590">			fundsInDetails.addAttribute(Constants.PERFORM_CHECKS, Boolean.TRUE);</span>
+		}
+<span class="nc" id="L592">		fundsInDetails.addAttribute(&quot;FailedFundsinDetails&quot;, request);</span>
+<span class="nc" id="L593">		fundsInDetails.addAttribute(Constants.OLD_REQUEST, fundsInDetails);</span>
+<span class="nc" id="L594">		fundsInDetails.addAttribute(Constants.ZERO_CLEAR_FUNDSIN, isFirstFundsIn);//AT-3346</span>
+<span class="nc" id="L595">		fundsInDetails.addAttribute(Constants.EDD_COUNTRY_NUMBER, eddCountryNumber);//AT-3346</span>
+<span class="nc" id="L596">		fundsInDetails.addAttribute(Constants.ZERO_EU_FUNDS_CLEARED_AFTER_LE_DATE, isAnyFundsCleared);//AT-3349</span>
+<span class="nc" id="L597">		fundsInDetails.addAttribute(Constants.CONTACT_POI_EXISTS, getPOIExists(fundsInDetails,fundsInDetails));//AT-3349</span>
+<span class="nc" id="L598">		fundsInDetails.addAttribute(Constants.CDINC_ZERO_CLEAR_FUNDSIN, isCDINCFirstFundsIn); //Add for AT-3738</span>
+<span class="nc" id="L599">		message.getPayload().getGatewayMessageExchange().setRequest(fundsInDetails);</span>
+<span class="nc" id="L600">		message.getPayload().getGatewayMessageExchange().setResponse(fundsInResponse);</span>
+<span class="nc" id="L601">		return message;</span>
+	}
+
+	/**
+	 * Builds the fraugster exchange.
+	 *
+	 * @param message
+	 *            the message
+	 * @param esl
+	 *            the esl
+	 * @param token
+	 *            the token
+	 */
+	private void buildFraugsterExchange(Message&lt;MessageContext&gt; message, EventServiceLog esl, UserProfile token) {
+<span class="nc" id="L615">		FraugsterPaymentsInResponse fraugsterPayInResponse = new FraugsterPaymentsInResponse();</span>
+<span class="nc" id="L616">		FraugsterPaymentsInContactResponse fraugsterContactResponse = JsonConverterUtil</span>
+<span class="nc" id="L617">				.convertToObject(FraugsterPaymentsInContactResponse.class, esl.getProviderResponse());</span>
+<span class="nc" id="L618">		List&lt;FraugsterPaymentsInContactResponse&gt; fraugsterContactResponseList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L619">		fraugsterContactResponseList.add(fraugsterContactResponse);</span>
+<span class="nc" id="L620">		fraugsterPayInResponse.setContactResponses(fraugsterContactResponseList);</span>
+<span class="nc" id="L621">		fraugsterPayInResponse.setStatus(fraugsterContactResponse.getStatus());</span>
+<span class="nc" id="L622">		FraugsterSummary summary = JsonConverterUtil.convertToObject(FraugsterSummary.class, esl.getSummary());</span>
+<span class="nc" id="L623">		MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L624">		ccExchange.setResponse(fraugsterPayInResponse);</span>
+<span class="nc" id="L625">		ccExchange.setServiceTypeEnum(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+
+<span class="nc" id="L627">		ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(esl.getEventId(),</span>
+<span class="nc" id="L628">				ServiceTypeEnum.FRAUGSTER_SERVICE, ServiceProviderEnum.FRAUGSTER_FUNDSIN_SERVICE, esl.getEntityId(),</span>
+<span class="nc" id="L629">				esl.getEntityVersion(), EntityEnum.CONTACT.name(), token.getUserID(), fraugsterContactResponse, summary,</span>
+<span class="nc" id="L630">				esl.getStatus()));</span>
+
+<span class="nc" id="L632">		message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L633">	}</span>
+
+	/**
+	 * Creates the event service log entry with status.
+	 *
+	 * @param eventId
+	 *            the event id
+	 * @param servceType
+	 *            the servce type
+	 * @param providerEnum
+	 *            the provider enum
+	 * @param entityID
+	 *            the entity ID
+	 * @param entityVersion
+	 *            the entity version
+	 * @param entityType
+	 *            the entity type
+	 * @param user
+	 *            the user
+	 * @param providerResponse
+	 *            the provider response
+	 * @param summary
+	 *            the summary
+	 * @param serviceStatus
+	 *            the service status
+	 * @return the event service log
+	 */
+	@SuppressWarnings(&quot;squid:S00107&quot;)
+	protected EventServiceLog createEventServiceLogEntryWithStatus(Integer eventId, ServiceTypeEnum servceType,
+			ServiceProviderEnum providerEnum, Integer entityID, Integer entityVersion, String entityType, Integer user,
+			Object providerResponse, Object summary, String serviceStatus) {
+
+<span class="nc" id="L665">		EventServiceLog eventServiceLog = new EventServiceLog();</span>
+<span class="nc" id="L666">		eventServiceLog.setServiceName(servceType.getShortName());</span>
+<span class="nc" id="L667">		eventServiceLog.setServiceProviderName(providerEnum.getProvidername());</span>
+<span class="nc" id="L668">		eventServiceLog.setEntityId(entityID);</span>
+<span class="nc" id="L669">		eventServiceLog.setEventId(eventId);</span>
+<span class="nc" id="L670">		eventServiceLog.setEntityVersion(entityVersion);</span>
+<span class="nc" id="L671">		eventServiceLog.setEntityType(entityType);</span>
+<span class="nc" id="L672">		eventServiceLog.setStatus(serviceStatus);</span>
+<span class="nc" id="L673">		eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(providerResponse));</span>
+<span class="nc" id="L674">		eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L675">		eventServiceLog.setCratedBy(user);</span>
+<span class="nc" id="L676">		eventServiceLog.setUpdatedBy(user);</span>
+<span class="nc" id="L677">		eventServiceLog.setCreatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L678">		eventServiceLog.setUpdatedOn(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L679">		return eventServiceLog;</span>
+	}
+
+	/**
+	 * Builds the sanction exchange.
+	 *
+	 * @param message
+	 *            the message
+	 * @param esl
+	 *            the esl
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @param token
+	 *            the token
+	 * @param sanctionEntityLogList
+	 *            the sanction entity log list
+	 */
+	private void buildSanctionExchange(Message&lt;MessageContext&gt; message, EventServiceLog esl,
+			SanctionResponse sanctionResponse, UserProfile token, List&lt;EventServiceLog&gt; sanctionEntityLogList) {
+
+<span class="nc" id="L699">		EventServiceLog contactLog = getSanctionContactResponse(esl, sanctionResponse, token);</span>
+
+<span class="nc" id="L701">		sanctionEntityLogList.add(contactLog);</span>
+
+<span class="nc" id="L703">		createPreviousSanctionExchange(message, sanctionResponse, sanctionEntityLogList);</span>
+<span class="nc" id="L704">	}</span>
+
+	/**
+	 * Gets the sanction contact response.
+	 *
+	 * @param esl
+	 *            the esl
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @param token
+	 *            the token
+	 * @return the sanction contact response
+	 */
+	private EventServiceLog getSanctionContactResponse(EventServiceLog esl, SanctionResponse sanctionResponse,
+			UserProfile token) {
+<span class="nc bnc" id="L719" title="All 2 branches missed.">		if (&quot;DEBTOR&quot;.equalsIgnoreCase(esl.getEntityType())) {</span>
+<span class="nc" id="L720">			List&lt;SanctionContactResponse&gt; sanctionContactResponseList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L721">			SanctionContactResponse sanctionContactResponse = JsonConverterUtil</span>
+<span class="nc" id="L722">					.convertToObject(SanctionContactResponse.class, esl.getProviderResponse());</span>
+<span class="nc" id="L723">			SanctionSummary sanctionSummary = JsonConverterUtil.convertToObject(SanctionSummary.class,</span>
+<span class="nc" id="L724">					esl.getSummary());</span>
+<span class="nc" id="L725">			sanctionContactResponseList.add(sanctionContactResponse);</span>
+<span class="nc" id="L726">			sanctionResponse.setContactResponses(sanctionContactResponseList);</span>
+<span class="nc" id="L727">			return createEventServiceLogEntryWithStatus(esl.getEventId(), ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L728">					ServiceProviderEnum.SANCTION_SERVICE, esl.getEntityId(), esl.getEntityVersion(),</span>
+<span class="nc" id="L729">					EntityEnum.DEBTOR.name(), token.getUserID(), sanctionContactResponse, sanctionSummary,</span>
+<span class="nc" id="L730">					esl.getStatus());</span>
+		}
+<span class="nc" id="L732">		return null;</span>
+	}
+
+	/**
+	 * Creates the previous sanction exchange.
+	 *
+	 * @param message
+	 *            the message
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @param sanctionEntityLogList
+	 *            the sanction entity log list
+	 */
+	private void createPreviousSanctionExchange(Message&lt;MessageContext&gt; message, SanctionResponse sanctionResponse,
+			List&lt;EventServiceLog&gt; sanctionEntityLogList) {
+<span class="nc" id="L747">		MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L748">		ccExchange.setResponse(sanctionResponse);</span>
+<span class="nc" id="L749">		ccExchange.setServiceTypeEnum(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc bnc" id="L750" title="All 2 branches missed.">		for (EventServiceLog sanctionLog : sanctionEntityLogList) {</span>
+<span class="nc" id="L751">			ccExchange.addEventServiceLog(sanctionLog);</span>
+<span class="nc" id="L752">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L753">		}</span>
+<span class="nc" id="L754">	}</span>
+
+	/**
+	 * Builds the internal rule service exchange.
+	 *
+	 * @param message
+	 *            the message
+	 * @param esl
+	 *            the esl
+	 * @param contactResponse
+	 *            the contact response
+	 */
+	private void buildInternalRuleServiceExchange(Message&lt;MessageContext&gt; message, EventServiceLog esl,
+			ContactResponse contactResponse, FundsInCreateRequest fundsInDetails) {
+<span class="nc bnc" id="L768" title="All 2 branches missed.">		if (esl.getServiceType() == 3) {</span>
+<span class="nc" id="L769">			BlacklistContactResponse blacklistContactResponse = JsonConverterUtil</span>
+<span class="nc" id="L770">					.convertToObject(BlacklistContactResponse.class, esl.getProviderResponse());</span>
+<span class="nc" id="L771">			contactResponse.setBlacklist(blacklistContactResponse);</span>
+		}
+<span class="nc bnc" id="L773" title="All 2 branches missed.">		if (esl.getServiceType() == 8) {</span>
+<span class="nc" id="L774">			CountryCheckContactResponse countryCheckContactResponse = JsonConverterUtil</span>
+<span class="nc" id="L775">					.convertToObject(CountryCheckContactResponse.class, esl.getProviderResponse());</span>
+<span class="nc" id="L776">			contactResponse.setCountryCheck(countryCheckContactResponse);</span>
+<span class="nc" id="L777">			fundsInDetails.addAttribute(&quot;CountryCheckStatus&quot;, esl.getStatus());</span>
+		}
+<span class="nc bnc" id="L779" title="All 2 branches missed.">		if (esl.getServiceType() == 11) {</span>
+<span class="nc" id="L780">			CardFraudScoreResponse cardFraudScoreResponse = JsonConverterUtil</span>
+<span class="nc" id="L781">					.convertToObject(CardFraudScoreResponse.class, esl.getProviderResponse());</span>
+<span class="nc" id="L782">			contactResponse.setCardFraudCheck(cardFraudScoreResponse);</span>
+		}
+<span class="nc bnc" id="L784" title="All 2 branches missed.">		if (esl.getServiceType() == 14) {</span>
+<span class="nc" id="L785">			FraudSightScoreResponse fraudSightScoreResponse = JsonConverterUtil</span>
+<span class="nc" id="L786">					.convertToObject(FraudSightScoreResponse.class, esl.getProviderResponse());</span>
+<span class="nc" id="L787">			contactResponse.setFraudSightCheck(fraudSightScoreResponse);</span>
+		}
+<span class="nc bnc" id="L789" title="All 4 branches missed.">		if (null != contactResponse.getBlacklist() &amp;&amp; null != contactResponse.getCountryCheck()</span>
+<span class="nc bnc" id="L790" title="All 4 branches missed.">				&amp;&amp; (null != contactResponse.getCardFraudCheck() || null != contactResponse.getFraudSightCheck())) {</span>
+<span class="nc" id="L791">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L792">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L793">			InternalServiceResponse response = new InternalServiceResponse();</span>
+<span class="nc" id="L794">			List&lt;ContactResponse&gt; responseList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L795">			responseList.add(contactResponse);</span>
+<span class="nc" id="L796">			response.setContacts(responseList);</span>
+<span class="nc" id="L797">			ccExchange.setResponse(response);</span>
+<span class="nc" id="L798">			message.getPayload().appendMessageExchange(ccExchange);</span>
+		}
+<span class="nc" id="L800">	}</span>
+
+	/**
+	 * Builds the custom check exchange.
+	 *
+	 * @param message
+	 *            the message
+	 * @param esl
+	 *            the esl
+	 * @param token
+	 *            the token
+	 * @param fundsInDetails
+	 *            the funds in details
+	 */
+	private void buildCustomCheckExchange(Message&lt;MessageContext&gt; message, EventServiceLog esl, UserProfile token,
+			FundsInCreateRequest fundsInDetails) {
+<span class="nc" id="L816">		MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L817">		CustomCheckResponse serviceResponse = JsonConverterUtil.convertToObject(CustomCheckResponse.class,</span>
+<span class="nc" id="L818">				esl.getProviderResponse());</span>
+<span class="nc" id="L819">		CustomChecksRequest serviceRequest = new CustomChecksRequest();</span>
+
+<span class="nc" id="L821">		Account account = (Account) fundsInDetails.getAdditionalAttribute(&quot;account&quot;);</span>
+
+<span class="nc" id="L823">		serviceRequest.setOrgCode(fundsInDetails.getOrgCode());</span>
+<span class="nc" id="L824">		serviceRequest.setPaymentTransId(fundsInDetails.getFundsInId());</span>
+<span class="nc" id="L825">		serviceRequest.setAccId(account.getId());</span>
+		// ?? is below correct?
+<span class="nc" id="L827">		serviceRequest.setBuyAmountOnAccount(account.getMaxTransactionAmount());</span>
+<span class="nc" id="L828">		serviceRequest.setBuyCurrencyOnAccount(account.getBuyingCurrency());</span>
+<span class="nc" id="L829">		serviceRequest.setReasonsOfTransferOnAccount(account.getPurposeOfTran());</span>
+<span class="nc" id="L830">		serviceRequest.setSellAmountOnAccount(account.getMaxTransactionAmount());</span>
+<span class="nc" id="L831">		serviceRequest.setSellCurrencyOnAccount(account.getSellingCurrency());</span>
+<span class="nc" id="L832">		fundsInDetails.setType(FUNDS_IN_REPEAT);</span>
+<span class="nc" id="L833">		serviceRequest.setESDocument(fundsInDetails);</span>
+<span class="nc" id="L834">		ccExchange.setRequest(serviceRequest);</span>
+<span class="nc" id="L835">		ccExchange.setResponse(serviceResponse);</span>
+<span class="nc" id="L836">		ccExchange.setServiceTypeEnum(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+<span class="nc" id="L837">		ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(esl.getEventId(),</span>
+<span class="nc" id="L838">				ServiceTypeEnum.CUSTOM_CHECKS_SERVICE, ServiceProviderEnum.CUSTOM_CHECKS_SERVICE, esl.getEntityId(),</span>
+<span class="nc" id="L839">				esl.getEntityVersion(), EntityEnum.ACCOUNT.name(), token.getUserID(), serviceResponse, serviceResponse,</span>
+<span class="nc" id="L840">				esl.getStatus()));</span>
+<span class="nc" id="L841">		fundsInDetails.addAttribute(&quot;customCheckESLStatus&quot;, esl.getStatus());</span>
+<span class="nc" id="L842">		message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L843">	}</span>
+
+	/**
+	 * Sets the service checks eligiblity.
+	 *
+	 * @param fundsInDetails
+	 *            the funds in details
+	 * @return the boolean
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Boolean setServiceChecksEligiblity(FundsInCreateRequest fundsInDetails) throws ComplianceException {
+<span class="nc" id="L855">		Boolean result = Boolean.FALSE;</span>
+<span class="nc bnc" id="L856" title="All 2 branches missed.">		if (fundsInDetails.getAdditionalAttribute(Constants.FRAUGSTER_STATUS).equals(Constants.SERVICE_FAILURE)) {</span>
+<span class="nc" id="L857">			fundsInDetails.addAttribute(Constants.RECHECK_FRAUGSTER_ELIGIBLE, Boolean.TRUE);</span>
+<span class="nc" id="L858">			result = Boolean.TRUE;</span>
+		} else {
+<span class="nc" id="L860">			fundsInDetails.addAttribute(Constants.RECHECK_FRAUGSTER_ELIGIBLE, Boolean.FALSE);</span>
+		}
+<span class="nc bnc" id="L862" title="All 2 branches missed.">		if (fundsInDetails.getAdditionalAttribute(Constants.SANCTION_STATUS).equals(Constants.SERVICE_FAILURE)) {</span>
+<span class="nc" id="L863">			fundsInDetails.addAttribute(Constants.RECHECK_SANCTION_ELIGIBLE, Boolean.TRUE);</span>
+<span class="nc" id="L864">			fundsInDetails.setSanctionEligible(true);</span>
+<span class="nc" id="L865">			Contact contact = (Contact) fundsInDetails.getAdditionalAttribute(&quot;contact&quot;);</span>
+
+			try {
+<span class="nc" id="L868">				SanctionSummary sanctionSummary = newRegistrationDBServiceImpl.getFirstSanctionSummary(contact.getId(),</span>
+<span class="nc" id="L869">						EntityEnum.CONTACT.name());</span>
+
+<span class="nc" id="L871">				fundsInDetails.addAttribute(&quot;firstSanctionSummary&quot; + contact.getId(), sanctionSummary);</span>
+
+<span class="nc" id="L873">				EntityDetails entityDetails = eventDBServiceImpl.isSanctionPerformed(contact.getId(),</span>
+<span class="nc" id="L874">						EntityEnum.CONTACT.name());</span>
+<span class="nc" id="L875">				contact.setSanctionPerformed(entityDetails.getIsExist());</span>
+
+<span class="nc" id="L877">			} catch (ComplianceException complianceException) {</span>
+<span class="nc" id="L878">				LOGGER.error(&quot;Exception in setServiceChecksEligiblity()&quot;, complianceException);</span>
+<span class="nc" id="L879">			}</span>
+<span class="nc" id="L880">			result = Boolean.TRUE;</span>
+<span class="nc" id="L881">		} else {</span>
+<span class="nc" id="L882">			fundsInDetails.addAttribute(Constants.RECHECK_SANCTION_ELIGIBLE, Boolean.FALSE);</span>
+<span class="nc" id="L883">			fundsInDetails.setSanctionEligible(false);</span>
+		}
+<span class="nc bnc" id="L885" title="All 2 branches missed.">		if (fundsInDetails.getAdditionalAttribute(Constants.BLACKLIST_STATUS).equals(Constants.SERVICE_FAILURE)) {</span>
+<span class="nc" id="L886">			fundsInDetails.addAttribute(Constants.RECHECK_BLACKLIST_ELIGIBLE, Boolean.TRUE);</span>
+<span class="nc" id="L887">			result = Boolean.TRUE;</span>
+		} else {
+<span class="nc" id="L889">			fundsInDetails.addAttribute(Constants.RECHECK_BLACKLIST_ELIGIBLE, Boolean.FALSE);</span>
+		}
+<span class="nc bnc" id="L891" title="All 2 branches missed.">		if (fundsInDetails.getAdditionalAttribute(&quot;CountryCheckStatus&quot;).equals(Constants.SERVICE_FAILURE)) {</span>
+<span class="nc" id="L892">			fundsInDetails.addAttribute(Constants.RECHECK_COUNTRY_CHECK_ELIGIBLE, Boolean.TRUE);</span>
+<span class="nc" id="L893">			result = Boolean.TRUE;</span>
+		} else {
+<span class="nc" id="L895">			fundsInDetails.addAttribute(Constants.RECHECK_COUNTRY_CHECK_ELIGIBLE, Boolean.FALSE);</span>
+		}
+<span class="nc bnc" id="L897" title="All 2 branches missed.">		if (fundsInDetails.getAdditionalAttribute(&quot;customCheckESLStatus&quot;).equals(Constants.SERVICE_FAILURE)) {</span>
+<span class="nc" id="L898">			fundsInDetails.addAttribute(Constants.RECHECK_CUSTOM_CHECK_ELIGIBLE, Boolean.TRUE);</span>
+<span class="nc" id="L899">			result = Boolean.TRUE;</span>
+		} else {
+<span class="nc" id="L901">			fundsInDetails.addAttribute(Constants.RECHECK_CUSTOM_CHECK_ELIGIBLE, Boolean.FALSE);</span>
+		}
+<span class="nc" id="L903">		return result;</span>
+	}
+	
+	/**
+	 * AT-3349
+	 * Gets the POI exists.
+	 *
+	 * @param oldReuqest the old reuqest
+	 * @param fundsInRequest the funds in request
+	 * @return the POI exists
+	 */
+	@SuppressWarnings(&quot;unchecked&quot;)
+	private Integer getPOIExists(FundsInCreateRequest oldReuqest, FundsInCreateRequest fundsInRequest) {
+<span class="nc" id="L916">		Integer poiExists = null;</span>
+<span class="nc" id="L917">		List&lt;Contact&gt; contacts = (List&lt;Contact&gt;) oldReuqest.getAdditionalAttribute(Constants.FIELD_OLD_CONTACTS);</span>
+<span class="nc bnc" id="L918" title="All 2 branches missed.">		for(Contact contact : contacts ) {</span>
+<span class="nc bnc" id="L919" title="All 2 branches missed.">			if(fundsInRequest.getTrade().getTradeContactId().equals(contact.getTradeContactID())) {</span>
+<span class="nc" id="L920">				poiExists = contact.getPoiExists();</span>
+<span class="nc" id="L921">				break;</span>
+			}
+<span class="nc" id="L923">		}</span>
+<span class="nc" id="L924">		return poiExists;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

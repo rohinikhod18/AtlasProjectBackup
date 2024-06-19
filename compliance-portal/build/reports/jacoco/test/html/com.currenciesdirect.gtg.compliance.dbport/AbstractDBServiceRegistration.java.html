@@ -1,0 +1,1234 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbstractDBServiceRegistration.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">AbstractDBServiceRegistration.java</span></div><h1>AbstractDBServiceRegistration.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import com.currenciesdirect.gtg.compliance.core.domain.BaseUpdateDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.BroadcastEventToDB;
+import com.currenciesdirect.gtg.compliance.core.domain.ComplianceStatus;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.ContactWrapper;
+import com.currenciesdirect.gtg.compliance.core.domain.CountryCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.CustomCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.Fraugster;
+import com.currenciesdirect.gtg.compliance.core.domain.GlobalCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.Intuition;
+import com.currenciesdirect.gtg.compliance.commons.domain.IDomain;
+import com.currenciesdirect.gtg.compliance.core.domain.IpCheck;
+import com.currenciesdirect.gtg.compliance.core.domain.Kyc;
+import com.currenciesdirect.gtg.compliance.core.domain.Onfido;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationAccount;
+import com.currenciesdirect.gtg.compliance.core.domain.Sanction;
+import com.currenciesdirect.gtg.compliance.core.domain.UploadDocumentTypeDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.WatchListData;
+import com.currenciesdirect.gtg.compliance.core.domain.WatchListDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.Watchlist;
+import com.currenciesdirect.gtg.compliance.core.domain.internalrule.IpSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.kyc.KYCSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.onfido.OnfidoSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSummary;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.ProfileActivityLogDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegUpdateDBDto;
+import com.currenciesdirect.gtg.compliance.core.domain.sanction.SanctionSummary;
+import com.currenciesdirect.gtg.compliance.dbport.enums.BroadCastEntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.BroadCastStatusEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.EntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.FragusterWatchListEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.FraugsterReasonsEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.ServiceStatusEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.UserLockResourceTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.WatchListCategoryEnum;
+import com.currenciesdirect.gtg.compliance.dbport.report.WorkEfficiencyReportQueryConstant;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.DecimalFormatter;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+import com.currenciesdirect.gtg.compliance.util.StringUtils;
+
+
+/**
+ * The Class AbstractDBServiceRegistration.
+ */
+@SuppressWarnings(&quot;squid:S2095&quot;)
+<span class="fc" id="L69">public abstract class AbstractDBServiceRegistration extends AbstractDBServiceLevel2 {</span>
+
+	protected Watchlist getAccountWatchlistWithSelected(Integer contactId, Connection connection, UserProfile profile)
+			throws CompliancePortalException {
+
+<span class="nc" id="L74">		Watchlist watchlist = new Watchlist();</span>
+<span class="nc" id="L75">		List&lt;WatchListData&gt; watchlistDataList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L76">		watchlist.setWatchlistData(watchlistDataList);</span>
+<span class="nc" id="L77">		PreparedStatement statement = null;</span>
+<span class="nc" id="L78">		ResultSet rs = null;</span>
+<span class="nc" id="L79">		boolean category1 = profile.getPermissions().getCanManageWatchListCategory1();</span>
+<span class="nc" id="L80">		boolean category2 = profile.getPermissions().getCanManageWatchListCategory2();</span>
+		try {
+<span class="nc" id="L82">			statement = getPrepareStatementForWatchlist(contactId, connection, category1, category2);</span>
+<span class="nc" id="L83">			rs = statement.executeQuery();</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L85">				WatchListData watchlistData = new WatchListData();</span>
+<span class="nc" id="L86">				watchlistData.setName(rs.getString(Constants.WATCHLISTNAME));</span>
+<span class="nc" id="L87">				watchlistData.setContactId(rs.getInt(Constants.CONTACTID));</span>
+<span class="nc" id="L88">				Integer contactIdDb = rs.getInt(Constants.CONTACTID);</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">				if (contactIdDb != -1) {</span>
+<span class="nc" id="L90">					watchlistData.setValue(Boolean.TRUE);</span>
+				} else {
+<span class="nc" id="L92">					watchlistData.setValue(Boolean.FALSE);</span>
+				}
+<span class="nc" id="L94">				watchlistDataList.add(watchlistData);</span>
+<span class="nc" id="L95">			}</span>
+
+<span class="nc" id="L97">		} catch (Exception e) {</span>
+<span class="nc" id="L98">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L100">			closeResultset(rs);</span>
+<span class="nc" id="L101">			closePrepareStatement(statement);</span>
+		}
+<span class="nc" id="L103">		return watchlist;</span>
+	}
+
+	/**
+	 * @param accountId
+	 * @param connection
+	 * @param category1
+	 * @param category2
+	 * @return
+	 * @throws SQLException
+	 */
+	private PreparedStatement getPrepareStatementForWatchlist(Integer contactId, Connection connection,
+			boolean category1, boolean category2) throws SQLException {
+		PreparedStatement statement;
+		// if only one of category is enabled, then add second param to
+		// query
+		// else no filter needed
+<span class="nc" id="L120">		String accountWatchlistQuery = &quot;&quot;;</span>
+<span class="nc" id="L121">		int result = 0;</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">		if ((category1 == category2)) {</span>
+<span class="nc" id="L123">			accountWatchlistQuery = RegistrationQueryConstant.GET_CONTACT_WATCHLIST_WITH_SELECTED.getQuery();</span>
+		} else {
+<span class="nc" id="L125">			accountWatchlistQuery = RegistrationQueryConstant.GET_CONTACT_WATCHLIST_CATEGORY_WITH_SELECTED.getQuery();</span>
+<span class="nc bnc" id="L126" title="All 4 branches missed.">			if (category1 &amp;&amp; !category2) {</span>
+<span class="nc" id="L127">				result = WatchListCategoryEnum.CATEGORY_1.getCategoryDbStatus();</span>
+
+<span class="nc bnc" id="L129" title="All 4 branches missed.">			} else if (!category1 &amp;&amp; category2) {</span>
+<span class="nc" id="L130">				result = WatchListCategoryEnum.CATEGORY_2.getCategoryDbStatus();</span>
+			}
+		}
+
+<span class="nc" id="L134">		statement = connection.prepareStatement(accountWatchlistQuery);</span>
+
+<span class="nc" id="L136">		statement.setInt(1, contactId);</span>
+<span class="nc bnc" id="L137" title="All 8 branches missed.">		if ((!category1 &amp;&amp; category2) || (category1 &amp;&amp; !category2))</span>
+<span class="nc" id="L138">			statement.setInt(2, result);</span>
+<span class="nc" id="L139">		return statement;</span>
+	}
+
+	/**
+	 * Gets the other contacts.
+	 *
+	 * @param accountId
+	 *            the account id
+	 * @param contactId
+	 *            the contact id
+	 * @param connection
+	 *            the connection
+	 * @return the other contacts
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	protected List&lt;ContactWrapper&gt; getOtherContacts(Integer accountId, Integer contactId, Connection connection)
+			throws CompliancePortalException {
+<span class="fc" id="L157">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L158">		ResultSet rs = null;</span>
+		try {
+<span class="fc" id="L160">			preparedStatement = connection</span>
+<span class="fc" id="L161">					.prepareStatement(RegistrationQueryConstant.GET_OTHER_CONTACT_DETAILS.getQuery());</span>
+<span class="fc" id="L162">			preparedStatement.setInt(1, accountId);</span>
+<span class="fc" id="L163">			preparedStatement.setInt(2, contactId);</span>
+<span class="fc" id="L164">			List&lt;ContactWrapper&gt; otherContacts = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L165">			rs = preparedStatement.executeQuery();</span>
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L167">				ContactWrapper contact = new ContactWrapper();</span>
+<span class="nc" id="L168">				contact.setId(rs.getInt(&quot;Id&quot;));</span>
+<span class="nc" id="L169">				contact.setName(rs.getString(&quot;Name&quot;));</span>
+<span class="nc" id="L170">				contact.setComplianceStatus(rs.getString(&quot;complianceStatus&quot;));</span>
+<span class="nc" id="L171">				contact.setCustType(rs.getString(&quot;CustomerType&quot;));</span>
+<span class="nc" id="L172">				contact.setPreviousBlacklistStatus(</span>
+<span class="nc" id="L173">						ServiceStatusEnum.getUiStatusFromDatabaseStatus(rs.getInt(&quot;BlacklistStatus&quot;)));</span>
+<span class="nc" id="L174">				contact.setPreviousSanctionStatus(</span>
+<span class="nc" id="L175">						ServiceStatusEnum.getUiStatusFromDatabaseStatus(rs.getInt(&quot;SanctionStatus&quot;)));</span>
+<span class="nc" id="L176">				otherContacts.add(contact);</span>
+<span class="nc" id="L177">			}</span>
+<span class="fc" id="L178">			return otherContacts;</span>
+
+<span class="nc" id="L180">		} catch (Exception e) {</span>
+<span class="nc" id="L181">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L183">			closeResultset(rs);</span>
+<span class="fc" id="L184">			closePrepareStatement(preparedStatement);</span>
+		}
+
+	}
+
+	/**
+	 * Save into broadcast queue.
+	 *
+	 * @param broadcastEventToDB the broadcast event to DB
+	 * @param connection the connection
+	 * @return the boolean
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected Boolean saveIntoBroadcastQueue(BroadcastEventToDB broadcastEventToDB, Connection connection)
+			throws CompliancePortalException {
+<span class="fc" id="L199">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="fc" id="L201">			preparedStatement = connection</span>
+<span class="fc" id="L202">					.prepareStatement(RegistrationQueryConstant.SAVE_INTO_BROADCAST_QUEUE.getQuery());</span>
+<span class="fc" id="L203">			preparedStatement.setString(1, broadcastEventToDB.getOrgCode());</span>
+<span class="fc" id="L204">			preparedStatement.setInt(2,</span>
+<span class="fc" id="L205">					BroadCastEntityTypeEnum.getBraodCastEntityTypeAsInteger(broadcastEventToDB.getEntityType()));</span>
+<span class="fc" id="L206">			preparedStatement.setInt(3, broadcastEventToDB.getAccountId());</span>
+<span class="pc bpc" id="L207" title="1 of 2 branches missed.">			if (broadcastEventToDB.getContactId() != null) {</span>
+<span class="fc" id="L208">				preparedStatement.setInt(4, broadcastEventToDB.getContactId());</span>
+			} else {
+<span class="nc" id="L210">				preparedStatement.setNull(4, Types.INTEGER);</span>
+			}
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">			if (broadcastEventToDB.getPaymentInId() != null) {</span>
+<span class="nc" id="L213">				preparedStatement.setInt(5, broadcastEventToDB.getPaymentInId());</span>
+			} else {
+<span class="fc" id="L215">				preparedStatement.setNull(5, Types.INTEGER);</span>
+			}
+<span class="pc bpc" id="L217" title="1 of 2 branches missed.">			if (broadcastEventToDB.getPaymentOutId() != null) {</span>
+<span class="nc" id="L218">				preparedStatement.setInt(6, broadcastEventToDB.getPaymentOutId());</span>
+			} else {
+<span class="fc" id="L220">				preparedStatement.setNull(6, Types.INTEGER);</span>
+			}
+<span class="fc" id="L222">			preparedStatement.setString(7, broadcastEventToDB.getStatusJson());</span>
+<span class="fc" id="L223">			preparedStatement.setInt(8,</span>
+<span class="fc" id="L224">					BroadCastStatusEnum.getBraodCastStatusAsInteger(broadcastEventToDB.getDeliveryStatus()));</span>
+<span class="fc" id="L225">			preparedStatement.setTimestamp(9, broadcastEventToDB.getDeliverOn());</span>
+<span class="fc" id="L226">			preparedStatement.setString(10, broadcastEventToDB.getCreatedBy());</span>
+<span class="fc" id="L227">			preparedStatement.setTimestamp(11, broadcastEventToDB.getCreatedOn());</span>
+<span class="fc" id="L228">			int count = preparedStatement.executeUpdate();</span>
+<span class="fc" id="L229">			boolean result = true;</span>
+<span class="pc bpc" id="L230" title="1 of 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L231">				result = false;</span>
+			}
+<span class="fc" id="L233">			return result;</span>
+<span class="nc" id="L234">		} catch (Exception e) {</span>
+<span class="nc" id="L235">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_SAVING_DATA_INTO_BROADCAST_QUEUE, e);</span>
+		} finally {
+<span class="fc" id="L237">			closePrepareStatement(preparedStatement);</span>
+		}
+	}
+
+	/**
+	 * Update Account Status
+	 * 
+	 * @param requestHandlerDto
+	 * @param accountStatus
+	 * @param connection
+	 * @return
+	 * @throws CompliancePortalException
+	 */
+	protected Boolean updateAccountStatus(RegUpdateDBDto requestHandlerDto, String accountStatus, Connection connection)
+			throws CompliancePortalException {
+<span class="fc" id="L252">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L253">		Boolean accountStatusActive = Boolean.FALSE;</span>
+		try {
+<span class="fc" id="L255">			Integer accountId = requestHandlerDto.getAccountId();</span>
+<span class="fc" id="L256">			String complianceDoneOn = requestHandlerDto.getComplianceDoneOn();</span>
+<span class="fc" id="L257">			String complianceExpiry = requestHandlerDto.getComplianceExpiry();</span>
+<span class="fc" id="L258">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.UPDATE_ACCOUNT_STATUS.getQuery());</span>
+<span class="fc" id="L259">			preparedStatement.setString(1, accountStatus);</span>
+<span class="fc" id="L260">			preparedStatement.setString(2, accountStatus);</span>
+<span class="fc" id="L261">			accountStatusActive = accountStatus.equals(ComplianceStatus.ACTIVE.name());</span>
+<span class="pc bpc" id="L262" title="5 of 6 branches missed.">			if (Boolean.TRUE.equals(accountStatusActive) &amp;&amp; (null == complianceDoneOn || Constants.DASH_UI.equals(complianceDoneOn))) {</span>
+<span class="nc" id="L263">				preparedStatement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L264">				Calendar c = Calendar.getInstance();</span>
+<span class="nc" id="L265">				c.setTime(new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L266">				c.add(Calendar.YEAR, SearchCriteriaUtil.getComplianceExpiryYears());</span>
+<span class="nc" id="L267">				preparedStatement.setTimestamp(4, new Timestamp(c.getTimeInMillis()));</span>
+<span class="nc" id="L268">				requestHandlerDto.setComplianceDoneOn(new Timestamp(System.currentTimeMillis()).toString());</span>
+<span class="nc" id="L269">				requestHandlerDto.setComplianceExpiry(new Timestamp(c.getTimeInMillis()).toString());</span>
+<span class="nc" id="L270">			} else {</span>
+<span class="fc" id="L271">				setComplianceFields(requestHandlerDto, preparedStatement, complianceDoneOn, complianceExpiry);</span>
+			}
+<span class="fc" id="L273">			preparedStatement.setBoolean(5, requestHandlerDto.getIsAccountOnQueue());</span>
+<span class="fc" id="L274">			preparedStatement.setInt(6, accountId);</span>
+
+<span class="fc" id="L276">			int count = preparedStatement.executeUpdate();</span>
+<span class="fc" id="L277">			boolean result = true;</span>
+<span class="pc bpc" id="L278" title="1 of 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L279">				result = false;</span>
+			}
+<span class="fc" id="L281">			return result;</span>
+<span class="nc" id="L282">		} catch (Exception e) {</span>
+<span class="nc" id="L283">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_SAVING_DATA_INTO_BROADCAST_QUEUE, e);</span>
+		} finally {
+<span class="fc" id="L285">			closePrepareStatement(preparedStatement);</span>
+		}
+	}
+
+	/**
+	 * Set Compliance Fields
+	 * 
+	 * @param requestHandlerDto
+	 * @param preparedStatement
+	 * @param complianceDoneOn
+	 * @param complianceExpiry
+	 * @throws ParseException
+	 * @throws SQLException
+	 */
+	private void setComplianceFields(RegUpdateDBDto requestHandlerDto, PreparedStatement preparedStatement,
+			String complianceDoneOn, String complianceExpiry) throws ParseException, SQLException {
+<span class="fc" id="L301">		Timestamp complianceDoneOnTimestamp = DateTimeFormatter.getTimestamp(complianceDoneOn);</span>
+<span class="fc" id="L302">		Timestamp complianceExpiryTimestamp = DateTimeFormatter.getTimestamp(complianceExpiry);</span>
+<span class="pc bpc" id="L303" title="2 of 4 branches missed.">		if (null == complianceDoneOn || Constants.DASH_UI.equals(complianceDoneOn)) {</span>
+<span class="nc" id="L304">			preparedStatement.setNull(3, Types.TIMESTAMP);</span>
+<span class="nc" id="L305">			preparedStatement.setNull(4, Types.TIMESTAMP);</span>
+<span class="nc" id="L306">			requestHandlerDto.setComplianceDoneOn(null);</span>
+<span class="nc" id="L307">			requestHandlerDto.setComplianceExpiry(null);</span>
+		} else {
+<span class="fc" id="L309">			preparedStatement.setTimestamp(3, complianceDoneOnTimestamp);</span>
+<span class="fc" id="L310">			preparedStatement.setTimestamp(4, complianceExpiryTimestamp);</span>
+<span class="fc" id="L311">			requestHandlerDto.setComplianceDoneOn(complianceDoneOnTimestamp.toString());</span>
+<span class="fc" id="L312">			requestHandlerDto.setComplianceExpiry(complianceExpiryTimestamp.toString());</span>
+		}
+<span class="fc" id="L314">	}</span>
+
+	/**
+	 * Gets the more kyc details.
+	 *
+	 * @param resultSet the result set
+	 * @return the more kyc details
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected List&lt;IDomain&gt; getMoreKycDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="fc" id="L324">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc bfc" id="L326" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L327">				Kyc kyc = new Kyc();</span>
+<span class="fc" id="L328">				KYCSummary kycSummary = JsonConverterUtil.convertToObject(KYCSummary.class,</span>
+<span class="fc" id="L329">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="fc" id="L330">				kyc.setId(resultSet.getInt(&quot;id&quot;)); // ESL id</span>
+<span class="fc" id="L331">				kyc.setCheckedOn(DateTimeFormatter.dateTimeFormatter(kycSummary.getCheckedOn()));</span>
+<span class="fc" id="L332">				kyc.setDob(kycSummary.getDob());</span>
+<span class="fc" id="L333">				kyc.setEidCheck(kycSummary.getEidCheck());</span>
+<span class="fc" id="L334">				kyc.setVerifiactionResult(kycSummary.getVerifiactionResult());</span>
+<span class="fc" id="L335">				kyc.setReferenceId(kycSummary.getReferenceId());</span>
+<span class="fc" id="L336">				boolean status = Constants.PASS.equals(kycSummary.getStatus());</span>
+				/** Added changes to set status as Not_Required on UI -Saylee */
+<span class="pc bpc" id="L338" title="1 of 2 branches missed.">				if (Constants.NOT_REQUIRED.equalsIgnoreCase(kycSummary.getStatus())) {</span>
+<span class="nc" id="L339">					kyc.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L340">					kyc.setStatusValue(Constants.NOT_REQUIRED_UI);</span>
+				} else {
+<span class="fc" id="L342">					kyc.setIsRequired(Boolean.TRUE);</span>
+<span class="fc" id="L343">					kyc.setStatusValue(kycSummary.getStatus());</span>
+<span class="fc" id="L344">					kyc.setStatus(status);</span>
+				}
+<span class="fc" id="L346">				kyc.setEntityType(</span>
+<span class="fc" id="L347">						EntityTypeEnum.getUiStatusFromDatabaseStatus(resultSet.getInt(Constants.ENTITY_TYPE)));</span>
+<span class="fc" id="L348">				domainList.add((IDomain) kyc);</span>
+<span class="fc" id="L349">			}</span>
+<span class="fc" id="L350">			return domainList;</span>
+
+<span class="nc" id="L352">		} catch (Exception e) {</span>
+<span class="nc" id="L353">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+
+	}
+
+	/**
+	 * Gets the more sanction details.
+	 *
+	 * @param resultSet the result set
+	 * @return the more sanction details
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected List&lt;IDomain&gt; getMoreSanctionDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="fc" id="L366">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc bfc" id="L368" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L369">				Sanction sanc = new Sanction();</span>
+<span class="fc" id="L370">				SanctionSummary sancSummary = JsonConverterUtil.convertToObject(SanctionSummary.class,</span>
+<span class="fc" id="L371">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="fc" id="L372">				sanc.setUpdatedBy(resultSet.getString(Constants.UPDATED_BY));</span>
+<span class="fc" id="L373">				sanc.setEventServiceLogId(resultSet.getInt(&quot;id&quot;)); // Set esl id</span>
+<span class="fc" id="L374">				sanc.setUpdatedOn(DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+<span class="fc" id="L375">				sanc.setSanctionId(sancSummary.getSanctionId());</span>
+<span class="fc" id="L376">				sanc.setOfacList(sancSummary.getOfacList());</span>
+<span class="fc" id="L377">				sanc.setWorldCheck(sancSummary.getWorldCheck());</span>
+<span class="fc" id="L378">				boolean status = &quot;PASS&quot;.equals(sancSummary.getStatus());</span>
+				/** Added changes to set status as Not_Required on UI -Saylee */
+<span class="pc bpc" id="L380" title="1 of 2 branches missed.">				if (Constants.NOT_REQUIRED.equalsIgnoreCase(sancSummary.getStatus())) {</span>
+<span class="nc" id="L381">					sanc.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L382">					sanc.setStatusValue(Constants.NOT_REQUIRED_UI);</span>
+				} else {
+<span class="fc" id="L384">					sanc.setIsRequired(Boolean.TRUE);</span>
+<span class="fc" id="L385">					sanc.setStatusValue(sancSummary.getStatus());</span>
+<span class="fc" id="L386">					sanc.setStatus(status);</span>
+				}
+<span class="fc" id="L388">				sanc.setEntityType(</span>
+<span class="fc" id="L389">						EntityTypeEnum.getUiStatusFromDatabaseStatus(resultSet.getInt(Constants.ENTITY_TYPE)));</span>
+<span class="fc" id="L390">				domainList.add((IDomain) sanc);</span>
+<span class="fc" id="L391">			}</span>
+<span class="fc" id="L392">			return domainList;</span>
+<span class="nc" id="L393">		} catch (Exception e) {</span>
+<span class="nc" id="L394">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+
+	}
+
+	/**
+	 * Gets the more fraugster details.
+	 *
+	 * @param resultSet the result set
+	 * @return the more fraugster details
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected List&lt;IDomain&gt; getMoreFraugsterDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="fc" id="L407">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc bfc" id="L409" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L410">				Fraugster fraug = new Fraugster();</span>
+<span class="fc" id="L411">				FraugsterSummary fraugSummary = JsonConverterUtil.convertToObject(FraugsterSummary.class,</span>
+<span class="fc" id="L412">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="fc" id="L413">				boolean status = Constants.PASS.equals(fraugSummary.getStatus());</span>
+<span class="fc" id="L414">				fraug.setCreatedOn(DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+<span class="fc" id="L415">				fraug.setUpdatedBy(resultSet.getString(Constants.UPDATED_BY));</span>
+<span class="fc" id="L416">				fraug.setFraugsterId(fraugSummary.getFrgTransId());</span>
+<span class="fc" id="L417">				fraug.setScore(fraugSummary.getScore());</span>
+<span class="fc" id="L418">				fraug.setStatus(status);</span>
+<span class="fc" id="L419">				fraug.setId(resultSet.getInt(&quot;id&quot;)); // fix AT-373 - Umesh</span>
+<span class="fc" id="L420">				domainList.add((IDomain) fraug);</span>
+<span class="fc" id="L421">			}</span>
+<span class="fc" id="L422">			return domainList;</span>
+<span class="nc" id="L423">		} catch (Exception e) {</span>
+<span class="nc" id="L424">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.dbport.AbstractDBServiceLevel1#getOrganization(java.sql.Connection)
+	 */
+	@Override
+	protected List&lt;String&gt; getOrganization(Connection connection) throws CompliancePortalException {
+<span class="fc" id="L433">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L434">		ResultSet resultSet = null;</span>
+<span class="fc" id="L435">		List&lt;String&gt; organization = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc" id="L437">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_ORGANIZATION.getQuery());</span>
+<span class="fc" id="L438">			resultSet = preparedStatement.executeQuery();</span>
+<span class="pc bpc" id="L439" title="1 of 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L440">				organization.add(resultSet.getString(RegQueDBColumns.CODE.getName()));</span>
+			}
+
+<span class="nc" id="L443">		} catch (Exception e) {</span>
+<span class="nc" id="L444">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L446">			closeResultset(resultSet);</span>
+<span class="fc" id="L447">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="fc" id="L450">		return organization;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.dbport.AbstractDBServiceLevel1#getCurrency(java.sql.Connection)
+	 */
+	@Override
+	protected List&lt;String&gt; getCurrency(Connection connection) throws CompliancePortalException {
+<span class="fc" id="L458">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L459">		ResultSet resultSet = null;</span>
+<span class="fc" id="L460">		List&lt;String&gt; currency = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc" id="L462">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_CURRENCY.getQuery());</span>
+<span class="fc" id="L463">			resultSet = preparedStatement.executeQuery();</span>
+<span class="pc bpc" id="L464" title="1 of 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L465">				currency.add(resultSet.getString(RegQueDBColumns.CURRENCY.getName()));</span>
+			}
+
+<span class="nc" id="L468">		} catch (Exception e) {</span>
+<span class="nc" id="L469">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L471">			closeResultset(resultSet);</span>
+<span class="fc" id="L472">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="fc" id="L475">		return currency;</span>
+	}
+
+	/**
+	 * Gets the more custom check details.
+	 *
+	 * @param resultSet the result set
+	 * @return the more custom check details
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected List&lt;IDomain&gt; getMoreCustomCheckDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="nc" id="L486">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L488">			Map&lt;Integer, CustomCheck&gt; hm = new TreeMap&lt;&gt;();</span>
+
+<span class="nc bnc" id="L490" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L491">				CustomCheck cuschk = hm.get(resultSet.getInt(RegQueDBColumns.EVENTID.getName()));</span>
+<span class="nc bnc" id="L492" title="All 2 branches missed.">				if (cuschk == null) {</span>
+<span class="nc" id="L493">					cuschk = new CustomCheck();</span>
+<span class="nc" id="L494">					getMoreCustomCheckServiceDetails(resultSet, cuschk);</span>
+<span class="nc" id="L495">					hm.put(resultSet.getInt(RegQueDBColumns.EVENTID.getName()), cuschk);</span>
+				} else {
+<span class="nc" id="L497">					getMoreCustomCheckServiceDetails(resultSet, cuschk);</span>
+<span class="nc" id="L498">					hm.put(resultSet.getInt(RegQueDBColumns.EVENTID.getName()), cuschk);</span>
+				}
+<span class="nc" id="L500">			}</span>
+<span class="nc" id="L501">			domainList.addAll(hm.values());</span>
+<span class="nc" id="L502">			Collections.reverse(domainList);</span>
+<span class="nc" id="L503">			return domainList;</span>
+<span class="nc" id="L504">		} catch (Exception e) {</span>
+<span class="nc" id="L505">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+	}
+
+	/**
+	 * Gets the more custom check service details.
+	 *
+	 * @param resultSet the result set
+	 * @param cuschk the cuschk
+	 * @return the more custom check service details
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected CustomCheck getMoreCustomCheckServiceDetails(ResultSet resultSet, CustomCheck cuschk)
+			throws CompliancePortalException {
+
+		try {
+<span class="nc bnc" id="L521" title="All 2 branches missed.">			if ((&quot;IP&quot;).equals(resultSet.getString(RegQueDBColumns.SERVICETYPE.getName()))</span>
+<span class="nc bnc" id="L522" title="All 2 branches missed.">					&amp;&amp; cuschk.getIpCheck() == null) {</span>
+<span class="nc" id="L523">				IpCheck ipCheck = new IpCheck();</span>
+<span class="nc" id="L524">				ipCheck.setCheckedOn(DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+<span class="nc" id="L525">				ipCheck.setStatus(ServiceStatusEnum</span>
+<span class="nc" id="L526">						.getUiStatusFromDatabaseStatus(resultSet.getInt(RegQueDBColumns.STATUS.getName())));</span>
+<span class="nc" id="L527">				IpSummary ipSummary = JsonConverterUtil.convertToObject(IpSummary.class,</span>
+<span class="nc" id="L528">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="nc bnc" id="L529" title="All 2 branches missed.">				if (!Constants.NOT_REQUIRED.equalsIgnoreCase(ipSummary.getStatus())) {</span>
+<span class="nc" id="L530">					ipCheck.setIpAddress(ipSummary.getIpAddress());</span>
+<span class="nc" id="L531">					ipCheck.setIpRule(ipSummary.getIpRule());</span>
+<span class="nc" id="L532">					ipCheck.setStatus(ipSummary.getStatus());</span>
+<span class="nc" id="L533">					ipCheck.setIsRequired(Boolean.TRUE);</span>
+
+<span class="nc" id="L535">					checkIPStatus(ipCheck, ipSummary);</span>
+
+				}
+<span class="nc" id="L538">				cuschk.setIpCheck(ipCheck);</span>
+
+<span class="nc bnc" id="L540" title="All 2 branches missed.">			} else if ((&quot;GLOBALCHECK&quot;).equals(resultSet.getString(RegQueDBColumns.SERVICETYPE.getName()))</span>
+<span class="nc bnc" id="L541" title="All 2 branches missed.">					&amp;&amp; cuschk.getGlobalCheck() == null) {</span>
+<span class="nc" id="L542">				GlobalCheck globalCheck = new GlobalCheck();</span>
+<span class="nc" id="L543">				globalCheck.setStatus(ServiceStatusEnum</span>
+<span class="nc" id="L544">						.getUiStatusFromDatabaseStatus(resultSet.getInt(RegQueDBColumns.STATUS.getName())));</span>
+<span class="nc" id="L545">				cuschk.setGlobalCheck(globalCheck);</span>
+
+<span class="nc bnc" id="L547" title="All 2 branches missed.">			} else if ((&quot;COUNTRYCHECK&quot;).equals(resultSet.getString(RegQueDBColumns.SERVICETYPE.getName()))</span>
+<span class="nc bnc" id="L548" title="All 2 branches missed.">					&amp;&amp; cuschk.getCountryCheck() == null) {</span>
+<span class="nc" id="L549">				CountryCheck countryCheck = new CountryCheck();</span>
+<span class="nc" id="L550">				countryCheck.setStatus(ServiceStatusEnum</span>
+<span class="nc" id="L551">						.getUiStatusFromDatabaseStatus(resultSet.getInt(RegQueDBColumns.STATUS.getName())));</span>
+<span class="nc" id="L552">				cuschk.setCountryCheck(countryCheck);</span>
+			}
+
+<span class="nc" id="L555">		} catch (Exception e) {</span>
+<span class="nc" id="L556">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+<span class="nc" id="L557">		}</span>
+<span class="nc" id="L558">		return cuschk;</span>
+	}
+
+	/**
+	 * Check IP status.
+	 *
+	 * @param ipCheck the ip check
+	 * @param ipSummary the ip summary
+	 */
+	private void checkIPStatus(IpCheck ipCheck, IpSummary ipSummary) {
+<span class="nc bnc" id="L568" title="All 2 branches missed.">		if (ipCheck.getStatus().equalsIgnoreCase(Constants.PASS)</span>
+<span class="nc bnc" id="L569" title="All 2 branches missed.">				|| ipCheck.getStatus().equalsIgnoreCase(Constants.FAIL)) {</span>
+<span class="nc" id="L570">			ipCheck.setIpCity(Constants.IP_CITY_FIELD + StringUtils.isNullOrTrimEmptySetNA(ipSummary.getIpCity())</span>
+					+ Constants.COMMA);
+<span class="nc" id="L572">			ipCheck.setIpCountry(Constants.IP_COUNTRY_FIELD</span>
+<span class="nc" id="L573">					+ StringUtils.isNullOrTrimEmptySetNA(ipSummary.getIpCountry()) + Constants.COMMA);</span>
+<span class="nc" id="L574">			ipCheck.setGeoDifference(Constants.IP_DISTANCE_FIELD</span>
+					+ StringUtils
+<span class="nc" id="L576">							.isNullOrTrimEmptySetNA(DecimalFormatter.convertToOneDigit(ipSummary.getGeoDifference()))</span>
+<span class="nc" id="L577">					+ StringUtils.isNullOrTrimEmptySetSpace(ipSummary.getUnit()) + Constants.CLOSING_BRACKET);</span>
+		}
+<span class="nc" id="L579">	}</span>
+
+	/**
+	 * Insert Profile Activity Logs
+	 * 
+	 * @param activityLogDtos
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	@Override
+	@SuppressWarnings(&quot;resource&quot;)
+	public void insertProfileActivityLogs(List&lt;ProfileActivityLogDto&gt; profileActivityLogDtos, Connection connection)
+			throws CompliancePortalException {
+<span class="fc" id="L592">		PreparedStatement prepareStatement = null;</span>
+		try {
+<span class="fc" id="L594">			prepareStatement = connection.prepareStatement(</span>
+<span class="fc" id="L595">					RegistrationQueryConstant.INSERT_PROFILE_ACTIVITY_LOG.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="fc bfc" id="L597" title="All 2 branches covered.">			for (ProfileActivityLogDto profileActivityLog : profileActivityLogDtos) {</span>
+<span class="fc" id="L598">				prepareStatement.setTimestamp(1, profileActivityLog.getTimeStatmp());</span>
+<span class="fc" id="L599">				prepareStatement.setNString(2, profileActivityLog.getActivityBy());</span>
+<span class="fc" id="L600">				prepareStatement.setNString(3, profileActivityLog.getOrgCode());</span>
+<span class="fc" id="L601">				prepareStatement.setInt(4, profileActivityLog.getAccountId());</span>
+<span class="pc bpc" id="L602" title="1 of 2 branches missed.">				if (null == profileActivityLog.getContactId()) {</span>
+<span class="fc" id="L603">					prepareStatement.setNull(5, Types.INTEGER);</span>
+				} else {
+<span class="nc" id="L605">					prepareStatement.setInt(5, profileActivityLog.getContactId());</span>
+				}
+<span class="fc" id="L607">				prepareStatement.setNString(6, profileActivityLog.getComment());</span>
+<span class="fc" id="L608">				prepareStatement.setNString(7, profileActivityLog.getCreatedBy());</span>
+<span class="fc" id="L609">				prepareStatement.setTimestamp(8, profileActivityLog.getCreatedOn());</span>
+<span class="fc" id="L610">				prepareStatement.setNString(9, profileActivityLog.getUpdatedBy());</span>
+<span class="fc" id="L611">				prepareStatement.setTimestamp(10, profileActivityLog.getUpdatedOn());</span>
+				// AT-894 WorkEfficiencyReport
+				// Add ResouceType and ResourceID
+<span class="pc bpc" id="L614" title="1 of 2 branches missed.">				if (null == profileActivityLog.getContactId()) {</span>
+<span class="fc" id="L615">					prepareStatement.setInt(11, UserLockResourceTypeEnum.ACCOUNT.getDatabaseStatus());</span>
+<span class="fc" id="L616">					prepareStatement.setInt(12, profileActivityLog.getAccountId());</span>
+				} else {
+<span class="nc" id="L618">					prepareStatement.setInt(11, UserLockResourceTypeEnum.CONTACT.getDatabaseStatus());</span>
+<span class="nc" id="L619">					prepareStatement.setInt(12, profileActivityLog.getContactId());</span>
+				}
+
+<span class="fc" id="L622">				int updateCount = prepareStatement.executeUpdate();</span>
+<span class="pc bpc" id="L623" title="1 of 2 branches missed.">				if (updateCount == 0) {</span>
+<span class="nc" id="L624">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				}
+<span class="fc" id="L626">				ResultSet rs = prepareStatement.getGeneratedKeys();</span>
+<span class="pc bpc" id="L627" title="1 of 2 branches missed.">				if (rs.next()) {</span>
+<span class="fc" id="L628">					profileActivityLog.setId(rs.getInt(1));</span>
+<span class="fc" id="L629">					profileActivityLog.getActivityLogDetailDto().setActivityId(rs.getInt(1));</span>
+				}
+<span class="fc" id="L631">			}</span>
+
+<span class="nc" id="L633">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L634">			throw e;</span>
+<span class="nc" id="L635">		} catch (Exception e) {</span>
+<span class="nc" id="L636">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L638">			closePrepareStatement(prepareStatement);</span>
+		}
+<span class="fc" id="L640">	}</span>
+
+	/**
+	 * Insert Profile Activity Log Detail
+	 * 
+	 * @param activityLogDtos
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	public void insertProfileActivityLogDetail(List&lt;ProfileActivityLogDto&gt; activityLogDtos, Connection connection)
+			throws CompliancePortalException {
+<span class="fc" id="L652">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="fc" id="L654">			preparedStatement = connection</span>
+<span class="fc" id="L655">					.prepareStatement(RegistrationQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL.getQuery());</span>
+<span class="fc bfc" id="L656" title="All 2 branches covered.">			for (ProfileActivityLogDto activityLog : activityLogDtos) {</span>
+<span class="fc" id="L657">				ActivityLogDetailDto activityLogDetailDto = activityLog.getActivityLogDetailDto();</span>
+<span class="fc" id="L658">				preparedStatement.setInt(1, activityLogDetailDto.getActivityId());</span>
+<span class="fc" id="L659">				preparedStatement.setString(2, activityLogDetailDto.getActivityType().getModule());</span>
+<span class="fc" id="L660">				preparedStatement.setString(3, activityLogDetailDto.getActivityType().getType());</span>
+<span class="fc" id="L661">				preparedStatement.setNString(4, activityLogDetailDto.getLog());</span>
+<span class="fc" id="L662">				preparedStatement.setNString(5, activityLogDetailDto.getCreatedBy());</span>
+<span class="fc" id="L663">				preparedStatement.setTimestamp(6, activityLogDetailDto.getCreatedOn());</span>
+<span class="fc" id="L664">				preparedStatement.setNString(7, activityLogDetailDto.getUpdatedBy());</span>
+<span class="fc" id="L665">				preparedStatement.setTimestamp(8, activityLogDetailDto.getUpdatedOn());</span>
+<span class="fc" id="L666">				preparedStatement.addBatch();</span>
+<span class="fc" id="L667">			}</span>
+<span class="fc" id="L668">			int[] count = preparedStatement.executeBatch();</span>
+<span class="fc bfc" id="L669" title="All 2 branches covered.">			for (int c : count) {</span>
+<span class="pc bpc" id="L670" title="1 of 2 branches missed.">				if (c == 0) {</span>
+<span class="nc" id="L671">					throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+				}
+			}
+
+<span class="nc" id="L675">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L676">			throw e;</span>
+<span class="nc" id="L677">		} catch (Exception e) {</span>
+<span class="nc" id="L678">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L680">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="fc" id="L683">	}</span>
+
+	/**
+	 * @param baseUpdateDBDto
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	protected void addProfileActivityLogs(BaseUpdateDBDto baseUpdateDBDto, Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L692">		List&lt;ProfileActivityLogDto&gt; activityLogs = baseUpdateDBDto.getActivityLog();</span>
+<span class="nc bnc" id="L693" title="All 4 branches missed.">		if (activityLogs != null &amp;&amp; !activityLogs.isEmpty()) {</span>
+<span class="nc" id="L694">			insertProfileActivityLogs(activityLogs, connection);</span>
+<span class="nc" id="L695">			insertProfileActivityLogDetail(activityLogs, connection);</span>
+		}
+<span class="nc" id="L697">	}</span>
+
+	/**
+	 * Gets the upload document list.
+	 *
+	 * @param connection the connection
+	 * @return the upload document list
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected List&lt;UploadDocumentTypeDBDto&gt; getUploadDocumentList(Connection connection)
+			throws CompliancePortalException {
+<span class="nc" id="L708">		List&lt;UploadDocumentTypeDBDto&gt; documentType = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L709">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L710">		ResultSet resultSet = null;</span>
+		try {
+<span class="nc" id="L712">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_DOCUMENT_LIST.getQuery());</span>
+<span class="nc" id="L713">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L714" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L715">				UploadDocumentTypeDBDto uploadDocument = new UploadDocumentTypeDBDto();</span>
+<span class="nc" id="L716">				uploadDocument.setId(resultSet.getInt(&quot;Id&quot;));</span>
+<span class="nc" id="L717">				uploadDocument.setDocumentName(resultSet.getString(&quot;Name&quot;));</span>
+<span class="nc" id="L718">				documentType.add(uploadDocument);</span>
+<span class="nc" id="L719">			}</span>
+<span class="nc" id="L720">			return documentType;</span>
+<span class="nc" id="L721">		} catch (Exception e) {</span>
+<span class="nc" id="L722">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L724">			closeResultset(resultSet);</span>
+<span class="nc" id="L725">			closePrepareStatement(preparedStatement);</span>
+		}
+	}
+
+	/**
+	 * @param query
+	 * @param connection
+	 * @throws CompliancePortalException
+	 */
+	protected void deleteWatchlist(String query, Connection connection) throws CompliancePortalException {
+<span class="nc" id="L735">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L737">			preparedStatement = connection.prepareStatement(query);</span>
+<span class="nc" id="L738">			int delRowCnt = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L739" title="All 2 branches missed.">			if (delRowCnt == 0) {</span>
+<span class="nc" id="L740">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+<span class="nc" id="L742">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L743">			throw exception;</span>
+<span class="nc" id="L744">		} catch (Exception e) {</span>
+<span class="nc" id="L745">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_DELETING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L747">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="nc" id="L750">	}</span>
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.dbport.AbstractDBServiceLevel1#getLockedUserName(java.sql.Connection)
+	 */
+	@Override
+	protected List&lt;String&gt; getLockedUserName(Connection connection) throws CompliancePortalException {
+<span class="fc" id="L757">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L758">		ResultSet resultSet = null;</span>
+<span class="fc" id="L759">		List&lt;String&gt; owner = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc" id="L761">			preparedStatement = connection.prepareStatement(WorkEfficiencyReportQueryConstant.GET_OWNER.getQuery());</span>
+<span class="fc" id="L762">			resultSet = preparedStatement.executeQuery();</span>
+<span class="pc bpc" id="L763" title="1 of 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L764">				owner.add(resultSet.getString(RegQueDBColumns.OWNER.getName()));</span>
+			}
+
+<span class="nc" id="L767">		} catch (Exception e) {</span>
+<span class="nc" id="L768">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L770">			closeResultset(resultSet);</span>
+<span class="fc" id="L771">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="fc" id="L774">		return owner;</span>
+	}
+
+	/**
+	 * Gets the kyc country list.
+	 *
+	 * @param connection the connection
+	 * @return the kyc country list
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected List&lt;String&gt; getKycCountryList(Connection connection) throws CompliancePortalException {
+<span class="nc" id="L785">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L786">		ResultSet resultSet = null;</span>
+<span class="nc" id="L787">		List&lt;String&gt; kycCountryList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc" id="L790">			preparedStatement = connection</span>
+<span class="nc" id="L791">					.prepareStatement(RegistrationQueryConstant.GET_KYC_SUPPORTED_COUNTRY_LIST.getQuery());</span>
+<span class="nc" id="L792">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L793" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L794">				kycCountryList.add(resultSet.getString(&quot;Code&quot;));</span>
+			}
+<span class="nc" id="L796">		} catch (Exception e) {</span>
+<span class="nc" id="L797">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L799">			closeResultset(resultSet);</span>
+<span class="nc" id="L800">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L802">		return kycCountryList;</span>
+	}
+
+	/**
+	 * Update work flow time.
+	 *
+	 * @param resourceId the resource id
+	 * @param connection the connection
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected void updateWorkFlowTime(Integer resourceId, Connection connection) throws CompliancePortalException {
+
+<span class="nc" id="L814">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="nc" id="L816">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.UPDATE_WORKFLOW_TIME.getQuery());</span>
+<span class="nc" id="L817">			preparedStatement.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L818">			preparedStatement.setInt(2, resourceId);</span>
+<span class="nc" id="L819">			int count = preparedStatement.executeUpdate();</span>
+<span class="nc bnc" id="L820" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L821">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+
+<span class="nc" id="L824">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L825">			throw exception;</span>
+<span class="nc" id="L826">		} catch (Exception e) {</span>
+<span class="nc" id="L827">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L829">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="nc" id="L832">	}</span>
+
+	/**
+	 * Update watchlist status.
+	 *
+	 * @param requestHandlerDto the request handler dto
+	 * @param connection the connection
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected void updateWatchlistStatus(BaseUpdateDBDto requestHandlerDto, Connection connection)
+			throws CompliancePortalException {
+
+<span class="fc" id="L844">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="fc" id="L846">			preparedStatement = connection</span>
+<span class="fc" id="L847">					.prepareStatement(RegistrationQueryConstant.UPDATE_WATCHLISTSTATUS_CONTACT.getQuery());</span>
+<span class="fc" id="L848">			preparedStatement.setString(1, requestHandlerDto.getCreatedBy());</span>
+<span class="fc" id="L849">			preparedStatement.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="pc bpc" id="L850" title="1 of 2 branches missed.">			if (requestHandlerDto.getOverallPaymentInWatchlistStatus().getDatabaseStatus().equals(2)) {</span>
+<span class="nc" id="L851">				preparedStatement.setInt(3, ServiceStatusEnum.FAIL.getDatabaseStatus());</span>
+<span class="pc bpc" id="L852" title="1 of 2 branches missed.">			} else if (requestHandlerDto.getOverallPaymentInWatchlistStatus().getDatabaseStatus().equals(7)) {</span>
+<span class="nc" id="L853">				preparedStatement.setInt(3, ServiceStatusEnum.WATCH_LIST.getDatabaseStatus());</span>
+			} else {
+<span class="fc" id="L855">				preparedStatement.setInt(3, ServiceStatusEnum.PASS.getDatabaseStatus());</span>
+			}
+
+<span class="pc bpc" id="L858" title="1 of 2 branches missed.">			if (requestHandlerDto.getOverallPaymentOutWatchlistStatus().getDatabaseStatus().equals(2)) {</span>
+<span class="nc" id="L859">				preparedStatement.setInt(4, ServiceStatusEnum.FAIL.getDatabaseStatus());</span>
+<span class="pc bpc" id="L860" title="1 of 2 branches missed.">			} else if (requestHandlerDto.getOverallPaymentOutWatchlistStatus().getDatabaseStatus().equals(7)) {</span>
+<span class="nc" id="L861">				preparedStatement.setInt(4, ServiceStatusEnum.WATCH_LIST.getDatabaseStatus());</span>
+			} else {
+<span class="fc" id="L863">				preparedStatement.setInt(4, ServiceStatusEnum.PASS.getDatabaseStatus());</span>
+			}
+<span class="fc" id="L865">			preparedStatement.setInt(5, requestHandlerDto.getContactId());</span>
+<span class="fc" id="L866">			int count = preparedStatement.executeUpdate();</span>
+<span class="pc bpc" id="L867" title="1 of 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L868">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+<span class="nc" id="L870">		} catch (CompliancePortalException exception) {</span>
+<span class="nc" id="L871">			throw exception;</span>
+<span class="nc" id="L872">		} catch (Exception e) {</span>
+<span class="nc" id="L873">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_INSERTING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L875">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="fc" id="L878">	}</span>
+
+	/**
+	 * Gets the watch list status.
+	 *
+	 * @param requestHandlerDto the request handler dto
+	 * @param readOnlyConn the read only conn
+	 * @return the watch list status
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected void getWatchListStatus(BaseUpdateDBDto requestHandlerDto, Connection readOnlyConn)
+			throws CompliancePortalException {
+
+<span class="fc" id="L891">		List&lt;WatchListDetails&gt; watchListPaymentReasons = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L892">		List&lt;String&gt; toatalContactWatchListReason = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L893">		List&lt;String&gt; finalWatchList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc" id="L895">			requestHandlerDto.setOverallPaymentInWatchlistStatus(ServiceStatusEnum.PASS);</span>
+<span class="fc" id="L896">			requestHandlerDto.setOverallPaymentOutWatchlistStatus(ServiceStatusEnum.PASS);</span>
+<span class="fc" id="L897">			getPaymentWatchListReasons(readOnlyConn, watchListPaymentReasons);</span>
+<span class="fc" id="L898">			getTotalContactWatchListReasons(readOnlyConn, toatalContactWatchListReason,</span>
+					requestHandlerDto);// for AT-2986
+<span class="fc" id="L900">			List&lt;String&gt; delWatchlist = requestHandlerDto.getDeletedWatchlist();</span>
+<span class="fc" id="L901">			List&lt;String&gt; addWatchlist = requestHandlerDto.getAddWatchlist();</span>
+
+<span class="pc bpc" id="L903" title="1 of 2 branches missed.">			if (!toatalContactWatchListReason.isEmpty()) {</span>
+<span class="fc" id="L904">				finalWatchList.addAll(toatalContactWatchListReason);</span>
+			}
+
+<span class="fc" id="L907">			removeDeletedReasonFromWatchList(toatalContactWatchListReason, delWatchlist, finalWatchList);</span>
+<span class="fc" id="L908">			addReasonToWatchList(finalWatchList, addWatchlist);</span>
+<span class="fc" id="L909">			getFinalWatchListStatus(requestHandlerDto, watchListPaymentReasons, finalWatchList);</span>
+
+<span class="nc" id="L911">		} catch (Exception e) {</span>
+<span class="nc" id="L912">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="fc" id="L913">		}</span>
+
+<span class="fc" id="L915">	}</span>
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.dbport.AbstractDBServiceLevel1#addSort(java.lang.String, boolean, java.lang.String)
+	 */
+	@Override
+	protected String addSort(String columnName, boolean isAsc, String query) {
+<span class="fc" id="L922">		String orderByCon = &quot;{ORDER_TYPE}&quot;;</span>
+<span class="pc bpc" id="L923" title="1 of 2 branches missed.">		if (columnName != null) {</span>
+<span class="fc" id="L924">			query = query.replace(&quot;{SORT_FIELD_NAME}&quot;, columnName);</span>
+<span class="pc bpc" id="L925" title="1 of 2 branches missed.">			if (isAsc) {</span>
+<span class="nc" id="L926">				query = query.replace(orderByCon, &quot;ASC&quot;);</span>
+			} else {
+<span class="fc" id="L928">				query = query.replace(orderByCon, &quot;DESC&quot;);</span>
+			}
+		}
+<span class="fc" id="L931">		return query;</span>
+	}
+
+	/**
+	 * Gets the alert compliance log.
+	 *
+	 * @param accountId the account id
+	 * @return the alert compliance log
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected String getAlertComplianceLog(Integer accountId) throws CompliancePortalException {
+<span class="nc" id="L942">		String alertComplianceLog = Constants.DASH_DETAILS_PAGE;</span>
+<span class="nc" id="L943">		PreparedStatement prepareStatement = null;</span>
+<span class="nc" id="L944">		ResultSet resultSet = null;</span>
+<span class="nc" id="L945">		Connection connection = null;</span>
+
+		try {
+<span class="nc" id="L948">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L949">			prepareStatement = connection</span>
+<span class="nc" id="L950">					.prepareStatement(RegistrationQueryConstant.GET_ALERT_COMPLIANCE_LOG.getQuery());</span>
+<span class="nc" id="L951">			prepareStatement.setInt(1, accountId);</span>
+<span class="nc" id="L952">			resultSet = prepareStatement.executeQuery();</span>
+<span class="nc bnc" id="L953" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L954">				alertComplianceLog = resultSet.getString(&quot;Comments&quot;);</span>
+			}
+
+<span class="nc" id="L957">		} catch (Exception e) {</span>
+<span class="nc" id="L958">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L960">			closeResultset(resultSet);</span>
+<span class="nc" id="L961">			closePrepareStatement(prepareStatement);</span>
+<span class="nc" id="L962">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L965">		return alertComplianceLog;</span>
+	}
+
+	/**
+	 * Gets the account attributes.
+	 *
+	 * @param accountId the account id
+	 * @param connection the connection
+	 * @return the account attributes
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected RegistrationAccount getAccountAttributes(Integer accountId, Connection connection)
+			throws CompliancePortalException {
+<span class="fc" id="L978">		PreparedStatement preparedStatement = null;</span>
+		try {
+<span class="fc" id="L980">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_ACC_ATTRIBUTE.getQuery());</span>
+<span class="fc" id="L981">			preparedStatement.setInt(1, accountId);</span>
+<span class="fc" id="L982">			ResultSet rs = preparedStatement.executeQuery();</span>
+<span class="pc bpc" id="L983" title="1 of 2 branches missed.">			if (rs.next()) {</span>
+<span class="fc" id="L984">				return JsonConverterUtil.convertToObject(RegistrationAccount.class, rs.getString(Constants.ATTRIBUTES));</span>
+			}
+<span class="nc" id="L986">			rs.close();</span>
+<span class="nc" id="L987">		} catch (Exception e) {</span>
+<span class="nc" id="L988">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L990">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L992">		return null;</span>
+	}
+
+	/**
+	 * Sets the fraugster data.
+	 *
+	 * @param baseUpdateDBDto
+	 *            the base update DB dto
+	 * @param readOnlyConn
+	 *            the read only conn
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 * 
+	 *             This method is called to check whether a fraugster watchlist
+	 *             is added or deleted or fraugster reason is added or deleted.
+	 *             This method then return providerresponse on fraugster
+	 *             eventservicelogId If fraugsterSummary or
+	 *             fraugstertransactionId or Id is not null then data is
+	 *             inserted in FraugsterSchedularData table
+	 */
+
+	protected void setFraugsterDataByAccountId(BaseUpdateDBDto baseUpdateDBDto, Connection conn,
+			Connection readOnlyConn, String status) throws CompliancePortalException {
+
+		String asyncStatus;
+		try {
+
+<span class="nc" id="L1019">			Boolean isWatchListAdded = isWatchListAdded(baseUpdateDBDto);</span>
+<span class="nc" id="L1020">			Boolean isWatchListRemoved = isWatchListRemoved(baseUpdateDBDto);</span>
+
+<span class="nc bnc" id="L1022" title="All 2 branches missed.">			if (Constants.ACTIVE.equalsIgnoreCase(status)) {</span>
+<span class="nc bnc" id="L1023" title="All 2 branches missed.">				if (Constants.CUST_TYPE_PFX.equalsIgnoreCase(baseUpdateDBDto.getCustType())) {</span>
+
+<span class="nc" id="L1025">					List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogByContactId(readOnlyConn,</span>
+<span class="nc" id="L1026">							baseUpdateDBDto.getContactId());</span>
+<span class="nc" id="L1027">					updateFraugsterSchedularDataOnReasonAdded(baseUpdateDBDto, null, conn, summaryList);</span>
+
+<span class="nc" id="L1029">				} else {</span>
+					/**
+					 * Updated all contact for cfx record
+					 */
+<span class="nc" id="L1033">					List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogByAccountId(readOnlyConn,</span>
+<span class="nc" id="L1034">							baseUpdateDBDto.getAccountId());</span>
+<span class="nc" id="L1035">					updateFraugsterSchedularDataOnWLAdded(baseUpdateDBDto, null, conn, summaryList);</span>
+<span class="nc" id="L1036">				}</span>
+
+			} else {
+
+<span class="nc bnc" id="L1040" title="All 2 branches missed.">				if (Boolean.TRUE.equals(isWatchListAdded)) {</span>
+
+<span class="nc" id="L1042">					asyncStatus = FragusterWatchListEnum.FRAUGSTER_HIGH_RISK_OF_FRAUD.getWatchlistCode();</span>
+<span class="nc" id="L1043">					List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogByAccountId(readOnlyConn,</span>
+<span class="nc" id="L1044">							baseUpdateDBDto.getAccountId());</span>
+<span class="nc" id="L1045">					updateFraugsterSchedularDataOnWLAdded(baseUpdateDBDto, asyncStatus, conn, summaryList);</span>
+
+<span class="nc bnc" id="L1047" title="All 2 branches missed.">				} else if (Boolean.TRUE.equals(isWatchListRemoved)) {</span>
+<span class="nc" id="L1048">					asyncStatus = FragusterWatchListEnum.APPROVED.getWatchlistCode();</span>
+<span class="nc" id="L1049">					List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogByAccountId(readOnlyConn,</span>
+<span class="nc" id="L1050">							baseUpdateDBDto.getAccountId());</span>
+<span class="nc" id="L1051">					updateFraugsterSchedularDataOnWLAdded(baseUpdateDBDto, asyncStatus, conn, summaryList);</span>
+				}
+
+<span class="nc bnc" id="L1054" title="All 4 branches missed.">				if (Boolean.FALSE.equals(isWatchListAdded) &amp;&amp; Boolean.FALSE.equals(isWatchListRemoved)) {</span>
+<span class="nc" id="L1055">					setAsyncStatusForRegReason(baseUpdateDBDto, conn, readOnlyConn);</span>
+				}
+			}
+
+<span class="nc" id="L1059">		} catch (Exception e) {</span>
+<span class="nc" id="L1060">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L1061">		}</span>
+<span class="nc" id="L1062">	}</span>
+
+	/**
+	 * Sets the async status for reg reason.
+	 *
+	 * @param baseUpdateDBDto the base update DB dto
+	 * @param conn the conn
+	 * @param readOnlyConn the read only conn
+	 * @return the string
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	private String setAsyncStatusForRegReason(BaseUpdateDBDto baseUpdateDBDto, Connection conn, Connection readOnlyConn)
+			throws CompliancePortalException {
+
+<span class="nc" id="L1076">		Boolean isReasonAdded = Boolean.FALSE;</span>
+<span class="nc" id="L1077">		Boolean isReasonRemoved = Boolean.FALSE;</span>
+<span class="nc" id="L1078">		String asyncStatus = FragusterWatchListEnum.APPROVED.getWatchlistCode();</span>
+
+		try {
+<span class="nc" id="L1081">			isReasonAdded = isReasonAddded(baseUpdateDBDto);</span>
+<span class="nc" id="L1082">			isReasonRemoved = isReasonRemoved(baseUpdateDBDto);</span>
+
+<span class="nc bnc" id="L1084" title="All 2 branches missed.">			if (Boolean.TRUE.equals(isReasonAdded)) {</span>
+<span class="nc bnc" id="L1085" title="All 2 branches missed.">				for (String reason : baseUpdateDBDto.getAddReasons()) {</span>
+<span class="nc" id="L1086">					asyncStatus = FraugsterReasonsEnum.getFraugsterReasonCode(reason);</span>
+<span class="nc" id="L1087">				}</span>
+<span class="nc bnc" id="L1088" title="All 2 branches missed.">				if (Constants.CUST_TYPE_PFX.equalsIgnoreCase(baseUpdateDBDto.getCustType())) {</span>
+
+<span class="nc" id="L1090">					List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogByContactId(readOnlyConn,</span>
+<span class="nc" id="L1091">							baseUpdateDBDto.getContactId());</span>
+<span class="nc" id="L1092">					updateFraugsterSchedularDataOnReasonAdded(baseUpdateDBDto, asyncStatus, conn, summaryList);</span>
+<span class="nc" id="L1093">				} else {</span>
+					/**
+					 * Updated all contact for cfx record
+					 */
+<span class="nc" id="L1097">					List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogByAccountId(readOnlyConn,</span>
+<span class="nc" id="L1098">							baseUpdateDBDto.getAccountId());</span>
+<span class="nc" id="L1099">					updateFraugsterSchedularDataOnWLAdded(baseUpdateDBDto, asyncStatus, conn, summaryList);</span>
+<span class="nc" id="L1100">				}</span>
+
+<span class="nc bnc" id="L1102" title="All 2 branches missed.">			} else if (Boolean.TRUE.equals(isReasonRemoved)) {</span>
+<span class="nc" id="L1103">				asyncStatus = FraugsterReasonsEnum.APPROVED.getReasonCode();</span>
+<span class="nc" id="L1104">				List&lt;FraugsterSummary&gt; summaryList = getFraugsterEventServiceLogByContactId(readOnlyConn,</span>
+<span class="nc" id="L1105">						baseUpdateDBDto.getContactId());</span>
+<span class="nc" id="L1106">				updateFraugsterSchedularDataOnReasonAdded(baseUpdateDBDto, asyncStatus, conn, summaryList);</span>
+			}
+
+<span class="nc" id="L1109">		} catch (Exception e) {</span>
+<span class="nc" id="L1110">			throw new CompliancePortalException(CompliancePortalErrors.DATABASE_GENERIC_ERROR, e);</span>
+<span class="nc" id="L1111">		}</span>
+
+<span class="nc" id="L1113">		return asyncStatus;</span>
+	}
+	
+	/**
+	 * Gets the legal entity.
+	 *
+	 * @param connection the connection
+	 * @return the legal entity
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	@Override
+	protected List&lt;String&gt; getLegalEntity(Connection connection) throws CompliancePortalException {
+<span class="fc" id="L1125">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L1126">		ResultSet resultSet = null;</span>
+<span class="fc" id="L1127">		List&lt;String&gt; legalEntity = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="fc" id="L1129">			preparedStatement = connection.prepareStatement(RegistrationQueryConstant.GET_LEGAL_ENTITY.getQuery());</span>
+<span class="fc" id="L1130">			resultSet = preparedStatement.executeQuery();</span>
+<span class="pc bpc" id="L1131" title="1 of 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1132">				legalEntity.add(resultSet.getString(RegQueDBColumns.CODE.getName()));</span>
+			}
+
+<span class="nc" id="L1135">		} catch (Exception e) {</span>
+<span class="nc" id="L1136">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L1138">			closeResultset(resultSet);</span>
+<span class="fc" id="L1139">			closePrepareStatement(preparedStatement);</span>
+		}
+
+<span class="fc" id="L1142">		return legalEntity;</span>
+	}
+	
+	/**
+	 * Gets the more onfido details.
+	 *
+	 * @param resultSet the result set
+	 * @return the more onfido details
+	 * @throws CompliancePortalException the compliance portal exception
+	 */
+	protected List&lt;IDomain&gt; getMoreOnfidoDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="nc" id="L1153">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc bnc" id="L1155" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1156">				Onfido onfido = new Onfido();</span>
+<span class="nc" id="L1157">				OnfidoSummary onfidoSummary = JsonConverterUtil.convertToObject(OnfidoSummary.class,</span>
+<span class="nc" id="L1158">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="nc" id="L1159">				onfido.setUpdatedBy(resultSet.getString(Constants.UPDATED_BY));</span>
+<span class="nc" id="L1160">				onfido.setEventServiceLogId(resultSet.getInt(&quot;id&quot;)); // Set esl id</span>
+<span class="nc" id="L1161">				onfido.setUpdatedOn(DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+<span class="nc" id="L1162">				onfido.setOnfidoId(onfidoSummary.getOnfidoId());</span>
+<span class="nc" id="L1163">				onfido.setReviewed(onfidoSummary.getReviewed());</span>
+<span class="nc" id="L1164">				boolean status = &quot;PASS&quot;.equals(onfidoSummary.getStatus());</span>
+<span class="nc bnc" id="L1165" title="All 2 branches missed.">				if (Constants.NOT_REQUIRED.equalsIgnoreCase(onfidoSummary.getStatus())) {</span>
+<span class="nc" id="L1166">					onfido.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L1167">					onfido.setStatusValue(Constants.NOT_REQUIRED_UI);</span>
+				} else {
+<span class="nc" id="L1169">					onfido.setIsRequired(Boolean.TRUE);</span>
+<span class="nc" id="L1170">					onfido.setStatusValue(onfidoSummary.getStatus());</span>
+<span class="nc" id="L1171">					onfido.setStatus(status);</span>
+				}
+<span class="nc" id="L1173">				onfido.setEntityType(</span>
+<span class="nc" id="L1174">						EntityTypeEnum.getUiStatusFromDatabaseStatus(resultSet.getInt(Constants.ENTITY_TYPE)));</span>
+<span class="nc" id="L1175">				domainList.add((IDomain) onfido);</span>
+<span class="nc" id="L1176">			}</span>
+<span class="nc" id="L1177">			return domainList;</span>
+<span class="nc" id="L1178">		} catch (Exception e) {</span>
+<span class="nc" id="L1179">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+	}
+
+	//AT-4114
+	protected List&lt;IDomain&gt; getMoreIntuitionDetails(ResultSet resultSet) throws CompliancePortalException {
+<span class="nc" id="L1185">		List&lt;IDomain&gt; domainList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc bnc" id="L1187" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1188">				Intuition intuition = new Intuition();</span>
+<span class="nc" id="L1189">				TransactionMonitoringAccountSummary intuitionSummary = JsonConverterUtil.convertToObject(TransactionMonitoringAccountSummary.class,</span>
+<span class="nc" id="L1190">						resultSet.getString(Constants.SUMMARY));</span>
+<span class="nc" id="L1191">				intuition.setUpdatedBy(resultSet.getString(Constants.UPDATED_BY));</span>
+<span class="nc" id="L1192">				intuition.setId(resultSet.getInt(&quot;id&quot;)); </span>
+<span class="nc" id="L1193">				intuition.setCreatedOn(DateTimeFormatter.dateTimeFormatter(resultSet.getString(Constants.UPDATED_ON)));</span>
+				
+<span class="nc" id="L1195">				intuition.setCorrelationId(Constants.DASH_SINGLE_DETAILS);</span>
+<span class="nc bnc" id="L1196" title="All 2 branches missed.">				if(null != intuitionSummary.getCorrelationId()) {</span>
+<span class="nc" id="L1197">					intuition.setCorrelationId(intuitionSummary.getCorrelationId());</span>
+				}
+<span class="nc" id="L1199">				intuition.setProfileScore(Constants.DASH_SINGLE_DETAILS);</span>
+<span class="nc bnc" id="L1200" title="All 2 branches missed.">				if(null != intuitionSummary.getProfileScore()) {</span>
+<span class="nc" id="L1201">					intuition.setProfileScore(intuitionSummary.getProfileScore());</span>
+				}
+<span class="nc" id="L1203">				intuition.setRuleScore(Constants.DASH_SINGLE_DETAILS);</span>
+<span class="nc bnc" id="L1204" title="All 2 branches missed.">				if(null != intuitionSummary.getRuleScore()) {</span>
+<span class="nc" id="L1205">					intuition.setRuleScore(intuitionSummary.getRuleScore());</span>
+				}
+				
+<span class="nc" id="L1208">				intuition.setRiskLevel(Constants.DASH_SINGLE_DETAILS);</span>
+<span class="nc bnc" id="L1209" title="All 2 branches missed.">				if(null != intuitionSummary.getRiskLevel()) {</span>
+<span class="nc" id="L1210">					intuition.setRiskLevel(intuitionSummary.getRiskLevel());</span>
+				}
+				
+<span class="nc" id="L1213">				boolean status = &quot;PASS&quot;.equals(intuitionSummary.getStatus());</span>
+			
+<span class="nc bnc" id="L1215" title="All 2 branches missed.">				if (Constants.NOT_PERFORMED.equalsIgnoreCase(intuitionSummary.getStatus())) {</span>
+<span class="nc" id="L1216">					intuition.setIsRequired(Boolean.FALSE);</span>
+<span class="nc" id="L1217">					intuition.setStatusValue(Constants.NOT_PERFORMED);</span>
+				} else {
+<span class="nc" id="L1219">					intuition.setIsRequired(Boolean.TRUE);</span>
+<span class="nc" id="L1220">					intuition.setStatusValue(intuitionSummary.getStatus());</span>
+<span class="nc" id="L1221">					intuition.setStatus(status);</span>
+				}
+<span class="nc" id="L1223">				intuition.setEntityType(</span>
+<span class="nc" id="L1224">						EntityTypeEnum.getUiStatusFromDatabaseStatus(resultSet.getInt(Constants.ENTITY_TYPE)));</span>
+<span class="nc" id="L1225">				domainList.add((IDomain) intuition);</span>
+<span class="nc" id="L1226">			}</span>
+<span class="nc" id="L1227">			return domainList;</span>
+<span class="nc" id="L1228">		} catch (Exception e) {</span>
+<span class="nc" id="L1229">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		}
+
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,122 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="PROFILE.KYC_RESEND.in.channel"/>
+	<int:channel id="KYCRESEND.out.channel"/>
+	<int:channel id="KYCRESEND.RESPONSE"/>
+	<int:channel id="KYCRESEND.ACTIVITY.LOG"/>
+	<int:channel id="REGISTRATION.KYC.RESEND.ERROR.CHANNEL"/>
+	
+	<int:chain id="resendKycServcie" input-channel="PROFILE.KYC_RESEND.in.channel">
+	<int:header-enricher>
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header
+				name="username"
+				expression="headers['username']" />
+			<int:header
+				name="password"
+				expression="headers['password']" />
+		</int:header-enricher>
+	<int:service-activator ref="kycResendMessageValidator" />	
+		<int:router
+			id="kycResendValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="KYCRESEND.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="KYC.RESEND.CHANNEL" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain id="kycRsendChannel" input-channel="KYC.RESEND.CHANNEL" output-channel="KYCRESEND.out.channel">
+	<int:service-activator
+			id="kycResend.ENRICH"
+			ref="kycResendRegistratioDataEnricher"
+			method="enrichData" />
+		<int:service-activator
+			id="KYCRESEND.CREATE.EVENT"
+			method="createEvent"
+			ref ="eventDBServiceImpl" >
+		</int:service-activator>
+		<int:transformer
+			ref="kycTransformer"
+			method="transformRequest" />
+	<int:service-activator id="KYC.RESEND" method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('KYC_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).KYC_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCProviderResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="kycTransformer"
+			method="transformResponse" />
+		<int:filter  discard-channel="REGISTRATION.KYC.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />	
+	</int:chain>
+	
+	 <int:chain input-channel="KYCRESEND.out.channel" output-channel="KYCRESEND.ACTIVITY.LOG">
+		<int:service-activator id="KYCRESEND.SAVE.EVENT.SERVICE"
+			method="createEventSerivceLog"
+			ref ="eventDBServiceImpl">
+		</int:service-activator>
+	<int:filter  discard-channel="REGISTRATION.KYC.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />	
+	</int:chain> 
+	
+	<int:chain id="kycRepeatcreateActivity" input-channel="KYCRESEND.ACTIVITY.LOG" output-channel="KYCRESEND.RESPONSE">
+		<int:service-activator id="kycResendActivityBuilder" ref="kycResendActivityBuilder"  method="buildActivityLogs" />
+	    <int:service-activator id="kycResendActivity"  method="createProfileActivity" >
+	    <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl" />
+	    </int:service-activator>
+	     <!--  Added new service activator to update KYC status for account and contact -->
+	    <int:service-activator id="KYCResendStatus" ref="newRegistrationDBServiceImpl" method="updateKYCStatus" >
+	    
+	    </int:service-activator> 
+	   <int:filter  discard-channel="REGISTRATION.KYC.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" /> 
+	</int:chain>
+	
+	<int:chain input-channel="KYCRESEND.RESPONSE" output-channel="nullChannel">
+	<int:service-activator id="KYCRESEND.RES" ref="kycResendResponse" method="process" />
+	<int:filter  discard-channel="REGISTRATION.KYC.RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain id="reg.kyc.resend.errorchain" input-channel="REGISTRATION.KYC.RESEND.ERROR.CHANNEL"
+		output-channel="nullChannel">
+	<int:service-activator id="reg.resend.kyc"
+			method="logError" ref="reg.kyc.resend.errorhandler">
+	</int:service-activator>
+	</int:chain>
+		
+	<!-- <bean id="kycResend" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.KycResendDBServiceImpl"/> -->
+	<!-- <bean
+		id="kycTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.reg.KYCTransformer" /> -->
+	<bean id="reg.kyc.resend.errorhandler" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.kyc.KycRepeatErrorHandler"/>	
+	<bean id="kycResendResponse" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.kyc.PrepareKycResendResponse"/>
+	<bean id="kycResendMessageValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.kyc.KycResendMessageValidator" />
+	<bean id="kycResendRegistratioDataEnricher" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.reg.RepeatCheckDataEnricher" />
+	<bean id="kycResendActivityBuilder" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.kyc.KYCRepeatCheckAtivityLogBuilder"/>
+	<bean id="newRegistrationDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl" />
+</beans>

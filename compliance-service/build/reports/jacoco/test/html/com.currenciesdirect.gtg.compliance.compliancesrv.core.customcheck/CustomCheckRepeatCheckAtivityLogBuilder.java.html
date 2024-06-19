@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CustomCheckRepeatCheckAtivityLogBuilder.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.customcheck</a> &gt; <span class="el_source">CustomCheckRepeatCheckAtivityLogBuilder.java</span></div><h1>CustomCheckRepeatCheckAtivityLogBuilder.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.customcheck;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.integration.annotation.ServiceActivator;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogData;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityTemplateEnum;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.CustomChecksRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.EntityDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.customchecks.response.CustomCheckResendResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class CustomCheckRepeatCheckAtivityLogBuilder.
+ */
+<span class="nc" id="L39">public class CustomCheckRepeatCheckAtivityLogBuilder {</span>
+	
+	
+	/**
+	 * Builds the activity logs for sanction repeat check and adds into message
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@ServiceActivator
+	public Message&lt;MessageContext&gt; buildActivityLogs(Message&lt;MessageContext&gt; message){
+		
+<span class="nc" id="L51">		UserProfile userProfile = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L52">		String userName = userProfile.getPreferredUserName();</span>
+		
+<span class="nc" id="L54">		MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+		
+<span class="nc" id="L56">		ServiceInterfaceType eventType = message.getPayload().getGatewayMessageExchange().getServiceInterface();</span>
+<span class="nc" id="L57">		OperationEnum operation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+<span class="nc" id="L58">		ActivityLogs activityLogs = null;</span>
+		String summary;
+<span class="nc" id="L60">		CustomCheckResendResponse resendResponse = new CustomCheckResendResponse();</span>
+<span class="nc bnc" id="L61" title="All 4 branches missed.">		if(ServiceInterfaceType.FUNDSOUT ==  eventType &amp;&amp; OperationEnum.CUSTOMCHECK_RESEND == operation){</span>
+<span class="nc" id="L62">			CustomChecksRequest serviceRequest = exchange.getRequest(CustomChecksRequest.class );</span>
+<span class="nc" id="L63">			FundsOutRequest fundsOutRequest = (FundsOutRequest)serviceRequest.getESDocument();</span>
+<span class="nc" id="L64">			EventServiceLog beneLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L65">				ServiceTypeEnum.CUSTOM_CHECKS_SERVICE, EntityEnum.BENEFICIARY.name(), </span>
+<span class="nc" id="L66">				fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L67">			List&lt;PaymentOutActivityLogDto&gt; activityLogDtos = getPaymentOutActivityLog(fundsOutRequest, userName, beneLog);</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">			if(!activityLogDtos.isEmpty()){</span>
+<span class="nc" id="L69">				activityLogs = getCCPaymentOutActivityLogsResponse(activityLogDtos);</span>
+			}
+<span class="nc" id="L71">			summary = beneLog.getSummary();</span>
+
+<span class="nc bnc" id="L73" title="All 2 branches missed.">			if(summary != null) {</span>
+<span class="nc" id="L74">				CustomCheckResponse customCheckSummary = JsonConverterUtil.convertToObject(CustomCheckResponse.class, summary);</span>
+<span class="nc" id="L75">				resendResponse.setResponse(customCheckSummary);</span>
+<span class="nc" id="L76">				resendResponse.setActivityLogs(activityLogs);</span>
+			}
+<span class="nc" id="L78">			resendResponse.addAttribute(&quot;paymentOutActivities&quot;, activityLogDtos);</span>
+<span class="nc" id="L79">			resendResponse.setActivityLogs(activityLogs);</span>
+<span class="nc" id="L80">			resendResponse.setEventServiceLogId(beneLog.getEventServiceLogId());</span>
+<span class="nc" id="L81">			resendResponse.setCheckedOn(beneLog.getCreatedOn().toString());</span>
+<span class="nc bnc" id="L82" title="All 4 branches missed.">		} else if(ServiceInterfaceType.FUNDSIN ==  eventType &amp;&amp; OperationEnum.CUSTOMCHECK_RESEND == operation){</span>
+<span class="nc" id="L83">			CustomChecksRequest serviceRequest = exchange.getRequest(CustomChecksRequest.class );</span>
+<span class="nc" id="L84">			FundsInCreateRequest fundsInRequest = (FundsInCreateRequest)serviceRequest.getESDocument();</span>
+<span class="nc" id="L85">			EventServiceLog debtorLog = exchange.getEventServiceLog(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE, </span>
+<span class="nc" id="L86">						EntityEnum.ACCOUNT.name(), fundsInRequest.getAccId());</span>
+<span class="nc" id="L87">			List&lt;PaymentInActivityLogDto&gt; activityLogDtos = getPaymentInActivityLog(fundsInRequest,userName,debtorLog);</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">			if( !activityLogDtos.isEmpty()){</span>
+<span class="nc" id="L89">				activityLogs = getPaymentInActivityLogsResponse(activityLogDtos);</span>
+			}
+<span class="nc" id="L91">			summary = debtorLog.getSummary(); </span>
+
+<span class="nc bnc" id="L93" title="All 2 branches missed.">			if(summary != null) {</span>
+<span class="nc" id="L94">				CustomCheckResponse customCheckSummary = JsonConverterUtil.convertToObject(CustomCheckResponse.class, summary);</span>
+<span class="nc" id="L95">				resendResponse.setResponse(customCheckSummary);</span>
+<span class="nc" id="L96">				resendResponse.setActivityLogs(activityLogs);</span>
+			}
+<span class="nc" id="L98">			resendResponse.addAttribute(&quot;paymentInActivities&quot;, activityLogDtos);</span>
+<span class="nc" id="L99">			resendResponse.setActivityLogs(activityLogs);</span>
+<span class="nc" id="L100">			resendResponse.setEventServiceLogId(debtorLog.getEventServiceLogId());</span>
+<span class="nc" id="L101">			resendResponse.setCheckedOn(debtorLog.getCreatedOn().toString());</span>
+		}
+		
+<span class="nc" id="L104">		message.getPayload().getGatewayMessageExchange().setResponse(resendResponse);</span>
+<span class="nc" id="L105">		return message;</span>
+	}
+	
+	
+	
+	private  List&lt;PaymentOutActivityLogDto&gt; getPaymentOutActivityLog(FundsOutRequest request,String userName,EventServiceLog log){
+		
+<span class="nc" id="L112">		List&lt;PaymentOutActivityLogDto&gt; activityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L113">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L114">			PaymentOutActivityLogDto ccPayOutActivityLog = new PaymentOutActivityLogDto();</span>
+<span class="nc" id="L115">			ccPayOutActivityLog.setPaymentOutId(request.getFundsOutId());</span>
+<span class="nc" id="L116">			ccPayOutActivityLog.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L117">			ccPayOutActivityLog.setActivityBy(userName);</span>
+<span class="nc" id="L118">			ccPayOutActivityLog.setCreatedBy(userName);</span>
+<span class="nc" id="L119">			ccPayOutActivityLog.setUpdatedBy(userName);</span>
+<span class="nc" id="L120">			ccPayOutActivityLog.setCreatedOn(timestamp);</span>
+<span class="nc" id="L121">			ccPayOutActivityLog.setTimeStatmp(timestamp);</span>
+<span class="nc" id="L122">			ccPayOutActivityLog.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L123">			PaymentOutActivityLogDetailDto ccPaymentOutActivityLogDetail = new PaymentOutActivityLogDetailDto();</span>
+<span class="nc" id="L124">			ccPayOutActivityLog.setActivityLogDetailDto(ccPaymentOutActivityLogDetail);</span>
+<span class="nc" id="L125">			ccPaymentOutActivityLogDetail.setActivityType(ActivityType.PAYMENT_OUT_CUSTOM_CHECK_RECHECK);</span>
+<span class="nc" id="L126">			ccPaymentOutActivityLogDetail.setLog(getPaymentOutCustomCheckLog(request,log));</span>
+<span class="nc" id="L127">			ccPaymentOutActivityLogDetail.setCreatedBy(userName);</span>
+<span class="nc" id="L128">			ccPaymentOutActivityLogDetail.setUpdatedBy(userName);</span>
+<span class="nc" id="L129">			ccPaymentOutActivityLogDetail.setCreatedOn(timestamp);</span>
+<span class="nc" id="L130">			ccPaymentOutActivityLogDetail.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L131">			activityLogDtos.add(ccPayOutActivityLog);</span>
+<span class="nc" id="L132">		return activityLogDtos;</span>
+	}
+	
+	
+	private ActivityLogs getCCPaymentOutActivityLogsResponse(List&lt;PaymentOutActivityLogDto&gt; ccPayOutActivityLog){
+<span class="nc" id="L137">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L138">		List&lt;ActivityLogData&gt; activityData = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">		for (PaymentOutActivityLogDto profileActivityLogDto : ccPayOutActivityLog) {</span>
+<span class="nc" id="L140">		    ActivityLogData ccPOutActivity = new ActivityLogData();</span>
+<span class="nc" id="L141">		    ccPOutActivity.setActivity(profileActivityLogDto.getActivityLogDetailDto().getLog());</span>
+<span class="nc" id="L142">			ccPOutActivity.setActivityType(ActivityType.PAYMENT_OUT_CUSTOM_CHECK_RECHECK.getModule() +&quot; &quot;+ActivityType.PAYMENT_OUT_CUSTOM_CHECK_RECHECK.getType());</span>
+<span class="nc" id="L143">			ccPOutActivity.setCreatedBy(profileActivityLogDto.getActivityBy());</span>
+<span class="nc" id="L144">			ccPOutActivity.setCreatedOn(profileActivityLogDto.getCreatedOn().toString());</span>
+<span class="nc" id="L145">			activityData.add(ccPOutActivity);</span>
+<span class="nc" id="L146">		}</span>
+<span class="nc" id="L147">		activityLogs.setActivityLogData(activityData);</span>
+<span class="nc" id="L148">		return activityLogs;</span>
+	}
+	
+	private String getPaymentOutCustomCheckLog(FundsOutRequest request, EventServiceLog log) {
+
+<span class="nc" id="L153">		EntityDetails entityDetails = (EntityDetails) request.getAdditionalAttribute(Constants.FIELD_ENTITY_DETAILS);</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">		if (null == entityDetails) {</span>
+<span class="nc" id="L155">			entityDetails = new EntityDetails();</span>
+		}
+<span class="nc" id="L157">		getDefaultEntityDetails(entityDetails);</span>
+<span class="nc" id="L158">		return ActivityTemplateEnum.RECHECK.getTemplate().replace(&quot;{RECHECK_SERVICE_NAME}&quot;, &quot;Custom check&quot;)</span>
+<span class="nc" id="L159">				.replace(&quot;{PRE_STATUS}&quot;, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L160">				.replace(&quot;{UPDATED_STATUS}&quot;, log.getStatus().toLowerCase())</span>
+<span class="nc" id="L161">				.replace(&quot;{ENTITY_NAME}&quot;, entityDetails.getBeneficiaryName());</span>
+
+	}
+	
+	private  List&lt;PaymentInActivityLogDto&gt; getPaymentInActivityLog(FundsInCreateRequest request,String userName,
+		EventServiceLog log){
+		
+<span class="nc" id="L168">		List&lt;PaymentInActivityLogDto&gt; activityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L169">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L170">			PaymentInActivityLogDto ccPaymentInActivityLog = new PaymentInActivityLogDto();</span>
+<span class="nc" id="L171">			ccPaymentInActivityLog.setPaymentInId(request.getFundsInId());</span>
+<span class="nc" id="L172">			ccPaymentInActivityLog.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L173">			ccPaymentInActivityLog.setActivityBy(userName);</span>
+<span class="nc" id="L174">			ccPaymentInActivityLog.setCreatedBy(userName);</span>
+<span class="nc" id="L175">			ccPaymentInActivityLog.setUpdatedBy(userName);</span>
+<span class="nc" id="L176">			ccPaymentInActivityLog.setCreatedOn(timestamp);</span>
+<span class="nc" id="L177">			ccPaymentInActivityLog.setTimeStatmp(timestamp);</span>
+<span class="nc" id="L178">			ccPaymentInActivityLog.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L179">			PaymentInActivityLogDetailDto ccPaymentInActivityLogDetailDto = new PaymentInActivityLogDetailDto();</span>
+<span class="nc" id="L180">			ccPaymentInActivityLog.setActivityLogDetailDto(ccPaymentInActivityLogDetailDto);</span>
+<span class="nc" id="L181">			ccPaymentInActivityLogDetailDto.setActivityType(ActivityType.PAYMENT_IN_CUSTOM_CHECK_RECHECK);</span>
+<span class="nc" id="L182">			ccPaymentInActivityLogDetailDto.setLog(getPaymentInCustomCheckLog(request,log));</span>
+<span class="nc" id="L183">			ccPaymentInActivityLogDetailDto.setCreatedBy(userName);</span>
+<span class="nc" id="L184">			ccPaymentInActivityLogDetailDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L185">			ccPaymentInActivityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L186">			ccPaymentInActivityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L187">			activityLogDtos.add(ccPaymentInActivityLog);</span>
+<span class="nc" id="L188">		return activityLogDtos;</span>
+	}
+	
+	
+	private ActivityLogs getPaymentInActivityLogsResponse(List&lt;PaymentInActivityLogDto&gt; ccPaymentInActivityLog){
+<span class="nc" id="L193">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L194">		List&lt;ActivityLogData&gt; activityData = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">		for (PaymentInActivityLogDto profileActivityLogDto : ccPaymentInActivityLog) {</span>
+<span class="nc" id="L196">		    ActivityLogData ccPInActivity = new ActivityLogData();</span>
+<span class="nc" id="L197">		    ccPInActivity.setActivity(profileActivityLogDto.getActivityLogDetailDto().getLog());</span>
+<span class="nc" id="L198">			ccPInActivity.setActivityType(ActivityType.PAYMENT_IN_CUSTOM_CHECK_RECHECK.getModule() +&quot; &quot;+ActivityType.PAYMENT_IN_CUSTOM_CHECK_RECHECK.getType());</span>
+<span class="nc" id="L199">			ccPInActivity.setCreatedBy(profileActivityLogDto.getActivityBy());</span>
+<span class="nc" id="L200">			ccPInActivity.setCreatedOn(profileActivityLogDto.getCreatedOn().toString());</span>
+<span class="nc" id="L201">			activityData.add(ccPInActivity);</span>
+<span class="nc" id="L202">		}</span>
+<span class="nc" id="L203">		activityLogs.setActivityLogData(activityData);</span>
+<span class="nc" id="L204">		return activityLogs;</span>
+	}
+	
+	private String getPaymentInCustomCheckLog(FundsInCreateRequest request, EventServiceLog log) {
+
+<span class="nc" id="L209">		EntityDetails entityDetails = (EntityDetails) request.getAdditionalAttribute(Constants.FIELD_ENTITY_DETAILS);</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">		if (null == entityDetails) {</span>
+<span class="nc" id="L211">			entityDetails = new EntityDetails();</span>
+		}
+<span class="nc" id="L213">		getDefaultEntityDetails(entityDetails);</span>
+
+<span class="nc" id="L215">		return ActivityTemplateEnum.RECHECK.getTemplate().replace(&quot;{RECHECK_SERVICE_NAME}&quot;, &quot;Custom check&quot;)</span>
+<span class="nc" id="L216">				.replace(&quot;{PRE_STATUS}&quot;, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L217">				.replace(&quot;{UPDATED_STATUS}&quot;, log.getStatus().toLowerCase())</span>
+<span class="nc" id="L218">				.replace(&quot;{ENTITY_NAME}&quot;, entityDetails.getAccountName());</span>
+	}
+	
+	/**
+	 * added to set default prev status to service failure when 
+	 * there is no entry in Event service log table for respective service
+	 */
+	private void getDefaultEntityDetails(EntityDetails entityDetails) {
+
+<span class="nc bnc" id="L227" title="All 4 branches missed.">		if (null == entityDetails.getPrevStatus() || entityDetails.getPrevStatus().isEmpty()) {</span>
+<span class="nc" id="L228">			entityDetails.setPrevStatus(Constants.SERVICE_FAILURE);</span>
+		}
+<span class="nc" id="L230">	}</span>
+	
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

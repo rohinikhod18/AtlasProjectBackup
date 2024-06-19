@@ -1,0 +1,151 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<int:channel id="FUNDSOUT.UPDATE_OPI.in.channel" />
+	<int:channel id="FUNDS_OUT.UPDATE.DATA_ENRICHMENT" />
+	<int:channel id="FUNDS_OUT.UPDATE.UPDATE_REQUEST" />
+	<int:channel id="FUNDS_OUT.UPDATE.TRANFROM.REQUESTS" />
+	<int:channel id="FUNDS_OUT.UPDATE.SPLITTER"/>
+		
+	<int:channel id="FUNDS_OUT.UPDATE.SERVICES.IN" >
+		<int:dispatcher task-executor="FUNDS_OUT.SPLITTER.channel.executor" />
+	</int:channel>
+	<int:channel id="FUNDS_OUT.UPDATE.SERVICES.OUT" />
+	<int:channel id="FUNDS_OUT.UPDATE.RULES.IN" />
+
+	<int:chain
+		id="fundsout.upd.initChain"
+		input-channel="FUNDSOUT.UPDATE_OPI.in.channel">
+		<int:header-enricher id="fundsout.upd.HeaderEnricher">
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+		</int:header-enricher>
+		<int:service-activator
+			ref="fundsout.MsgValidator"
+			id="fundsout.upd.Validator"
+			method="process" />
+		<int:router
+			id="fundsout.upd.postValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="FUNDS_OUT.UPDATE.DATA_ENRICHMENT">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDS_OUT.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDS_OUT.UPDATE.DATA_ENRICHMENT" />
+		</int:router>
+	</int:chain>
+
+	<int:chain
+		id="fundsout.upd.dataEnrichChain"
+		input-channel="FUNDS_OUT.UPDATE.DATA_ENRICHMENT">
+		<int:service-activator
+			id="fundsout.upd.dataEnrich"
+			ref="fundsout.dataEnricher"
+			method="enrichData" />
+		<int:service-activator
+			ref="fundsout.DataValidator"
+			id="fundsout.upd.DataValidation"
+			method="process" />	
+		<int:router
+			id="fundsout.upd.postDataValidation"
+			expression="payload.getValidationResult()"
+			default-output-channel="FUNDS_OUT.UPDATE.UPDATE_REQUEST">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDS_OUT.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDS_OUT.UPDATE.UPDATE_REQUEST" />
+		</int:router>
+	</int:chain>
+
+	<int:chain
+		id="fundsout.upd.dbChain"
+		input-channel="FUNDS_OUT.UPDATE.UPDATE_REQUEST"
+		output-channel="FUNDS_OUT.UPDATE.TRANFROM.REQUESTS">
+		<int:service-activator
+			id="fundsout.upd.saveRequest"
+			ref="fundsOutDBService"
+			method="saveFundsOutUpdateRequest" />
+		<int:service-activator
+			id="fundsout.upd.createEvent"
+			ref="eventDBServiceImpl"
+			method="createEvent" />	
+			<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+
+	<int:chain
+		id="fundsout.upd.transformations"
+		input-channel="FUNDS_OUT.UPDATE.TRANFROM.REQUESTS"
+		output-channel="FUNDS_OUT.UPDATE.RULES.IN">
+		<int:transformer
+			id="fundsout.upd.trans.customChecks"
+			ref="fundsout.customChecksTransformer"
+			method="transformRequest"
+		/>
+		<int:service-activator
+			id="fundsout.upd.CustomChecks"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('VELOCITY_PERFORM_CHECK')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).CUSTOM_CHECKS_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.CustomChecksRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse" />
+		</int:service-activator>
+		<int:transformer
+			id="fundsout.upd.customChecksTransformer"
+			ref="fundsout.customChecksTransformer"
+			method="transformResponse" />
+			<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	
+	<int:chain
+		id="fundsout.upd.RuleServiceChain"
+		input-channel="FUNDS_OUT.UPDATE.RULES.IN"
+		output-channel="FUNDS_OUT.RESPONSE">
+		<int:service-activator
+			id="fundsout.upd.SAVE.EVENT.SERVICE"
+			ref="eventDBServiceImpl"
+			method="createEventSerivceLog">
+		</int:service-activator>
+		<int:service-activator
+			id="fundsout.upd.Exec.Rules"
+			ref="fundsout.RulesService"
+			method="process">
+		</int:service-activator>
+		<int:service-activator
+			id="fundsout.upd.updateStatus"
+			ref="fundsOutDBService"
+			method="updatePaymentOutStatus" />
+		<int:service-activator id="fundsout.kafkaTxExecutor" ref="kafkaTxExecutorServiceImpl" method="executeKafkaTx" />
+			<int:filter  discard-channel="FUNDS_OUT.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+</beans>

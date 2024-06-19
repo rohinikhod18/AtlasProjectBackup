@@ -1,0 +1,126 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="FUNDSOUT.PAYMENT_REFERENCE_RESEND.in.channel"/>
+	<int:channel id="FUNDSOUT.PAYMENT_REFERENCE_RESEND.process"/>
+	<int:channel id="FUNDSOUT.PAYMENTREFERENCERESEND.out.channel"/>
+	<int:channel id="FUNDSOUT.PAYMENT.REFERENCE.RESEND.CHANNEL"/>
+	<int:channel id="FUNDSOUT.PAYMENTREFERENCERESEND.CREATE.EVENT"/>
+	<int:channel id="FUNDSOUT.PAYMENTREFERENCERESEND.REQUEST.SENDER"/>
+	<int:channel id="FUNDSOUT.PAYMENTREFERENCERESEND.RESPONSE"/>
+	<int:channel id="FUNDSOUT.PAYMENTREFERENCERESEND.ACTIVITY.LOG"/>
+	<int:channel id="FUNDSOUT.PAYMENT_REFERENCE_RESEND.ERROR.CHANNEL"/>
+	
+	<int:chain id="resendFundsOutPaymentReferenceService" 
+		input-channel="FUNDSOUT.PAYMENT_REFERENCE_RESEND.in.channel">
+		<int:service-activator 
+			ref="fundsout.MsgValidator"
+			method="validatePaymentReferenceResendReuqest" />	
+		<int:router
+			id="fundsoutPaymentReferenceResendValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDSOUT.PAYMENTREFERENCERESEND.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDSOUT.PAYMENT_REFERENCE_RESEND.process" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain id="fundsOutpaymentreferenceDataEnrich" input-channel="FUNDSOUT.PAYMENT_REFERENCE_RESEND.process" output-channel="FUNDSOUT.PAYMENTREFERENCERESEND.CREATE.EVENT">
+		<int:service-activator
+			id="FUNDSOUT.PaymentReferenceResend.ENRICH"
+			ref="fundsout.DataEnrich"
+			method="enrichDataForPaymentReferenceRecheck" />
+	</int:chain>
+	
+	<int:chain id="fundsOutpaymentReferenceEventCreater" input-channel="FUNDSOUT.PAYMENTREFERENCERESEND.CREATE.EVENT" output-channel="FUNDSOUT.PAYMENTREFERENCERESEND.REQUEST.SENDER">
+		<int:service-activator
+			id="fundsout.PAYMENTREFERENCERESEND.event"
+			method="createEvent" ref="eventDBServiceImpl">
+		</int:service-activator>
+	</int:chain>
+	
+		<int:chain id="fundsOutpaymentReferenceRequestSender" input-channel="FUNDSOUT.PAYMENTREFERENCERESEND.REQUEST.SENDER" output-channel="FUNDSOUT.PAYMENTREFERENCERESEND.out.channel">
+		<int:transformer
+			ref="fundsout.paymentReferenceTransformer"
+			method="transformPaymentReferenceResendRequest" />
+		<int:service-activator
+			id="fundsout.PAYMENTREFERENCE.RESEND"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('INTERNAL_RULE_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).INTERNAL_RULE_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.paymentReferenceTransformer"
+			method="transformPaymentReferenceResendResponse" />
+			<int:filter discard-channel="FUNDSOUT.PAYMENT_REFERENCE_RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	 <int:chain input-channel="FUNDSOUT.PAYMENTREFERENCERESEND.out.channel" output-channel="FUNDSOUT.PAYMENTREFERENCERESEND.ACTIVITY.LOG">
+		<int:service-activator id="fundsout.PAYMENTREFERENCERESEND.SAVE.EVENT.SERVICE"
+			method="createEventSerivceLog" ref= "eventDBServiceImpl">
+		</int:service-activator>
+		<int:filter  discard-channel="FUNDSOUT.PAYMENT_REFERENCE_RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain> 
+	
+	<int:chain id="fundsout.paymentReferenceRepeatcreateActivity" input-channel="FUNDSOUT.PAYMENTREFERENCERESEND.ACTIVITY.LOG" output-channel="FUNDSOUT.PAYMENTREFERENCERESEND.RESPONSE">
+		<int:service-activator id="fundsout.paymentReferenceResendActivityBuilder" ref="paymentReferenceResendActivityBuilder"  method="buildActivityLogs" />
+		<int:service-activator id="fundsout.paymentReferenceResendSetServiceStatus" ref="fundsOutDBService"  method="updateServiceStatusIntoPaymetOut" />	
+		<int:service-activator id="fundsout.paymentReferenceResendActivity"  method="createPaymentOutActivity" >
+	    <bean class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.ActivityDBServiceImpl" />
+	    </int:service-activator>
+		<int:service-activator id="fundsout.kafkaTxExecutor" ref="kafkaTxExecutorServiceImpl" method="executeKafkaTx" />		   
+	    <int:filter discard-channel="FUNDSOUT.PAYMENT_REFERENCE_RESEND.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+	
+	<int:chain input-channel="FUNDSOUT.PAYMENTREFERENCERESEND.RESPONSE" output-channel="nullChannel">
+	<int:service-activator id="fundsout.PAYMENTREFERENCERESEND.RES" ref="paymentReferenceResendResponse" method="process" />
+	<int:filter discard-channel="FUNDSOUT.PAYMENT_REFERENCE_RESEND.ERROR.CHANNEL"
+			expression="!payload.isFailed()" />
+	</int:chain>
+	
+	
+	<int:chain
+		id="fundsout.paymentReferenceResendErrorChain"
+		input-channel="FUNDSOUT.PAYMENT_REFERENCE_RESEND.ERROR.CHANNEL"
+		output-channel="nullChannel">
+		<int:service-activator 
+			id="fundsout.resend.paymentReference"
+			ref="paymentReference.resend.errorhandler"
+			method="logError" />	
+	</int:chain>
+	
+	<bean id="fundsout.MsgValidator" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.validator.fundsout.MessageValidator"/>
+	<bean id="paymentReferenceResendResponse" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist.PrepareBlacklistPayRefResendResponse"/>
+	<bean id="paymentReferenceResendActivityBuilder" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist.PaymentReferenceResendActivityLogBuilder"/>
+	<bean id="eventDBServiceImpl" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.EventDBServiceImpl"/>
+	<bean id="fundsout.DataEnrich" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.DataEnricher"/>	
+	<bean id="fundsout.paymentReferenceTransformer" class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.InternalRuleServiceTransformer"/>	
+	<bean id="fundsOutDBService" class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl"/>
+	<bean id="paymentReference.resend.errorhandler" class="com.currenciesdirect.gtg.compliance.compliancesrv.core.blacklist.BlacklistRepeatErrorHandler" />
+</beans>

@@ -1,0 +1,1943 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FundsInDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">FundsInDBServiceImpl.java</span></div><h1>FundsInDBServiceImpl.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.commons.collections.MultiHashMap;
+import org.apache.commons.collections.MultiMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.DeviceInfo;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FundsInFraugsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInBaseRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.response.FundsInDeleteResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FundsInBlacklistResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.FundsInSanctionResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResendResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateData;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringFundsProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentInResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsInRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.WatchList;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsin.FundsInComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.customchecks.response.CustomCheckResendResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsin.response.FundsInCreateResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class FundsInDBServiceImpl.
+ *
+ * @author manish
+ */
+@SuppressWarnings(&quot;squid:S2095&quot;)
+<span class="nc" id="L67">public class FundsInDBServiceImpl extends PaymentsAbstractDao {</span>
+	
+	/** The Constant LOG. */
+<span class="nc" id="L70">	private static final Logger LOG = LoggerFactory.getLogger(FundsInDBServiceImpl.class);</span>
+
+	private static final String BLACKLIST_STATUS = &quot;BlacklistStatus&quot;;
+	private static final String PI_COMPLIANCE_STATUS = &quot;PIComplianceStatus&quot;;
+	private static final String STATUS = &quot;status&quot;;
+	private static final String CONTACT_ID2 = &quot;ContactID&quot;;
+	private static final String ACCOUNTID = &quot;accountid&quot;;
+	private static final String FUNDSIN_ID = &quot;fundsinId&quot;;
+	private static final String PI_ATTRIB = &quot;PIAttrib&quot;;
+	private static final String EXCEPTION_IN_SAVE_FUNDS_IN_REQUEST = &quot;Exception in saveFundsInRequest()&quot;;
+	private static final String ACCOUNT = &quot;account&quot;;
+	private static final String REASONS_OF_WATCHLIST = &quot;reasonsOfWatchlist&quot;;
+	private static final String WATCHLISTID = &quot;watchlistid&quot;;
+	private static final String WATCHLISTREASONNAME = &quot;watchlistreasonname&quot;;
+	private static final String REQUEST_ORG_ID =&quot;requestOrgID&quot;;
+	private static final String ACATTRIB =&quot;acattrib&quot;;
+	private static final String ACCOUNTSTATUS =&quot;accountStatus&quot;;
+	private static final String CONTACT_ID= &quot;contactid&quot;;
+	private static final String CONTACTATTRIB=&quot;contactattrib&quot;;
+	private static final String CONTACT_STATUS =&quot;ContactStatus&quot;;
+	private static final String NUM_OF_FUNDS_IN_CLEAR =&quot;NumOfFundsInClear&quot;;
+	
+	/** The Constant CLIENT_RISK_LEVEL. */
+	private static final String CLIENT_RISK_LEVEL = &quot;ClientRiskLevel&quot;;
+	
+	/** The Constant FRAUGSTER_STATUS. */
+	private static final String FRAUGSTER_STATUS = &quot;FraugsterStatus&quot;;
+	
+	/** The Constant ACCOUNT_TM_FLAG. */
+	private static final String ACCOUNT_TM_FLAG = &quot;AccountTMFlag&quot;;
+	
+	/** The Constant TRADE_CONTACT_ID. */
+	private static final String TRADE_CONTACT_ID = &quot;TradeContactID&quot;;
+	
+	/** The Constant PAYMENT_IN_ID. */
+	private static final String PAYMENT_IN_ID = &quot;payInId&quot;;
+	
+	/**
+	 * Save funds in request.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MessageContext&gt; saveFundsInRequest(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L115">		Connection conn = null;</span>
+		try {
+<span class="nc" id="L117">			FundsInCreateRequest fundsInRequest = (FundsInCreateRequest) message.getPayload()</span>
+<span class="nc" id="L118">					.getGatewayMessageExchange().getRequest();</span>
+<span class="nc" id="L119">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L120">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L121">			beginTransaction(conn);</span>
+<span class="nc" id="L122">			Account accountID = (Account) fundsInRequest.getAdditionalAttribute(ACCOUNT);</span>
+<span class="nc" id="L123">			Contact contactID = (Contact) fundsInRequest.getAdditionalAttribute(&quot;contact&quot;);</span>
+<span class="nc" id="L124">			saveIntoPaymentsIn(conn, fundsInRequest, accountID.getId(), contactID.getId(), token.getUserID());</span>
+<span class="nc" id="L125">			saveIntoPaymentsInAttribute(conn, fundsInRequest, token.getUserID());</span>
+<span class="nc" id="L126">			commitTransaction(conn);</span>
+<span class="nc" id="L127">		} catch (Exception e) {</span>
+			try {
+<span class="nc" id="L129">				transactionRolledBack(conn);</span>
+<span class="nc" id="L130">			} catch (ComplianceException e1) {</span>
+<span class="nc" id="L131">				LOG.error(EXCEPTION_IN_SAVE_FUNDS_IN_REQUEST, e1);</span>
+<span class="nc" id="L132">			}</span>
+<span class="nc" id="L133">			LOG.error(EXCEPTION_IN_SAVE_FUNDS_IN_REQUEST, e);</span>
+<span class="nc" id="L134">			message.getPayload().setFailed(true);</span>
+		} finally {
+			try {
+<span class="nc" id="L137">				closeConnection(conn);</span>
+<span class="nc" id="L138">			} catch (ComplianceException e) {</span>
+<span class="nc" id="L139">				LOG.error(EXCEPTION_IN_SAVE_FUNDS_IN_REQUEST, e);</span>
+<span class="nc" id="L140">				message.getPayload().setFailed(true);</span>
+<span class="nc" id="L141">			}</span>
+		}
+<span class="nc" id="L143">		return message;</span>
+	}
+
+	/**
+	 * Save into payments in.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param fundsInRequest
+	 *            the funds in request
+	 * @param accountID
+	 *            the account ID
+	 * @param contactID
+	 *            the contact ID
+	 * @param userID
+	 *            the user ID
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void saveIntoPaymentsIn(Connection conn, FundsInCreateRequest fundsInRequest, Integer accountID,
+			Integer contactID, Integer userID) throws ComplianceException {
+<span class="nc" id="L164">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L165">		ResultSet rs = null;</span>
+		try {
+			/*
+			 * SELECT [ID], [OrganizationID], [AccountID], [ContactID],
+			 * [TradeContractNumber] , [TradePaymentID], [ComplianceStatus],
+			 * [ComplianceDoneOn] , [Deleted], [CreatedBy], [CreatedOn],
+			 * [UpdatedBy], [UpdatedOn] FROM [dbo].[PaymentIn] GO
+			 */
+<span class="nc" id="L173">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_INTO_PAYMENTS_IN.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L175">			preparedStatment.setString(1, fundsInRequest.getOrgCode());</span>
+<span class="nc" id="L176">			preparedStatment.setInt(2, accountID);</span>
+<span class="nc" id="L177">			preparedStatment.setInt(3, contactID);</span>
+<span class="nc" id="L178">			preparedStatment.setString(4, fundsInRequest.getTrade().getContractNumber());</span>
+<span class="nc" id="L179">			preparedStatment.setInt(5, fundsInRequest.getTrade().getPaymentFundsInId());// ???</span>
+<span class="nc" id="L180">			preparedStatment.setString(6, FundsInComplianceStatus.HOLD.name());</span>
+<span class="nc" id="L181">			preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L182">			preparedStatment.setBoolean(8, false);</span>
+<span class="nc" id="L183">			preparedStatment.setInt(9, userID);</span>
+<span class="nc" id="L184">			preparedStatment.setTimestamp(10, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L185">			preparedStatment.setInt(11, userID);</span>
+<span class="nc" id="L186">			preparedStatment.setTimestamp(12, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L187">			preparedStatment.setInt(13, ServiceStatus.getStatusAsInteger(ServiceStatus.NOT_REQUIRED.name()));</span>
+<span class="nc" id="L188">			preparedStatment.setInt(14, ServiceStatus.getStatusAsInteger(ServiceStatus.NOT_REQUIRED.name()));</span>
+<span class="nc" id="L189">			preparedStatment.setInt(15, ServiceStatus.getStatusAsInteger(ServiceStatus.NOT_REQUIRED.name()));</span>
+<span class="nc" id="L190">			preparedStatment.setInt(16, ServiceStatus.getStatusAsInteger(ServiceStatus.NOT_REQUIRED.name()));</span>
+<span class="nc" id="L191">			preparedStatment.setTimestamp(17,</span>
+<span class="nc" id="L192">					DateTimeFormatter.convertStringToTimestamp(fundsInRequest.getTrade().getPaymentTime()));</span>
+<span class="nc" id="L193">			preparedStatment.setBoolean(18, false);</span>
+			// set STPFlag
+<span class="nc" id="L195">			preparedStatment.setBoolean(19, false);</span>
+<span class="nc" id="L196">			preparedStatment.setString(20, fundsInRequest.getTrade().getCustLegalEntity());</span>
+<span class="nc" id="L197">			preparedStatment.setInt(21, ServiceStatus.getStatusAsInteger(ServiceStatus.NOT_REQUIRED.name()));</span>
+<span class="nc" id="L198">			preparedStatment.setInt(22, ServiceStatus.getStatusAsInteger(ServiceStatus.NOT_REQUIRED.name()));//Add for TM status</span>
+<span class="nc" id="L199">			preparedStatment.execute();</span>
+<span class="nc" id="L200">			rs = preparedStatment.getGeneratedKeys();</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L202">				fundsInRequest.setFundsInId(rs.getInt(1));</span>
+			}
+
+<span class="nc" id="L205">		} catch (Exception e) {</span>
+<span class="nc" id="L206">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L208">			closeResultset(rs);</span>
+<span class="nc" id="L209">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L211">	}</span>
+
+	/**
+	 * Save into payments in attribute.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param fundsInRequest
+	 *            the funds in request
+	 * @param userID
+	 *            the user ID
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void saveIntoPaymentsInAttribute(Connection conn, FundsInCreateRequest fundsInRequest, Integer userID)
+			throws ComplianceException {
+<span class="nc" id="L227">		PreparedStatement preparedStatment = null;</span>
+		try {
+			/*
+			 * [ID], [Version], [TransactionDate], [TransactionCurrency],
+			 * [TransactionAmount] , [BaseCurrencyAmount], [PaymentMethod],
+			 * [CountryOfPayment], [ThirdPartyPayment], [DebitorName],
+			 * [Attributes], [CreatedBy], [CreatedOn], [UpdatedBy], [UpdatedOn]
+			 */
+<span class="nc" id="L235">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_INTO_PAYMENTS_IN_ATTRIBUTE.getQuery());</span>
+<span class="nc" id="L236">			preparedStatment.setInt(1, fundsInRequest.getFundsInId());</span>
+<span class="nc" id="L237">			preparedStatment.setInt(2, 1);</span>
+<span class="nc" id="L238">			preparedStatment.setString(3, JsonConverterUtil.convertToJsonWithoutNull(fundsInRequest));</span>
+<span class="nc" id="L239">			preparedStatment.setInt(4, userID);</span>
+<span class="nc" id="L240">			preparedStatment.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L241">			preparedStatment.setInt(6, userID);</span>
+<span class="nc" id="L242">			preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L243">			preparedStatment.execute();</span>
+
+<span class="nc" id="L245">		} catch (Exception e) {</span>
+<span class="nc" id="L246">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L248">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L250">	}</span>
+
+	/**
+	 * Update payment in status.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; updatePaymentInStatus(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L262">		Connection conn = null;</span>
+		try {
+<span class="nc" id="L264">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L265">			ServiceInterfaceType serviceInterfaceType = exchange.getServiceInterface();</span>
+<span class="nc" id="L266">			OperationEnum operation = exchange.getOperation();</span>
+<span class="nc bnc" id="L267" title="All 4 branches missed.">			boolean newFundsIn = (serviceInterfaceType == ServiceInterfaceType.FUNDSIN &amp;&amp; operation == OperationEnum.FUNDS_IN); </span>
+			
+<span class="nc" id="L269">			CustomCheckResponse ccResponse = (CustomCheckResponse) message.getPayload().getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE).getResponse();</span>
+			
+<span class="nc" id="L271">			FundsInBaseRequest fRequest = (FundsInBaseRequest) exchange.getRequest();</span>
+<span class="nc" id="L272">			FundsInCreateResponse fundsInCreateResponse = (FundsInCreateResponse) message.getPayload()</span>
+<span class="nc" id="L273">					.getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L274">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L275">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc bnc" id="L276" title="All 2 branches missed.">			if (newFundsIn) {</span>
+<span class="nc" id="L277">				TransactionMonitoringPaymentInResponse tmResponse = (TransactionMonitoringPaymentInResponse) message</span>
+<span class="nc" id="L278">						.getPayload().getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE).getResponse();</span>
+<span class="nc" id="L279">				TransactionMonitoringFundsProviderResponse tmProviderResponse = tmResponse</span>
+<span class="nc" id="L280">						.getTransactionMonitoringFundsProviderResponse();</span>
+				
+<span class="nc bnc" id="L282" title="All 4 branches missed.">				if (tmProviderResponse != null &amp;&amp; tmProviderResponse.getClientRiskLevel() != null) { //Add for AT-4961</span>
+<span class="nc" id="L283">					fundsInCreateResponse.addAttribute(CLIENT_RISK_LEVEL, tmProviderResponse.getClientRiskLevel());</span>
+				}
+			}
+<span class="nc" id="L286">			getContactWatchlist(conn, fRequest.getFundsInId(), fundsInCreateResponse);//Add for AT-3470</span>
+<span class="nc" id="L287">			updateStatusIntoPaymetIn(conn, fundsInCreateResponse, fRequest.getFundsInId(), token.getUserID(),newFundsIn);</span>
+<span class="nc" id="L288">			updateIntoPaymentInStatusReason(conn, fundsInCreateResponse, fRequest.getFundsInId(), token.getUserID());</span>
+<span class="nc" id="L289">			updateEDDStatusInAccount(conn, fundsInCreateResponse,ccResponse);</span>
+<span class="nc" id="L290">		} catch (Exception e) {</span>
+<span class="nc" id="L291">			LOG.error(&quot;Exception in updatePaymentInstatus()&quot;, e);</span>
+<span class="nc" id="L292">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L294">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L296">		return message;</span>
+	}
+	
+	/**
+	 * Gets the contact watchlist.
+	 *
+	 * @param conn the conn
+	 * @param id the id
+	 * @param fundsInCreateResponse the funds in create response
+	 * @return the contact watchlist
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void getContactWatchlist(Connection conn, Integer id, FundsInCreateResponse fundsInCreateResponse) throws ComplianceException {
+<span class="nc" id="L309">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L310">		ResultSet rs = null;</span>
+		
+<span class="nc" id="L312">		StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L313">		DecimalFormat df = new DecimalFormat(&quot;000&quot;);</span>
+		
+		try {
+			
+<span class="nc" id="L317">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_CONTACT_WATCHLIST_FUNDS_IN.getQuery());</span>
+<span class="nc" id="L318">			preparedStatment.setInt(1, id);</span>
+<span class="nc" id="L319">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L320" title="All 2 branches missed.">			while(rs.next()) {</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">				if (sb.length() &gt; 0) {</span>
+<span class="nc" id="L322">					sb.append(&quot;, &quot;);</span>
+				}
+<span class="nc" id="L324">				String watchListReason=rs.getString(&quot;Reason&quot;);</span>
+<span class="nc bnc" id="L325" title="All 4 branches missed.">				if(!WatchList.E_TAILER_CLIENT_VAT_REQUIRED.getDescription().equals(watchListReason) &amp;&amp; !WatchList.E_TAILER_CLIENT_DOCUMENTATIONREQUIRED.getDescription().equals(watchListReason))</span>
+				{
+<span class="nc bnc" id="L327" title="All 4 branches missed.">					if(rs.getInt(&quot;StopPaymentIn&quot;) == 1 &amp;&amp; fundsInCreateResponse.getStatus().equals(FundsInComplianceStatus.HOLD.name())) {</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">						if(fundsInCreateResponse.getShortResponseCode().contains(&quot;NSTP&quot;)) {</span>
+<span class="nc" id="L329">							sb.append(&quot;WR&quot;).append(df.format(rs.getInt(&quot;ID&quot;)));</span>
+						}else {
+<span class="nc" id="L331">							fundsInCreateResponse.setShortResponseCode(&quot;NSTP&quot;);</span>
+<span class="nc" id="L332">							sb.append(&quot;WR&quot;).append(df.format(rs.getInt(&quot;ID&quot;)));</span>
+						}
+					}else {
+<span class="nc" id="L335">							sb.append(&quot;WA&quot;).append(df.format(rs.getInt(&quot;ID&quot;)));</span>
+						}
+				}
+<span class="nc bnc" id="L338" title="All 2 branches missed.">				else if(WatchList.E_TAILER_CLIENT_DOCUMENTATIONREQUIRED.getDescription().equals(watchListReason)) {</span>
+<span class="nc" id="L339">					getShortCodeForDocRequiredWL(fundsInCreateResponse, rs, sb, df);</span>
+				}
+<span class="nc bnc" id="L341" title="All 2 branches missed.">				else if(WatchList.E_TAILER_CLIENT_VAT_REQUIRED.getDescription().equals(watchListReason)) {</span>
+<span class="nc" id="L342">					getShortCodeForVatRequiredWL(fundsInCreateResponse, rs, sb, df);</span>
+				}
+<span class="nc" id="L344">			}	</span>
+<span class="nc bnc" id="L345" title="All 2 branches missed.">			if(sb.length() != 0) {</span>
+<span class="nc" id="L346">				String watch = fundsInCreateResponse.getShortResponseCode().concat(&quot;;&quot;).concat(sb.toString());</span>
+<span class="nc" id="L347">				fundsInCreateResponse.setShortResponseCode(watch);</span>
+			}
+			
+<span class="nc" id="L350">		} catch (Exception e) {</span>
+<span class="nc" id="L351">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L353">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L354">			closeResultset(rs);</span>
+		}
+<span class="nc" id="L356">	}</span>
+	
+	private void getShortCodeForDocRequiredWL(FundsInCreateResponse fundsInCreateResponse, ResultSet rs,
+			StringBuilder sb, DecimalFormat df) throws SQLException {
+<span class="nc bnc" id="L360" title="All 2 branches missed.">		if (Boolean.TRUE.equals(fundsInCreateResponse.getDocRequiredWL())) {</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">			if (fundsInCreateResponse.getShortResponseCode().contains(&quot;NSTP&quot;)) {</span>
+<span class="nc" id="L362">				sb.append(&quot;WR&quot;).append(df.format(rs.getInt(&quot;ID&quot;)));</span>
+			} else {
+<span class="nc" id="L364">				fundsInCreateResponse.setShortResponseCode(&quot;NSTP&quot;);</span>
+<span class="nc" id="L365">				sb.append(&quot;WR&quot;).append(df.format(rs.getInt(&quot;ID&quot;)));</span>
+			}
+		} else {
+<span class="nc" id="L368">			sb.append(&quot;WA&quot;).append(df.format(rs.getInt(&quot;ID&quot;)));</span>
+		}
+<span class="nc" id="L370">	}</span>
+	
+	private void getShortCodeForVatRequiredWL(FundsInCreateResponse fundsInCreateResponse, ResultSet rs,
+			StringBuilder sb, DecimalFormat df) throws SQLException {
+<span class="nc bnc" id="L374" title="All 2 branches missed.">		if (Boolean.TRUE.equals(fundsInCreateResponse.getVatRequiredWL())) {</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">			if (fundsInCreateResponse.getShortResponseCode().contains(&quot;NSTP&quot;)) {</span>
+<span class="nc" id="L376">				sb.append(&quot;WR&quot;).append(df.format(rs.getInt(&quot;ID&quot;)));</span>
+			} else {
+<span class="nc" id="L378">				fundsInCreateResponse.setShortResponseCode(&quot;NSTP&quot;);</span>
+<span class="nc" id="L379">				sb.append(&quot;WR&quot;).append(df.format(rs.getInt(&quot;ID&quot;)));</span>
+			}
+		} else {
+<span class="nc" id="L382">			sb.append(&quot;WA&quot;).append(df.format(rs.getInt(&quot;ID&quot;)));</span>
+		}
+<span class="nc" id="L384">	}</span>
+
+	/**
+	 * Update status into paymet in.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param fundsInCreateResponse
+	 *            the funds in create response
+	 * @param id
+	 *            the id
+	 * @param userID
+	 *            the user ID
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void updateStatusIntoPaymetIn(Connection conn, FundsInCreateResponse fundsInCreateResponse, Integer id,
+			Integer userID, boolean newFundsIn) throws ComplianceException {
+<span class="nc" id="L402">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L403">		Boolean paymentInStatusHold = Boolean.FALSE;</span>
+		try {
+<span class="nc" id="L405">			paymentInStatusHold = fundsInCreateResponse.getStatus().equals(FundsInComplianceStatus.HOLD.name());</span>
+<span class="nc bnc" id="L406" title="All 2 branches missed.">			if(newFundsIn) {</span>
+<span class="nc" id="L407">				preparedStatment = conn.prepareStatement(DBQueryConstant.UPDATE_FUNDS_IN_STATUS.getQuery());</span>
+<span class="nc" id="L408">				preparedStatment.setString(1, fundsInCreateResponse.getStatus());</span>
+<span class="nc" id="L409">				preparedStatment.setInt(2,ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getFraugsterCheckStatus()));</span>
+<span class="nc" id="L410">				preparedStatment.setInt(3,ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getSanctionCheckStatus()));</span>
+<span class="nc" id="L411">				preparedStatment.setInt(4,ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getBlacklistCheckStatus()));</span>
+<span class="nc" id="L412">				preparedStatment.setInt(5, ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getCustomCheckStatus()));</span>
+<span class="nc" id="L413">				preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L414">				preparedStatment.setInt(7, userID);</span>
+<span class="nc" id="L415">				preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L416">				preparedStatment.setBoolean(9, paymentInStatusHold);</span>
+<span class="nc" id="L417">				preparedStatment.setBoolean(10, fundsInCreateResponse.getSTPFlag());// set STP Flag</span>
+<span class="nc" id="L418">				preparedStatment.setString(11, fundsInCreateResponse.getShortResponseCode());//Add for AT-3470</span>
+<span class="nc" id="L419">				preparedStatment.setInt(12, ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getDebitCardFraudCheckStatus()));</span>
+<span class="nc" id="L420">				preparedStatment.setString(13,</span>
+<span class="nc bnc" id="L421" title="All 2 branches missed.">						fundsInCreateResponse.getAdditionalAttribute(CLIENT_RISK_LEVEL) != null</span>
+<span class="nc" id="L422">								? (String) fundsInCreateResponse.getAdditionalAttribute(CLIENT_RISK_LEVEL)</span>
+								: null); //AT-4451
+<span class="nc" id="L424">				preparedStatment.setInt(14, ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getIntuitionCheckStatus()));</span>
+<span class="nc" id="L425">				preparedStatment.setInt(15, id);</span>
+<span class="nc" id="L426">				preparedStatment.execute();</span>
+			}else {
+<span class="nc" id="L428">				preparedStatment = conn.prepareStatement(DBQueryConstant.UPDATE_FUNDS_IN_STATUS_WITHOUT_INITITAL_STATUS.getQuery());</span>
+<span class="nc" id="L429">				preparedStatment.setString(1, fundsInCreateResponse.getStatus());</span>
+<span class="nc" id="L430">				preparedStatment.setInt(2,ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getFraugsterCheckStatus()));</span>
+<span class="nc" id="L431">				preparedStatment.setInt(3,ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getSanctionCheckStatus()));</span>
+<span class="nc" id="L432">				preparedStatment.setInt(4,ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getBlacklistCheckStatus()));</span>
+<span class="nc" id="L433">				preparedStatment.setInt(5, ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getCustomCheckStatus()));</span>
+<span class="nc" id="L434">				preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L435">				preparedStatment.setInt(7, userID);</span>
+<span class="nc" id="L436">				preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L437">				preparedStatment.setBoolean(9, paymentInStatusHold);</span>
+<span class="nc" id="L438">				preparedStatment.setBoolean(10, fundsInCreateResponse.getSTPFlag());// set STP Flag</span>
+<span class="nc" id="L439">				preparedStatment.setInt(11, ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getDebitCardFraudCheckStatus()));</span>
+<span class="nc" id="L440">				preparedStatment.setInt(12, ServiceStatus.getStatusAsInteger(fundsInCreateResponse.getIntuitionCheckStatus()));</span>
+<span class="nc" id="L441">				preparedStatment.setInt(13, id);</span>
+<span class="nc" id="L442">				preparedStatment.execute();</span>
+			}
+		
+<span class="nc" id="L445">		} catch (Exception e) {</span>
+<span class="nc" id="L446">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L448">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L450">	}</span>
+
+	/**
+	 * Update into payment in status reason.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param fundsInCreateResponse
+	 *            the funds in create response
+	 * @param id
+	 *            the id
+	 * @param userID
+	 *            the user ID
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void updateIntoPaymentInStatusReason(Connection conn, FundsInCreateResponse fundsInCreateResponse,
+			Integer id, Integer userID) throws ComplianceException {
+<span class="nc" id="L468">		PreparedStatement preparedStatment = null;</span>
+		try {
+			// [PaymentOutID], [StatusUpdateReasonID], [CreatedBy], [CreatedOn],
+			// [UpdatedBy], [UpdatedOn]
+<span class="nc bnc" id="L472" title="All 2 branches missed.">			if (null != fundsInCreateResponse.getResponseReason().getReasonShort()) {</span>
+<span class="nc" id="L473">				preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_INTO_FUNDS_IN_STATUS_REASON.getQuery());</span>
+<span class="nc" id="L474">				preparedStatment.setInt(1, id);</span>
+<span class="nc" id="L475">				preparedStatment.setString(2, &quot;ALL&quot;);</span>
+<span class="nc" id="L476">				preparedStatment.setString(3, fundsInCreateResponse.getResponseReason().getReasonShort());</span>
+<span class="nc" id="L477">				preparedStatment.setInt(4, userID);</span>
+<span class="nc" id="L478">				preparedStatment.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L479">				preparedStatment.setInt(6, userID);</span>
+<span class="nc" id="L480">				preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L481">				preparedStatment.execute();</span>
+			}
+<span class="nc" id="L483">		} catch (Exception e) {</span>
+<span class="nc" id="L484">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L486">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L488">	}</span>
+
+	/**
+	 * Does funds in exists.
+	 *
+	 * @param paymentFundsInId
+	 *            the payment funds in id
+	 * @return the integer
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Integer doesFundsInExists(Integer paymentFundsInId) throws ComplianceException {
+<span class="nc" id="L500">		Connection conn = null;</span>
+<span class="nc" id="L501">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L502">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L504">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L505">			preparedStatment = conn.prepareStatement(DBQueryConstant.DOES_FUNDS_IN_EXIST.getQuery());</span>
+<span class="nc" id="L506">			preparedStatment.setInt(1, paymentFundsInId);</span>
+
+<span class="nc" id="L508">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L509" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L510">				return rs.getInt(1);</span>
+			}
+
+<span class="nc" id="L513">			closeResultset(rs);</span>
+<span class="nc" id="L514">		} catch (Exception e) {</span>
+<span class="nc" id="L515">			LOG.error(&quot;Error in doesFundsIN exists&quot;, e);</span>
+		} finally {
+<span class="nc" id="L517">			closeResultset(rs);</span>
+<span class="nc" id="L518">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L519">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L521">		return null;</span>
+	}
+
+	/**
+	 * Following method calls two function which returns whether for given
+	 * tradeaccount number &amp; organizzation account &amp; contact is present and
+	 * whether for given organization fundsIn id is present.
+	 *
+	 * @param fundsInBaseRequest
+	 *            the funds in base request
+	 * @return the funds in details
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public FundsInCreateRequest getFundsInDetails(FundsInBaseRequest fundsInBaseRequest) throws ComplianceException {
+<span class="nc" id="L536">		Connection conn = null;</span>
+<span class="nc" id="L537">		FundsInCreateRequest details = new FundsInCreateRequest();</span>
+		try {
+<span class="nc" id="L539">			conn = getConnection(Boolean.TRUE);</span>
+
+<span class="nc bnc" id="L541" title="All 2 branches missed.">			if (fundsInBaseRequest instanceof FundsInSanctionResendRequest) {</span>
+<span class="nc" id="L542">				FundsInSanctionResendRequest resendRequest = (FundsInSanctionResendRequest) fundsInBaseRequest;</span>
+<span class="nc" id="L543">				details = getExistingFundsInId(conn, fundsInBaseRequest.getOrgCode(),</span>
+<span class="nc" id="L544">						resendRequest.getTradePaymentId());</span>
+<span class="nc" id="L545">			} else {</span>
+<span class="nc" id="L546">				details = getExistingFundsInIdForFraugster(conn, fundsInBaseRequest.getOrgCode(),</span>
+<span class="nc" id="L547">						fundsInBaseRequest.getPaymentFundsInId());</span>
+			}
+
+<span class="nc" id="L550">			getFundsInContactAccountDetails(details, conn, fundsInBaseRequest.getTradeAccountNumber(),</span>
+<span class="nc" id="L551">					fundsInBaseRequest.getOrgCode());</span>
+<span class="nc" id="L552">		} catch (Exception e) {</span>
+<span class="nc" id="L553">			LOG.error(&quot;&quot;, e);</span>
+		} finally {
+<span class="nc" id="L555">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L557">		return details;</span>
+	}
+
+	/**
+	 * Following method calls two function which returns whether for given trade
+	 * account number &amp; organizzation account &amp; contact is present and whether
+	 * for given organization fundsIn id is present.
+	 *
+	 * @param fundsInBaseRequest
+	 *            the funds in base request
+	 * @return the funds in details
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public FundsInCreateRequest getFundsInDetailsForBlacklistRecheck(FundsInBaseRequest fundsInBaseRequest)
+			throws ComplianceException {
+<span class="nc" id="L573">		Connection conn = null;</span>
+<span class="nc" id="L574">		FundsInCreateRequest details = new FundsInCreateRequest();</span>
+		try {
+<span class="nc" id="L576">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L577">			details = getExistingFundsInIdForBlacklistRecheck(conn, fundsInBaseRequest.getOrgCode(),</span>
+<span class="nc" id="L578">					fundsInBaseRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L579">			getFundsInContactAccountDetailsForBlacklistRecheck(details, conn,</span>
+<span class="nc" id="L580">					fundsInBaseRequest.getTradeAccountNumber(), fundsInBaseRequest.getOrgCode());</span>
+
+<span class="nc" id="L582">		} catch (Exception e) {</span>
+<span class="nc" id="L583">			LOG.error(&quot;&quot;, e);</span>
+		} finally {
+<span class="nc" id="L585">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L587">		return details;</span>
+	}
+
+	private FundsInCreateRequest getExistingFundsInIdForBlacklistRecheck(Connection conn, String orgCode,
+			Integer fundsInId) throws ComplianceException {
+
+<span class="nc" id="L593">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L594">		ResultSet rs = null;</span>
+<span class="nc" id="L595">		FundsInCreateRequest details = new FundsInCreateRequest();</span>
+		try {
+<span class="nc" id="L597">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_FUNDS_IN_ID_FOR_BLACKLIST.getQuery());</span>
+<span class="nc" id="L598">			preparedStatment.setInt(1, fundsInId);</span>
+<span class="nc" id="L599">			preparedStatment.setString(2, orgCode);</span>
+<span class="nc" id="L600">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L601" title="All 2 branches missed.">			while (rs.next()) {</span>
+
+<span class="nc" id="L603">				String json = rs.getString(PI_ATTRIB);</span>
+<span class="nc bnc" id="L604" title="All 2 branches missed.">				if (null != json) {</span>
+<span class="nc" id="L605">					details = JsonConverterUtil.convertToObject(FundsInCreateRequest.class, rs.getString(PI_ATTRIB));</span>
+				}
+<span class="nc" id="L607">				details.setFundsInId(rs.getInt(FUNDSIN_ID));</span>
+<span class="nc" id="L608">				details.setAccId(rs.getInt(ACCOUNTID));</span>
+<span class="nc" id="L609">				details.setContactId(rs.getInt(CONTACT_ID2));</span>
+<span class="nc" id="L610">				details.addAttribute(STATUS, rs.getString(PI_COMPLIANCE_STATUS));</span>
+<span class="nc" id="L611">				details.addAttribute(Constants.BLACKLIST_STATUS,</span>
+<span class="nc" id="L612">						ServiceStatus.getStatusAsString(rs.getInt(BLACKLIST_STATUS)));</span>
+
+<span class="nc" id="L614">			}</span>
+<span class="nc" id="L615">		} catch (Exception e) {</span>
+<span class="nc" id="L616">			LOG.error(&quot;&quot;, e);</span>
+		} finally {
+<span class="nc" id="L618">			closeResultset(rs);</span>
+<span class="nc" id="L619">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L621">		return details;</span>
+	}
+
+	private void getFundsInContactAccountDetailsForBlacklistRecheck(FundsInCreateRequest request, Connection conn,
+			String tradeAccountNumber, String orgCode) throws ComplianceException {
+<span class="nc" id="L626">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L627">		ResultSet rs = null;</span>
+
+		try {
+<span class="nc" id="L630">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_FUNDS_IN_ACCOUNT_CONTACT_DETAILS.getQuery());</span>
+<span class="nc" id="L631">			preparedStatment.setString(1, orgCode);</span>
+<span class="nc" id="L632">			preparedStatment.setString(2, tradeAccountNumber);</span>
+<span class="nc" id="L633">			preparedStatment.setString(3, orgCode);</span>
+<span class="nc" id="L634">			rs = preparedStatment.executeQuery();</span>
+<span class="nc" id="L635">			List&lt;Contact&gt; contacts = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L636">			Integer count = 1;</span>
+<span class="nc bnc" id="L637" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L638" title="All 2 branches missed.">				if (count == 1) {</span>
+<span class="nc" id="L639">					request.setOrgId(rs.getInt(REQUEST_ORG_ID));</span>
+<span class="nc" id="L640">					Account acc = JsonConverterUtil.convertToObject(Account.class, rs.getString(ACATTRIB));</span>
+<span class="nc" id="L641">					acc.setId(rs.getInt(ACCOUNTID));</span>
+<span class="nc" id="L642">					acc.setAccountStatus(rs.getString(ACCOUNTSTATUS));</span>
+<span class="nc" id="L643">					request.setAccId(acc.getId());</span>
+<span class="nc" id="L644">					request.addAttribute(ACCOUNT, acc);</span>
+<span class="nc" id="L645">					request.addAttribute(Constants.FIELD_NO_OF_CONTACT, rs.getInt(&quot;contacts&quot;));</span>
+				}
+<span class="nc" id="L647">				Contact con = JsonConverterUtil.convertToObject(Contact.class, rs.getString(CONTACTATTRIB));</span>
+<span class="nc" id="L648">				con.setId(rs.getInt(CONTACT_ID));</span>
+<span class="nc" id="L649">				con.setContactStatus(rs.getString(CONTACT_STATUS));</span>
+<span class="nc" id="L650">				request.setContactId(con.getId());</span>
+<span class="nc" id="L651">				contacts.add(con);</span>
+<span class="nc" id="L652">				count++;</span>
+<span class="nc" id="L653">			}</span>
+<span class="nc" id="L654">			request.addAttribute(Constants.FIELD_OLD_CONTACTS, contacts);</span>
+<span class="nc" id="L655">		} catch (Exception e) {</span>
+<span class="nc" id="L656">			LOG.error(&quot; &quot;, e);</span>
+		} finally {
+<span class="nc" id="L658">			closeResultset(rs);</span>
+<span class="nc" id="L659">			closePrepareStatement(preparedStatment);</span>
+		}
+
+<span class="nc" id="L662">	}</span>
+
+	/**
+	 * Gets the existing funds in id.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param orgCode
+	 *            the org code
+	 * @param fundsInId
+	 *            the funds in id
+	 * @return the existing funds in id
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private FundsInCreateRequest getExistingFundsInIdForFraugster(Connection conn, String orgCode, Integer fundsInId)
+			throws ComplianceException {
+
+<span class="nc" id="L680">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L681">		ResultSet rs = null;</span>
+<span class="nc" id="L682">		FundsInCreateRequest details = new FundsInCreateRequest();</span>
+		try {
+<span class="nc" id="L684">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_FUNDS_IN_ID_FOR_FRAUGSTER.getQuery());</span>
+<span class="nc" id="L685">			preparedStatment.setInt(1, fundsInId);</span>
+<span class="nc" id="L686">			preparedStatment.setString(2, orgCode);</span>
+<span class="nc" id="L687">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L688" title="All 2 branches missed.">			while (rs.next()) {</span>
+
+<span class="nc" id="L690">				String json = rs.getString(PI_ATTRIB);</span>
+<span class="nc bnc" id="L691" title="All 2 branches missed.">				if (null != json) {</span>
+<span class="nc" id="L692">					details = JsonConverterUtil.convertToObject(FundsInCreateRequest.class, rs.getString(PI_ATTRIB));</span>
+				}
+<span class="nc" id="L694">				details.setFundsInId(rs.getInt(FUNDSIN_ID));</span>
+<span class="nc" id="L695">				details.setAccId(rs.getInt(ACCOUNTID));</span>
+<span class="nc" id="L696">				details.setContactId(rs.getInt(CONTACT_ID2));</span>
+<span class="nc" id="L697">				details.setDeviceInfo(createDeviceInfoObject(rs));</span>
+<span class="nc" id="L698">				details.addAttribute(STATUS, rs.getString(PI_COMPLIANCE_STATUS));</span>
+<span class="nc" id="L699">				details.addAttribute(Constants.FRAUGSTER_STATUS,</span>
+<span class="nc" id="L700">						ServiceStatus.getStatusAsString(rs.getInt(FRAUGSTER_STATUS)));</span>
+
+<span class="nc" id="L702">			}</span>
+<span class="nc" id="L703">		} catch (Exception e) {</span>
+<span class="nc" id="L704">			LOG.error(&quot;&quot;, e);</span>
+		} finally {
+<span class="nc" id="L706">			closeResultset(rs);</span>
+<span class="nc" id="L707">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L709">		return details;</span>
+	}
+
+	private FundsInCreateRequest getExistingFundsInId(Connection conn, String orgCode, Integer fundsInId)
+			throws ComplianceException {
+
+<span class="nc" id="L715">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L716">		ResultSet rs = null;</span>
+<span class="nc" id="L717">		FundsInCreateRequest details = new FundsInCreateRequest();</span>
+		try {
+<span class="nc" id="L719">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_FUNDS_IN_ID.getQuery());</span>
+<span class="nc" id="L720">			preparedStatment.setInt(1, fundsInId);</span>
+<span class="nc" id="L721">			preparedStatment.setString(2, orgCode);</span>
+<span class="nc" id="L722">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L723" title="All 2 branches missed.">			while (rs.next()) {</span>
+
+<span class="nc" id="L725">				String json = rs.getString(PI_ATTRIB);</span>
+<span class="nc bnc" id="L726" title="All 2 branches missed.">				if (null != json) {</span>
+<span class="nc" id="L727">					details = JsonConverterUtil.convertToObject(FundsInCreateRequest.class, rs.getString(PI_ATTRIB));</span>
+				}
+<span class="nc" id="L729">				details.setFundsInId(rs.getInt(FUNDSIN_ID));</span>
+<span class="nc" id="L730">				details.addAttribute(STATUS, rs.getString(PI_COMPLIANCE_STATUS));</span>
+<span class="nc" id="L731">			}</span>
+<span class="nc" id="L732">		} catch (Exception e) {</span>
+<span class="nc" id="L733">			LOG.error(&quot;&quot;, e);</span>
+		} finally {
+<span class="nc" id="L735">			closeResultset(rs);</span>
+<span class="nc" id="L736">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L738">		return details;</span>
+	}
+
+	/**
+	 * Creates the device info object.
+	 *
+	 * @param rs
+	 *            the rs
+	 * @return the device info
+	 * @throws SQLException
+	 *             the SQL exception
+	 */
+	private DeviceInfo createDeviceInfoObject(ResultSet rs) throws SQLException {
+<span class="nc" id="L751">		DeviceInfo dInfo = new DeviceInfo();</span>
+<span class="nc" id="L752">		dInfo.setBrowserLanguage(rs.getString(&quot;BrowserLanguage&quot;));</span>
+<span class="nc" id="L753">		dInfo.setBrowserMajorVersion(rs.getString(&quot;BrowserVersion&quot;));</span>
+<span class="nc" id="L754">		dInfo.setBrowserName(rs.getString(&quot;BrowserName&quot;));</span>
+
+<span class="nc bnc" id="L756" title="All 2 branches missed.">		if (null != rs.getString(&quot;BrowserOnline&quot;)) {</span>
+<span class="nc bnc" id="L757" title="All 2 branches missed.">			if (rs.getString(&quot;BrowserOnline&quot;).equals(&quot;1&quot;))</span>
+<span class="nc" id="L758">				dInfo.setBrowserOnline(&quot;true&quot;);</span>
+			else
+<span class="nc" id="L760">				dInfo.setBrowserOnline(&quot;false&quot;);</span>
+		}
+
+<span class="nc" id="L763">		dInfo.setScreenResolution(rs.getString(&quot;ScreenResolution&quot;));</span>
+<span class="nc" id="L764">		dInfo.setCdAppId(rs.getString(&quot;CDAppID&quot;));</span>
+<span class="nc" id="L765">		dInfo.setCdAppVersion(rs.getString(&quot;CDAppVersion&quot;));</span>
+<span class="nc" id="L766">		dInfo.setDeviceId(rs.getString(&quot;DeviceID&quot;));</span>
+<span class="nc" id="L767">		dInfo.setDeviceManufacturer(rs.getString(&quot;DeviceManufacturer&quot;));</span>
+<span class="nc" id="L768">		dInfo.setDeviceName(rs.getString(&quot;DeviceName&quot;));</span>
+<span class="nc" id="L769">		dInfo.setDeviceType(rs.getString(&quot;DeviceType&quot;));</span>
+<span class="nc" id="L770">		dInfo.setDeviceVersion(rs.getString(&quot;DeviceVersion&quot;));</span>
+<span class="nc" id="L771">		dInfo.setOsDateAndTime(rs.getString(&quot;OSTimestamp&quot;));</span>
+<span class="nc" id="L772">		dInfo.setUserAgent(rs.getString(&quot;UserAgent&quot;));</span>
+
+<span class="nc" id="L774">		return dInfo;</span>
+	}
+
+	/**
+	 * Gets the funds in contact account details.
+	 *
+	 * @param request
+	 *            the request
+	 * @param conn
+	 *            the conn
+	 * @param tradeAccountNumber
+	 *            the trade account number
+	 * @param orgCode
+	 *            the org code
+	 * @return the funds in contact account details
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void getFundsInContactAccountDetails(FundsInCreateRequest request, Connection conn,
+			String tradeAccountNumber, String orgCode) throws ComplianceException {
+<span class="nc" id="L794">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L795">		ResultSet rs = null;</span>
+
+		try {
+<span class="nc" id="L798">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_FUNDS_IN_ACCOUNT_CONTACT_DETAILS.getQuery());</span>
+<span class="nc" id="L799">			preparedStatment.setString(1, orgCode);</span>
+<span class="nc" id="L800">			preparedStatment.setString(2, tradeAccountNumber);</span>
+<span class="nc" id="L801">			preparedStatment.setString(3, orgCode);</span>
+<span class="nc" id="L802">			rs = preparedStatment.executeQuery();</span>
+<span class="nc" id="L803">			StringBuilder listOfWatchListIds = new StringBuilder();</span>
+<span class="nc" id="L804">			List&lt;Contact&gt; contacts = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L805">			List&lt;String&gt; watchListDetails = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L806">			MultiMap multiMapWatchlistCon = new MultiHashMap();//Add For AT-2986</span>
+<span class="nc" id="L807">			Integer count = 1;</span>
+<span class="nc bnc" id="L808" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L809" title="All 2 branches missed.">				if (count == 1) {</span>
+<span class="nc" id="L810">					setClientOrgId(request, rs);</span>
+<span class="nc" id="L811">					Account acc = JsonConverterUtil.convertToObject(Account.class, rs.getString(ACATTRIB));</span>
+<span class="nc" id="L812">					acc.setId(rs.getInt(ACCOUNTID));</span>
+<span class="nc" id="L813">					acc.setCustomerType(rs.getInt(&quot;custType&quot;));</span>
+<span class="nc" id="L814">					acc.setAccountStatus(rs.getString(ACCOUNTSTATUS));</span>
+<span class="nc" id="L815">					request.setAccId(acc.getId());</span>
+<span class="nc" id="L816">					request.addAttribute(ACCOUNT, acc);</span>
+<span class="nc" id="L817">					request.addAttribute(Constants.FIELD_NO_OF_CONTACT, rs.getInt(&quot;contacts&quot;));</span>
+<span class="nc" id="L818">					request.addAttribute(Constants.LE_UPDATE_DATE, rs.getTimestamp(&quot;leUpdateDate&quot;));</span>
+<span class="nc" id="L819">					request.addAttribute(ACCOUNT_TM_FLAG, rs.getInt(ACCOUNT_TM_FLAG));</span>
+<span class="nc" id="L820">					request.addAttribute(&quot;DormantFlag&quot;, rs.getInt(&quot;DormantFlag&quot;));</span>
+				}
+<span class="nc" id="L822">				Contact con = JsonConverterUtil.convertToObject(Contact.class, rs.getString(CONTACTATTRIB));</span>
+<span class="nc" id="L823">				con.setId(rs.getInt(CONTACT_ID));</span>
+<span class="nc" id="L824">				con.setContactStatus(rs.getString(CONTACT_STATUS));</span>
+<span class="nc" id="L825">				con.setPoiExists(rs.getInt(&quot;poiExists&quot;));</span>
+<span class="nc" id="L826">				request.setContactId(con.getId());</span>
+<span class="nc" id="L827">				contacts.add(con);</span>
+<span class="nc" id="L828">				watchListDetails.add(rs.getString(WATCHLISTREASONNAME));</span>
+<span class="nc" id="L829">				multiMapWatchlistCon.put(rs.getInt(TRADE_CONTACT_ID), rs.getString(WATCHLISTREASONNAME));</span>
+<span class="nc" id="L830">				count++;</span>
+<span class="nc" id="L831">			}</span>
+<span class="nc" id="L832">			request.addAttribute(Constants.FIELD_OLD_CONTACTS, contacts);</span>
+<span class="nc" id="L833">			request.addAttribute(WATCHLISTID, listOfWatchListIds.toString());</span>
+<span class="nc" id="L834">			request.addAttribute(REASONS_OF_WATCHLIST, watchListDetails);</span>
+<span class="nc" id="L835">			request.addAttribute(&quot;watchlist_with_trade&amp;cont&quot;, multiMapWatchlistCon);</span>
+<span class="nc" id="L836">		} catch (Exception e) {</span>
+<span class="nc" id="L837">			LOG.error(&quot; &quot;, e);</span>
+		} finally {
+<span class="nc" id="L839">			closeResultset(rs);</span>
+<span class="nc" id="L840">			closePrepareStatement(preparedStatment);</span>
+		}
+
+<span class="nc" id="L843">	}</span>
+
+	/**
+	 * Sets the client org id.
+	 *
+	 * @param request
+	 *            the request
+	 * @param rs
+	 *            the rs
+	 * @throws SQLException
+	 *             the SQL exception
+	 */
+	private void setClientOrgId(FundsInCreateRequest request, ResultSet rs) throws SQLException {
+<span class="nc bnc" id="L856" title="All 2 branches missed.">		if (0 == rs.getInt(&quot;OldOrganizationId&quot;)) {</span>
+<span class="nc" id="L857">			request.setOrgId(rs.getInt(REQUEST_ORG_ID));</span>
+		} else {
+<span class="nc" id="L859">			request.setOrgId(rs.getInt(&quot;OldOrganizationId&quot;));</span>
+		}
+<span class="nc" id="L861">	}</span>
+	
+	/**
+	 * Gets the funds in request by id.
+	 *
+	 * @param fundsInId
+	 *            the funds in id
+	 * @return the funds in request by id
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public FundsInCreateRequest getFundsInRequestById(Integer fundsInId) throws ComplianceException {
+<span class="nc" id="L873">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L874">		Connection connection = null;</span>
+<span class="nc" id="L875">		ResultSet rs = null;</span>
+<span class="nc" id="L876">		FundsInCreateRequest fundsOutRequest = null;</span>
+		try {
+<span class="nc" id="L878">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L879">			preparedStatment = connection</span>
+<span class="nc" id="L880">					.prepareStatement(DBQueryConstant.GET_FUNDSIN_REQUEST_BY_PAYMENTINID.getQuery());</span>
+<span class="nc" id="L881">			preparedStatment.setInt(1, fundsInId);</span>
+<span class="nc" id="L882">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L883" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L884">				fundsOutRequest = JsonConverterUtil.convertToObject(FundsInCreateRequest.class,</span>
+<span class="nc" id="L885">						rs.getString(&quot;Attributes&quot;));</span>
+<span class="nc" id="L886">				fundsOutRequest.setAccId(rs.getInt(ACCOUNTID));</span>
+<span class="nc" id="L887">				fundsOutRequest.setContactId(rs.getInt(CONTACT_ID2));</span>
+<span class="nc" id="L888">				return fundsOutRequest;</span>
+			}
+<span class="nc" id="L890">			rs.close();</span>
+<span class="nc" id="L891">		} catch (Exception e) {</span>
+<span class="nc" id="L892">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L894">			closeResultset(rs);</span>
+<span class="nc" id="L895">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L896">			closeConnection(connection);</span>
+		}
+
+<span class="nc" id="L899">		return null;</span>
+	}
+
+	/**
+	 * Business -- Update sanction, custom and fraugster check status into
+	 * paymentIn table after performing repeat check.
+	 * 
+	 * Implementation--- 1) If operation is SANCTION_RESEND then call
+	 * updateSanctionServiceStatus() 2) If operation is CUSTOMCHECK_RESEND then
+	 * call updateCustomCheckServiceStatus()
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; updateServiceStatusIntoPaymentIn(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+
+		try {
+<span class="nc" id="L920">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+
+<span class="nc" id="L922">			ServiceInterfaceType eventType = message.getPayload().getGatewayMessageExchange().getServiceInterface();</span>
+<span class="nc" id="L923">			OperationEnum operation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+<span class="nc" id="L924">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L925">			FundsInBaseRequest fRequest = (FundsInBaseRequest) exchange.getRequest();</span>
+<span class="nc bnc" id="L926" title="All 4 branches missed.">			if (ServiceInterfaceType.FUNDSIN == eventType &amp;&amp; OperationEnum.SANCTION_RESEND == operation) {</span>
+<span class="nc" id="L927">				SanctionResendResponse resendResponse = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L928">						.getResponse(SanctionResendResponse.class);</span>
+<span class="nc" id="L929">				String status = resendResponse.getSummary().getStatus();</span>
+<span class="nc" id="L930">				updateSanctionServiceStatus(status, fRequest.getFundsInId(), token.getUserID());</span>
+<span class="nc bnc" id="L931" title="All 4 branches missed.">			} else if (ServiceInterfaceType.FUNDSIN == eventType &amp;&amp; OperationEnum.CUSTOMCHECK_RESEND == operation) {</span>
+<span class="nc" id="L932">				CustomCheckResendResponse resendResponse = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L933">						.getResponse(CustomCheckResendResponse.class);</span>
+<span class="nc" id="L934">				String status = resendResponse.getResponse().getOverallStatus();</span>
+<span class="nc" id="L935">				updateCustomCheckServiceStatus(status, fRequest.getFundsInId(), token.getUserID());</span>
+<span class="nc bnc" id="L936" title="All 4 branches missed.">			} else if (ServiceInterfaceType.FUNDSIN == eventType &amp;&amp; OperationEnum.FRAUGSTER_RESEND == operation) {</span>
+
+<span class="nc" id="L938">				FundsInFraugsterResendRequest resendRequest = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L939">						.getRequest(FundsInFraugsterResendRequest.class);</span>
+<span class="nc" id="L940">				FundsInCreateRequest oldRequest = resendRequest.getAdditionalAttribute(Constants.OLD_REQUEST,</span>
+						FundsInCreateRequest.class);
+<span class="nc" id="L942">				MessageExchange fExchange = message.getPayload().getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L943">				FraugsterPaymentsInResponse fpResponse = fExchange.getResponse(FraugsterPaymentsInResponse.class);</span>
+
+<span class="nc" id="L945">				String status = fpResponse.getContactResponses().get(0).getStatus();</span>
+<span class="nc" id="L946">				updateFraugsterServiceStatus(status, oldRequest.getFundsInId(), token.getUserID());</span>
+<span class="nc" id="L947">			}</span>
+
+<span class="nc bnc" id="L949" title="All 4 branches missed.">			else if (ServiceInterfaceType.FUNDSIN == eventType &amp;&amp; OperationEnum.BLACKLIST_RESEND == operation) {</span>
+
+<span class="nc" id="L951">				FundsInBlacklistResendRequest resendRequest = message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L952">						.getRequest(FundsInBlacklistResendRequest.class);</span>
+<span class="nc" id="L953">				FundsInCreateRequest oldRequest = resendRequest.getAdditionalAttribute(Constants.OLD_REQUEST,</span>
+						FundsInCreateRequest.class);
+<span class="nc" id="L955">				MessageExchange fExchange = message.getPayload()</span>
+<span class="nc" id="L956">						.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L957">				InternalServiceResponse fpResponse = fExchange.getResponse(InternalServiceResponse.class);</span>
+
+<span class="nc" id="L959">				String status = fpResponse.getContacts().get(0).getContactStatus();</span>
+<span class="nc" id="L960">				updateBlacklistServiceStatus(status, oldRequest.getFundsInId(), token.getUserID());</span>
+			}
+<span class="nc" id="L962">		} catch (Exception e) {</span>
+<span class="nc" id="L963">			LOG.error(&quot;Error while updating PaymentIn service status&quot;, e);</span>
+<span class="nc" id="L964">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L965">		}</span>
+<span class="nc" id="L966">		return message;</span>
+	}
+
+	/**
+	 * Update fraugster status in paymentIn table.
+	 *
+	 * @param status
+	 *            the status
+	 * @param id
+	 *            the id
+	 * @param userID
+	 *            the user ID
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public void updateBlacklistServiceStatus(String status, Integer id, Integer userID) throws ComplianceException {
+<span class="nc" id="L982">		Connection conn = null;</span>
+<span class="nc" id="L983">		PreparedStatement preparedStatment = null;</span>
+		try {
+<span class="nc" id="L985">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L986">			preparedStatment = conn.prepareStatement(DBQueryConstant.UPDATE_FUNDS_IN_BLACKLIST_STATUS.getQuery());</span>
+
+<span class="nc" id="L988">			preparedStatment.setInt(1, ServiceStatus.getStatusAsInteger(status));</span>
+<span class="nc" id="L989">			preparedStatment.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L990">			preparedStatment.setInt(3, userID);</span>
+<span class="nc" id="L991">			preparedStatment.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L992">			preparedStatment.setInt(5, id);</span>
+<span class="nc" id="L993">			preparedStatment.execute();</span>
+
+<span class="nc" id="L995">		} catch (Exception e) {</span>
+<span class="nc" id="L996">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L998">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L999">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1001">	}</span>
+
+	/**
+	 * Update sanction service status.
+	 *
+	 * @param status
+	 *            the status
+	 * @param id
+	 *            the id
+	 * @param userID
+	 *            the user ID
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public void updateSanctionServiceStatus(String status, Integer id, Integer userID) throws ComplianceException {
+<span class="nc" id="L1016">		Connection conn = null;</span>
+<span class="nc" id="L1017">		PreparedStatement preparedStatment = null;</span>
+		try {
+<span class="nc" id="L1019">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1020">			preparedStatment = conn.prepareStatement(DBQueryConstant.UPDATE_FUNDS_IN_SANCTION_STATUS.getQuery());</span>
+<span class="nc" id="L1021">			preparedStatment.setInt(1, ServiceStatus.getStatusAsInteger(status));</span>
+<span class="nc" id="L1022">			preparedStatment.setInt(2, userID);</span>
+<span class="nc" id="L1023">			preparedStatment.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1024">			preparedStatment.setInt(4, id);</span>
+<span class="nc" id="L1025">			preparedStatment.execute();</span>
+
+<span class="nc" id="L1027">		} catch (Exception e) {</span>
+<span class="nc" id="L1028">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1030">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1031">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1033">	}</span>
+
+	/**
+	 * Update fraugster status in paymentIn table.
+	 *
+	 * @param status
+	 *            the status
+	 * @param id
+	 *            the id
+	 * @param userID
+	 *            the user ID
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public void updateFraugsterServiceStatus(String status, Integer id, Integer userID) throws ComplianceException {
+<span class="nc" id="L1048">		Connection conn = null;</span>
+<span class="nc" id="L1049">		PreparedStatement preparedStatment = null;</span>
+		try {
+<span class="nc" id="L1051">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1052">			preparedStatment = conn.prepareStatement(DBQueryConstant.UPDATE_FUNDS_IN_FRAUGSTER_STATUS.getQuery());</span>
+
+<span class="nc" id="L1054">			preparedStatment.setInt(1, ServiceStatus.getStatusAsInteger(status));</span>
+<span class="nc" id="L1055">			preparedStatment.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1056">			preparedStatment.setInt(3, userID);</span>
+<span class="nc" id="L1057">			preparedStatment.setTimestamp(4, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1058">			preparedStatment.setInt(5, id);</span>
+<span class="nc" id="L1059">			preparedStatment.execute();</span>
+
+<span class="nc" id="L1061">		} catch (Exception e) {</span>
+<span class="nc" id="L1062">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1064">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1065">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1067">	}</span>
+
+	/**
+	 * Update custom check service status.
+	 *
+	 * @param status
+	 *            the status
+	 * @param id
+	 *            the id
+	 * @param userID
+	 *            the user ID
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public void updateCustomCheckServiceStatus(String status, Integer id, Integer userID) throws ComplianceException {
+<span class="nc" id="L1082">		Connection conn = null;</span>
+<span class="nc" id="L1083">		PreparedStatement preparedStatment = null;</span>
+		try {
+<span class="nc" id="L1085">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1086">			preparedStatment = conn.prepareStatement(DBQueryConstant.UPDATE_FUNDS_IN_CUSTOMCHECK_STATUS.getQuery());</span>
+<span class="nc" id="L1087">			preparedStatment.setInt(1, ServiceStatus.getStatusAsInteger(status));</span>
+<span class="nc" id="L1088">			preparedStatment.setInt(2, userID);</span>
+<span class="nc" id="L1089">			preparedStatment.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1090">			preparedStatment.setInt(4, id);</span>
+<span class="nc" id="L1091">			preparedStatment.execute();</span>
+<span class="nc" id="L1092">		} catch (Exception e) {</span>
+<span class="nc" id="L1093">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1095">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1096">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1098">	}</span>
+
+	/**
+	 * update sanction status in paymentIn table if operation is SANCTION_UPDATE
+	 * then update paymentIn table for sanction status.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+
+	public Message&lt;MessageContext&gt; updateFundsInSanctionStatus(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+
+		try {
+<span class="nc" id="L1115">			OperationEnum operation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+<span class="nc" id="L1116">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc bnc" id="L1117" title="All 2 branches missed.">			if (operation == OperationEnum.SANCTION_UPDATE) {</span>
+<span class="nc" id="L1118">				MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1119">				SanctionUpdateRequest sanctionUpdateRequest = messageExchange.getRequest(SanctionUpdateRequest.class);</span>
+<span class="nc" id="L1120">				SanctionUpdateData data = sanctionUpdateRequest.getSanctions().get(0);</span>
+<span class="nc" id="L1121">				EventServiceLog eventServiceLog = messageExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L1122">						EntityEnum.valueOf(data.getEntityType()).name(), data.getEntityId());</span>
+<span class="nc" id="L1123">				updateSanctionServiceStatus(eventServiceLog.getStatus(), sanctionUpdateRequest.getResourceId(),</span>
+<span class="nc" id="L1124">						token.getUserID());</span>
+			}
+<span class="nc" id="L1126">		} catch (Exception e) {</span>
+<span class="nc" id="L1127">			LOG.error(&quot;Error in AbstractRegistrationDBService updateFundsInSanctionStatus()&quot;, e);</span>
+<span class="nc" id="L1128">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L1129">		}</span>
+
+<span class="nc" id="L1131">		return message;</span>
+	}
+
+	/**
+	 * Delete payment in.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; deletePaymentIn(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L1144">		Connection conn = null;</span>
+<span class="nc" id="L1145">		ResultSet rs = null;</span>
+<span class="nc" id="L1146">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1147">		int updateCount = 0;</span>
+<span class="nc" id="L1148">		OperationEnum operation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+<span class="nc" id="L1149">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L1150">		boolean isDeleted = false;</span>
+<span class="nc" id="L1151">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1152">		ServiceInterfaceType serviceInterfaceType = messageExchange.getServiceInterface();</span>
+<span class="nc" id="L1153">		FundsInDeleteRequest fDeleteRequest = messageExchange.getRequest(FundsInDeleteRequest.class);</span>
+		try {
+
+<span class="nc bnc" id="L1156" title="All 4 branches missed.">			if (serviceInterfaceType == ServiceInterfaceType.FUNDSIN &amp;&amp; operation == OperationEnum.DELETE_OPI) {</span>
+
+<span class="nc" id="L1158">				conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1159">				preparedStatment = conn.prepareStatement(DBQueryConstant.DELETE_FUNDS_IN.getQuery());</span>
+<span class="nc" id="L1160">				preparedStatment.setString(1, FundsInComplianceStatus.REVERSED.name());</span>
+<span class="nc" id="L1161">				preparedStatment.setInt(2, token.getUserID());</span>
+<span class="nc" id="L1162">				preparedStatment.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1163">				preparedStatment.setInt(4, fDeleteRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L1164">				preparedStatment.setString(5, fDeleteRequest.getOrgCode());</span>
+<span class="nc" id="L1165">				updateCount = preparedStatment.executeUpdate();</span>
+
+			}
+
+<span class="nc bnc" id="L1169" title="All 2 branches missed.">			if (updateCount &gt; 0) {</span>
+<span class="nc" id="L1170">				isDeleted = true;</span>
+<span class="nc" id="L1171">				isNullLockReleasedOn(fDeleteRequest, conn);</span>
+			}
+
+<span class="nc" id="L1174">			MessageExchange ccExchange = new MessageExchange();</span>
+<span class="nc" id="L1175">			FundsInDeleteResponse response = new FundsInDeleteResponse();</span>
+<span class="nc" id="L1176">			fDeleteRequest.addAttribute(&quot;isFundsInDeleted&quot;, isDeleted);</span>
+<span class="nc" id="L1177">			ccExchange.setServiceTypeEnum(ServiceTypeEnum.FUNDSIN_DELETE_SERVICE);</span>
+<span class="nc" id="L1178">			ccExchange.setRequest(fDeleteRequest);</span>
+<span class="nc" id="L1179">			ccExchange.setResponse(response);</span>
+<span class="nc" id="L1180">			message.getPayload().appendMessageExchange(ccExchange);</span>
+
+<span class="nc" id="L1182">		} catch (Exception e) {</span>
+<span class="nc" id="L1183">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1185">			closeResultset(rs);</span>
+<span class="nc" id="L1186">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1187">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1189">		return message;</span>
+	}
+
+	/**
+	 * Checks if is null lock released on.
+	 *
+	 * @param fDeleteRequest
+	 *            the f delete request
+	 * @param conn
+	 *            the conn
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public void isNullLockReleasedOn(FundsInDeleteRequest fDeleteRequest, Connection conn) throws ComplianceException {
+
+<span class="nc" id="L1204">		ResultSet rs = null;</span>
+<span class="nc" id="L1205">		PreparedStatement preparedStatment = null;</span>
+		try {
+<span class="nc" id="L1207">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_IS_LOCK_RELEASED_ON.getQuery());</span>
+<span class="nc" id="L1208">			preparedStatment.setInt(1, fDeleteRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L1209">			preparedStatment.setString(2, fDeleteRequest.getOrgCode());</span>
+<span class="nc" id="L1210">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L1212" title="All 2 branches missed.">			while (rs.next()) {</span>
+
+<span class="nc bnc" id="L1214" title="All 2 branches missed.">				if (null == rs.getTimestamp(&quot;LockReleasedOn&quot;)) {</span>
+
+<span class="nc" id="L1216">					updateLockReleasedOn(fDeleteRequest, conn);</span>
+				}
+			}
+<span class="nc" id="L1219">		} catch (Exception e) {</span>
+<span class="nc" id="L1220">			LOG.error(&quot; &quot;, e);</span>
+		} finally {
+<span class="nc" id="L1222">			closeResultset(rs);</span>
+<span class="nc" id="L1223">			closePrepareStatement(preparedStatment);</span>
+
+		}
+<span class="nc" id="L1226">	}</span>
+
+	/**
+	 * Update lock released on.
+	 *
+	 * @param fDeleteRequest
+	 *            the f delete request
+	 * @param conn
+	 *            the conn
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void updateLockReleasedOn(FundsInDeleteRequest fDeleteRequest, Connection conn) throws ComplianceException {
+<span class="nc" id="L1239">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="nc" id="L1242">			preparedStatment = conn.prepareStatement(DBQueryConstant.UPDATE_LOCK_RELEASED_ON.getQuery());</span>
+<span class="nc" id="L1243">			preparedStatment.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1244">			preparedStatment.setInt(2, fDeleteRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L1245">			preparedStatment.setString(3, fDeleteRequest.getOrgCode());</span>
+<span class="nc" id="L1246">			preparedStatment.executeUpdate();</span>
+
+<span class="nc" id="L1248">		} catch (Exception e) {</span>
+<span class="nc" id="L1249">			LOG.error(&quot; &quot;, e);</span>
+		} finally {
+<span class="nc" id="L1251">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1253">	}</span>
+
+	/**
+	 * Gets the failed funds in details.
+	 *
+	 * @param paymentInId
+	 *            the payment in id
+	 * @return the failed funds in details
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public FundsInCreateRequest getFailedFundsInDetails(Integer paymentInId) throws ComplianceException {
+<span class="nc" id="L1265">		Connection connection = null;</span>
+<span class="nc" id="L1266">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L1267">		ResultSet resultSet = null;</span>
+<span class="nc" id="L1268">		FundsInCreateRequest fundsInDetails = new FundsInCreateRequest();</span>
+		try {
+<span class="nc" id="L1270">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1271">			preparedStatement = connection.prepareStatement(DBQueryConstant.GET_DETAILS_FOR_FAILED_FUNDS_IN.getQuery());</span>
+<span class="nc" id="L1272">			preparedStatement.setInt(1, paymentInId);</span>
+<span class="nc" id="L1273">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L1274" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1275">				String json = resultSet.getString(PI_ATTRIB);</span>
+<span class="nc bnc" id="L1276" title="All 2 branches missed.">				if (null != json) {</span>
+<span class="nc" id="L1277">					fundsInDetails = JsonConverterUtil.convertToObject(FundsInCreateRequest.class,</span>
+<span class="nc" id="L1278">							resultSet.getString(PI_ATTRIB));</span>
+				}
+<span class="nc" id="L1280">				fundsInDetails.setFundsInId(paymentInId);</span>
+<span class="nc" id="L1281">				fundsInDetails.setAccId(resultSet.getInt(ACCOUNTID));</span>
+<span class="nc" id="L1282">				fundsInDetails.getTrade().setTradeAccountNumber(resultSet.getString(&quot;tradeaccountnumber&quot;));</span>
+<span class="nc" id="L1283">				fundsInDetails.setContactId(resultSet.getInt(CONTACT_ID2));</span>
+<span class="nc" id="L1284">				fundsInDetails.setDeviceInfo(createDeviceInfoObject(resultSet));</span>
+<span class="nc" id="L1285">				fundsInDetails.addAttribute(Constants.STATUS, resultSet.getString(PI_COMPLIANCE_STATUS));</span>
+<span class="nc" id="L1286">				fundsInDetails.addAttribute(Constants.FRAUGSTER_STATUS,</span>
+<span class="nc" id="L1287">						ServiceStatus.getStatusAsString(resultSet.getInt(FRAUGSTER_STATUS)));</span>
+<span class="nc" id="L1288">				fundsInDetails.addAttribute(Constants.BLACKLIST_STATUS,</span>
+<span class="nc" id="L1289">						ServiceStatus.getStatusAsString(resultSet.getInt(BLACKLIST_STATUS)));</span>
+<span class="nc" id="L1290">				fundsInDetails.addAttribute(Constants.SANCTION_STATUS,</span>
+<span class="nc" id="L1291">						ServiceStatus.getStatusAsString(resultSet.getInt(&quot;SanctionStatus&quot;)));</span>
+<span class="nc" id="L1292">				fundsInDetails.addAttribute(Constants.CUSTOM_CHECK_STATUS,</span>
+<span class="nc" id="L1293">						ServiceStatus.getStatusAsString(resultSet.getInt(&quot;CustomCheckStatus&quot;)));</span>
+
+<span class="nc" id="L1295">			}</span>
+<span class="nc" id="L1296">			getFailedFundsInContactAccountDetails(fundsInDetails, connection, fundsInDetails.getTradeAccountNumber(),</span>
+<span class="nc" id="L1297">					fundsInDetails.getOrgCode());</span>
+<span class="nc" id="L1298">		} catch (Exception e) {</span>
+<span class="nc" id="L1299">			LOG.error(&quot;&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1301">			closeResultset(resultSet);</span>
+<span class="nc" id="L1302">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L1303">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L1305">		return fundsInDetails;</span>
+	}
+
+	/**
+	 * Gets the failed funds in contact account details.
+	 *
+	 * @param request
+	 *            the request
+	 * @param conn
+	 *            the conn
+	 * @param tradeAccountNumber
+	 *            the trade account number
+	 * @param orgCode
+	 *            the org code
+	 * @return the failed funds in contact account details
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public void getFailedFundsInContactAccountDetails(FundsInCreateRequest request, Connection conn,
+			String tradeAccountNumber, String orgCode) throws ComplianceException {
+<span class="nc" id="L1325">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1326">		ResultSet rs = null;</span>
+
+		try {
+<span class="nc" id="L1329">			String contactJoin = &quot; AND c.id = ?&quot;;</span>
+<span class="nc" id="L1330">			preparedStatment = conn.prepareStatement(</span>
+<span class="nc" id="L1331">					DBQueryConstant.GET_FUNDS_IN_ACCOUNT_CONTACT_DETAILS.getQuery().concat(contactJoin));</span>
+<span class="nc" id="L1332">			preparedStatment.setString(1, orgCode);</span>
+<span class="nc" id="L1333">			preparedStatment.setString(2, tradeAccountNumber);</span>
+<span class="nc" id="L1334">			preparedStatment.setString(3, orgCode);</span>
+<span class="nc" id="L1335">			preparedStatment.setString(4, request.getContactId().toString());</span>
+<span class="nc" id="L1336">			rs = preparedStatment.executeQuery();</span>
+<span class="nc" id="L1337">			Integer count = 1;</span>
+<span class="nc" id="L1338">			Integer noOfContacts = 0;</span>
+<span class="nc" id="L1339">			List&lt;Contact&gt; contacts = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1340">			List&lt;String&gt; watchListDetails = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1341">			MultiMap multiMapWatchlistCon = new MultiHashMap();//AT-3502</span>
+<span class="nc bnc" id="L1342" title="All 2 branches missed.">			while (rs.next()) {</span>
+
+<span class="nc" id="L1344">				request.setOrgId(rs.getInt(REQUEST_ORG_ID));</span>
+<span class="nc" id="L1345">				Account acc = JsonConverterUtil.convertToObject(Account.class, rs.getString(ACATTRIB));</span>
+<span class="nc" id="L1346">				acc.setId(rs.getInt(ACCOUNTID));</span>
+<span class="nc" id="L1347">				acc.setAccountStatus(rs.getString(ACCOUNTSTATUS));</span>
+<span class="nc" id="L1348">				request.setAccId(acc.getId());</span>
+<span class="nc" id="L1349">				request.addAttribute(ACCOUNT, acc);</span>
+<span class="nc" id="L1350">				request.addAttribute(Constants.LE_UPDATE_DATE, rs.getTimestamp(&quot;leUpdateDate&quot;));</span>
+<span class="nc" id="L1351">				Contact con = JsonConverterUtil.convertToObject(Contact.class, rs.getString(CONTACTATTRIB));</span>
+<span class="nc" id="L1352">				con.setId(rs.getInt(CONTACT_ID));</span>
+<span class="nc" id="L1353">				con.setContactStatus(rs.getString(CONTACT_STATUS));</span>
+<span class="nc" id="L1354">				con.setPoiExists(rs.getInt(&quot;poiExists&quot;));</span>
+<span class="nc" id="L1355">				request.addAttribute(&quot;contact&quot;, con);</span>
+<span class="nc" id="L1356">				contacts.add(con);</span>
+<span class="nc bnc" id="L1357" title="All 4 branches missed.">				if (null != rs.getString(WATCHLISTREASONNAME) &amp;&amp; !rs.getString(WATCHLISTREASONNAME).isEmpty()) {</span>
+<span class="nc" id="L1358">					request.addAttribute(WATCHLISTID + count, rs.getInt(WATCHLISTID));</span>
+<span class="nc" id="L1359">					watchListDetails.add(rs.getString(WATCHLISTREASONNAME));</span>
+<span class="nc" id="L1360">					request.addAttribute(&quot;watchlistreasonname1&quot;, rs.getString(WATCHLISTREASONNAME));</span>
+				}
+<span class="nc" id="L1362">				multiMapWatchlistCon.put(rs.getInt(TRADE_CONTACT_ID), rs.getString(WATCHLISTREASONNAME));</span>
+<span class="nc" id="L1363">				noOfContacts++;</span>
+<span class="nc" id="L1364">			}</span>
+<span class="nc" id="L1365">			request.addAttribute(&quot;noOfContacts&quot;, noOfContacts);</span>
+<span class="nc" id="L1366">			request.addAttribute(Constants.FIELD_OLD_CONTACTS, contacts);</span>
+<span class="nc" id="L1367">			request.addAttribute(REASONS_OF_WATCHLIST, watchListDetails);</span>
+<span class="nc" id="L1368">			request.addAttribute(&quot;watchlist_with_trade&amp;cont&quot;, multiMapWatchlistCon);</span>
+<span class="nc" id="L1369">		} catch (Exception e) {</span>
+<span class="nc" id="L1370">			LOG.error(&quot; &quot;, e);</span>
+		} finally {
+<span class="nc" id="L1372">			closeResultset(rs);</span>
+<span class="nc" id="L1373">			closePrepareStatement(preparedStatment);</span>
+		}
+
+<span class="nc" id="L1376">	}</span>
+
+	/**
+	 * Gets the failed funds in ESL details.
+	 *
+	 * @param request
+	 *            the request
+	 * @return the failed funds in ESL details
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public List&lt;EventServiceLog&gt; getFailedFundsInESLDetails(FundsInCreateRequest request) throws ComplianceException {
+<span class="nc" id="L1388">		Connection conn = null;</span>
+<span class="nc" id="L1389">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1390">		ResultSet rs = null;</span>
+<span class="nc" id="L1391">		List&lt;EventServiceLog&gt; eventServiceLogList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L1393">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1394">			String query = DBQueryConstant.GET_ESL_FOR_SERVICE_FAILED_FUNDSIN.getQuery();</span>
+<span class="nc" id="L1395">			preparedStatment = conn.prepareStatement(query);</span>
+<span class="nc" id="L1396">			preparedStatment.setString(1, request.getFundsInId().toString());</span>
+<span class="nc" id="L1397">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1398" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L1399">				EventServiceLog eventServiceLog = new EventServiceLog();</span>
+<span class="nc" id="L1400">				eventServiceLog.setEntityType(EntityEnum.getEntityTypeAsString(rs.getInt(&quot;EntityType&quot;)));</span>
+<span class="nc" id="L1401">				eventServiceLog.setServiceType(rs.getInt(&quot;ServiceType&quot;));</span>
+<span class="nc" id="L1402">				eventServiceLog.setProviderResponse(rs.getString(&quot;ProviderResponse&quot;));</span>
+<span class="nc" id="L1403">				eventServiceLog.setStatus(ServiceStatus.getStatusAsString(rs.getInt(&quot;Status&quot;)));</span>
+<span class="nc" id="L1404">				eventServiceLog.setSummary(rs.getString(&quot;summary&quot;));</span>
+<span class="nc" id="L1405">				eventServiceLog.setEntityId(rs.getInt(&quot;EntityID&quot;));</span>
+<span class="nc" id="L1406">				eventServiceLog.setEntityVersion(rs.getInt(&quot;EntityVersion&quot;));</span>
+<span class="nc" id="L1407">				eventServiceLog.setEventId(rs.getInt(&quot;eventID&quot;));</span>
+<span class="nc" id="L1408">				eventServiceLogList.add(eventServiceLog);</span>
+<span class="nc" id="L1409">			}</span>
+<span class="nc" id="L1410">		} catch (Exception e) {</span>
+<span class="nc" id="L1411">			LOG.error(&quot;Error while fetching eventservicelog details :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1413">			closeResultset(rs);</span>
+<span class="nc" id="L1414">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1415">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1417">		return eventServiceLogList;</span>
+
+	}
+	
+	/**
+	 * AT-3346
+	 * Check first funds in.
+	 *
+	 * @param conn the conn
+	 * @param fundsInBaseRequest the funds in base request
+	 * @param details the details
+	 * @throws ComplianceException 
+	 */
+	@SuppressWarnings(&quot;null&quot;)
+	public boolean checkFirstFundsIn(FundsInCreateRequest details) throws ComplianceException {
+<span class="nc" id="L1432">		Connection conn = null;</span>
+<span class="nc" id="L1433">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1434">		ResultSet rs = null;</span>
+<span class="nc" id="L1435">		Integer count = 0;</span>
+<span class="nc" id="L1436">		boolean isFirstFundsIn = false;</span>
+		try {
+<span class="nc" id="L1438">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1439">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_ZERO_CLEAR_FUNDSIN_FOR_ACCOUNT.getQuery());</span>
+<span class="nc" id="L1440">			preparedStatment.setString(1,details.getTradeAccountNumber());</span>
+<span class="nc" id="L1441">			preparedStatment.setString(2,details.getTradeAccountNumber());</span>
+<span class="nc" id="L1442">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1443" title="All 2 branches missed.">			while(rs.next()) {</span>
+<span class="nc bnc" id="L1444" title="All 2 branches missed.">				if(count.equals(rs.getInt(NUM_OF_FUNDS_IN_CLEAR)) &amp;&amp;</span>
+<span class="nc bnc" id="L1445" title="All 2 branches missed.">						(ServiceStatus.NOT_PERFORMED.getServiceStatusAsInteger().equals(rs.getInt(&quot;FirstCreditCheck&quot;))</span>
+<span class="nc bnc" id="L1446" title="All 2 branches missed.">								|| ServiceStatus.FAIL.getServiceStatusAsInteger().equals(rs.getInt(&quot;FirstCreditCheck&quot;))))</span>
+<span class="nc" id="L1447">					return true;</span>
+			}
+<span class="nc" id="L1449">		}catch(Exception e) {</span>
+<span class="nc" id="L1450">			LOG.error(&quot;Error while fetching checkFirstFundsIn() details :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1452">			closeResultset(rs);</span>
+<span class="nc" id="L1453">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1454">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1456">		return isFirstFundsIn;</span>
+	}
+
+	/**
+	 * AT-3349
+	 * Check any funds clear for contact.
+	 *
+	 * @param details the details
+	 * @return true, if successful
+	 * @throws ComplianceException the compliance exception
+	 */
+	public boolean checkAnyFundsClearForContact(FundsInCreateRequest details,Timestamp leUpdateDate) throws ComplianceException{
+<span class="nc" id="L1468">		Connection conn = null;</span>
+<span class="nc" id="L1469">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1470">		ResultSet rs = null;</span>
+<span class="nc" id="L1471">		Integer count = 0;</span>
+<span class="nc" id="L1472">		Integer fundsInCount = 0;</span>
+<span class="nc" id="L1473">		Integer fundsOutCount = 0;</span>
+<span class="nc" id="L1474">		boolean isAnyFundsClear = false;</span>
+		try {
+<span class="nc" id="L1476">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1477">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_NUMBER_OF_FI_CLEAR_AFTER_LEDATE.getQuery());</span>
+<span class="nc" id="L1478">			preparedStatment.setString(1,details.getTradeAccountNumber());</span>
+<span class="nc" id="L1479">			preparedStatment.setInt(2,details.getTrade().getTradeContactId());</span>
+<span class="nc" id="L1480">			preparedStatment.setTimestamp(3,leUpdateDate);</span>
+<span class="nc" id="L1481">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1482" title="All 2 branches missed.">			while(rs.next()) {</span>
+<span class="nc" id="L1483">				fundsInCount = rs.getInt(NUM_OF_FUNDS_IN_CLEAR);</span>
+			}
+<span class="nc" id="L1485">			closeResultset(rs);</span>
+<span class="nc" id="L1486">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1487">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_NUMBER_OF_FO_CLEAR_AFTER_LEDATE.getQuery());</span>
+<span class="nc" id="L1488">			preparedStatment.setString(1,details.getTradeAccountNumber());</span>
+<span class="nc" id="L1489">			preparedStatment.setInt(2,details.getTrade().getTradeContactId());</span>
+<span class="nc" id="L1490">			preparedStatment.setTimestamp(3,leUpdateDate);</span>
+<span class="nc" id="L1491">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1492" title="All 2 branches missed.">			while(rs.next()) {</span>
+<span class="nc" id="L1493">				fundsOutCount = rs.getInt(&quot;NumOfFundsOutClear&quot;);</span>
+			}
+<span class="nc bnc" id="L1495" title="All 2 branches missed.">			if(count == (fundsInCount+fundsOutCount)) {</span>
+<span class="nc" id="L1496">				isAnyFundsClear = true;</span>
+			}
+<span class="nc" id="L1498">		}catch(Exception e) {</span>
+<span class="nc" id="L1499">			LOG.error(&quot;Error while fetching checkAnyFundsClearForContact() details :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1501">			closeResultset(rs);</span>
+<span class="nc" id="L1502">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1503">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1505">		return isAnyFundsClear;</span>
+	}
+	
+	/**
+	 * Update EDD status in account.
+	 *
+	 * @param conn the conn
+	 * @param fundsInCreateResponse the funds in create response
+	 * @param ccResponse the cc response
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void updateEDDStatusInAccount(Connection conn, FundsInCreateResponse fundsInCreateResponse,
+			CustomCheckResponse ccResponse) throws ComplianceException {
+<span class="nc" id="L1518">		PreparedStatement preparedStatment = null;</span>
+		try {
+<span class="nc" id="L1520">			preparedStatment = conn.prepareStatement(DBQueryConstant.UPDATE_FIRST_EDD_CHECK_IN_ACCOUNT.getQuery());</span>
+<span class="nc" id="L1521">			preparedStatment.setInt(1, ServiceStatus.getStatusAsInteger(ccResponse.getFirstCreditCheck().getStatus()));</span>
+<span class="nc" id="L1522">			preparedStatment.setString(2, fundsInCreateResponse.getTradeAccountNumber());</span>
+<span class="nc" id="L1523">		    preparedStatment.executeUpdate();</span>
+<span class="nc" id="L1524">		} catch(Exception e) {</span>
+<span class="nc" id="L1525">			LOG.error(&quot;Error while updatig account table column Edd_check : &quot;, e);</span>
+		} finally {
+<span class="nc" id="L1527">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1529">	}</span>
+	
+	
+	/**
+	 * Add for AT-3738
+	 * Check CDINC first funds in.
+	 *
+	 * @param details the details
+	 * @return true, if successful
+	 * @throws ComplianceException the compliance exception
+	 */
+	@SuppressWarnings(&quot;null&quot;)
+	public boolean checkCDINCFirstFundsIn(FundsInCreateRequest details) throws ComplianceException {
+<span class="nc" id="L1542">		Connection conn = null;</span>
+<span class="nc" id="L1543">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1544">		ResultSet rs = null;</span>
+<span class="nc" id="L1545">		Integer count = 0;</span>
+<span class="nc" id="L1546">		boolean isCDINCFirstFundsIn = false;</span>
+		try {
+<span class="nc" id="L1548">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1549">			preparedStatment = conn.prepareStatement(DBQueryConstant.GET_ZERO_CLEAR_FUNDSIN_FOR_CDINC_ACCOUNT.getQuery());</span>
+<span class="nc" id="L1550">			preparedStatment.setString(1,details.getTradeAccountNumber());</span>
+<span class="nc" id="L1551">			rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1552" title="All 2 branches missed.">			while(rs.next()) {</span>
+<span class="nc bnc" id="L1553" title="All 2 branches missed.">				if(count.equals(rs.getInt(NUM_OF_FUNDS_IN_CLEAR)))</span>
+<span class="nc" id="L1554">					return true;</span>
+			}
+<span class="nc" id="L1556">		}catch(Exception e) {</span>
+<span class="nc" id="L1557">			LOG.error(&quot;Error while fetching checkCDINCFirstFundsIn() details :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1559">			closeResultset(rs);</span>
+<span class="nc" id="L1560">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1561">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L1563">		return isCDINCFirstFundsIn;</span>
+	}
+
+	public FundsInCreateRequest getFundsInDetailsForIntuition(Integer tradePayId)throws ComplianceException {
+<span class="nc" id="L1567">		Connection connection = null;</span>
+<span class="nc" id="L1568">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L1569">		ResultSet resultSet = null;</span>
+<span class="nc" id="L1570">		FundsInCreateRequest fundsInDetails = new FundsInCreateRequest();</span>
+		try {
+<span class="nc" id="L1572">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1573">			preparedStatement = connection.prepareStatement(DBQueryConstant.GET_FUNDS_IN_FOR_DETAILS_INTUITION.getQuery());</span>
+<span class="nc" id="L1574">			preparedStatement.setInt(1, tradePayId);</span>
+<span class="nc" id="L1575">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L1576" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1577">				fundsInDetails = setFundsInDetailsForIntuition(resultSet);</span>
+			}
+<span class="nc" id="L1579">		} catch (Exception e) {</span>
+<span class="nc" id="L1580">			LOG.error(&quot;&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1582">			closeResultset(resultSet);</span>
+<span class="nc" id="L1583">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L1584">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L1586">		return fundsInDetails;</span>
+	}
+
+	/**
+	 * Sets the funds in details for intuition.
+	 *
+	 * @param resultSet the result set
+	 * @param fundsInDetails the funds in details
+	 * @throws SQLException the SQL exception
+	 */
+	private FundsInCreateRequest setFundsInDetailsForIntuition(ResultSet resultSet)
+			throws SQLException {
+<span class="nc" id="L1598">		FundsInCreateRequest fundsInDetails = new FundsInCreateRequest();</span>
+<span class="nc" id="L1599">		String json = resultSet.getString(PI_ATTRIB);</span>
+<span class="nc bnc" id="L1600" title="All 2 branches missed.">		if (null != json) {</span>
+<span class="nc" id="L1601">			fundsInDetails = JsonConverterUtil.convertToObject(FundsInCreateRequest.class,</span>
+<span class="nc" id="L1602">					resultSet.getString(PI_ATTRIB));</span>
+		}
+<span class="nc" id="L1604">		fundsInDetails.setFundsInId(resultSet.getInt(PAYMENT_IN_ID));</span>
+<span class="nc" id="L1605">		fundsInDetails.setAccId(resultSet.getInt(ACCOUNTID));</span>
+<span class="nc" id="L1606">		fundsInDetails.getTrade().setTradeAccountNumber(resultSet.getString(&quot;Tradeaccountnumber&quot;));</span>
+<span class="nc" id="L1607">		fundsInDetails.getTrade().setTradeContactId(resultSet.getInt(TRADE_CONTACT_ID));</span>
+<span class="nc" id="L1608">		fundsInDetails.setContactId(resultSet.getInt(CONTACT_ID2));</span>
+<span class="nc" id="L1609">		fundsInDetails.addAttribute(Constants.STATUS, FundsInComplianceStatus</span>
+<span class="nc" id="L1610">				.getFundsInComplianceStatusAsString(resultSet.getInt(PI_COMPLIANCE_STATUS)));</span>
+<span class="nc" id="L1611">		fundsInDetails.addAttribute(Constants.FRAUGSTER_STATUS,</span>
+<span class="nc" id="L1612">				ServiceStatus.getStatusAsString(resultSet.getInt(FRAUGSTER_STATUS)));</span>
+<span class="nc" id="L1613">		fundsInDetails.addAttribute(Constants.BLACKLIST_STATUS,</span>
+<span class="nc" id="L1614">				ServiceStatus.getStatusAsString(resultSet.getInt(BLACKLIST_STATUS)));</span>
+<span class="nc" id="L1615">		fundsInDetails.addAttribute(Constants.SANCTION_STATUS,</span>
+<span class="nc" id="L1616">				ServiceStatus.getStatusAsString(resultSet.getInt(&quot;SanctionStatus&quot;)));</span>
+<span class="nc" id="L1617">		fundsInDetails.addAttribute(Constants.CUSTOM_CHECK_STATUS,</span>
+<span class="nc" id="L1618">				ServiceStatus.getStatusAsString(resultSet.getInt(&quot;CustomCheckStatus&quot;)));</span>
+<span class="nc" id="L1619">		fundsInDetails.addAttribute(&quot;AccountVersion&quot;, resultSet.getInt(&quot;AccountVersion&quot;));</span>
+<span class="nc" id="L1620">		fundsInDetails.addAttribute(ACCOUNT_TM_FLAG, resultSet.getInt(ACCOUNT_TM_FLAG));</span>
+<span class="nc" id="L1621">		fundsInDetails.addAttribute(&quot;STPFlag&quot;, resultSet.getString(&quot;InitialStatus&quot;));</span>
+<span class="nc" id="L1622">		fundsInDetails.addAttribute(&quot;orgcode&quot;, resultSet.getString(&quot;OrganizationCode&quot;));</span>
+<span class="nc" id="L1623">		fundsInDetails.addAttribute(Constants.ETAILER, resultSet.getString(Constants.ETAILER)); //AT-5310</span>
+		
+<span class="nc" id="L1625">		return fundsInDetails;</span>
+	}
+
+	public String getCountryCheckStatus(FundsInCreateRequest fundsInCreateRequest) throws ComplianceException {
+<span class="nc" id="L1629">		Connection connection = null;</span>
+<span class="nc" id="L1630">		ResultSet resultSet = null;</span>
+<span class="nc" id="L1631">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L1632">		String countryCheckStatus = null;</span>
+		try {
+<span class="nc" id="L1634">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1635">			preparedStatement = connection.prepareStatement(DBQueryConstant.GET_FUNDS_IN_COUNTRY_CHECK_STATUS_FOR_INTUITION.getQuery());</span>
+<span class="nc" id="L1636">			preparedStatement.setInt(1, fundsInCreateRequest.getFundsInId());</span>
+<span class="nc" id="L1637">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L1638" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1639">				countryCheckStatus = resultSet.getString(&quot;CountryCheckStatus&quot;);</span>
+			}
+
+<span class="nc" id="L1642">		} catch (Exception e) {</span>
+<span class="nc" id="L1643">			LOG.error(&quot;&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1645">			closeResultset(resultSet);</span>
+<span class="nc" id="L1646">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L1647">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L1649">		return countryCheckStatus;</span>
+	}
+
+	public String getPaymentInStatusUpdateReason(FundsInCreateRequest fundsInCreateRequest) throws ComplianceException {
+<span class="nc" id="L1653">		Connection connection = null;</span>
+<span class="nc" id="L1654">		ResultSet resultSet = null;</span>
+<span class="nc" id="L1655">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L1656">		String statusUpdateReason= null;</span>
+		try {
+<span class="nc" id="L1658">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1659">			preparedStatement = connection.prepareStatement(DBQueryConstant.GET_STATUS_UPDATE_REASON_FOR_PAYMENT_IN_INTUITION.getQuery());</span>
+<span class="nc" id="L1660">			preparedStatement.setInt(1, fundsInCreateRequest.getFundsInId());</span>
+<span class="nc" id="L1661">			resultSet = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L1662" title="All 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L1663">				statusUpdateReason = resultSet.getString(&quot;Reason&quot;);</span>
+			}
+
+<span class="nc" id="L1666">		} catch (Exception e) {</span>
+<span class="nc" id="L1667">			LOG.error(&quot;&quot;, e);</span>
+		} finally {
+<span class="nc" id="L1669">			closeResultset(resultSet);</span>
+<span class="nc" id="L1670">			closePrepareStatement(preparedStatement);</span>
+<span class="nc" id="L1671">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L1673">		return statusUpdateReason;</span>
+	}
+	
+	public Message&lt;MessageContext&gt; updateAccountIntuitionClientRiskLevel(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L1677">        Connection connection = null;</span>
+<span class="nc" id="L1678">        String paymentStatus = null;</span>
+        try {
+
+        	
+        	
+<span class="nc" id="L1683">			TransactionMonitoringPaymentInResponse tmResponse = (TransactionMonitoringPaymentInResponse) message</span>
+<span class="nc" id="L1684">					.getPayload().getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE).getResponse();</span>
+			
+<span class="nc" id="L1686">			TransactionMonitoringPaymentsInRequest request = (TransactionMonitoringPaymentsInRequest) message</span>
+<span class="nc" id="L1687">					.getPayload().getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE).getRequest();</span>
+
+<span class="nc" id="L1689">			OperationEnum operation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+<span class="nc bnc" id="L1690" title="All 4 branches missed.">            if(operation == OperationEnum.FUNDS_IN || operation == OperationEnum.RECHECK_FAILURES) {</span>
+<span class="nc" id="L1691">            	FundsInCreateResponse response = (FundsInCreateResponse) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L1692">                        .getResponse();</span>
+<span class="nc" id="L1693">                paymentStatus = response.getStatus();</span>
+<span class="nc" id="L1694">            } else {</span>
+<span class="nc" id="L1695">                paymentStatus = tmResponse.getPaymentStatus();</span>
+            }
+			
+<span class="nc" id="L1698">            String clientRiskLevel = (String) tmResponse.getAdditionalAttribute(CLIENT_RISK_LEVEL);</span>
+<span class="nc" id="L1699">            Integer accountTMFlag = (Integer) request.getAdditionalAttribute(ACCOUNT_TM_FLAG);</span>
+<span class="nc bnc" id="L1700" title="All 8 branches missed.">            if(clientRiskLevel != null &amp;&amp; (accountTMFlag == 1 || accountTMFlag == 2 || accountTMFlag == 4)) {</span>
+<span class="nc" id="L1701">            	 UserProfile userToken = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L1702">                 connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1703">                 beginTransaction(connection);</span>
+<span class="nc" id="L1704">                 updateAccountIntuitionRiskLevel(request.getAccountId(), clientRiskLevel, userToken, connection);</span>
+<span class="nc" id="L1705">                 updatePaymentInIntuitionStatus(request.getFundsInId(), tmResponse.getStatus(), userToken, connection);</span>
+                 
+<span class="nc bnc" id="L1707" title="All 2 branches missed.">					if (request.getUpdateStatus() != null</span>
+<span class="nc bnc" id="L1708" title="All 4 branches missed.">							&amp;&amp; request.getUpdateStatus().equalsIgnoreCase(FundsInComplianceStatus.HOLD.name())</span>
+							&amp;&amp; paymentStatus != null) {
+<span class="nc" id="L1710">	                	 updatePaymentInStatus(paymentStatus,request.getFundsInId(), connection);</span>
+                 }
+<span class="nc" id="L1712">                 commitTransaction(connection);</span>
+            }
+<span class="nc" id="L1714">        } catch (Exception e) {</span>
+<span class="nc" id="L1715">            message.getPayload().setFailed(true);</span>
+<span class="nc" id="L1716">            LOG.error(&quot;Error while updating IntuitionRiskLevel to Account&quot;, e);</span>
+        } finally {
+            try {
+<span class="nc" id="L1719">                closeConnection(connection);</span>
+<span class="nc" id="L1720">            } catch (ComplianceException e) {</span>
+<span class="nc" id="L1721">                message.getPayload().setFailed(true);</span>
+<span class="nc" id="L1722">                LOG.error(&quot;Error while updating IntuitionRiskLevel to Account&quot;, e);</span>
+<span class="nc" id="L1723">            }</span>
+        }
+<span class="nc" id="L1725">        return message;</span>
+    }
+
+    public void updateAccountIntuitionRiskLevel(Integer accountId, String clientRiskLevel,
+            UserProfile userToken, Connection connection) throws ComplianceException {
+<span class="nc" id="L1730">        PreparedStatement statement = null;</span>
+        try {
+<span class="nc" id="L1732">            statement = connection.prepareStatement(DBQueryConstant.UPDATE_ACCOUNT_INTUITION_RISK_LEVEL.getQuery());</span>
+
+<span class="nc" id="L1734">            statement.setString(1, clientRiskLevel);</span>
+<span class="nc" id="L1735">            statement.setInt(2, userToken.getUserID());</span>
+<span class="nc" id="L1736">            statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1737">            statement.setInt(4, accountId);</span>
+
+<span class="nc" id="L1739">            statement.executeUpdate();</span>
+<span class="nc" id="L1740">        } catch (Exception e) {</span>
+<span class="nc" id="L1741">            throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+        } finally {
+<span class="nc" id="L1743">            closePrepareStatement(statement);</span>
+        }
+<span class="nc" id="L1745">    }</span>
+	
+	 public void updatePaymentInIntuitionStatus(Integer fundsInId, String status,
+				UserProfile userToken, Connection connection) throws ComplianceException {
+<span class="nc" id="L1749">	        PreparedStatement statement = null;</span>
+	        try {
+<span class="nc" id="L1751">	            statement = connection.prepareStatement(DBQueryConstant.UPDATE_PAYMENT_IN_INTUITION_CHECK_STATUS.getQuery());</span>
+
+<span class="nc" id="L1753">	            statement.setInt(1, ServiceStatus.getStatusAsInteger(status));</span>
+<span class="nc" id="L1754">	            statement.setInt(2, userToken.getUserID());</span>
+<span class="nc" id="L1755">	            statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1756">	            statement.setInt(4, fundsInId);</span>
+
+<span class="nc" id="L1758">	            statement.executeUpdate();</span>
+<span class="nc" id="L1759">	        } catch (Exception e) {</span>
+<span class="nc" id="L1760">	            throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+	        } finally {
+<span class="nc" id="L1762">	            closePrepareStatement(statement);</span>
+	        }
+<span class="nc" id="L1764">	    }</span>
+	 
+	 
+	 public void getFundsInContactAccountDetailsForDeleteOpi(FundsInDeleteRequest fundsInDeleteRequest) throws ComplianceException {
+<span class="nc" id="L1768">			PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1769">			ResultSet rs = null;</span>
+<span class="nc" id="L1770">			Connection conn = null;</span>
+
+			try {
+<span class="nc" id="L1773">				conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1774">				preparedStatment = conn.prepareStatement(DBQueryConstant.GET_FUNDS_IN_ACCOUNT_DETAILS_FOR_DELETE_OPI.getQuery());</span>
+<span class="nc" id="L1775">				preparedStatment.setString(1, fundsInDeleteRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L1776">				preparedStatment.setInt(2, fundsInDeleteRequest.getPaymentFundsInId());</span>
+<span class="nc" id="L1777">				preparedStatment.setString(3, fundsInDeleteRequest.getOrgCode());</span>
+<span class="nc" id="L1778">				rs = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1779" title="All 2 branches missed.">				while (rs.next()) {</span>
+<span class="nc" id="L1780">						Account acc = JsonConverterUtil.convertToObject(Account.class, rs.getString(ACATTRIB));</span>
+<span class="nc" id="L1781">						acc.setId(rs.getInt(ACCOUNTID));</span>
+<span class="nc" id="L1782">						acc.setCustomerType(rs.getInt(&quot;custType&quot;));</span>
+<span class="nc" id="L1783">						fundsInDeleteRequest.addAttribute(ACCOUNT, acc);</span>
+<span class="nc" id="L1784">						fundsInDeleteRequest.addAttribute(PAYMENT_IN_ID, rs.getInt(PAYMENT_IN_ID));</span>
+						
+<span class="nc" id="L1786">				}</span>
+				
+<span class="nc" id="L1788">			} catch (Exception e) {</span>
+<span class="nc" id="L1789">				LOG.error(&quot; &quot;, e);</span>
+			} finally {
+<span class="nc" id="L1791">				closeResultset(rs);</span>
+<span class="nc" id="L1792">				closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1793">				 closeConnection(conn);</span>
+			}
+
+<span class="nc" id="L1796">		}</span>
+	 
+	 /**
+	  * Add for AT-4752
+	  * 
+ 	 * Update short response code.
+ 	 *
+ 	 * @param message the message
+ 	 * @return the message
+ 	 * @throws ComplianceException the compliance exception
+ 	 */
+ 	public Message&lt;MessageContext&gt; updateShortResponseCode(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L1808">			Connection conn = null;</span>
+			try {
+<span class="nc" id="L1810">				MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+				
+<span class="nc" id="L1812">				FundsInBaseRequest fRequest = (FundsInBaseRequest) exchange.getRequest();</span>
+<span class="nc" id="L1813">				FundsInCreateResponse fundsInCreateResponse = (FundsInCreateResponse) message.getPayload()</span>
+<span class="nc" id="L1814">						.getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L1815">				conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1816">				fundsInCreateResponse.setStatus(FundsInComplianceStatus.HOLD.name());</span>
+<span class="nc" id="L1817">				getContactWatchlist(conn, fRequest.getFundsInId(), fundsInCreateResponse);</span>
+<span class="nc" id="L1818">				fRequest.addAttribute(&quot;AtlasSTPFlag&quot;, fundsInCreateResponse.getShortResponseCode());</span>
+				
+<span class="nc" id="L1820">			} catch (Exception e) {</span>
+<span class="nc" id="L1821">				LOG.error(&quot;Exception in updatePaymentInstatus()&quot;, e);</span>
+<span class="nc" id="L1822">				message.getPayload().setFailed(true);</span>
+			} finally {
+<span class="nc" id="L1824">				closeConnection(conn);</span>
+			}
+<span class="nc" id="L1826">			return message;</span>
+		}
+	 
+	 public String getPaymentComplianceStatus(Integer payId) throws ComplianceException {
+<span class="nc" id="L1830">	        PreparedStatement statement = null;</span>
+<span class="nc" id="L1831">	        Connection connection = null;</span>
+<span class="nc" id="L1832">	        ResultSet resultSet = null;</span>
+<span class="nc" id="L1833">	        String status = null; </span>
+<span class="nc" id="L1834">	        String tableName = &quot;PaymentIn&quot;;</span>
+	        try {
+<span class="nc" id="L1836">	        	connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1837">	        	statement = connection.prepareStatement(DBQueryConstant.GET_PAYMENT_STATUS.getQuery().replace(&quot;#&quot;,</span>
+	        			tableName));
+<span class="nc" id="L1839">	        	statement.setInt(1, payId);</span>
+<span class="nc" id="L1840">				resultSet = statement.executeQuery();</span>
+<span class="nc bnc" id="L1841" title="All 2 branches missed.">				while (resultSet.next()) {</span>
+<span class="nc" id="L1842">					status = FundsInComplianceStatus.getFundsInComplianceStatusAsString(resultSet.getInt(&quot;ComplianceStatus&quot;));</span>
+				
+				}
+<span class="nc" id="L1845">	        } catch (Exception e) {</span>
+<span class="nc" id="L1846">	            throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+	        } finally {
+<span class="nc" id="L1848">	            closePrepareStatement(statement);</span>
+	        }
+	        
+<span class="nc" id="L1851">	        return status;</span>
+	    }
+	 
+		public void updatePaymentInStatus(String paymentStatus, Integer paymentInID, Connection connection)
+				throws ComplianceException {
+<span class="nc" id="L1856">			PreparedStatement statement = null;</span>
+			try {
+<span class="nc" id="L1858">				statement = connection.prepareStatement(DBQueryConstant.UPDATE_PAYMENT_IN_STATUS.getQuery());</span>
+
+<span class="nc" id="L1860">				statement.setInt(1, 1);</span>
+<span class="nc" id="L1861">				statement.setTimestamp(2, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1862">				statement.setInt(3, FundsInComplianceStatus.getFundsInComplianceStatusAsInteger(paymentStatus));</span>
+<span class="nc" id="L1863">				statement.setInt(4, paymentInID);</span>
+
+<span class="nc" id="L1865">				statement.executeUpdate();</span>
+<span class="nc" id="L1866">			} catch (Exception e) {</span>
+<span class="nc" id="L1867">				throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+			} finally {
+
+<span class="nc" id="L1870">				closePrepareStatement(statement);</span>
+
+			}
+<span class="nc" id="L1873">		}</span>
+		
+		/**
+		  * Gets the payment in status by trade payment id.
+		  *
+		  * @param tradePaymentId the trade payment id
+		  * @return the payment in status by trade payment id
+		  * @throws ComplianceException the compliance exception
+		  */
+		 //AT-4906
+		public Integer getPaymentInStatusByTradePaymentId(Integer tradePaymentId) throws ComplianceException {
+<span class="nc" id="L1884">			PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1885">			ResultSet resultSet = null;</span>
+<span class="nc" id="L1886">			Connection conn = null;</span>
+<span class="nc" id="L1887">			Integer paymentStatus= 0;</span>
+			try {
+<span class="nc" id="L1889">				conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1890">				preparedStatment = conn.prepareStatement(</span>
+<span class="nc" id="L1891">						DBQueryConstant.GET_PAYMENT_STATUS_BY_PAYMENT_TRADE_ID.getQuery().replace(&quot;#&quot;, &quot;PaymentIn&quot;));</span>
+<span class="nc" id="L1892">				preparedStatment.setInt(1, tradePaymentId);</span>
+<span class="nc" id="L1893">				resultSet = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1894" title="All 2 branches missed.">				while (resultSet.next()) {</span>
+<span class="nc" id="L1895">					paymentStatus = resultSet.getInt(&quot;ComplianceStatus&quot;);</span>
+				}
+
+<span class="nc" id="L1898">			} catch (Exception e) {</span>
+<span class="nc" id="L1899">				LOG.error(&quot;Error in getPaymentInStatusByTradePaymentId() : &quot;, e);</span>
+			} finally {
+<span class="nc" id="L1901">				closeResultset(resultSet);</span>
+<span class="nc" id="L1902">				closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1903">				closeConnection(conn);</span>
+			}
+
+<span class="nc" id="L1906">			return paymentStatus;</span>
+
+		}
+
+		
+		/**
+		 * Gets the intuition historic payment in.
+		 *
+		 * @return the intuition historic payment in
+		 * @throws ComplianceException the compliance exception
+		 */
+		//AT-5264
+		public List&lt;FundsInCreateRequest&gt; getIntuitionHistoricPaymentIn() throws ComplianceException {
+<span class="nc" id="L1919">			PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1920">			ResultSet resultSet = null;</span>
+<span class="nc" id="L1921">			Connection connection = null;</span>
+<span class="nc" id="L1922">			List&lt;FundsInCreateRequest&gt; fundsInRequests = new ArrayList&lt;&gt;();</span>
+			try {
+<span class="nc" id="L1924">				connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1925">				preparedStatment = connection.prepareStatement(</span>
+<span class="nc" id="L1926">						DBQueryConstant.GET_DETAILS_FOR_INTUITION_HISTORIC_PAYMENT_IN_RECORDS.getQuery());</span>
+<span class="nc" id="L1927">				resultSet = preparedStatment.executeQuery();</span>
+<span class="nc bnc" id="L1928" title="All 2 branches missed.">				while (resultSet.next()) {</span>
+<span class="nc" id="L1929">					FundsInCreateRequest fundsInRequest = setFundsInDetailsForIntuition(resultSet);</span>
+<span class="nc" id="L1930">					fundsInRequest.getTrade().setPaymentTime(resultSet.getString(&quot;PaymentTime&quot;)); //Added for AT-5486</span>
+<span class="nc" id="L1931">					fundsInRequests.add(fundsInRequest);</span>
+<span class="nc" id="L1932">				}</span>
+<span class="nc" id="L1933">			} catch (Exception e) {</span>
+<span class="nc" id="L1934">				LOG.error(&quot;Error in getIntuitionHistoricPaymentIn() : &quot;, e);</span>
+			} finally {
+<span class="nc" id="L1936">				closeResultset(resultSet);</span>
+<span class="nc" id="L1937">				closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1938">				closeConnection(connection);</span>
+			}
+<span class="nc" id="L1940">			return fundsInRequests;</span>
+		}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

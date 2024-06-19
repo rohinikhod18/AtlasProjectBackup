@@ -1,0 +1,1100 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationQueryConstant.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">RegistrationQueryConstant.java</span></div><h1>RegistrationQueryConstant.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+/**
+ * The Enum RegistrationQueryConstant.
+ *
+ * @author Rajesh
+ */
+<span class="fc" id="L8">@SuppressWarnings(&quot;squid:S1192&quot;)</span>
+public enum RegistrationQueryConstant {
+
+	//Query changes since for CFX customer shown on basis of accountid 
+	/** Optimized registration queue query */
+	
+<span class="fc" id="L14">	REGISTRATION_QUEUE_CONTACT_FILTER( &quot;SELECT B.AccountId , A.Id ContactId, ROW_NUMBER() OVER (PARTITION BY B.AccountId ORDER BY B.UpdatedOn) RNum &quot;</span>
+			+ &quot; FROM ContactAttribute A JOIN Contact B ON A.Id = B.ID {REGISTRATION_QUEUE_COUNTRY_OF_RESIDENCE_FILTER} {WATCHLIST_CATEGORY_FILTER}&quot;),
+	
+<span class="fc" id="L17">	REGISTRATION_QUEUE_ACCOUNT_FILTER( &quot;SELECT A.Id AccountId &quot;</span>
+			+ &quot; FROM AccountAttribute A JOIN ACCOUNT B ON A.id = B.id &quot; ),
+	
+<span class="fc" id="L20">	REGISTRATION_QUEUE_FILTER(&quot; SELECT A.Type, A.ResourceType, A.ResourceID,  A.ContactId, A.AccountId, A.UpdatedOn, A.RowNum &quot;</span>
+			+ &quot; FROM vInActiveCustomer A &quot;
+			+ &quot; {CONTACT_FILTER_JOIN} {ACCOUNT_FILTER_JOIN} {ORG_TABLE_JOIN} {USER_FILTER_JOIN} {LEGAL_ENTITY_JOIN} {DEVICE_ID_JOIN} {ONFIDO_JOIN}&quot;),
+			
+<span class="fc" id="L24">	CONTACT_FILTER_JOIN(&quot; JOIN ContactAttributeFilter CF ON A.ContactId = CF.ContactId AND CF.Rnum=1 &quot;),</span>
+	
+<span class="fc" id="L26">	ACCOUNT_FILTER_JOIN(&quot; JOIN AccountAttributeFilter AF ON A.AccountId = AF.AccountId &quot;),</span>
+	
+<span class="fc" id="L28">    CONTACT_FILTER_LEFT_JOIN(&quot; LEFT JOIN ContactAttributeFilter CF ON A.ContactId = CF.ContactId AND CF.Rnum=1 &quot;),</span>
+	
+<span class="fc" id="L30">	ACCOUNT_FILTER_LEFT_JOIN(&quot; LEFT JOIN AccountAttributeFilter AF ON A.AccountId = AF.AccountId &quot;),</span>
+	
+<span class="fc" id="L32">	REPORT_FILTER_NULL_CHECK(&quot; ((CF.ContactId IS NOT NULL AND A.Type=2) OR (AF.AccountId IS NOT NULL AND A.Type IN (1,3))) &quot;),</span>
+	
+<span class="fc" id="L34">	ORG_TABLE_JOIN(&quot;JOIN ACCOUNT acc ON A.AccountId = acc.id &quot;	</span>
+			+ &quot; JOIN organization org ON acc.organizationid = org.id&quot;),
+	
+<span class="fc" id="L37">	LEGEL_ENTITY_TABLE_JOIN(&quot;JOIN ACCOUNT ac ON A.AccountId = ac.id JOIN LegalEntity le ON ac.LegalEntityID = le.ID &quot;),</span>
+	
+<span class="fc" id="L39">	USER_FILTER_JOIN(&quot;JOIN Userresourcelock ul ON (ul.Resourceid = A.ContactId AND ul.resourcetype=3) OR (ul.Resourceid = A.Accountid AND ul.resourcetype=4)&quot;</span>
+			+ &quot; JOIN [USER] usr ON usr.id = ul.createdby&quot;),
+	
+<span class="fc" id="L42">	REGISTRATION_QUEUE_COUNTRY_OF_RESIDENCE_FILTER(&quot;JOIN Country coun ON coun.id = b.country&quot;),</span>
+<span class="fc" id="L43">	WATCHLIST_CATEGORY_FILTER(&quot; LEFT JOIN ContactWatchList CL ON CL.contact=B.id LEFT JOIN watchlist W ON CL.reason=w.id AND w.category IN(?) &quot;),</span>
+	
+<span class="fc" id="L45">	GET_REGISTRATION_QUEUE(&quot;DECLARE @Offset int = ?, @Rows int = ?;DECLARE @tmpRows int = @Rows*10; &quot;</span>
+			+ &quot; WITH &quot;
+			+ &quot;ContactAttributeFilter AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_CONTACT_FILTER} ),&quot;
+			+ &quot;AccountAttributeFilter AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_ACCOUNT_FILTER} ),&quot;
+			+ &quot;SelectedIds AS &quot;
+			+ &quot;( {REGISTRATION_QUEUE_FILTER} &quot;
+			+ &quot; ORDER BY {SORT_FIELD_NAME} {ORDER_TYPE} OFFSET @Offset ROWS FETCH NEXT @tmpRows ROWS ONLY ), &quot;
+			+ &quot; SelectedId AS ( &quot;
+			+ &quot;select TOP (@Rows) * &quot;
+			+ &quot;from SelectedIds a &quot;
+			+ &quot; WHERE RowNum = 1 &quot;
+			+ &quot;ORDER BY {SORT_FIELD_NAME} {ORDER_TYPE} ) &quot;
+			+ &quot;SELECT &quot;
+			+ &quot;    c.Id                     AS contactid, &quot;
+			//+ &quot;                c.compliancestatus, &quot;
+			+ &quot; CASE acc.[type] WHEN 2 THEN c.compliancestatus ELSE acc.compliancestatus END AS compliancestatus, &quot;
+			+ &quot;                c.accountid, &quot;
+			+ &quot;     CASE acc.[type] WHEN 2 THEN  c.NAME ELSE acc.NAME END   AS contactname, &quot;
+			+ &quot;    acc.tradeaccountnumber   AS TradeAccountNumber, &quot;
+			+ &quot;    c.updatedon              AS registeredon, &quot;
+			+ &quot;    acc.crmaccountid         AS ACSFID, &quot;
+			+ &quot;    accattrib.vsellcurrency, &quot;
+			+ &quot;    accattrib.vbuycurrency, &quot;
+			+ &quot;    accattrib.vsource, &quot;
+			+ &quot;    accattrib.vtransactionvalue, &quot;
+			+ &quot;    org.NAME                 AS organization, &quot;
+			+ &quot;    acc.LegalEntity, &quot;
+			+ &quot;     acc.[type] AS Type, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.eidstatus  ELSE acc.eidstatus END AS eidstatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.blackliststatus ELSE acc.blackliststatus END AS blackliststatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.fraugsterstatus ELSE acc.fraugsterstatus END AS fraugsterstatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.sanctionstatus ELSE acc.sanctionstatus END AS sanctionstatus, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.customCheckStatus ELSE 9 END AS customCheckStatus, &quot;
+			+ &quot;    contactstatusEnum.status AS contactStatus, &quot;
+			+ &quot;    ur.id                    AS userresourceilockid, &quot;
+			+ &quot;    usr.ssouserid            AS lockedby, &quot;
+			+ &quot;    ur.createdon             AS UserResourceCreatedOn, &quot;
+			+ &quot;    ur.workflowtime          AS UserResourceWorkflowTime, &quot;
+			+ &quot;    ur.resourcetype          AS UserResourceEntityType, &quot;
+			+ &quot;    SI.UpdatedOn             AS UpdatedOn, &quot;
+			+ &quot;    coun.DisplayName         AS CountryFullName, &quot;
+			+ &quot;    coun.Code                AS CountryCode, &quot;
+			+ &quot;    acc.ComplianceDoneOn     AS registeredDate, &quot;
+			+ &quot;    CASE acc.[type] WHEN 2 THEN c.version &quot;
+			+ &quot;    ELSE acc.version END AS version &quot;					
+			+ &quot;            FROM    contact c &quot;
+			+ &quot;JOIN SelectedId Si ON c.Id = Si.ContactId &quot;
+			+ &quot;JOIN contactattribute conattrib ON c.id = conattrib.id &quot;
+			+ &quot;JOIN account acc ON acc.id = c.accountid &quot;
+			+ &quot; {JOIN_LEGAL_ENTITY} &quot; //Add for AT-3269
+			+ &quot;            JOIN accountattribute accattrib ON       c.accountid = accattrib.id &quot;
+			+ &quot;            JOIN organization org ON     acc.organizationid = org.id &quot;
+			+ &quot; JOIN contactcompliancestatusenum contactstatusEnum ON c.compliancestatus = contactstatusEnum.id &quot;
+			+ &quot;  JOIN      country coun ON c.country = coun.id&quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON ur.resourceId = Si.ResourceId AND ur.ResourceType = si.ResourceType &quot;
+			+ &quot;  AND ur.lockreleasedon IS NULL &quot;
+			+ &quot;  LEFT JOIN [user] usr ON    usr.id = ur.createdby WHERE c.Deleted = 0 OR c.Deleted IS NULL&quot;),
+	
+	
+<span class="fc" id="L106">	GET_REGISTRATION_QUEUE_COUNT(&quot; WITH &quot;</span>
+		+ &quot;ContactAttributeFilter AS &quot;
+		+ &quot;( {REGISTRATION_QUEUE_CONTACT_FILTER} ), &quot;
+		+ &quot;AccountAttributeFilter AS &quot;
+		+ &quot;( {REGISTRATION_QUEUE_ACCOUNT_FILTER}  ), &quot;
+		+ &quot; SelectedIds AS &quot;
+		+ &quot;( {REGISTRATION_QUEUE_FILTER}  ) ,&quot;
+		+ &quot; SelectedId AS ( &quot;
+		+ &quot;select TOP 100 PERCENT * &quot;
+		+ &quot;from SelectedIds a &quot;
+		+ &quot; WHERE RowNum = 1 &quot;
+		+ &quot;ORDER BY a.updatedon DESC ) &quot;
+		+ &quot; SELECT &quot;
+		+ &quot;    Count(1)              AS TotalRows &quot;
+		+ &quot;FROM contact c JOIN SelectedId Si ON c.Id = Si.ContactId &quot;
+		+ &quot;LEFT JOIN contactattribute conattrib ON c.id = conattrib.id &quot;
+		+ &quot;LEFT JOIN account acc ON acc.id = c.accountid &quot;
+		+ &quot; {JOIN_LEGAL_ENTITY} &quot; //Add for AT-3269
+		+ &quot;LEFT JOIN accountattribute accattrib ON c.accountid = accattrib.id &quot;
+		+ &quot;LEFT JOIN organization org ON acc.organizationid = org.id &quot;
+		+ &quot;LEFT JOIN contactcompliancestatusenum contactstatusEnum ON c.compliancestatus = contactstatusEnum.id &quot;
+		+ &quot; LEFT JOIN userresourcelock ur ON ur.resourceId = Si.ResourceId AND ur.ResourceType = si.ResourceType &quot;
+		+ &quot;   AND ur.lockreleasedon IS NULL &quot;
+		+ &quot;LEFT JOIN [user] usr ON usr.id = ur.createdby WHERE c.Deleted = 0 OR c.Deleted IS NULL&quot; ),
+
+<span class="fc" id="L131">	GET_CONTACTID_FOR_FILTER(&quot;SELECT rc.ContactId &quot;</span>
+			+ &quot;FROM   ( {INNER_QUERY} &quot;
+			+ &quot;        ) AS rc &quot;
+			+ &quot;WHERE  rownum &gt;= ? &quot;
+			+ &quot;       AND rownum &lt;= ?&quot;),
+
+<span class="fc" id="L137">	GET_OTHER_CONTACT_DETAILS(&quot;SELECT &quot;</span>
+					 + &quot; c.ID, &quot;
+					 + &quot; c.Name, c.SanctionStatus,c.BlacklistStatus,&quot;
+					 + &quot; CASE A.[Type] WHEN 1 THEN 'CFX' ELSE 'PFX' END AS CustomerType, &quot;
+					 + &quot; cste.Status AS complianceStatus &quot;
+					 + &quot;FROM &quot;
+					 + &quot; Contact C JOIN Account A ON C.Accountid=A.id &quot;
+					 + &quot; JOIN ContactComplianceStatusEnum cste ON c.complianceStatus = cste.id &quot;
+					 + &quot;WHERE &quot;
+					 + &quot; AccountID =? &quot;
+					 + &quot; AND C.Id &lt;&gt;? AND (C.Deleted = 0 OR C.Deleted IS NULL)&quot;),
+
+<span class="fc" id="L149">	GET_CONTACT_DETAILS_WITH_EVENT(&quot;SELECT &quot;</span>
+			+ &quot;    cr.ID, &quot;
+			+ &quot;    conStatus.Status as ContactComplianceStatus, &quot;
+			+ &quot;    accStatus.Status as AccountComplianceStatus, &quot;
+			+ &quot;    cr.name, cr.isOnQueue, &quot;
+			+ &quot;    cr.AccountID AS AccountId, &quot;
+			+ &quot;    cr.CRMContactID, &quot;
+			+ &quot;    cr.TradeContactID, &quot;
+			+ &quot;    cr.complianceDoneOn As RegComplete, &quot;
+			+ &quot;    cr.createdOn AS RegIn,cr.CustomCheckStatus, &quot;
+			+ &quot;    cr.POIExists AS poiExists, &quot; //AT-3391
+			+ &quot;    coun.DisplayName as countryFullName, &quot;
+			+ &quot;    acc.ComplianceDoneOn AS RegCompleteAcc, &quot;
+			+ &quot;    acc.CreatedOn AS RegistrationInDate, &quot;
+			+ &quot;    acc.ComplianceExpiry AS ComplianceExpiry, &quot;
+			+ &quot;    acc.CRMAccountID, &quot;
+			+ &quot;    acc.TradeAccountNumber, &quot;
+			+ &quot;    acc.LegalEntity, &quot;
+			+ &quot;    org.code AS Organization, &quot;
+			+ &quot;    conAttrib.Attributes AS contactAttrib, &quot;
+			+ &quot;    accAttrib.Attributes AS AccountAttrib, &quot;
+			+ &quot;    ur.id AS userResourceLockId, &quot;
+			+ &quot; Lock.ssouserid AS LockedBy, &quot;
+			+ &quot; cste.code AS ServiceName, &quot;
+			+ &quot;    esl.Id as EventServiceLogId, &quot;
+			+ &quot;    esl.EventId as EventId, &quot;
+			+ &quot;    esl.summary as EventSummary, &quot;
+			+ &quot;    esl.Status as EventStatus, &quot;
+			+ &quot; event.ssouserid AS EventUpdatedBy, &quot;
+			+ &quot;    esl.updatedOn as EventUpdatedOn, &quot;
+			+ &quot;    acc.AccountTMFlag AS accountTMFlag, &quot;
+			+ &quot;    acc.DataAnonStatus     AS dataAnonStatus, &quot;
+			+ &quot;    acc.IntuitionRiskLevel     AS riskLevel, &quot;
+			+ &quot;    acc.Version     AS accountVersion &quot;
+			+ &quot;FROM Contact AS cr JOIN Account acc ON acc.id = cr.accountId &quot;
+			+ &quot;    JOIN Country coun ON coun.id = cr.country &quot;
+			+ &quot;    JOIN Organization org ON org.id=cr.OrganizationID &quot;
+			+ &quot;    JOIN ContactAttribute conAttrib ON conAttrib.ID = cr.ID &quot;
+			+ &quot;    JOIN AccountAttribute accAttrib ON accAttrib.ID=cr.AccountID &quot;
+			+ &quot;    JOIN ContactComplianceStatusEnum conStatus ON conStatus.ID=cr.ComplianceStatus &quot;
+			+ &quot;    LEFT JOIN Event eve ON eve.accountid=acc.id &quot;
+			+ &quot;    AND PaymentInID is null &quot;
+			+ &quot;    and PaymentOutID is null &quot;
+			+ &quot; LEFT JOIN EventServiceLog esl ON esl.eventid = eve.id &quot;
+			+ &quot;    and (esl.EntityID = cr.id  AND esl.EntityType = 3 OR esl.EntityType = 1)&quot; //Contact 
+			//+ &quot;		 or (esl.EntityID = cr.accountId AND esl.EntityType = 1 and esl.eventid = eve.id)&quot;
+			+ &quot; LEFT JOIN compliance_servicetypeenum cste ON cste.id = esl.servicetype &quot;
+			+ &quot;    LEFT JOIN AccountComplianceStatusEnum accStatus ON accStatus.ID=acc.ComplianceStatus &quot;
+			+ &quot;    LEFT JOIN UserResourceLock ur on cr.Id = ur.ResourceID &quot;
+			+ &quot; AND ur.LockReleasedOn IS NULL AND ur.ResourceType = 3 &quot;
+			+ &quot; LEFT JOIN [user] Lock ON lock.id = ur.createdby &quot;
+			+ &quot; LEFT JOIN [user] event ON event.id = esl.updatedby &quot;
+			+ &quot;where &quot;
+			+ &quot; cr.id = ? &quot;
+			+ &quot;order by esl.updatedOn desc&quot;),
+	
+<span class="fc" id="L205">	GET_CONTACT_DETAILS_BY_RECORD_NUM(&quot;SELECT cr.ID, &quot; + &quot; conStatus.Status as ContactComplianceStatus, &quot;</span>
+			+ &quot; accStatus.Status as AccountComplianceStatus, &quot; + &quot; cr.name, &quot; + &quot; cr.AccountID AS AccountId, &quot;
+			+ &quot; cr.CRMContactID, &quot; + &quot; cr.TradeContactID, &quot; + &quot; cr.complianceDoneOn As RegComplete, &quot;
+			+ &quot; cr.createdOn AS RegIn, &quot; + &quot; acc.CRMAccountID,  &quot; + &quot; acc.TradeAccountNumber,&quot;
+			+ &quot; org.code AS Organization, &quot; + &quot;       conAttrib.Attributes AS contactAttrib, &quot;
+			+ &quot;       accAttrib.Attributes AS AccountAttrib, &quot;
+			+ &quot;  ur.id AS userResourceLockId,ur.createdBy AS LockedBy,&quot;
+			+ &quot; (select code from Compliance_ServiceTypeEnum where id =esl.serviceType) as ServiceName, &quot;
+			+ &quot; esl.Id as EventServiceLogId , esl.EventId as EventId, &quot; + &quot; esl.summary as EventSummary, &quot; + &quot; esl.Status as EventStatus, &quot;
+			+ &quot; esl.updatedBy as EventUpdatedBy, &quot; + &quot; esl.updatedOn as EventUpdatedOn &quot; + &quot; FROM &quot; + &quot;   (SELECT * &quot;
+			+ &quot;    FROM &quot; + &quot;       (SELECT *  &quot; + &quot;       FROM contact  &quot; + &quot;       WHERE ID=(SELECT ContactId  FROM &quot;
+			+ &quot; (SELECT ROW_NUMBER() OVER ( &quot;
+			+ &quot; ORDER BY ID DESC) AS RowNum, &quot;
+			+ &quot; id AS ContactId &quot; 
+			+ &quot; FROM Contact &quot;
+			+ &quot; WHERE ComplianceStatus&lt;&gt;1 ) AS RowConstrainedResult &quot;
+			+ &quot; WHERE RowNum=?) ) AS ContactResult) AS cr &quot;
+			+ &quot; LEFT JOIN Account acc ON acc.id=cr.accountId &quot; + &quot; JOIN Organization org ON org.id=cr.OrganizationID &quot;
+			+ &quot; LEFT JOIN ContactAttribute conAttrib ON conAttrib.ID = cr.ID &quot;
+			+ &quot; LEFT JOIN AccountAttribute accAttrib ON accAttrib.ID=cr.AccountID &quot;
+			+ &quot; LEFT JOIN ContactComplianceStatusEnum conStatus ON conStatus.ID=cr.ComplianceStatus &quot;
+			+ &quot; LEFT JOIN EventServiceLog esl ON esl.EntityID=cr.id AND esl.EntityType='CONTACT' and esl.eventId IN (select id from Event where PaymentInID is null and PaymentOutID is null ) &quot;
+			+ &quot; LEFT JOIN AccountComplianceStatusEnum accStatus ON accStatus.ID=acc.ComplianceStatus &quot;
+			+ &quot; LEFT JOIN UserResourceLock ur on cr.Id = ur.ResourceID AND ur.LockReleasedOn IS NULL AND  ur.ResourceType='CONTACT'&quot;
+			+ &quot; order by esl.updatedOn desc&quot;),
+	
+<span class="fc" id="L231">	GET_CONTACT_DETAILS_BY_CONTACTID(&quot;SELECT cr.ID, &quot; + &quot; conStatus.Status as ContactComplianceStatus, &quot;</span>
+			+ &quot; accStatus.Status as AccountComplianceStatus, &quot; + &quot; cr.name, &quot; + &quot; cr.AccountID AS AccountId, &quot;
+			+ &quot; cr.CRMContactID, &quot; + &quot; cr.TradeContactID, &quot; + &quot; cr.complianceDoneOn As RegComplete, &quot;
+			+ &quot; cr.createdOn AS RegIn, &quot; + &quot; acc.CRMAccountID,  &quot; + &quot; acc.TradeAccountNumber,&quot;
+			+ &quot; org.code AS Organization, &quot; + &quot;       conAttrib.Attributes AS contactAttrib, &quot;
+			+ &quot;       accAttrib.Attributes AS AccountAttrib, &quot;
+			+ &quot;  ur.id AS userResourceLockId,(select ssouserid from  [user] where id = ur.createdby) AS LockedBy,&quot;
+			+ &quot; (select code from Compliance_ServiceTypeEnum where id =esl.serviceType) as ServiceName, &quot;
+			+ &quot; esl.Id as EventServiceLogId , esl.EventId as EventId, &quot; + &quot; esl.summary as EventSummary, &quot; + &quot; esl.Status as EventStatus, &quot;
+			+ &quot; (select ssouserid from  [user] where id = esl.updatedby) as EventUpdatedBy, &quot; + &quot; esl.updatedOn as EventUpdatedOn &quot; + &quot; FROM &quot; + &quot;   (SELECT * &quot;
+<span class="fc" id="L241">			+ &quot;    FROM &quot; + &quot;       (SELECT *  &quot; + &quot;       FROM contact  &quot; + &quot;       WHERE ID=(&quot;+GET_CONTACTID_FOR_FILTER.getQuery()+&quot;) ) AS ContactResult) AS cr &quot;</span>
+			+ &quot; LEFT JOIN Account acc ON acc.id=cr.accountId &quot; + &quot; JOIN Organization org ON org.id=cr.OrganizationID &quot;
+			+ &quot; LEFT JOIN ContactAttribute conAttrib ON conAttrib.ID = cr.ID &quot;
+			+ &quot; LEFT JOIN AccountAttribute accAttrib ON accAttrib.ID=cr.AccountID &quot;
+			+ &quot; LEFT JOIN ContactComplianceStatusEnum conStatus ON conStatus.ID=cr.ComplianceStatus &quot;
+			+ &quot; LEFT JOIN EventServiceLog esl ON esl.EntityID=cr.id AND esl.EntityType='CONTACT' and esl.eventId IN (select id from Event where PaymentInID is null and PaymentOutID is null ) &quot;
+			+ &quot; LEFT JOIN AccountComplianceStatusEnum accStatus ON accStatus.ID=acc.ComplianceStatus &quot;
+			+ &quot; LEFT JOIN UserResourceLock ur on cr.Id = ur.ResourceID AND ur.LockReleasedOn IS NULL AND  ur.ResourceType='CONTACT'&quot;
+			+ &quot; order by esl.updatedOn desc&quot;),
+
+<span class="fc" id="L251">	GET_WATCHLIST_OF_CONTACT(</span>
+			&quot;SELECT w.Reason AS WatchlistName ,isNull(cw.Contact,-1) AS ContactId FROM Watchlist w LEFT JOIN ContactWatchList cw ON ( w.id=cw.reason AND cw.contact=?) order by WatchlistName&quot;),
+
+<span class="fc" id="L254">	GET_WATCHLIST_ENUM(&quot;SELECT Reason FROM Watchlist&quot;),</span>
+
+<span class="fc" id="L256">	GET_ACTIVITY_LOGS_OF_CONTACT(</span>
+			&quot; SELECT (select SSOUserID from [user] where ID=pal.ActivityBy) As [User], pal.CreatedOn, pald.Log As [Activity], ate.module+' '+ate.type As [ActivityType], pal.Comments AS [Comment] FROM ProfileActivityLog  pal &quot;
+			+ &quot; JOIN ProfileActivityLogDetail pald ON pal.id=pald.ActivityId &quot;
+			+ &quot; JOIN ActivityTypeEnum ate ON pald.ActivityType=ate.id &quot;
+			+ &quot; where  pal.contactId= ? OR (pal.Accountid= ?  AND pal.contactId IS NULL ) &quot;
+			+ &quot; ORDER BY pal.CreatedOn desc&quot;),
+
+<span class="fc" id="L263">	GET_CONTACT_STATUS_REASON(</span>
+			&quot;SELECT sur.Reason , ISNULL(psr.ContactID,-1) AS ContactID FROM StatusUpdateReason sur  LEFT JOIN ProfileStatusReason psr ON psr.StatusUpdateReasonID=sur.id AND  psr.ContactID=?   WHERE  sur.Module IN ('CONTACT','ALL') order by sur.Reason&quot;),
+
+<span class="fc" id="L266">	DELETE_CONTACT_WATCHLIST(</span>
+			&quot;DELETE ContactWatchList WHERE Contact=? AND Reason IN (SELECT  [Id] FROM [Watchlist] WHERE Reason IN (?))&quot;),
+
+<span class="fc" id="L269">	GET_WATCHLIST_REASON(&quot;SELECT  [Id] FROM [Watchlist]&quot;),</span>
+	
+    //Query use for AT-2986
+<span class="fc" id="L272">	INSERT_CONTACT_WATCHLIST(</span>
+			&quot;INSERT INTO [ContactWatchList] VALUES ((SELECT  [Id] FROM [Watchlist] WHERE Reason = ?), ? , (select Id from [user] where SSOUserID=?) , ?)&quot;),
+	
+<span class="fc" id="L275">	INSERT_WATCHLIST_BY_ACCOUNT_ID(&quot;INSERT INTO [ContactWatchList] ( [Reason], [Contact], [CreatedBy], [CreatedOn] ) &quot;</span>
+			+ &quot;select (SELECT [Id] FROM [Watchlist] WHERE Reason = ?), ID,(select Id from [user] where SSOUserID=?) , ? FROM CONTACT where AccountId=?&quot;),
+
+<span class="fc" id="L278">	DELETE_CONTACT_REASON(</span>
+			&quot;DELETE [ProfileStatusReason] WHERE ContactID=? AND StatusUpdateReasonID IN (SELECT Id FROM [StatusUpdateReason] WHERE Module IN ('CONTACT','ALL') AND Reason IN (?))&quot;),
+
+<span class="fc" id="L281">	GET_STATUS_REASON_ID(&quot;SELECT Id FROM [StatusUpdateReason]&quot;),</span>
+
+<span class="fc" id="L283">	INSERT_CONTACT_REASON(</span>
+			&quot;INSERT INTO [ProfileStatusReason] VALUES((SELECT Id FROM Organization WHERE Code=?), ?, ?, (SELECT Id FROM StatusUpdateReason WHERE Module IN ('CONTACT','ALL') AND Reason=?), (select Id from [user] where SSOUserID=?), ?, (select Id from [user] where SSOUserID=?), ?)&quot;),
+	
+<span class="fc" id="L286">	INSERT_PROFILE_ACTIVITY_LOG(</span>
+			&quot;INSERT INTO [ProfileActivityLog] ([Timestamp], ActivityBy, OrganizationID, AccountID, ContactID, Comments, CreatedBy, CreatedOn, UpdatedBy, UpdatedOn, UserLockID) &quot;
+			+ &quot;VALUES (?, (select ID from [user] where SSOUserID=?), (SELECT Id FROM Organization WHERE Code= ? ), ?, ?, ?, &quot;
+			+ &quot;(select Id from [user] where SSOUserID=?), ?, (select Id from [user] where SSOUserID=?), ?, &quot;
+			+ &quot;(SELECT ID FROM UserResourceLock WHERE ResourceType = ? AND ResourceID = ? AND LockReleasedOn IS NULL))&quot;),
+
+<span class="fc" id="L292">	INSERT_PROFILE_ACTIVITY_LOG_DETAIL(</span>
+			&quot;INSERT INTO [ProfileActivityLogDetail] VALUES(?, (SELECT Id FROM ActivityTypeEnum WHERE Module=? and Type=?), ?, (select Id from [user] where SSOUserID=?), ?, (select Id from [user] where SSOUserID=?), ?)&quot;),
+
+<span class="fc" id="L295">	UPDATE_CONTACT_STATUS(</span>
+			&quot;UPDATE [Contact] SET ComplianceStatus=(SELECT Id FROM ContactComplianceStatusEnum WHERE Status=?), UpdatedBy=(select id  from [user] where SSOUserID=?), UpdatedOn = ? , isOnQueue = ? WHERE Id=?&quot;),
+	
+<span class="fc" id="L298">	INSERT_USER_RESOURCE_LOCK(</span>
+			&quot;INSERT INTO [UserResourceLock] (UserID, ResourceType, ResourceID, LockReleasedOn, CreatedBy, CreatedOn, WorkflowTime ) &quot;
+			+ &quot; VALUES ((select Id from [user] where SSOUserID=?),?,?,?,(select Id from [user] where SSOUserID=?),?,?)&quot;),
+	
+<span class="fc" id="L302">	INSERT_USER_RESOURCE_LOCK_PFX(</span>
+			&quot;INSERT INTO [UserResourceLock] (UserID, ResourceType, ResourceID, LockReleasedOn, CreatedBy, CreatedOn, WorkflowTime ) VALUES &quot;
+			+ &quot; ((select Id from [user] where SSOUserID=?),?,?,?,(select Id from [user] where SSOUserID=?),?,?)&quot;),
+
+<span class="fc" id="L306">	UPDATE_USER_RESOURCE_TO_LOCK(</span>
+			&quot;UPDATE [UserResourceLock] SET [UserID] = (select Id from [user] where SSOUserID=?) , [CreatedBy]= (select Id from [user] where SSOUserID=?) , [CreatedOn] = ? , [LockReleasedOn] = ?  &quot;
+			+ &quot; WHERE (id=?)&quot;),
+	
+<span class="fc" id="L310">	UPDATE_USER_RESOURCE_LOCK(</span>
+			&quot;UPDATE [UserResourceLock] SET LockReleasedOn= ? WHERE ID = ? and LockReleasedOn is null&quot;),
+	
+<span class="fc" id="L313">	UPDATE_USER_RESOURCE_LOCK_PFX(</span>
+			&quot;UPDATE [UserResourceLock] SET LockReleasedOn= ? WHERE ID = ? and LockReleasedOn is null&quot;),
+
+<span class="fc" id="L316">	GET_ACCOUNT_WATCHLIST(&quot;select cw.Contact as ContactId,w.Reason as WatchlistName from contactWatchlist cw &quot;</span>
+			+ &quot;join WatchList w on cw.Reason= w.id &quot;
+			+ &quot; where contact in &quot;
+			+ &quot;(select id from contact where accountId= ? ) order by WatchlistName&quot;),
+	
+	//query added for AT-2986
+<span class="fc" id="L322">	GET_CONTACT_WATCHLIST_WITH_SELECTED(&quot;SELECT w.Reason AS WatchlistName ,isNull(cw.Contact,-1) AS ContactId FROM Watchlist w &quot; </span>
+			+ &quot;LEFT JOIN ContactWatchList cw ON ( w.id=cw.reason AND cw.Contact = ?) order by WatchlistName&quot;),
+	
+	//query added for AT-2986
+<span class="fc" id="L326">	GET_CONTACT_WATCHLIST_CATEGORY_WITH_SELECTED(&quot;SELECT w.Reason AS WatchlistName ,isNull(cw.Contact,-1) AS ContactId FROM Watchlist w &quot; </span>
+			+ &quot;LEFT JOIN ContactWatchList cw ON ( w.id=cw.reason AND cw.contact = ?) WHERE w.category IN (?) order by WatchlistName&quot;),
+	
+<span class="fc" id="L329">	GET_ACCOUNT_WATCHLIST_WITH_SELECTED(&quot;SELECT w.Reason AS WatchlistName ,isNull(cw.Contact,-1) AS ContactId FROM Watchlist w &quot; </span>
+	+ &quot;LEFT JOIN ContactWatchList cw ON ( w.id=cw.reason AND cw.contact IN (select ID from contact where AccountId=?)) order by WatchlistName&quot;),
+	
+<span class="fc" id="L332">	GET_ACCOUNT_WATCHLIST_CATEGORY_WITH_SELECTED(&quot;SELECT w.Reason AS WatchlistName ,isNull(cw.Contact,-1) AS ContactId FROM Watchlist w &quot; </span>
+			+ &quot;LEFT JOIN ContactWatchList cw ON ( w.id=cw.reason AND cw.contact IN(select ID from contact where AccountId=?)) WHERE w.category IN (?) order by WatchlistName&quot;),
+	//Query changes since for CFX customer shown on basis of accountid 
+	
+/*	*//**Optimized registration queue query with criteria, used for registration pagination and filter criteria*//*
+	GET_REG_QUEUE_INNER_QUERY(&quot;SELECT row_number()  OVER ( ORDER BY {SORT_FIELD_NAME} {ORDER_TYPE}) AS rownum, &quot;
+			+ &quot;        rqtemp.* &quot;
+			+ &quot;    FROM &quot;
+			+ &quot;        ( &quot;
+			+ &quot;            select &quot;
+			+ &quot;                ur.id AS userresourceilockid, &quot;
+			+ &quot;                usr.ssouserid AS lockedby, &quot;
+			+ &quot;                ur.CreatedOn AS UserResourceCreatedOn, &quot;
+			+ &quot;                ur.WorkflowTime AS UserResourceWorkflowTime, &quot;
+			+ &quot;                ur.ResourceType AS UserResourceEntityType, &quot;
+			+ &quot;                c.id AS contactid, &quot;
+			+ &quot;                c.compliancestatus, &quot;
+			+ &quot;                c.accountid, &quot;
+			+ &quot;                c.NAME AS contactname, &quot;
+			+ &quot;                acc.tradeaccountnumber, &quot;
+			+ &quot;                &quot; + RegQueDBColumns.CONTACT_CREATEDON.getName()+  &quot; AS registeredon, &quot;
+			+ &quot;                accattrib.sellcurrency, &quot;
+			+ &quot;                accattrib.buycurrency, &quot;
+			+ &quot;                accattrib.source, &quot;
+			+ &quot;                accattrib.transactionvalue, &quot;
+			+ &quot;                org.NAME AS organization, &quot;
+			+ &quot;                acc.[type] AS Type, &quot;
+			+ &quot;                c.EIDStatus AS kycstatus, &quot;
+			+ &quot;                c.BlacklistStatus AS blackliststatus, &quot;
+			+ &quot;                c.FraugsterStatus AS fraugsterstatus, &quot;
+			+ &quot;                c.SanctionStatus AS sanctionstatus &quot;
+			+ &quot;            FROM &quot;
+			+ &quot;                contact c &quot;
+			+ &quot;            JOIN account acc ON &quot;
+			+ &quot;                acc.id = c.accountid &quot;
+			+ &quot;            JOIN accountattribute accattrib ON &quot;
+			+ &quot;                c.accountid = accattrib.id &quot;
+			+ &quot;            JOIN organization org ON &quot;
+			+ &quot;                acc.organizationid = org.id &quot;
+			+ &quot;            LEFT JOIN userresourcelock ur ON &quot;
+			+ &quot;                c.id = ur.resourceid &quot;
+			+ &quot;                AND ur.resourcetype = 'CONTACT' &quot;
+			+ &quot;            LEFT JOIN [user] usr ON &quot;
+			+ &quot;                usr.id = ur.createdby &quot;
+			+ &quot;            WHERE &quot;
+			+ &quot;                 {PFX_DATETIME_CRITERIA} &quot;
+			+ &quot;                 c.compliancestatus = 4 &quot;
+			+ &quot;                AND acc.[type] = 'PFX' &quot;
+			+ &quot;                AND ur.lockreleasedon IS NULL &quot;
+			+ &quot;                &quot;
+			+ &quot;        UNION SELECT &quot;
+			+ &quot;                ur.id AS userresourceilockid, &quot;
+			+ &quot;                usr.ssouserid AS lockedby, &quot;
+			+ &quot;                ur.CreatedOn AS UserResourceCreatedOn, &quot;
+			+ &quot;                ur.WorkflowTime AS UserResourceWorkflowTime, &quot;
+			+ &quot;                ur.ResourceType AS UserResourceEntityType, &quot;
+			+ &quot;                ( &quot;
+			+ &quot;                    SELECT &quot;
+			+ &quot;                        top 1 c.id &quot;
+			+ &quot;                    FROM &quot;
+			+ &quot;                        Contact c &quot;
+			+ &quot;                    where &quot;
+			+ &quot;                        c.AccountID = acc.id &quot;
+			+ &quot;                    order by &quot;
+			+ &quot;                        c.id &quot;
+			+ &quot;                ) AS contactid, &quot;
+			+ &quot;                acc.compliancestatus, &quot;
+			+ &quot;                acc.id as accountid, &quot;
+			+ &quot;                acc.NAME AS contactname, &quot;
+			+ &quot;                acc.tradeaccountnumber, &quot;
+			+ &quot;               &quot; + RegQueDBColumns.ACCOUNT_CREATEDON.getName()+  &quot; AS registeredon,  &quot;
+			+ &quot;                accattrib.sellcurrency, &quot;
+			+ &quot;                accattrib.buycurrency, &quot;
+			+ &quot;                accattrib.source, &quot;
+			+ &quot;                accattrib.transactionvalue, &quot;
+			+ &quot;                org.NAME AS organization, &quot;
+			+ &quot;                acc.[type] AS Type, &quot;
+			+ &quot;                acc.EIDStatus AS kycstatus, &quot;
+			+ &quot;                acc.BlacklistStatus AS blackliststatus, &quot;
+			+ &quot;                acc.FraugsterStatus AS fraugsterstatus, &quot;
+			+ &quot;                acc.SanctionStatus AS sanctionstatus &quot;
+			+ &quot;            FROM &quot;
+			+ &quot;                account acc &quot;
+			+ &quot;            JOIN accountattribute accattrib ON &quot;
+			+ &quot;                acc.id = accattrib.id &quot;
+			+ &quot;            JOIN organization org ON &quot;
+			+ &quot;                acc.organizationid = org.id &quot;
+			+ &quot;            LEFT JOIN userresourcelock ur ON &quot;
+			+ &quot;                acc.id = ur.resourceid &quot;
+			+ &quot;                AND ur.resourcetype = 'ACCOUNT' &quot;
+			+ &quot;            LEFT JOIN [user] usr ON &quot;
+			+ &quot;                usr.id = ur.createdby &quot;
+			+ &quot;            WHERE &quot;
+			+ &quot;                 {CFX_DATETIME_CRITERIA}  &quot;
+			+ &quot;                   acc.compliancestatus = 4 &quot;
+			+ &quot;                AND acc.[type] = 'CFX' &quot;
+			+ &quot;                AND ur.lockreleasedon IS NULL &quot;
+			+ &quot;              &quot;
+			+ &quot;        ) AS rqtemp&quot;),*/
+	
+<span class="fc" id="L432">    GET_PROFILE_ACTIVITY_LOGS_BY_ROWS(&quot;SELECT  ac.* FROM &quot;</span>
+			+ &quot; (SELECT  Row_number() over (ORDER BY pal.createdon desc) AS rownum,(select SSOUserID from [user] where ID=pal.activityby)              AS [User], &quot;
+			+ &quot;       pal.createdon, pal.comments , &quot;
+			+ &quot;       pald.log                    AS [Activity], &quot;
+			+ &quot;       ate.module + ' ' + ate.type AS [ActivityType] &quot;
+			+ &quot;       FROM   profileactivitylog pal &quot;
+			+ &quot;       JOIN profileactivitylogdetail pald &quot;
+			+ &quot;         ON pal.id = pald.activityid &quot;
+			+ &quot;       JOIN activitytypeenum ate &quot;
+			+ &quot;         ON pald.activitytype = ate.id &quot;
+			+ &quot;        WHERE   pal.contactid = ? OR (pal.Accountid=? AND pal.contactId IS NULL AND ate.module = 'PROFILE' )  ) as ac &quot;
+			+ &quot;         where rownum &gt;= ? and rownum &lt;= ? &quot;),
+    
+<span class="fc" id="L445">    SAVE_INTO_BROADCAST_QUEUE(&quot;INSERT INTO [StatusBroadCastQueue]([OrganizationID], [EntityType], [AccountID], [ContactID], [PaymentInID], [PaymentOutID], [StatusJson], [DeliveryStatus], [DeliverOn], [CreatedBy], [CreatedOn]) &quot;</span>
+    		+ &quot;    VALUES((SELECT ID FROM Organization WHERE code=?), ?, ?, ?, ?, ?, ?, ?, ?, (select Id from [user] where SSOUserID=?), ?)&quot;),
+    
+<span class="fc" id="L448">    GET_VIEWMORE_REGISTRATION_DETAILS(&quot;Select * from (SELECT Row_number() &quot;</span>
+			+ &quot; OVER (ORDER BY id DESC) AS rownum, PQueue.* &quot;
+			+ &quot; From &quot;
+			+ &quot; (SELECT esl.id, &quot;
+			+ &quot; esl.eventId, &quot;
+			+ &quot; esl.entitytype, &quot;
+			+ &quot; esl.entityid, &quot;
+			+ &quot; esl.createdon, &quot;
+			+ &quot; esl.updatedon, &quot;
+			+ &quot; (select SSOUserId from [user] where ID=esl.updatedBy) AS updatedBy , &quot;
+			+ &quot; esl.Summary &quot;
+			+ &quot;                           &quot;
+			+ &quot; FROM   eventservicelog esl &quot;
+			+ &quot;                   Left Join Event eve ON eve.id = esl.eventId &quot;
+			+ &quot; WHERE  servicetype = (SELECT id &quot;
+			+ &quot; FROM   compliance_servicetypeenum &quot;
+			+ &quot; WHERE code = ?) &quot;
+			+ &quot; AND entitytype = ? &quot;
+			+ &quot; and EntityID = ? &quot;
+			+ &quot;                         and eve.PaymentInID is null &quot;
+			+ &quot;                         and eve.PaymentOutID is null &quot;
+			+ &quot; ) AS PQueue ) AS PQueue2 &quot;
+			+ &quot; WHERE  rownum &gt;= ? &quot;
+			+ &quot; AND rownum &lt;= ? ORDER  BY updatedon DESC&quot;),
+
+<span class="fc" id="L473">	GET_BACKLISTED_CONTACTS_OF_ACCOUNT(&quot;SELECT EntityId, max (CreatedOn),status FROM  EventServiceLog &quot;</span>
+			+ &quot;where serviceType IN (3,5,8) and Status NOT IN (1,7,9) and EntityType=3 and EntityID IN &quot;
+			+ &quot;(select id from contact where accountId = ? AND Id &lt;&gt; ?) group by EntityId,Status&quot;),
+	
+<span class="fc" id="L477">	UPDATE_ACCOUNT_STATUS(&quot;UPDATE Account SET AccountStatus=?, ComplianceStatus= (SELECT Id FROM AccountComplianceStatusEnum WHERE status=?), ComplianceDoneOn = ? , ComplianceExpiry = ?, isOnQueue =? WHERE Id=? &quot;),</span>
+	
+<span class="fc" id="L479">	GET_PROVIDER_RESPONSE(&quot;select ProviderResponse from EventServiceLog where id = ?&quot;),</span>
+	
+<span class="fc" id="L481">	GET_VIEWMORE_REGISTRATION_DETAILS_FOR_CUSTOM_CHECK(&quot;Select * from  (SELECT esl.id, &quot;</span>
+			+ &quot;                            esl.status, &quot;
+			+ &quot;                            esl.eventId, &quot;
+			+ &quot; esl.entitytype, &quot;
+			+ &quot; esl.entityid, &quot;
+			+ &quot; esl.createdon, &quot;
+			+ &quot; esl.updatedon, &quot;
+			+ &quot; esl.Summary, &quot;
+			+ &quot;                          (select SSOUserId from [user] where ID=esl.updatedBy) AS updatedBy, &quot;
+			+ &quot;                          (select code from compliance_servicetypeenum where id = esl.servicetype ) AS ServiceType &quot;
+			+ &quot; FROM   eventservicelog esl &quot;
+			+ &quot;                   Left Join Event eve ON eve.id = esl.eventId &quot;
+			+ &quot; WHERE  servicetype IN   (SELECT id &quot;
+			+ &quot; FROM   compliance_servicetypeenum &quot;
+			+ &quot; WHERE  code IN (?,?,?)) &quot;
+			+ &quot;                                             &quot;
+			+ &quot; AND entitytype = ?&quot;
+			+ &quot; and EntityID = ?&quot;
+			+ &quot;                         and eve.PaymentInID is null &quot;
+			+ &quot;                         and eve.PaymentOutID is null &quot;
+			+ &quot; ) AS PQueue ORDER  BY eventId DESC, servicetype ASC&quot;),
+				
+<span class="fc" id="L503">	GET_ORGANIZATION(&quot;select Code from Organization&quot;),</span>
+	
+<span class="fc" id="L505">	GET_SOURCE(&quot;select distinct(source) from AccountAttribute&quot;),</span>
+	
+<span class="fc" id="L507">	GET_TRANSACTIONVALUE(&quot;select distinct(TransactionValue) from AccountAttribute&quot;),</span>
+	
+<span class="fc" id="L509">	GET_CURRENCY(&quot;select Code from Currency&quot;),</span>
+	
+<span class="fc" id="L511">	GET_PAYMENTOUTINFO_FOR_ACCOUNT(&quot;select * from(SELECT Row_number() &quot;</span>
+			+ &quot;OVER (ORDER BY poid DESC)  AS rownum, PQueue.* From (SELECT poa.id                 AS poid, &quot;
+			+ &quot; poa.transactiondate    AS [DateofPayment], &quot;
+			+ &quot; poa.buyingamount       AS Amount, &quot;
+			+ &quot; poa.buyingcurrency     AS BuyCurrency, &quot;
+			+ &quot; acc.NAME               AS Accountname, &quot;
+			+ &quot; acc.tradeaccountnumber AS Account &quot;
+			+ &quot; FROM   paymentoutattribute poa join PaymentOut po on poa.id = po.id JOIN account acc ON acc.id = po.accountid &quot;
+			+ &quot; WHERE  acc.id = ? &quot;
+			+ &quot; ) AS PQueue ) AS PQueue2 WHERE  rownum &gt;= ? &quot;
+			+ &quot; AND rownum &lt;= ? ORDER  BY DateofPayment DESC&quot;),
+	
+	//change in query to fetch beneficiary first name ,beneficiary last name and attributes column data  - Vishal J
+	/*GET_PAYMENTOUTINFO_FOR_ACCOUNT_SELECT(&quot;With PQueue(rownum,poid,DateofPayment, Amount,BuyCurrency,TradeContractNumber,BeneficiaryFirstName,BeneficiaryLastName,AccountNumber,PaymentReference,Attributes,Accountname,Account,Valuedate)  AS &quot;
+			+ &quot;            ( &quot;
+			+ &quot;                SELECT &quot;
+			+ &quot;                    Row_number() OVER (ORDER BY poa.id  DESC) AS rownum, &quot;
+			+ &quot;                    poa.id AS poid, &quot;
+			+ &quot;                    po.transactiondate AS DateofPayment, &quot;
+			+ &quot;                    poa.vBeneficiaryAmount AS Amount, &quot;
+			+ &quot;                    poa.vbuyingcurrency AS BuyCurrency, &quot;
+			+ &quot;                    po.ContractNumber AS TradeContractNumber,&quot;
+			+ &quot;                    poa.vbeneficiaryfirstname AS BeneficiaryFirstName, &quot;
+			+ &quot;                    poa.vbeneficiarylastname AS BeneficiaryLastName, &quot;
+			+ &quot; 				   JSON_VALUE(ATTRIBUTES, '$.beneficiary.account_number') AS AccountNumber,&quot;	
+			+ &quot;                    JSON_VALUE(ATTRIBUTES, '$.beneficiary.payment_reference') AS PaymentReference,&quot;
+			+ &quot;                    poa.attributes AS Attributes, &quot;
+			+ &quot;                    acc.NAME AS Accountname, &quot;
+			+ &quot;                    acc.tradeaccountnumber AS Account ,&quot;
+			+&quot;                     poa.vvaluedate AS Valuedate   &quot;
+			+ &quot;                FROM paymentoutattribute poa &quot;
+			+ &quot;                    join PaymentOut po on poa.id = po.id &quot;
+			+ &quot;                    JOIN account acc ON acc.id = po.accountid &quot;
+			+ &quot;                WHERE acc.id = ? &quot;
+			+ &quot;            ) &quot;
+			+ &quot;SELECT PQueue.*, ( SELECT max (rownum) FROM PQueue) AS 'TotalRows' FROM    PQueue &quot;
+			+ &quot;WHERE rownum &gt;= ? &quot;
+			+ &quot;    AND rownum &lt;= ? &quot;
+			+ &quot;ORDER BY DateofPayment DESC&quot;),*/
+	
+<span class="fc" id="L551">	GET_PAYMENTOUTINFO_FOR_ACCOUNT_SELECT(&quot;SELECT &quot;</span>
+			+ &quot; COUNT(poa.id) over ( partition by po.accountid) AS TotalRows, &quot;
+			+ &quot; poa.id AS poid, &quot;
+			+ &quot; po.transactiondate AS DateofPayment, &quot;
+			+ &quot; poa.vBankName AS BankName, &quot;
+			+ &quot; poa.vBeneficiaryAmount AS Amount, &quot;
+			+ &quot; poa.vbuyingcurrency AS BuyCurrency, &quot;
+			+ &quot; po.ContractNumber AS TradeContractNumber, &quot;
+			+ &quot; poa.vbeneficiaryfirstname AS BeneficiaryFirstName, &quot;
+			+ &quot; poa.vbeneficiarylastname AS BeneficiaryLastName, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.beneficiary.payment_reference') AS PaymentReference, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.beneficiary.account_number') AS AccountNumber, &quot;
+			+ &quot; acc.NAME               AS Accountname, &quot;
+			+ &quot; acc.tradeaccountnumber AS Account , &quot;
+			+ &quot; poa.vMaturityDate AS MaturityDate &quot;
+			+ &quot; FROM &quot;
+			+ &quot; paymentoutattribute poa join PaymentOut po on &quot;
+			+ &quot; poa.id = po.id &quot;
+			+ &quot; JOIN account acc ON &quot;
+			+ &quot; acc.id = po.accountid &quot;
+			+ &quot; WHERE &quot;
+			+ &quot; acc.id = ? &quot;
+			+ &quot; ORDER BY &quot;
+			+ &quot; poa.id DESC &quot;
+			+ &quot; OFFSET ? ROWS FETCH NEXT ? ROWS ONLY&quot;),
+	
+<span class="fc" id="L577">	GET_PAYMENTINFO_FOR_ACCOUNT(&quot;select * from (select Row_number() over (order by pyiid desc) AS rownum , PQueue.* From &quot;</span>
+			+ &quot;(SELECT pia.id                 AS pyiid, &quot;
+			+ &quot; pyi.transactiondate AS [DateofPayment], &quot;
+			+ &quot; pia.vTransactionAmount AS Amount, &quot;
+			+ &quot; pia.vTransactionCurrency     AS SellCurrency, &quot;
+			+ &quot; pia.vpaymentMethod      AS PaymentMethodin, &quot;
+			+ &quot; acc.NAME               AS Accountname, &quot;
+			+ &quot; acc.tradeaccountnumber AS Account &quot;
+			+ &quot; FROM   paymentInattribute pia join PaymentIn pyi on pia.id = pyi.id JOIN account acc ON acc.id = pyi.accountid &quot;
+			+ &quot; WHERE  acc.id = ? &quot;
+			+ &quot; ) AS PQueue ) AS PQueue2 where rownum &gt;= ? &quot;
+			+ &quot;and rownum&lt;= ? ORDER  BY DateofPayment DESC&quot;),
+	
+	//'attributes' column is fetched from paymentInAttribute table 
+	/*GET_PAYMENTINFO_FOR_ACCOUNT_SELECT(&quot;With PQueue(rownum,poid,DateofPayment,PaymentMethodin,Attributes,Amount,SellCurrency,Accountname,Account)  AS &quot;
+			+ &quot;            ( &quot;
+			+ &quot;                SELECT &quot;
+			+ &quot;                    Row_number() OVER (ORDER BY poa.id  DESC) AS rownum, &quot;
+			+ &quot;                    poa.id AS poid, &quot;
+			+ &quot;                    po.transactiondate AS DateofPayment, &quot;
+			+ &quot;			           poa.vpaymentMethod      AS PaymentMethodin, &quot;
+			+ &quot;                    poa.attributes AS Attributes, &quot;
+			+ &quot;                    poa.vTransactionAmount AS Amount, &quot;
+			+ &quot;                    poa.vTransactionCurrency AS SellCurrency, &quot;
+			+ &quot;                    acc.NAME AS Accountname, &quot;
+			+ &quot;                    acc.tradeaccountnumber AS Account &quot;
+			+ &quot;                FROM paymentInAttribute poa &quot;
+			+ &quot;                    join PaymentIn po on poa.id = po.id &quot;
+			+ &quot;                    JOIN account acc ON acc.id = po.accountid &quot;
+			+ &quot;                WHERE acc.id = ? &quot;
+			+ &quot;            ) &quot;
+			+ &quot;SELECT PQueue.*, ( SELECT max (rownum) FROM PQueue) AS 'TotalRows' FROM    PQueue &quot;
+			+ &quot;WHERE rownum &gt;= ? &quot;
+			+ &quot;    AND rownum &lt;= ? &quot;
+			+ &quot;ORDER BY DateofPayment DESC&quot;),*/
+	
+<span class="fc" id="L613">	GET_PAYMENTINFO_FOR_ACCOUNT_SELECT(&quot;SELECT &quot;</span>
+			+ &quot; COUNT(poa.id) over ( partition by po.accountid) AS TotalRows, &quot;
+			+ &quot; poa.id AS poid, &quot;
+			+ &quot; po.transactiondate AS DateofPayment, &quot;
+			+ &quot; poa.vpaymentMethod AS PaymentMethodin, &quot;
+			+ &quot; poa.vTransactionAmount AS Amount, &quot;
+			+ &quot; poa.vTransactionCurrency AS SellCurrency, &quot;
+			+ &quot; acc.NAME AS Accountname, &quot;
+			+ &quot; acc.tradeaccountnumber AS Account, &quot;
+			+ &quot; po.TradeContractNumber AS TradeContractNumber,&quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.trade.cc_first_name') AS Ccfirstname, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.debtorAccountNumber') AS DebtorAccountNumber, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.risk_score') AS RiskScore, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.risk_score.tScore') AS TScore, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.trade.debtor_name') AS DebtorName, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.trade.debtor_bank_name') AS BankName &quot;
+			+ &quot;FROM &quot;
+			+ &quot; paymentInAttribute poa join PaymentIn po on &quot;
+			+ &quot; poa.id = po.id &quot;
+			+ &quot;JOIN account acc ON &quot;
+			+ &quot; acc.id = po.accountid &quot;
+			+ &quot;WHERE &quot;
+			+ &quot; acc.id = ? &quot;
+			+ &quot;ORDER BY &quot;
+			+ &quot; poa.id DESC &quot;
+			+ &quot;OFFSET ? ROWS FETCH NEXT ? ROWS ONLY&quot;),
+	
+<span class="fc" id="L640">	GET_RECORDLOCK_STATUS(&quot;select * from UserResourceLock url Join [user] ur ON url.UserID = ur.id where ResourceID =? and ResourceType=? and LockReleasedOn is null&quot;),</span>
+	
+<span class="fc" id="L642">	GET_COUNTRY_LIST(&quot;select DisplayName AS Country from Country&quot;),</span>
+	
+	
+	
+	//***********Same Query to be used for all three flows*******************************************/
+	/*BeneficiaryFirstName, BeneficiaryLastName and Attributes columns from PaymentOutAttribute
+	are fetched to show beneficiary details on UI - Vishal J*/
+<span class="fc" id="L649">	GET_VIEWMORE_FURTHER_PAYMENT_OUT_DETAILS(&quot;select * from(SELECT Row_number() &quot;</span>
+			+ &quot;OVER (ORDER BY poid DESC)  AS rownum, PQueue.* From (SELECT poa.id                 AS poid, &quot;
+			+ &quot; po.transactiondate    AS [DateofPayment], &quot;
+			+ &quot; poa.vBankName AS BankName, &quot;
+			+ &quot; poa.BeneAmount       AS Amount, &quot;
+			+ &quot;                       poa.vbeneficiaryfirstname AS BeneficiaryFirstName, &quot;
+			+ &quot;                       poa.vbeneficiarylastname AS BeneficiaryLastName, &quot;
+			+ &quot;                       poa.attributes AS Attributes, &quot;
+			+ &quot;                       JSON_VALUE(ATTRIBUTES, '$.beneficiary.account_number') AS AccountNumber,&quot;
+			+ &quot;                       po.ContractNumber AS TradeContractNumber,&quot;
+			+ &quot;                       JSON_VALUE(ATTRIBUTES, '$.beneficiary.payment_reference') AS PaymentReference,&quot;
+			+ &quot; poa.vbuyingcurrency     AS BuyCurrency, &quot;
+			+ &quot; acc.NAME               AS Accountname, &quot;
+			+ &quot;                        poa.vMaturityDate   AS MaturityDate     ,    &quot;
+			+ &quot; acc.tradeaccountnumber AS Account &quot;
+			+ &quot; FROM   paymentoutattribute poa join PaymentOut po on poa.id = po.id JOIN account acc ON acc.id = po.accountid &quot;
+			+ &quot; WHERE  acc.id = ? &quot;
+			+ &quot; ) AS PQueue ) AS PQueue2 WHERE  rownum &gt;= ? &quot;
+			+ &quot; AND rownum &lt;= ? ORDER  BY DateofPayment DESC&quot;),
+	
+	/*GET_VIEWMORE_FURTHER_PAYMENT_IN_DETAILS(&quot;select * from (select Row_number() over (order by pyiid desc) AS rownum , PQueue.* From &quot;
+			+ &quot;(SELECT pia.id                 AS pyiid, &quot;
+			+ &quot;			              pyi.transactiondate    AS [DateofPayment], &quot;
+			+ &quot;			              pia.vTransactionAmount       AS Amount, &quot;
+			+ &quot;			              pia.vTransactionCurrency     AS SellCurrency, &quot;
+			+ &quot;                       pyi.TradeContractNumber AS TradeContractNumber,&quot;
+			+ &quot;                       JSON_VALUE(ATTRIBUTES, '$.trade.bill_ad_zip') AS PaymentReference,&quot;
+			+ &quot;			              pia.vpaymentMethod      AS PaymentMethodin, &quot;
+			+ &quot;                       pia.attributes AS Attributes, &quot;
+			+ &quot;			              acc.NAME               AS Accountname, &quot;
+			+ &quot;			              acc.tradeaccountnumber AS Account &quot;
+			+ &quot;			 FROM   paymentInattribute pia join PaymentIn pyi on pia.id = pyi.id JOIN account acc ON acc.id = pyi.accountid &quot;
+			+ &quot;			 WHERE  acc.id = ? &quot;
+			+ &quot;			 ) AS PQueue ) AS PQueue2 where rownum &gt;= ? &quot;
+			+ &quot;and rownum&lt;= ? ORDER  BY DateofPayment DESC&quot;),*/
+	
+<span class="fc" id="L685">	GET_VIEWMORE_FURTHER_PAYMENT_IN_DETAILS(&quot;select * from (select Row_number() over (order by pyiid desc) AS rownum , PQueue.* From &quot;</span>
+			+ &quot;(SELECT pia.id                 AS pyiid, &quot;
+			+ &quot; pyi.transactiondate    AS [DateofPayment], &quot;
+			+ &quot; pia.attributes AS Attributes, &quot;
+			+ &quot; pia.vTransactionAmount       AS Amount, &quot;
+			+ &quot; pia.vTransactionCurrency     AS SellCurrency, &quot;
+			+ &quot; pyi.TradeContractNumber AS TradeContractNumber, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.trade.bill_ad_zip') AS PaymentReference, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.trade.cc_first_name') AS Ccfirstname, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.trade.debtor_name') AS DebtorName, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.debtorAccountNumber') AS DebtorAccountNumber, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.risk_score') AS RiskScore, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.risk_score.tScore') AS TScore, &quot;
+			+ &quot; JSON_VALUE(ATTRIBUTES, '$.trade.debtor_bank_name') AS BankName, &quot;
+			+ &quot; pia.vpaymentMethod      AS PaymentMethodin, &quot;
+			+ &quot; acc.NAME               AS Accountname, &quot;
+			+ &quot; acc.tradeaccountnumber AS Account &quot;
+			+ &quot; FROM   paymentInattribute pia join PaymentIn pyi on pia.id = pyi.id JOIN account acc ON acc.id = pyi.accountid &quot;
+			+ &quot; WHERE  acc.id = ? &quot;
+			+ &quot; ) AS PQueue ) AS PQueue2 where rownum &gt;= ? &quot;
+			+ &quot; and rownum&lt;= ? ORDER  BY DateofPayment DESC&quot;),
+	
+<span class="fc" id="L707">	GET_FURTHER_PAYMENT_IN_DETAILS_COUNT(&quot;SELECT COUNT(*) as Count from PaymentIn where ID in (SELECT pia.id   AS pyiid &quot;</span>
+			+ &quot; FROM   paymentInattribute pia join PaymentIn pyi on pia.id = pyi.id JOIN account acc ON acc.id = pyi.accountid &quot;
+			+ &quot; WHERE  acc.id = ?)&quot;),
+	
+<span class="fc" id="L711">	GET_FURTHER_PAYMENT_OUT_DETAILS_COUNT(&quot;SELECT COUNT(*) as Count from PaymentOut where ID in (SELECT poa.id                 AS poid &quot;</span>
+			+ &quot; FROM   paymentoutattribute poa join PaymentOut po on poa.id = po.id JOIN account acc ON acc.id = po.accountid &quot;
+			+ &quot; WHERE  acc.id = ?)&quot;),
+	
+<span class="fc" id="L715">	GET_DOCUMENT_LIST(&quot;select * from Document&quot;),</span>
+	
+<span class="fc" id="L717">	GET_REG_QUEUE_FOR_PAGINATION_FILTER(&quot;WITH regque &quot;</span>
+			+ &quot; AS &quot;
+			+ &quot; ( &quot;
+			+ &quot; {INNER_QUERY} &quot;
+			+ &quot; ) &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; regque.*, &quot;
+			+ &quot; ( SELECT max (rownum) FROM regque) AS 'TotalRows' &quot;
+			+ &quot; FROM regque &quot;
+			+ &quot; WHERE  rownum in (?,?,?,?)&quot;),
+	
+<span class="fc" id="L728">	GET_PAGINATION_DETAILS(&quot;SELECT rc.* &quot;</span>
+			+ &quot; FROM   (SELECT Row_number() &quot;
+			+ &quot; OVER ( &quot;
+			+ &quot; ORDER BY contactid DESC) AS rownum, &quot;
+			+ &quot; rc1.* &quot;
+			+ &quot; FROM   (SELECT c.id                             AS contactid, &quot;
+			+ &quot; c.accountid, &quot;
+			+ &quot; acc.createdon                    AS registeredon, &quot;
+			+ &quot; accattrib.type, &quot;
+			+ &quot; accattrib.sellcurrency, &quot;
+			+ &quot; accattrib.buycurrency, &quot;
+			+ &quot; accattrib.source, &quot;
+			+ &quot; accattrib.transactionvalue, &quot;
+			+ &quot; (SELECT NAME &quot;
+			+ &quot; FROM   organization &quot;
+			+ &quot; WHERE  id = acc.organizationid) AS organization, &quot;
+			+ &quot; (SELECT TOP 1 status &quot;
+			+ &quot; FROM   eventservicelog e &quot;
+			+ &quot; WHERE  e.servicetype = (SELECT id &quot;
+			+ &quot; FROM &quot;
+			+ &quot; compliance_servicetypeenum &quot;
+			+ &quot; WHERE  code = 'KYC') &quot;
+			+ &quot; AND e.entityid = c.id &quot;
+			+ &quot; AND e.entitytype = 'CONTACT' and e.eventId IN (select id from Event where PaymentInID is null and PaymentOutID is null and accountid=acc.id ) &quot;
+			+ &quot; ORDER  BY e.updatedon DESC)     AS kycstatus, &quot;
+			+ &quot; (SELECT TOP 1 status &quot;
+			+ &quot; FROM   eventservicelog e &quot;
+			+ &quot; WHERE  e.servicetype = (SELECT id &quot;
+			+ &quot; FROM &quot;
+			+ &quot; compliance_servicetypeenum &quot;
+			+ &quot; WHERE  code = 'BLACKLIST') &quot;
+			+ &quot; AND e.entityid = c.id &quot;
+			+ &quot; AND e.entitytype = 'CONTACT' and e.eventId IN (select id from Event where PaymentInID is null and PaymentOutID is null and accountid=acc.id ) &quot;
+			+ &quot; ORDER  BY e.updatedon DESC)     AS blackliststatus, &quot;
+			+ &quot; (SELECT TOP 1 status &quot;
+			+ &quot; FROM   eventservicelog e &quot;
+			+ &quot; WHERE  e.servicetype = (SELECT id &quot;
+			+ &quot; FROM &quot;
+			+ &quot; compliance_servicetypeenum &quot;
+			+ &quot; WHERE  code = 'FRAUGSTER') &quot;
+			+ &quot; AND e.entityid = c.id &quot;
+			+ &quot; AND e.entitytype = 'CONTACT' and e.eventId IN (select id from Event where PaymentInID is null and PaymentOutID is null and accountid=acc.id ) &quot;
+			+ &quot; ORDER  BY e.updatedon DESC)     AS fraugsterstatus, &quot;
+			+ &quot; (SELECT TOP 1 status &quot;
+			+ &quot; FROM   eventservicelog e &quot;
+			+ &quot; WHERE  e.servicetype = (SELECT id &quot;
+			+ &quot; FROM &quot;
+			+ &quot; compliance_servicetypeenum &quot;
+			+ &quot; WHERE  code = 'SANCTION') &quot;
+			+ &quot; AND e.entityid = c.id &quot;
+			+ &quot; AND e.entitytype = 'CONTACT' and e.eventId IN (select id from Event where PaymentInID is null and PaymentOutID is null  and accountid=acc.id) &quot;
+			+ &quot; ORDER  BY e.updatedon DESC)     AS sanctionstatus &quot;
+			+ &quot; FROM   contact c &quot;
+			+ &quot; LEFT JOIN account acc &quot;
+			+ &quot; ON acc.id = c.accountid &quot;
+			+ &quot; LEFT JOIN accountattribute accAttrib &quot;
+			+ &quot; ON c.accountid = accattrib.id &quot;
+			+ &quot; WHERE  c.compliancestatus IN (4,5) ) AS rc1 &quot;
+			+ &quot; ) AS rc &quot;
+			+ &quot; WHERE  rownum in (?,?,?,?)&quot;),
+	
+<span class="fc" id="L789">	UPDATE_ACCOUNT_FROM_ATTRIBUTE(&quot;update AccountAttribute set Attributes = ? where id=?&quot;),</span>
+	
+<span class="fc" id="L791">	GET_ACC_ATTRIBUTE(&quot;Select Attributes From AccountAttribute Where Id=?&quot;),</span>
+	
+<span class="fc" id="L793">	GET_KYC_SUPPORTED_COUNTRY_LIST(&quot;SELECT * FROM Country WHERE DisplayName IN (SELECT Country FROM KYC_CountryProviderMapping)&quot;),</span>
+	
+<span class="fc" id="L795">	GET_ACCOUNT_CONTACT_IDS_BY_CONTACT_ID(&quot;select c.TradeContactId,c.CRMContactID,a.CRMAccountID,a.TradeAccountID,a.TradeAccountNumber FROM Contact c left join Account a on c.AccountID=a.id where c.id=?&quot;),</span>
+	
+<span class="fc" id="L797">	UPDATE_WORKFLOW_TIME(&quot;UPDATE [UserResourceLock] SET WorkflowTime=? WHERE ID=?&quot;),</span>
+	
+<span class="fc" id="L799">	UPDATE_WATCHLISTSTATUS_ACCOUNT(&quot;UPDATE [Account] SET UpdatedBy=(select id  from [user] where SSOUserID=?),UpdatedOn=?,PayInWatchlistStatus=?,PayOutWatchlistStatus=? WHERE Id=?&quot;),</span>
+	
+	//New AT-2986
+<span class="fc" id="L802">	UPDATE_WATCHLISTSTATUS_CONTACT(&quot;UPDATE [Contact] SET UpdatedBy=(select id  from [user] where SSOUserID=?),UpdatedOn=?,PayInWatchlistStatus=?,PayOutWatchlistStatus=? WHERE Id=?&quot;),</span>
+		
+<span class="fc" id="L804">	GET_DEVICE_INFO(&quot;SELECT deviceinfo.UserAgent,deviceinfo.CreatedOn, eve.EventType ,ete.Type &quot;</span>
+			+ &quot;         FROM DeviceInfo AS deviceinfo &quot;
+			+ &quot;         JOIN Event AS eve &quot;
+			+ &quot;         ON deviceinfo.EventID = eve.ID &quot;
+			+ &quot;         JOIN EventTypeEnum ete &quot;
+			+ &quot;         ON eve.EventType = ete.ID &quot;
+			+ &quot;         WHERE eve.accountid = ? &quot;
+			+ &quot;         ORDER BY deviceinfo.CreatedOn&quot;),
+	
+<span class="fc" id="L813">	GET_OLD_ACCOUNT_STATUS(&quot;select compliancestatus from Account where ID = ?&quot;),</span>
+	
+	
+<span class="fc" id="L816">	GET_ACCOUNT_HISTORY(&quot;select  &quot;</span>
+			+ &quot; case   when aa.version = 1 then aa.attributes &quot;
+			+ &quot; else aah.attributes end as attributes,   aa.createdOn AS createdon , a.ComplianceDoneOn as compliancedoneon&quot;
+			+ &quot; from AccountAttribute aa LEFT JOIN AccountAttributeHistory aah ON AA.id=aah.accountid   &quot;
+			+ &quot; and Aah.version=1 JOIN account a  on a.id=AA.id   WHERE aa.id=?  &quot;),
+	
+<span class="fc" id="L822">	GET_CONTACT_HISTORY(&quot;select case when ca.version =1 then ca.attributes else cah.attributes end as attributes  &quot;</span>
+			+ &quot; from ContactAttribute ca left join ContactAttributeHistory cah on ca.id = cah.contactid  &quot;
+			+ &quot; and cah.version = 1  &quot;
+			+ &quot; join contact c on c.id = ca.id  &quot;
+			+ &quot; join account a on c.accountid=a.id  &quot;
+			+ &quot; where datediff(minute,a.createdOn,c.CreatedOn) &lt; ? And a.id=? &quot;),
+	
+<span class="fc" id="L829">	GET_DEVICE_FOR_SIGNUP(&quot;SELECT *    FROM DeviceInfo AS deviceinfo    JOIN Event AS eve   &quot;</span>
+			+ &quot;  ON deviceinfo.EventID = eve.ID  AND eve.EventType=1 &quot;
+			+ &quot;  JOIN EventTypeEnum ete    ON eve.EventType = ete.ID   &quot;
+			+ &quot;   WHERE eve.accountid = ?  ORDER BY deviceinfo.CreatedOn&quot;),
+	
+<span class="fc" id="L834">	GET_WATCHLIST_REASON_LIST_FOR_PAYMENTOUT_AND_PAYMENTIN(&quot;SELECT Reason,StopPaymentIn,StopPaymentOut,Category FROM watchlist WHERE (StopPaymentIn = 1 OR StopPaymentOut = 1)&quot;),</span>
+	
+<span class="fc" id="L836">	GET_CONTACT_WATCHLIST(&quot;select DISTINCT watch.Reason from contactwatchlist cw   Join WatchList watch   &quot;</span>
+			+ &quot;    ON watch.id = cw.reason where contact IN (select id from Contact where Accountid= ? )&quot;),
+	
+	//Added for AT-2986
+<span class="fc" id="L840">	GET_CONTACT_WATCHLIST_FOR_PFX(&quot;select DISTINCT watch.Reason from contactwatchlist cw   Join WatchList watch   &quot;</span>
+				+ &quot;    ON watch.id = cw.reason where contact = ?&quot;),
+		
+<span class="fc" id="L843">	GET_ALERT_COMPLIANCE_LOG(&quot;SELECT TOP 1 * FROM ProfileActivityLogDetail PALD  &quot;</span>
+			+ &quot; JOIN ProfileActivityLog PAL ON PALD.ActivityID = PAL.ID &quot;
+			+ &quot; JOIN ActivityTypeEnum ATE ON ATE.id = PALD.ActivityType AND ATE.Module='PROFILE' AND ATE.[Type]='COMPLIANCE_LOG'&quot;
+			+ &quot; where PAL.AccountID= ? order by PALD.id desc&quot;),
+	
+<span class="fc" id="L848">	GET_FRAUGSTER_PROVIDER_RESPONSE_BY_ACCOUNTID(&quot;WITH SelectedID AS( &quot;</span>
+			+ &quot;SELECT &quot;
+			+ &quot; Row_number() OVER (PARTITION BY esl.EntityID ORDER BY esl.updatedon DESC) rnum , &quot;
+			+ &quot; esl.entityType,esl.EntityID, JSON_VALUE(esl.ProviderResponse, &quot;
+			+ &quot; '$.frgTransId') AS frgTransId, &quot;
+			+ &quot; JSON_VALUE(esl.ProviderResponse, &quot;
+			+ &quot; '$.fraugsterApproved') AS fraugsterApproved, &quot;
+			+ &quot; esl.id AS eventServiceLogId, u.SSOUserID AS UpdatedBy  &quot;
+			+ &quot; FROM &quot;
+			+ &quot; EventServiceLog esl left JOIN Event e ON E.id=esl.eventid JOIN [User] u ON u.id=esl.updatedby &quot;
+			+ &quot;WHERE &quot;
+			+ &quot; e.Accountid=? &quot;
+			+ &quot; AND esl.ServiceType=6 And esl.status NOT IN(5,8,9) and e.eventType IN (1,2,3)&quot;
+			+ &quot;and JSON_VALUE(esl.ProviderResponse, '$.frgTransId') is not null) &quot;
+			+ &quot;SELECT * FROM SelectedID WHERE rnum=1&quot;),
+	
+<span class="fc" id="L864">	GET_FRAUGSTER_PROVIDER_RESPONSE_BY_CONTACTID(&quot;WITH SelectedID AS( &quot;</span>
+			+ &quot;SELECT &quot;
+			+ &quot; Row_number() OVER (PARTITION BY esl.EntityID ORDER BY esl.updatedon DESC) rnum , &quot;
+			+ &quot; esl.entityType,esl.EntityID, JSON_VALUE(esl.ProviderResponse, '$.frgTransId') AS frgTransId, &quot;
+			+ &quot; JSON_VALUE(esl.ProviderResponse, '$.fraugsterApproved') AS fraugsterApproved,&quot;
+			+ &quot; JSON_VALUE(esl.ProviderResponse, '$.score') AS score,&quot;
+			+ &quot; esl.id AS eventServiceLogId, u.SSOUserID AS UpdatedBy &quot;
+			+ &quot;FROM &quot;
+			+ &quot; EventServiceLog esl left JOIN Event e ON E.id=esl.eventid &quot;
+			+ &quot; JOIN CONTACT c on c.id=esl.entityid JOIN [User] u ON u.id=esl.updatedby &quot;
+			+ &quot;WHERE &quot;
+			+ &quot; c.id= ? &quot;
+			+ &quot; AND esl.ServiceType=6 And esl.status NOT IN(5,8,9) and e.eventType IN (1,2,3)&quot;
+			+ &quot;and JSON_VALUE(esl.ProviderResponse, '$.frgTransId') is not null) &quot;
+			+ &quot;SELECT * FROM SelectedID WHERE rnum=1&quot;),
+	
+<span class="fc" id="L880">	GET_FRAUGSTER_PROVIDER_RESPONSE_FOR_PAYMENT(&quot;WITH SelectedID AS( &quot;</span>
+			+ &quot;SELECT &quot;
+			+ &quot; Row_number() OVER (PARTITION BY esl.EntityID ORDER BY esl.updatedon DESC) rnum , &quot;
+			+ &quot; esl.entityType,esl.EntityID, JSON_VALUE(esl.ProviderResponse, '$.frgTransId') AS frgTransId, &quot;
+			+ &quot; JSON_VALUE(esl.ProviderResponse, '$.fraugsterApproved') AS fraugsterApproved, &quot;
+			+ &quot; esl.id AS eventServiceLogId, u.SSOUserID AS UpdatedBy  &quot;
+			+ &quot;FROM &quot;
+			+ &quot; EventServiceLog esl left JOIN Event e ON E.id=esl.eventid &quot;
+			+ &quot; JOIN CONTACT c on c.id=esl.entityid JOIN [User] u ON u.id=esl.updatedby &quot;
+			+ &quot;WHERE &quot;
+			+ &quot; c.id= ? &quot;
+			+ &quot; AND esl.ServiceType=6 And esl.status NOT IN(5,8,9) and e.eventType = ? AND esl.EntityType=3&quot;
+			+ &quot;and JSON_VALUE(esl.ProviderResponse, '$.frgTransId') is not null) &quot;
+			+ &quot;SELECT * FROM SelectedID WHERE rnum=1&quot;),
+	
+<span class="fc" id="L895">	INSERT_FRAUGSTER_SCHEDULAR_DATA(&quot;INSERT INTO FraugsterSchedularData (AtlasID, FraugsterTransactionID, Status, AsyncStatus, &quot;</span>
+			+ &quot;AsyncStatusDate, CreatedBy) VALUES(?,?,?,?,?,(select Id from [user] where SSOUserID=?))&quot;),
+	
+<span class="fc" id="L898">	UPDATE_CONTACT_IS_ON_QUEUE_STATUS(</span>
+			&quot;UPDATE [Contact] SET UpdatedBy=(select id  from [user] where SSOUserID=?), UpdatedOn = ? , isOnQueue = ? WHERE Id=?&quot;),
+	
+<span class="fc" id="L901">	GET_FRAUGSTER_PROVIDER_RESPONSE(&quot;select JSON_VALUE(esl.ProviderResponse, '$.frgTransId') AS frgTransId,esl.EntityID, &quot;</span>
+			+ &quot; JSON_VALUE(esl.ProviderResponse, '$.fraugsterApproved') AS fraugsterApproved from EventServiceLog esl &quot;
+			+ &quot; where ServiceType = 6 and esl.status NOT IN(5,8,9) and id =?&quot;),
+	
+<span class="fc" id="L905">	GET_CONTACTID_BY_ACCOUNTID(&quot;select id from Contact Where Accountid = ?&quot;),</span>
+	
+<span class="fc" id="L907">	UPDATE_FRAUGSTER_SCHEDULAR_DATA_FOR_WL(&quot;UPDATE  FraugsterSchedularData &quot;</span>
+			+ &quot;  SET   AsyncStatus= ? , AsyncStatusDate= ? , &quot;
+			+ &quot; UpdatedBy = (select Id from [user] where SSOUserID=?) , UpdatedOn = ?, Delivered = ? WHERE FraugsterTransactionID = ? &quot;),
+	
+<span class="fc" id="L911">	UPDATE_FRAUGSTER_SCHEDULAR_DATA_FOR_REASON(&quot;UPDATE  FraugsterSchedularData &quot;</span>
+			+ &quot;  SET   AsyncStatus= ? , AsyncStatusDate= ? , &quot;
+			+ &quot; UpdatedBy = (select Id from [user] where SSOUserID=?) , UpdatedOn = ? , Delivered = ? WHERE FraugsterTransactionID = ? &quot;),
+	
+<span class="fc" id="L915">	GET_SERVICE_FAILURE_REG_COUNT(&quot;SELECT SUM(Sanction_Fail)as Sanction_Fail, SUM(Fraugster_Fail) as Fraugster_Fail, &quot;</span>
+			+ &quot;SUM(Eid_Fail) as Eid_Fail, SUM(Blacklist_Fail) as Blacklist_Fail &quot;
+			+ &quot;FROM ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; count(CASE WHEN a.SanctionStatus IN (8) THEN 1 ELSE NULL END ) AS Sanction_Fail, &quot;
+			+ &quot; count(CASE WHEN a.BlacklistStatus IN (8) THEN 1 ELSE NULL END ) AS Blacklist_Fail, &quot;
+			+ &quot; NULL AS Fraugster_Fail , &quot;
+			+ &quot; NULL AS Eid_Fail &quot;
+			+ &quot; FROM Account A &quot;
+			+ &quot; where a.createdon BETWEEN ? AND ? &quot;
+			+ &quot; AND a.ComplianceStatus = 4 &quot;
+			+ &quot; AND a.type &lt;&gt; 2 &quot;
+			+ &quot; UNION &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; count(CASE WHEN c.SanctionStatus IN (8) THEN 1 ELSE NULL END ) AS Sanction_Fail, &quot;
+			+ &quot; count(CASE WHEN c.BlacklistStatus IN (8) THEN 1 ELSE NULL END ) AS Blacklist_Fail, &quot;
+			+ &quot; count(CASE WHEN c.FraugsterStatus IN (8) THEN 1 ELSE NULL END )AS Fraugster_Fail , &quot;
+			+ &quot; count(CASE WHEN c.EIDStatus IN (8) THEN 1 ELSE NULL END )AS Eid_Fail &quot;
+			+ &quot; FROM Contact C JOIN Account acc on acc.id = c.AccountID &quot;
+			+ &quot; where c.createdon BETWEEN ? AND ? &quot;
+			+ &quot; AND c.ComplianceStatus = 4 &quot;
+			+ &quot; ) countTable&quot;), 
+	
+<span class="fc" id="L938">	GET_SERVICE_FAILURE_REGISTRATION_DETAILS_FOR_PFX (&quot; SELECT NULL AS AccountID, c.id As ContactId , A.type &quot;</span>
+			+ &quot; FROM Contact C JOIN Account A ON c.accountid=A.id &quot;
+			+ &quot; WHERE &quot;
+			+ &quot; c.ComplianceStatus = 4 &quot;
+			+ &quot; AND (c.fraugsterstatus IN(8) &quot;
+			+ &quot; OR c.SanctionStatus IN(8) &quot;
+			+ &quot; OR c.BlacklistStatus IN(8) &quot;
+			+ &quot; OR c.EIDStatus IN(8)) &quot;
+			+ &quot; AND a.type = 2 &quot;
+			+ &quot; and c.createdon BETWEEN ? AND ? &quot;),
+	
+<span class="fc" id="L949">	GET_SERVICE_FAILURE_REGISTRATION_DETAILS_FOR_CFX (&quot;SELECT acc.id AS AccountID, &quot;</span>
+			+ &quot;       NULL   AS ContactId, &quot;
+			+ &quot;       acc.type &quot;
+			+ &quot;FROM   account acc &quot;
+			+ &quot;       JOIN contact con &quot;
+			+ &quot;         ON con.accountid = acc.id &quot;
+			+ &quot;WHERE  acc.compliancestatus = 4 &quot;
+			+ &quot;       AND ( acc.blackliststatus IN( 8 ) &quot;
+			+ &quot;              OR acc.sanctionstatus IN( 8 ) ) &quot;
+			+ &quot;       AND acc.type &lt;&gt; 2 &quot;
+			+ &quot;       AND acc.createdon BETWEEN ? AND ? &quot;
+			+ &quot;UNION &quot;
+			+ &quot;SELECT NULL AS AccountID, &quot;
+			+ &quot;       c.id AS ContactId, &quot;
+			+ &quot;       A.type &quot;
+			+ &quot;FROM   contact C &quot;
+			+ &quot;       JOIN account A &quot;
+			+ &quot;         ON c.accountid = A.id &quot;
+			+ &quot;WHERE  c.compliancestatus = 4 &quot;
+			+ &quot;       AND ( c.blackliststatus IN( 8 ) &quot;
+			+ &quot;              OR c.fraugsterstatus IN( 8 ) &quot;
+			+ &quot;               ) &quot;
+			+ &quot;       AND a.type &lt;&gt; 2 &quot;
+			+ &quot;       AND c.createdon BETWEEN ? AND ?&quot;),
+	
+<span class="fc" id="L974">	INSERT_INTO_REPROCESS_FAILED_REGISTRATION (&quot;INSERT INTO ReproccessFailed &quot; </span>
+            + &quot; (TransType, BatchId, TransId, Status, RetryCount, CreatedBy, CreatedOn)&quot;
+            + &quot; VALUES(?, ?, ?, ?, ?, ?, ?)&quot; 
+            ),
+	
+<span class="fc" id="L979">	GET_MAX_BATCH_ID_FROM_REPROCESS_FAILED(&quot;SELECT Max(BatchId) AS MaxBatchId FROM ReproccessFailed&quot;),</span>
+	
+<span class="fc" id="L981">	INSERT_INTO_REPROCESS_FAILED (&quot;INSERT INTO ReproccessFailed &quot; </span>
+            + &quot; (TransType, BatchId, TransId, Status, RetryCount, CreatedBy, CreatedOn)&quot;
+            + &quot; VALUES(?, ?, ?, ?, ?, ?, ?)&quot; 
+            ),
+	
+<span class="fc" id="L986">	GET_REPROCESS_ELIGIBLE_REGISTRATIONS(&quot;SELECT * FROM ReproccessFailed where BatchId = ? and TransType IN (1, 4)&quot;),</span>
+	
+<span class="fc" id="L988">	GET_CONTACTS_FOR_CURRENT_ACCOUNT(&quot;SELECT CRMContactID, TradeContactID FROM Contact where AccountID = ?&quot;),</span>
+	
+<span class="fc" id="L990">	GET_PAYEE_CLIENT_DETAILS(&quot;SELECT name FROM Account where TradeAccountNumber = ?&quot;),</span>
+	
+<span class="fc" id="L992">	GET_BENE_CLIENT_TRADE_ACCOUNT_NUMBER(&quot;SELECT tradeaccountnumber from account where id = ?&quot;),</span>
+	
+<span class="fc" id="L994">	GET_PAYMENT_DETAILS(&quot; select &quot;</span>
+						+ &quot; po.TransactionDate, &quot;
+						+ &quot; poa.vBuyingCurrency, &quot;
+						+ &quot; poa.vBeneficiaryAmount, &quot;
+						+ &quot; JSON_VALUE(poa.Attributes,'$.beneficiary.payment_reference') as reference, &quot;
+						+ &quot; po.ComplianceStatus, &quot;
+						+ &quot; po.UpdatedOn &quot;
+						+ &quot; from Comp.PaymentOut po &quot;
+						+ &quot; join Comp.Account acc on acc.ID = po.AccountID &quot;
+						+ &quot; join Comp.PaymentOutAttribute poa on po.ID =poa.ID &quot;
+						+ &quot; where acc.TradeAccountNumber=? and &quot;
+						+ &quot; poa.vTradeBeneficiaryID=? &quot;
+						+ &quot; and po.OrganizationID= &quot;
+						+ &quot; (Select id from Comp.Organization where code = ?)&quot;
+						+ &quot;  and po.ComplianceStatus &lt;&gt; 6&quot;),
+	
+<span class="fc" id="L1010">	CHECK_IF_BENE_IS_WHITELISTED(&quot;Select * from WhiteListBeneficiary where AccountNumber = ? and Deleted = 0&quot;),</span>
+	
+<span class="fc" id="L1012">	GET_LEGAL_ENTITY(&quot;select Code from LegalEntity&quot;),</span>
+	
+<span class="fc" id="L1014">	DEVICE_ID_JOIN(&quot;JOIN Event e ON A.AccountId = e.AccountID AND e.EventType = 1&quot;  </span>
+			+  &quot; JOIN DeviceInfo di ON di.EventID = e.ID&quot;),
+	
+<span class="fc" id="L1017">	ONFIDO_JOIN(&quot;JOIN ACCOUNT ac ON A.AccountId = ac.id &quot;),</span>
+	
+	//AT-5465
+<span class="fc" id="L1020">	GET_SERVICE_FAILURE_REG_COUNT_FOR_ACTIVE_CUSTOMER(&quot;SELECT SUM(Sanction_Fail)as Sanction_Fail, SUM(Fraugster_Fail) as Fraugster_Fail, &quot;</span>
+			+ &quot;SUM(Eid_Fail) as Eid_Fail, SUM(Blacklist_Fail) as Blacklist_Fail &quot;
+			+ &quot;FROM ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; count(CASE WHEN a.SanctionStatus IN (8) THEN 1 ELSE NULL END ) AS Sanction_Fail, &quot;
+			+ &quot; count(CASE WHEN a.BlacklistStatus IN (8) THEN 1 ELSE NULL END ) AS Blacklist_Fail, &quot;
+			+ &quot; NULL AS Fraugster_Fail , &quot;
+			+ &quot; NULL AS Eid_Fail &quot;
+			+ &quot; FROM Account A &quot;
+			+ &quot; where a.createdon BETWEEN ? AND ? &quot;
+			+ &quot; AND a.ComplianceStatus IN (1, 4) &quot;
+			+ &quot; AND a.type &lt;&gt; 2 &quot;
+			+ &quot; UNION &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; count(CASE WHEN c.SanctionStatus IN (8) THEN 1 ELSE NULL END ) AS Sanction_Fail, &quot;
+			+ &quot; count(CASE WHEN c.BlacklistStatus IN (8) THEN 1 ELSE NULL END ) AS Blacklist_Fail, &quot;
+			+ &quot; count(CASE WHEN c.FraugsterStatus IN (8) THEN 1 ELSE NULL END )AS Fraugster_Fail , &quot;
+			+ &quot; count(CASE WHEN c.EIDStatus IN (8) THEN 1 ELSE NULL END )AS Eid_Fail &quot;
+			+ &quot; FROM Contact C JOIN Account acc on acc.id = c.AccountID &quot;
+			+ &quot; where c.createdon BETWEEN ? AND ? &quot;
+			+ &quot; AND c.ComplianceStatus IN (1, 4) &quot;
+			+ &quot; ) countTable&quot;),
+	
+	//AT-5465
+<span class="fc" id="L1044">	GET_SERVICE_FAILURE_REGISTRATION_DETAILS_FOR_PFX_ACTIVE_CUSTOMER (&quot; SELECT NULL AS AccountID, c.id As ContactId , A.type &quot;</span>
+			+ &quot; FROM Contact C JOIN Account A ON c.accountid=A.id &quot;
+			+ &quot; WHERE &quot;
+			+ &quot; c.ComplianceStatus IN(1,4) &quot;
+			+ &quot; AND (c.fraugsterstatus IN(8) &quot;
+			+ &quot; OR c.SanctionStatus IN(8) &quot;
+			+ &quot; OR c.BlacklistStatus IN(8) &quot;
+			+ &quot; OR c.EIDStatus IN(8)) &quot;
+			+ &quot; AND a.type = 2 &quot;
+			+ &quot; and c.createdon BETWEEN ? AND ? &quot;),
+	
+<span class="fc" id="L1055">	UPDATE_CONTACT_POI_EXISTS_FLAG(&quot;update Contact set POIExists = 1 where CRMContactID = ?&quot;),//AT-3391</span>
+	
+<span class="fc" id="L1057">	UPDATE_TMMQ_RETRY_COUNT(&quot;UPDATE TransactionMonitoringMQ SET RetryCount = 0&quot;),//Add for AT-4185</span>
+	
+	//AT-5023
+<span class="fc" id="L1060">	UPDATE_POST_CARD_TMMQ_RETRY_COUNT(&quot;UPDATE PostCardTransactionMonitoringMQ SET RetryCount = 0&quot;),</span>
+	
+	//AT-5465
+<span class="fc" id="L1063">	GET_SERVICE_FAILURE_REGISTRATION_DETAILS_FOR_CFX_ACTIVE_CUSTOMER(&quot;SELECT acc.id AS AccountID, &quot;</span>
+			+ &quot;       NULL   AS ContactId, &quot;
+			+ &quot;       acc.type &quot;
+			+ &quot;FROM   account acc &quot;
+			+ &quot;       JOIN contact con &quot;
+			+ &quot;         ON con.accountid = acc.id &quot;
+			+ &quot;WHERE  acc.compliancestatus IN(1, 4) &quot;
+			+ &quot;       AND ( acc.blackliststatus IN( 8 ) &quot;
+			+ &quot;              OR acc.sanctionstatus IN( 8 ) ) &quot;
+			+ &quot;       AND acc.type &lt;&gt; 2 &quot;
+			+ &quot;       AND acc.createdon BETWEEN ? AND ? &quot;
+			+ &quot;UNION &quot;
+			+ &quot;SELECT NULL AS AccountID, &quot;
+			+ &quot;       c.id AS ContactId, &quot;
+			+ &quot;       A.type &quot;
+			+ &quot;FROM   contact C &quot;
+			+ &quot;       JOIN account A &quot;
+			+ &quot;         ON c.accountid = A.id &quot;
+			+ &quot;WHERE  c.compliancestatus IN(1, 4) &quot;
+			+ &quot;       AND ( c.blackliststatus IN( 8 ) &quot;
+			+ &quot;              OR c.fraugsterstatus IN( 8 ) &quot;
+			+ &quot;               ) &quot;
+			+ &quot;       AND a.type &lt;&gt; 2 &quot;
+			+ &quot;       AND c.createdon BETWEEN ? AND ?&quot;);
+	
+	private String query;
+
+<span class="fc" id="L1090">	RegistrationQueryConstant(String query) {</span>
+<span class="fc" id="L1091">		this.query = query;</span>
+
+<span class="fc" id="L1093">	}</span>
+
+	public String getQuery() {
+<span class="fc" id="L1096">		return this.query;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SanctionRepeatCheckAtivityLogBuilder.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.sanction</a> &gt; <span class="el_source">SanctionRepeatCheckAtivityLogBuilder.java</span></div><h1>SanctionRepeatCheckAtivityLogBuilder.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.sanction;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.integration.annotation.ServiceActivator;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogData;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityTemplateEnum;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ProfileActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.FundsInSanctionResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResendResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionSummary;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.EntityDetails;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class SanctionRepeatCheckAtivityLogBuilder.
+ */
+<span class="nc" id="L47">public class SanctionRepeatCheckAtivityLogBuilder {</span>
+	
+	private static final String SANCTION = &quot;Sanction&quot;;
+  private static final String ENTITY_NAME = &quot;{ENTITY_NAME}&quot;;
+  private static final String UPDATED_STATUS = &quot;{UPDATED_STATUS}&quot;;
+  private static final String PRE_STATUS = &quot;{PRE_STATUS}&quot;;
+  private static final String RECHECK_SERVICE_NAME = &quot;{RECHECK_SERVICE_NAME}&quot;;
+<span class="nc" id="L54">  private static final Logger LOGGER = LoggerFactory.getLogger(SanctionRepeatCheckAtivityLogBuilder.class);</span>
+	/**
+	 * Builds the activity logs for sanction repeat check and adds into message
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@ServiceActivator
+	public Message&lt;MessageContext&gt; buildActivityLogs(Message&lt;MessageContext&gt; message){
+		
+		try {
+<span class="nc" id="L65">		UserProfile userProfile = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L66">		String userName = userProfile.getPreferredUserName();</span>
+		
+<span class="nc" id="L68">		MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+		
+<span class="nc" id="L70">		SanctionResponse fResponse = (SanctionResponse) exchange.getResponse();</span>
+<span class="nc" id="L71">		List&lt;SanctionContactResponse&gt; contactList = fResponse.getContactResponses();</span>
+		
+<span class="nc" id="L73">		ServiceInterfaceType eventType = message.getPayload().getGatewayMessageExchange().getServiceInterface();</span>
+<span class="nc" id="L74">		OperationEnum operation = message.getPayload().getGatewayMessageExchange().getOperation();</span>
+<span class="nc" id="L75">		ActivityLogs activityLogs = null;</span>
+		String summary;
+<span class="nc" id="L77">		SanctionResendResponse resendResponse = new SanctionResendResponse();</span>
+<span class="nc bnc" id="L78" title="All 4 branches missed.">		if(ServiceInterfaceType.PROFILE ==  eventType &amp;&amp; OperationEnum.SANCTION_RESEND == operation){</span>
+<span class="nc" id="L79">			RegistrationServiceRequest request = message.getPayload().getGatewayMessageExchange().getRequest(RegistrationServiceRequest.class);</span>
+<span class="nc" id="L80">			String entityType = (String) request.getAdditionalAttribute(&quot;entityType&quot;);</span>
+			
+			EventServiceLog eventServiceLog;
+<span class="nc bnc" id="L83" title="All 2 branches missed.">			if(EntityEnum.ACCOUNT.name().equalsIgnoreCase(entityType)){</span>
+<span class="nc" id="L84">				eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.ACCOUNT.name(), request.getAccount().getId());</span>
+<span class="nc" id="L85">				summary = eventServiceLog.getSummary();</span>
+			}else{
+<span class="nc" id="L87">				eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.CONTACT.name(), contactList.get(0).getContactId());</span>
+<span class="nc" id="L88">				summary = eventServiceLog.getSummary();</span>
+			}
+			
+<span class="nc" id="L91">			List&lt;ProfileActivityLogDto&gt; activityLogDtos = getProfileActivityLog(request, userName, eventServiceLog, entityType);</span>
+<span class="nc" id="L92">			activityLogs = getActivityLogData(activityLogs, activityLogDtos);</span>
+<span class="nc" id="L93">			resendResponse.addAttribute(&quot;profileActivities&quot;, activityLogDtos);</span>
+<span class="nc" id="L94">			setSanctionSummaryData(userName, summary, resendResponse, eventServiceLog);</span>
+<span class="nc" id="L95">			resendResponse.setActivityLogs(activityLogs);</span>
+<span class="nc" id="L96">			resendResponse.setEventServiceLogId(eventServiceLog.getEventServiceLogId());</span>
+		}
+		
+<span class="nc bnc" id="L99" title="All 4 branches missed.">		if(ServiceInterfaceType.FUNDSOUT ==  eventType &amp;&amp; OperationEnum.SANCTION_RESEND == operation){</span>
+<span class="nc" id="L100">			FundsOutRequest fundsOutRequest = message.getPayload().getGatewayMessageExchange().getRequest(FundsOutRequest.class);</span>
+			
+<span class="nc" id="L102">			EventServiceLog eventServiceLog = getPaymentOutServiceLog(fundsOutRequest, exchange);</span>
+<span class="nc" id="L103">			setSanctionSummaryFromESL(userName, resendResponse, eventServiceLog);</span>
+<span class="nc" id="L104">			List&lt;PaymentOutActivityLogDto&gt; activityLogDtos = getPaymentOutActivityLog(fundsOutRequest,userName,eventServiceLog);</span>
+<span class="nc" id="L105">			activityLogs = getPaymentOutActivityLogData(activityLogs, activityLogDtos);</span>
+<span class="nc" id="L106">			resendResponse.addAttribute(&quot;paymentOutActivities&quot;, activityLogDtos);</span>
+<span class="nc" id="L107">			resendResponse.setActivityLogs(activityLogs);</span>
+<span class="nc" id="L108">			setESLogId(resendResponse, eventServiceLog);</span>
+		}
+		
+<span class="nc bnc" id="L111" title="All 4 branches missed.">		if(ServiceInterfaceType.FUNDSIN ==  eventType &amp;&amp; OperationEnum.SANCTION_RESEND == operation){</span>
+<span class="nc" id="L112">			FundsInCreateRequest fundsInCreateRequest = message.getPayload().getGatewayMessageExchange().getRequest(FundsInCreateRequest.class);</span>
+<span class="nc" id="L113">			EventServiceLog eventServiceLog = getPaymentInServiceLog(fundsInCreateRequest, exchange);</span>
+<span class="nc" id="L114">			summary = eventServiceLog.getSummary();</span>
+<span class="nc" id="L115">			setSanctionSummaryData(userName, summary, resendResponse, eventServiceLog);</span>
+<span class="nc" id="L116">			List&lt;PaymentInActivityLogDto&gt; activityLogDtos = getPaymentInActivityLog(fundsInCreateRequest, userName, eventServiceLog);</span>
+<span class="nc" id="L117">			activityLogs = getPaymentInActivityLogData(activityLogs, activityLogDtos);</span>
+<span class="nc" id="L118">			resendResponse.addAttribute(&quot;paymentInActivities&quot;, activityLogDtos);</span>
+<span class="nc" id="L119">			resendResponse.setActivityLogs(activityLogs);</span>
+<span class="nc" id="L120">			resendResponse.setEventServiceLogId(eventServiceLog.getEventServiceLogId());</span>
+		}
+		
+<span class="nc" id="L123">		message.getPayload().getGatewayMessageExchange().setResponse(resendResponse);</span>
+<span class="nc" id="L124">		} catch(Exception ex){</span>
+<span class="nc" id="L125">			LOGGER.error(&quot;Exception : &quot;,ex);</span>
+<span class="nc" id="L126">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L127">		}</span>
+<span class="nc" id="L128">		return message;</span>
+	}
+
+	private ActivityLogs getPaymentInActivityLogData(ActivityLogs activityLogs,
+			List&lt;PaymentInActivityLogDto&gt; activityLogDtos) {
+<span class="nc bnc" id="L133" title="All 4 branches missed.">		if(activityLogDtos != null &amp;&amp; !activityLogDtos.isEmpty()){</span>
+<span class="nc" id="L134">			activityLogs = getPaymentInActivityLogsResponse(activityLogDtos);</span>
+		}
+<span class="nc" id="L136">		return activityLogs;</span>
+	}
+
+	private void setSanctionSummaryFromESL(String userName, SanctionResendResponse resendResponse,
+			EventServiceLog eventServiceLog) {
+<span class="nc bnc" id="L141" title="All 2 branches missed.">		if(null != eventServiceLog) {</span>
+<span class="nc" id="L142">			SanctionSummary sanctionSummary = JsonConverterUtil.convertToObject(SanctionSummary.class, eventServiceLog.getSummary());</span>
+<span class="nc" id="L143">			sanctionSummary.setEventServiceLogId(eventServiceLog.getEventServiceLogId());</span>
+<span class="nc" id="L144">			sanctionSummary.setUpdatedBy(userName);</span>
+<span class="nc" id="L145">			resendResponse.setSummary(sanctionSummary);</span>
+		}
+<span class="nc" id="L147">	}</span>
+
+	private void setESLogId(SanctionResendResponse resendResponse, EventServiceLog eventServiceLog) {
+<span class="nc bnc" id="L150" title="All 2 branches missed.">		if(null != eventServiceLog) </span>
+<span class="nc" id="L151">			resendResponse.setEventServiceLogId(eventServiceLog.getEventServiceLogId());</span>
+<span class="nc" id="L152">	}</span>
+
+	private ActivityLogs getPaymentOutActivityLogData(ActivityLogs activityLogs,
+			List&lt;PaymentOutActivityLogDto&gt; activityLogDtos) {
+<span class="nc bnc" id="L156" title="All 4 branches missed.">		if(activityLogDtos != null &amp;&amp; !activityLogDtos.isEmpty()){</span>
+<span class="nc" id="L157">			activityLogs = getPaymentOutActivityLogsResponse(activityLogDtos);</span>
+		}
+<span class="nc" id="L159">		return activityLogs;</span>
+	}
+
+	private void setSanctionSummaryData(String userName, String summary, SanctionResendResponse resendResponse,
+			EventServiceLog eventServiceLog) {
+<span class="nc bnc" id="L164" title="All 2 branches missed.">		if(summary != null) {</span>
+<span class="nc" id="L165">			SanctionSummary sanctionSummary = JsonConverterUtil.convertToObject(SanctionSummary.class, summary);</span>
+<span class="nc" id="L166">			sanctionSummary.setEventServiceLogId(eventServiceLog.getEventServiceLogId());</span>
+<span class="nc" id="L167">			sanctionSummary.setUpdatedBy(userName);</span>
+<span class="nc" id="L168">			resendResponse.setSummary(sanctionSummary);</span>
+		}
+<span class="nc" id="L170">	}</span>
+
+	private ActivityLogs getActivityLogData(ActivityLogs activityLogs, List&lt;ProfileActivityLogDto&gt; activityLogDtos) {
+<span class="nc bnc" id="L173" title="All 4 branches missed.">		if(activityLogDtos != null &amp;&amp; !activityLogDtos.isEmpty()){</span>
+<span class="nc" id="L174">			activityLogs = getActivityLogsResponse(activityLogDtos);</span>
+		}
+<span class="nc" id="L176">		return activityLogs;</span>
+	}
+	
+	private List&lt;ProfileActivityLogDto&gt; getProfileActivityLog(RegistrationServiceRequest request, String userName,
+			EventServiceLog log, String entityType) {
+		
+<span class="nc" id="L182">		List&lt;ProfileActivityLogDto&gt; activityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L183">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L184">		EntityDetails entityDetails = (EntityDetails)request.getAdditionalAttribute(Constants.FIELD_ENTITY_DETAILS);</span>
+		
+		Contact contact;
+<span class="nc" id="L187">			ProfileActivityLogDto sanctionActivityLogDto = new ProfileActivityLogDto();</span>
+<span class="nc" id="L188">			sanctionActivityLogDto.setAccountId(request.getAccount().getId());</span>
+<span class="nc" id="L189">			ActivityLogDetailDto sanctionActivityLogDetailDto = new ActivityLogDetailDto();</span>
+<span class="nc" id="L190">			sanctionActivityLogDto.setActivityLogDetailDto(sanctionActivityLogDetailDto);</span>
+<span class="nc bnc" id="L191" title="All 2 branches missed.">			if(EntityEnum.ACCOUNT.name().equalsIgnoreCase(entityType)){</span>
+<span class="nc" id="L192">				sanctionActivityLogDetailDto.setLog(ActivityTemplateEnum.RECHECK.getTemplate()</span>
+<span class="nc" id="L193">			    		.replace(RECHECK_SERVICE_NAME,SANCTION)</span>
+<span class="nc" id="L194">			    		.replace(PRE_STATUS, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L195">			    		.replace(UPDATED_STATUS, log.getStatus().toLowerCase())</span>
+<span class="nc" id="L196">			    		.replace(ENTITY_NAME, entityDetails.getAccountName()));</span>
+			}else{
+<span class="nc" id="L198">				contact = request.getAccount().getContacts().get(0);</span>
+<span class="nc" id="L199">				sanctionActivityLogDto.setContactId(contact.getId());</span>
+<span class="nc" id="L200">				sanctionActivityLogDetailDto.setLog(ActivityTemplateEnum.RECHECK.getTemplate()</span>
+<span class="nc" id="L201">			    		.replace(RECHECK_SERVICE_NAME,SANCTION)</span>
+<span class="nc" id="L202">			    		.replace(PRE_STATUS, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L203">			    		.replace(UPDATED_STATUS, log.getStatus().toLowerCase())</span>
+<span class="nc" id="L204">						.replace(ENTITY_NAME,entityDetails.getContactName()));</span>
+			}
+<span class="nc" id="L206">			sanctionActivityLogDto.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L207">			sanctionActivityLogDto.setActivityBy(userName);</span>
+<span class="nc" id="L208">			sanctionActivityLogDto.setCreatedBy(userName);</span>
+<span class="nc" id="L209">			sanctionActivityLogDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L210">			sanctionActivityLogDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L211">			sanctionActivityLogDto.setTimeStatmp(timestamp);</span>
+<span class="nc" id="L212">			sanctionActivityLogDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L213">			sanctionActivityLogDetailDto.setActivityType(ActivityType.PROFILE_SANCTION_RECHECK);</span>
+<span class="nc" id="L214">			sanctionActivityLogDetailDto.setCreatedBy(userName);</span>
+<span class="nc" id="L215">			sanctionActivityLogDetailDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L216">			sanctionActivityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L217">			sanctionActivityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L218">			activityLogDtos.add(sanctionActivityLogDto);</span>
+<span class="nc" id="L219">		return activityLogDtos;</span>
+	}
+	
+	private ActivityLogs getActivityLogsResponse(List&lt;ProfileActivityLogDto&gt; activityLogDtos){
+<span class="nc" id="L223">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L224">		List&lt;ActivityLogData&gt; activityData = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">		for (ProfileActivityLogDto profileActivityLogDto : activityLogDtos) {</span>
+<span class="nc" id="L226">		    ActivityLogData activity = new ActivityLogData();</span>
+<span class="nc" id="L227">		    activity.setActivity(profileActivityLogDto.getActivityLogDetailDto().getLog());</span>
+<span class="nc" id="L228">			activity.setActivityType(ActivityType.PROFILE_SANCTION_RECHECK.getModule() +&quot; &quot;+ActivityType.PROFILE_SANCTION_RECHECK.getType());</span>
+<span class="nc" id="L229">			activity.setCreatedBy(profileActivityLogDto.getActivityBy());</span>
+<span class="nc" id="L230">			activity.setCreatedOn(profileActivityLogDto.getCreatedOn().toString());</span>
+<span class="nc" id="L231">			activityData.add(activity);</span>
+<span class="nc" id="L232">		}</span>
+<span class="nc" id="L233">		activityLogs.setActivityLogData(activityData);</span>
+<span class="nc" id="L234">		return activityLogs;</span>
+	}
+	
+	private  List&lt;PaymentOutActivityLogDto&gt; getPaymentOutActivityLog(FundsOutRequest request,String userName,EventServiceLog logs){
+		
+<span class="nc" id="L239">		List&lt;PaymentOutActivityLogDto&gt; activityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L240">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L241">			PaymentOutActivityLogDto sanctionPOActivityLogDto = new PaymentOutActivityLogDto();</span>
+<span class="nc" id="L242">			sanctionPOActivityLogDto.setPaymentOutId(request.getFundsOutId());</span>
+<span class="nc" id="L243">			sanctionPOActivityLogDto.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L244">			sanctionPOActivityLogDto.setActivityBy(userName);</span>
+<span class="nc" id="L245">			sanctionPOActivityLogDto.setCreatedBy(userName);</span>
+<span class="nc" id="L246">			sanctionPOActivityLogDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L247">			sanctionPOActivityLogDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L248">			sanctionPOActivityLogDto.setTimeStatmp(timestamp);</span>
+<span class="nc" id="L249">			sanctionPOActivityLogDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L250">			PaymentOutActivityLogDetailDto sanctionPOActivityLogDetailDto = new PaymentOutActivityLogDetailDto();</span>
+<span class="nc" id="L251">			sanctionPOActivityLogDto.setActivityLogDetailDto(sanctionPOActivityLogDetailDto);</span>
+<span class="nc" id="L252">			sanctionPOActivityLogDetailDto.setActivityType(ActivityType.PAYMENT_OUT_SANCTION_RECHECK);</span>
+<span class="nc" id="L253">			sanctionPOActivityLogDetailDto.setLog(getPaymentOutSanctionLog(request,logs));</span>
+<span class="nc" id="L254">			sanctionPOActivityLogDetailDto.setCreatedBy(userName);</span>
+<span class="nc" id="L255">			sanctionPOActivityLogDetailDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L256">			sanctionPOActivityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L257">			sanctionPOActivityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L258">			activityLogDtos.add(sanctionPOActivityLogDto);</span>
+<span class="nc" id="L259">		return activityLogDtos;</span>
+	}
+	
+	
+	private ActivityLogs getPaymentOutActivityLogsResponse(List&lt;PaymentOutActivityLogDto&gt; activityLogDtos){
+<span class="nc" id="L264">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L265">		List&lt;ActivityLogData&gt; activityData = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">		for (PaymentOutActivityLogDto profileActivityLogDto : activityLogDtos) {</span>
+<span class="nc" id="L267">		    ActivityLogData activity = new ActivityLogData();</span>
+<span class="nc" id="L268">		    activity.setActivity(profileActivityLogDto.getActivityLogDetailDto().getLog());</span>
+<span class="nc" id="L269">			activity.setActivityType(ActivityType.PAYMENT_OUT_SANCTION_RECHECK.getModule() +&quot; &quot;+ActivityType.PAYMENT_OUT_SANCTION_RECHECK.getType());</span>
+<span class="nc" id="L270">			activity.setCreatedBy(profileActivityLogDto.getActivityBy());</span>
+<span class="nc" id="L271">			activity.setCreatedOn(profileActivityLogDto.getCreatedOn().toString());</span>
+<span class="nc" id="L272">			activityData.add(activity);</span>
+<span class="nc" id="L273">		}</span>
+<span class="nc" id="L274">		activityLogs.setActivityLogData(activityData);</span>
+<span class="nc" id="L275">		return activityLogs;</span>
+	}
+	
+	private String getPaymentOutSanctionLog(FundsOutRequest request,EventServiceLog log){
+<span class="nc" id="L279">		EntityDetails entityDetails = (EntityDetails)request.getAdditionalAttribute(Constants.FIELD_ENTITY_DETAILS);</span>
+		
+<span class="nc bnc" id="L281" title="All 2 branches missed.">		if(Boolean.TRUE.equals(request.getIsContactEligible())){</span>
+<span class="nc" id="L282">			return  ActivityTemplateEnum.RECHECK.getTemplate()</span>
+<span class="nc" id="L283">		    		.replace(RECHECK_SERVICE_NAME,&quot;Sanction Contact&quot;)</span>
+<span class="nc" id="L284">		    		.replace(PRE_STATUS, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L285">		    		.replace(UPDATED_STATUS, log.getStatus().toLowerCase())</span>
+<span class="nc" id="L286">		    		.replace(ENTITY_NAME, entityDetails.getContactName());</span>
+		} 
+<span class="nc bnc" id="L288" title="All 2 branches missed.">		if(Boolean.TRUE.equals(request.getIsBeneficiaryEligible())){</span>
+<span class="nc" id="L289">			return  ActivityTemplateEnum.RECHECK.getTemplate()</span>
+<span class="nc" id="L290">		    		.replace(RECHECK_SERVICE_NAME,&quot;Sanction Beneficiary&quot;)</span>
+<span class="nc" id="L291">		    		.replace(PRE_STATUS, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L292">		    		.replace(UPDATED_STATUS, log.getStatus().toLowerCase())</span>
+<span class="nc" id="L293">					.replace(ENTITY_NAME, entityDetails.getBeneficiaryName());</span>
+		}
+<span class="nc bnc" id="L295" title="All 2 branches missed.">		if(Boolean.TRUE.equals(request.getIsBankEligible())){</span>
+<span class="nc" id="L296">			return  ActivityTemplateEnum.RECHECK.getTemplate()</span>
+<span class="nc" id="L297">		    		.replace(RECHECK_SERVICE_NAME,&quot;Sanction Bank&quot;)</span>
+<span class="nc" id="L298">		    		.replace(PRE_STATUS, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L299">		    		.replace(UPDATED_STATUS, log.getStatus().toLowerCase())</span>
+<span class="nc" id="L300">		    		.replace(ENTITY_NAME, entityDetails.getBankName());</span>
+		}
+		
+<span class="nc" id="L303">		return null;</span>
+		
+	}
+	
+	private EventServiceLog getPaymentOutServiceLog(FundsOutRequest request, MessageExchange exchange){
+<span class="nc bnc" id="L308" title="All 2 branches missed.">		if (Boolean.TRUE.equals(request.getIsContactEligible())) {</span>
+<span class="nc" id="L309">			Contact contact = (Contact) request.getAdditionalAttribute(&quot;contact&quot;);</span>
+<span class="nc" id="L310">			return exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.CONTACT.name(), contact.getId());</span>
+		}
+<span class="nc bnc" id="L312" title="All 2 branches missed.">		if (Boolean.TRUE.equals(request.getIsBeneficiaryEligible())) {</span>
+<span class="nc" id="L313">			return exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.BENEFICIARY.name(), request.getBeneficiary().getBeneficiaryId());</span>
+		}
+<span class="nc bnc" id="L315" title="All 2 branches missed.">		if (Boolean.TRUE.equals(request.getIsBankEligible())) {</span>
+<span class="nc" id="L316">			return exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.BANK.name(), request.getBeneficiary().getBeneficiaryBankid());</span>
+		}
+<span class="nc" id="L318">		return null;</span>
+	}
+	
+private  List&lt;PaymentInActivityLogDto&gt; getPaymentInActivityLog(FundsInCreateRequest request, String userName, EventServiceLog log){
+		
+<span class="nc" id="L323">		List&lt;PaymentInActivityLogDto&gt; activityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L324">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L325">			PaymentInActivityLogDto activityLogDto = new PaymentInActivityLogDto();</span>
+<span class="nc" id="L326">			activityLogDto.setPaymentInId(request.getFundsInId());</span>
+<span class="nc" id="L327">			activityLogDto.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L328">			activityLogDto.setActivityBy(userName);</span>
+<span class="nc" id="L329">			activityLogDto.setCreatedBy(userName);</span>
+<span class="nc" id="L330">			activityLogDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L331">			activityLogDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L332">			activityLogDto.setTimeStatmp(timestamp);</span>
+<span class="nc" id="L333">			activityLogDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L334">			PaymentInActivityLogDetailDto activityLogDetailDto = new PaymentInActivityLogDetailDto();</span>
+<span class="nc" id="L335">			activityLogDto.setActivityLogDetailDto(activityLogDetailDto);</span>
+<span class="nc" id="L336">			activityLogDetailDto.setActivityType(ActivityType.PAYMENT_IN_SANCTION_RECHECK);</span>
+<span class="nc" id="L337">			activityLogDetailDto.setLog(getPaymentInSanctionLog(request,log));</span>
+<span class="nc" id="L338">			activityLogDetailDto.setCreatedBy(userName);</span>
+<span class="nc" id="L339">			activityLogDetailDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L340">			activityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L341">			activityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L342">			activityLogDtos.add(activityLogDto);</span>
+<span class="nc" id="L343">		return activityLogDtos;</span>
+	}
+	
+	
+	private ActivityLogs getPaymentInActivityLogsResponse(List&lt;PaymentInActivityLogDto&gt; activityLogDtos){
+<span class="nc" id="L348">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L349">		List&lt;ActivityLogData&gt; activityData = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">		for (PaymentInActivityLogDto profileActivityLogDto : activityLogDtos) {</span>
+<span class="nc" id="L351">		    ActivityLogData activity = new ActivityLogData();</span>
+<span class="nc" id="L352">		    activity.setActivity(profileActivityLogDto.getActivityLogDetailDto().getLog());</span>
+<span class="nc" id="L353">			activity.setActivityType(ActivityType.PAYMENT_IN_SANCTION_RECHECK.getModule() +&quot; &quot;+ActivityType.PAYMENT_IN_SANCTION_RECHECK.getType());</span>
+<span class="nc" id="L354">			activity.setCreatedBy(profileActivityLogDto.getActivityBy());</span>
+<span class="nc" id="L355">			activity.setCreatedOn(profileActivityLogDto.getCreatedOn().toString());</span>
+<span class="nc" id="L356">			activityData.add(activity);</span>
+<span class="nc" id="L357">		}</span>
+<span class="nc" id="L358">		activityLogs.setActivityLogData(activityData);</span>
+<span class="nc" id="L359">		return activityLogs;</span>
+	}
+	
+	private String getPaymentInSanctionLog(FundsInCreateRequest request, EventServiceLog log){
+		
+<span class="nc" id="L364">		EntityDetails entityDetails = (EntityDetails)request.getAdditionalAttribute(Constants.FIELD_ENTITY_DETAILS);</span>
+		
+<span class="nc" id="L366">			return  ActivityTemplateEnum.RECHECK.getTemplate()</span>
+<span class="nc" id="L367">		    		.replace(RECHECK_SERVICE_NAME,SANCTION)</span>
+<span class="nc" id="L368">		    		.replace(PRE_STATUS, entityDetails.getPrevStatus())</span>
+<span class="nc" id="L369">		    		.replace(UPDATED_STATUS, log.getStatus().toLowerCase())</span>
+<span class="nc" id="L370">		    		.replace(ENTITY_NAME, entityDetails.getContactName());</span>
+	}
+	
+	private EventServiceLog getPaymentInServiceLog(FundsInCreateRequest request, MessageExchange exchange){
+<span class="nc" id="L374">		FundsInSanctionResendRequest resendRequest = (FundsInSanctionResendRequest) request.getAdditionalAttribute(&quot;FUNDS_IN_REPEAT&quot;);</span>
+<span class="nc" id="L375">		return exchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.DEBTOR.name(), resendRequest.getEntityId());</span>
+	}
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

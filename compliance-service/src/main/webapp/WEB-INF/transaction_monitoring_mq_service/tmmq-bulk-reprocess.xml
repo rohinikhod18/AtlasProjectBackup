@@ -1,0 +1,135 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+
+
+	<int:channel
+		id="INTUITION.TRANSACTION_MONITORING_MQ_RESEND.in.channel" />
+	<int:channel id="PUSH.TMMQ.BULK.OUT.CHANNEL" />
+	<int:channel id="TMMQ.BULK.SERVICE.IN.CHANNEL" />
+
+	<int:chain id="tmmq.bulk.initChain"
+		input-channel="INTUITION.TRANSACTION_MONITORING_MQ_RESEND.in.channel"
+		output-channel="TMMQ.BULK.SERVICE.IN.CHANNEL">
+		<int:service-activator
+			ref="TransactionMonitoringMQDBServiceImpl" id="TMMQ.BULK.DB.LOAD"
+			method="loadMessageFromDB" />
+
+	</int:chain>
+
+	<int:chain id="tmmq.bulk.servicechain"
+		input-channel="TMMQ.BULK.SERVICE.IN.CHANNEL"
+		output-channel="MQ.INTUITIONSTATUS.BULK">
+		<int:service-activator id="tm.mq.bulk.createEvent"
+			ref="eventDBServiceImpl" method="createEventTMMQ" />
+		<int:transformer ref="tmmqTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="TMMQ.BULK.TRANSACTIONMONITORING" method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_MQ_RESEND')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_MQ_RESEND}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceResponse" />
+		</int:service-activator>
+		<int:transformer ref="tmmqTransformer"
+			method="transformResponse" />
+
+		<int:service-activator
+			id="SAVE.EVENT.SERVICE.TM.BULK" ref="eventDBServiceImpl"
+			method="createEventSerivceLog">
+		</int:service-activator>
+
+		<int:service-activator
+			id="TMMQ.BULK.Exec.Rules" ref="MQRulesService"
+			method="process">
+		</int:service-activator>
+
+		<int:service-activator
+			ref="TransactionMonitoringMQDBServiceImpl" id="TMMQ.BULK.DB.UPDATE"
+			method="updateMQStatusToDB" />
+			
+		<int:service-activator
+			ref="TransactionMonitoringMQDBServiceImpl" id="TMMQ.BULK.DB.UPDATE.INTUITION.RISK.LEVEL"
+			method="updateAccountIntuitionRiskLevel" />
+		
+
+		<int:service-activator
+			id="profile.activitylog.tm.bulk" ref="tmactivityDBServiceImpl"
+			method="createSTPTransactionMonitoringMQActivityLog" />
+		<int:service-activator
+			id="fundsin.kafkaTxExecutor"
+			ref="kafkaTxExecutorServiceImpl"
+			method="executeKafkaTx" />	
+
+		<int:service-activator
+			ref="TransactionMonitoringMQDBServiceImpl" id="TMMQ.BULK.DB.DELETE"
+			method="removeDeliveredRecordFromTMMQTable" />
+			
+		<int:service-activator
+			ref="TransactionMonitoringMQDBServiceImpl" id="TMMQ.BULK.DB.STATUS.BROADCAST"
+			method="updateStatusInBoardCastQueue" />
+
+<!-- If retry count is 5 then we send alert email to support team -->
+		<int:service-activator
+			ref="TransactionMonitoringEmailAlertImpl" id="TMMQ.BULK.EMAIL.ALERT"
+			method="sendEmailAlert" />
+
+	</int:chain>
+
+	<int:chain
+		input-channel="MQ.INTUITIONSTATUS.BULK">
+		<int:router
+			default-output-channel="PUSH.TMMQ.OUT.CHANNEL"
+			resolution-required="false"
+			expression="payload.isIntuitionMQStatusHold()">
+			<int:mapping
+				value="true"
+				channel="TRANSACTIONMONITORINGMQSTATUS.BULK" />
+			<int:mapping
+				value="false"
+				channel="PUSH.TMMQ.BULK.OUT.CHANNEL" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain input-channel="TRANSACTIONMONITORINGMQSTATUS.BULK"
+	output-channel="PUSH.TMMQ.BULK.OUT.CHANNEL"> 
+		<int:service-activator
+			id="TMMQ.BULK.TRANSACTIONMONITORING.RESEND" method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_MQ_RESEND')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_MQ_RESEND}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceResponse" />
+		</int:service-activator>
+	</int:chain>
+
+	<int:chain id="tmmq.bulk.responsechain"
+		input-channel="PUSH.TMMQ.BULK.OUT.CHANNEL" output-channel="nullChannel">
+		<int:service-activator
+			ref="transactionMonitoringMqService" method="handleResponse" />
+	</int:chain>
+	
+
+</beans>

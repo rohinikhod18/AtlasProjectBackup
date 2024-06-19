@@ -1,0 +1,468 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>InternalServicesFacade.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">internalrule-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.core</a> &gt; <span class="el_source">InternalServicesFacade.java</span></div><h1>InternalServicesFacade.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.core;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistPayrefContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.CardFraudScoreResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.ContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.CountryCheckContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.FraudSightScoreResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.GlobalCheckContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequestData;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.IpContactResponse;
+import com.currenciesdirect.gtg.compliance.exception.InternalRuleErrors;
+import com.currenciesdirect.gtg.compliance.exception.InternalRuleException;
+import com.currenciesdirect.gtg.compliance.exception.countrycheck.CountryCheckErrors;
+import com.currenciesdirect.gtg.compliance.util.Constants;
+import com.currenciesdirect.gtg.compliance.util.RequestTypes;
+
+/**
+ * @author manish
+ *
+ */
+public class InternalServicesFacade implements InternalService {
+
+<span class="nc" id="L29">	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(InternalServicesFacade.class);</span>
+	
+<span class="nc" id="L31">	private static InternalService internalService = null;</span>
+
+<span class="nc" id="L33">	private ServiceExecutor serviceExecutor = ServiceExecutor.getInstance();</span>
+
+<span class="nc" id="L35">	private InternalServicesFacade() {</span>
+
+<span class="nc" id="L37">	}</span>
+
+	public static InternalService getInstance() {
+<span class="nc bnc" id="L40" title="All 2 branches missed.">		if (internalService == null) {</span>
+<span class="nc" id="L41">			internalService = new InternalServicesFacade();</span>
+		}
+<span class="nc" id="L43">		return internalService;</span>
+	}
+	
+	/**
+	 * Business--
+	 * Perform checks.
+	 * Depending on requestType method is called.
+	 * @param request the request
+	 * @return the internal service response
+	 * @throws InternalRuleException the internal rule exception
+	 */
+	@Override
+	public InternalServiceResponse performCheck(InternalServiceRequest request) throws InternalRuleException {
+<span class="nc" id="L56">		InternalServiceResponse internalServiceResponse = null;</span>
+		try {			
+<span class="nc" id="L58">			RequestTypes requestType = RequestTypes.valueOf(request.getRequestType().toUpperCase());</span>
+<span class="nc" id="L59">			checkRequestType(requestType);</span>
+<span class="nc" id="L60">			internalServiceResponse = checkForRegistration(requestType, request);</span>
+<span class="nc bnc" id="L61" title="All 2 branches missed.">			if (null == internalServiceResponse) {</span>
+<span class="nc bnc" id="L62" title="All 8 branches missed.">				switch (requestType) {				</span>
+				case PAYMENT_IN:
+<span class="nc" id="L64">					return performPaymentIn(request);</span>
+				case PAYMENT_OUT:
+<span class="nc" id="L66">					return performPaymentOut(request);</span>
+				case SHOW_BLACKLIST_DATA:
+<span class="nc" id="L68">					return showBlacklistDataByType(request);</span>
+				case ADD_BLACKLIST_DATA:
+<span class="nc" id="L70">					return saveIntoBlacklistData(request);</span>
+				case DELETE_BLACKLIST_DATA:
+<span class="nc" id="L72">					return deleteFromBlacklistData(request);</span>
+				case SEARCH_BLACKLIST_DATA:
+<span class="nc" id="L74">					return searchBlacklistData(request);</span>
+				case PAYMENT_OUT_PAY_REF:
+<span class="nc" id="L76">					return performPaymentOutPayRef(request); //AT-3658</span>
+				default:
+<span class="nc" id="L78">					throw new InternalRuleException(InternalRuleErrors.INVALID_REQUEST_TYPE);</span>
+				}
+			}
+<span class="nc" id="L81">		} catch (InternalRuleException exception) {</span>
+<span class="nc" id="L82">			throw exception;</span>
+
+<span class="nc" id="L84">		} catch (Exception exception) {</span>
+<span class="nc" id="L85">			throw new InternalRuleException(InternalRuleErrors.FAILED, exception);</span>
+<span class="nc" id="L86">		}</span>
+<span class="nc" id="L87">		return internalServiceResponse;</span>
+
+	}
+
+	private InternalServiceResponse checkForRegistration(RequestTypes requestType, InternalServiceRequest request)
+			throws InternalRuleException {
+<span class="nc" id="L93">		InternalServiceResponse internalServiceResponse = null;</span>
+		try {
+<span class="nc bnc" id="L95" title="All 3 branches missed.">			switch (requestType) {</span>
+			case SIGNUP_PFX:
+			case ADD_CONTACT_PFX:
+			case UPDATE_ACCOUNT_PFX:
+			case BLACKLIST_RECHECK:
+<span class="nc" id="L100">				return performPfxRegistration(request);</span>
+			case SIGNUP_CFX:
+			case ADD_CONTACT_CFX:
+			case UPDATE_ACCOUNT_CFX:
+<span class="nc" id="L104">				return performCfxRegistration(request);</span>
+			default:
+				break;
+			}
+<span class="nc" id="L108">		} catch (Exception exception) {</span>
+<span class="nc" id="L109">			throw new InternalRuleException(InternalRuleErrors.FAILED, exception);</span>
+<span class="nc" id="L110">		}</span>
+<span class="nc" id="L111">		return internalServiceResponse;</span>
+	}
+
+	private void checkRequestType(RequestTypes requestType) throws InternalRuleException {
+<span class="nc bnc" id="L115" title="All 2 branches missed.">		if (requestType == null) {</span>
+<span class="nc" id="L116">			throw new InternalRuleException(InternalRuleErrors.INVALID_REQUEST_TYPE);</span>
+		}
+<span class="nc" id="L118">	}</span>
+	
+	/**
+	 * Save into blacklist data.
+	 *
+	 * @param request the request
+	 * @return the internal service response
+	 */
+	private InternalServiceResponse saveIntoBlacklistData(InternalServiceRequest request) {
+		InternalServiceResponse response;
+<span class="nc" id="L128">		response = serviceExecutor.saveIntoBlacklistData(request);</span>
+<span class="nc" id="L129">		return response;</span>
+	}
+
+	/**
+	 * Show blacklist data by type.
+	 *
+	 * @param request the request
+	 * @return the internal service response
+	 */
+	private InternalServiceResponse showBlacklistDataByType(InternalServiceRequest request) {
+		InternalServiceResponse response;
+<span class="nc" id="L140">		response = serviceExecutor.showBlacklistDataByType(request);</span>
+<span class="nc" id="L141">		return response;</span>
+	}
+
+	/**
+	 * Delete from blacklist data.
+	 *
+	 * @param request the request
+	 * @return the internal service response
+	 */
+	private InternalServiceResponse deleteFromBlacklistData(InternalServiceRequest request) {
+		InternalServiceResponse response;
+<span class="nc" id="L152">		response = serviceExecutor.deleteFromBlacklistData(request);</span>
+<span class="nc" id="L153">		return response;</span>
+	}
+	
+	/**
+	 * Search blacklist data.
+	 *
+	 * @param request the request
+	 * @return the internal service response
+	 */
+	private InternalServiceResponse searchBlacklistData(InternalServiceRequest request) {
+		InternalServiceResponse response;
+<span class="nc" id="L164">		response = serviceExecutor.searchBlacklistData(request);</span>
+<span class="nc" id="L165">		return response;</span>
+	}
+	
+	/**
+	 * status is returned with contactResponse as parameter by calling different method for each status -
+	 * */
+	private String getContactStatus(ContactResponse response) {
+<span class="nc bnc" id="L172" title="All 2 branches missed.">		if (isContactFailed(response)) {</span>
+<span class="nc" id="L173">			return Constants.FAIL;</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">		} else if (isContactInWatchlist(response)) {</span>
+<span class="nc" id="L175">			return Constants.WATCHLIST;</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">		} else if (isContactNotRequired(response)) {</span>
+<span class="nc" id="L177">			return Constants.NOT_REQUIRED;</span>
+		} else {
+<span class="nc" id="L179">			return Constants.PASS;</span>
+		}
+
+	}
+
+	private boolean isContactFailed(ContactResponse response) {
+
+<span class="nc bnc" id="L186" title="All 2 branches missed.">		return Constants.FAIL.equals(response.getBlacklist().getStatus())</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">				|| Constants.FAIL.equals(response.getCountryCheck().getStatus())</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">				|| Constants.FAIL.equals(response.getGlobalCheck().getStatus())</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">				|| Constants.FAIL.equals(response.getIpCheck().getStatus())</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">				|| Constants.FAIL.equals(response.getBlacklistPayref().getStatus());</span>
+	}
+
+	private boolean isContactInWatchlist(ContactResponse response) {
+
+<span class="nc bnc" id="L195" title="All 2 branches missed.">		return Constants.WATCHLIST.equals(response.getCountryCheck().getStatus())</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">				|| Constants.WATCHLIST.equals(response.getGlobalCheck().getStatus());</span>
+	}
+
+	private boolean isContactNotRequired(ContactResponse response) {
+
+<span class="nc bnc" id="L201" title="All 2 branches missed.">		return Constants.NOT_REQUIRED.equals(response.getBlacklist().getStatus())</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">				&amp;&amp; Constants.NOT_REQUIRED.equals(response.getCountryCheck().getStatus())</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">				&amp;&amp; Constants.NOT_REQUIRED.equals(response.getGlobalCheck().getStatus())</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">				&amp;&amp; Constants.NOT_REQUIRED.equals(response.getIpCheck().getStatus());</span>
+	}
+	/**
+	 * Default response is set which is NOT_REQUIRED
+	 */
+	private ContactResponse createDefaultContactResponse() {
+<span class="nc" id="L210">		IpContactResponse ipServiceResponse = new IpContactResponse();</span>
+<span class="nc" id="L211">		GlobalCheckContactResponse checkResponse = new GlobalCheckContactResponse();</span>
+<span class="nc" id="L212">		CountryCheckContactResponse countryCheckResponse = new CountryCheckContactResponse();</span>
+<span class="nc" id="L213">		BlacklistContactResponse blacklistSTPResponse = new BlacklistContactResponse();</span>
+<span class="nc" id="L214">		BlacklistPayrefContactResponse blacklistPayrefContactResponse = new BlacklistPayrefContactResponse();</span>
+<span class="nc" id="L215">		ContactResponse contactResponse = new ContactResponse();</span>
+<span class="nc" id="L216">		contactResponse.setBlacklist(blacklistSTPResponse);</span>
+<span class="nc" id="L217">		contactResponse.setCountryCheck(countryCheckResponse);</span>
+<span class="nc" id="L218">		contactResponse.setGlobalCheck(checkResponse);</span>
+<span class="nc" id="L219">		contactResponse.setIpCheck(ipServiceResponse);</span>
+<span class="nc" id="L220">		contactResponse.setBlacklistPayref(blacklistPayrefContactResponse);//Add for AT-3649</span>
+<span class="nc" id="L221">		return contactResponse;</span>
+	}
+	
+	/**
+	 * Business -- 
+	 * For CFX Registration only blacklistService is performed and response is set accordingly.
+	 * Implementation---
+	 * 1) Get the InternalServiceRequestData from the request.Initialize isBlacklisted to false.
+	 * 2) InternalServiceRequestData is iterated and by default all services are initialized to Not Required status.
+	 * 3) Then blacklist method is called and the response is set in contactResponse.If status is false then isBlacklisted is set to true
+	 * 4) The contactResponse is  passed to getContactStatus method and status returned from method is set.
+	 */
+	private InternalServiceResponse performCfxRegistration(InternalServiceRequest request) {
+<span class="nc" id="L234">		boolean isBlacklisted = false;</span>
+<span class="nc" id="L235">		InternalServiceResponse response = new InternalServiceResponse();</span>
+<span class="nc" id="L236">		List&lt;ContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L237">		response.setContacts(contactResponses);</span>
+<span class="nc" id="L238">		List&lt;InternalServiceRequestData&gt; internalServiceRequestData = request.getSearchdata();</span>
+<span class="nc bnc" id="L239" title="All 2 branches missed.">		for (InternalServiceRequestData requestData : internalServiceRequestData) {</span>
+<span class="nc" id="L240">			ContactResponse contactResponse = createDefaultContactResponse();</span>
+<span class="nc" id="L241">			requestData.setIsEmailDomainCheckRequired(Boolean.FALSE);</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">			if (!isBlacklisted) {</span>
+<span class="nc" id="L243">				BlacklistContactResponse blacklistSTPResponse = serviceExecutor.executeBlacklistService(requestData);</span>
+<span class="nc" id="L244">				contactResponse.setBlacklist(blacklistSTPResponse);</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">				if (Constants.FAIL.equalsIgnoreCase(blacklistSTPResponse.getStatus())) {</span>
+<span class="nc" id="L246">					isBlacklisted = true;</span>
+				}
+			}
+<span class="nc" id="L249">			contactResponse.setId(requestData.getId());</span>
+<span class="nc" id="L250">			contactResponse.setEntityType(requestData.getEntityType());</span>
+<span class="nc" id="L251">			contactResponse.setContactStatus(getContactStatus(contactResponse));</span>
+<span class="nc" id="L252">			contactResponses.add(contactResponse);</span>
+<span class="nc" id="L253">		}</span>
+<span class="nc" id="L254">		return response;</span>
+	}
+
+	/**
+	 * Business -- 
+	 * For PFX Registration,blacklistService,CountryCheck service,GlobalCheck Service and Ip Service is performed in 
+	 * order mentioned.
+	 * If any of the above service is failed then further services are not performed and also other micro-services 
+	 * are not performed.
+	 *Implementation---
+	 * 1) Get the InternalServiceRequestData from the request.Initialize isBlacklisted to false.
+	 * 2) InternalServiceRequestData is iterated and by default all services are initialized to Not Required status.
+	 * 3) Then each Service is called and there status is checked.If any of service returns fail status then isBlacklisted value is true.
+	 *    3.1) isBlacklisted value is checked and since it is not false rest of services method are not called and getContactStatus method is 
+	 *    called.
+	 * 4) If all services are performed then response from all services are set in contactResponse and passed to getContactStatus method and 
+	 *   status returned from method is set.
+	 */
+	private InternalServiceResponse performPfxRegistration(InternalServiceRequest request) {
+<span class="nc" id="L273">		InternalServiceResponse response = new InternalServiceResponse();</span>
+<span class="nc" id="L274">		List&lt;ContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L275">		response.setContacts(contactResponses);</span>
+<span class="nc" id="L276">		List&lt;InternalServiceRequestData&gt; internalServiceRequestData = request.getSearchdata();</span>
+<span class="nc bnc" id="L277" title="All 2 branches missed.">		for (InternalServiceRequestData requestData : internalServiceRequestData) {</span>
+<span class="nc" id="L278">			ContactResponse contactResponse = createDefaultContactResponse();</span>
+<span class="nc" id="L279">			requestData.setIsEmailDomainCheckRequired(Boolean.TRUE);</span>
+			
+<span class="nc" id="L281">			BlacklistContactResponse blacklistSTPResponse = serviceExecutor.executeBlacklistService(requestData);</span>
+<span class="nc" id="L282">			contactResponse.setBlacklist(blacklistSTPResponse);	</span>
+			
+<span class="nc bnc" id="L284" title="All 2 branches missed.">			if(Boolean.FALSE.equals(request.getOnlyBlacklistCheckPerform())) {</span>
+<span class="nc" id="L285">				CountryCheckContactResponse countryCheckResponse = serviceExecutor.executeCountryCheckService(requestData);</span>
+<span class="nc" id="L286">				contactResponse.setCountryCheck(countryCheckResponse);	</span>
+				
+<span class="nc" id="L288">				GlobalCheckContactResponse checkResponse = serviceExecutor.executeGlobalCheckService(requestData,</span>
+<span class="nc" id="L289">						request.getOrgCode());</span>
+<span class="nc" id="L290">				contactResponse.setGlobalCheck(checkResponse);	</span>
+				
+<span class="nc" id="L292">				IpContactResponse ipServiceResponse = serviceExecutor.executeIpService(requestData);</span>
+<span class="nc" id="L293">				contactResponse.setIpCheck(ipServiceResponse);</span>
+			}
+			
+<span class="nc" id="L296">			contactResponse.setId(requestData.getId());</span>
+<span class="nc" id="L297">			contactResponse.setEntityType(requestData.getEntityType());</span>
+<span class="nc" id="L298">			contactResponse.setContactStatus(getContactStatus(contactResponse));</span>
+<span class="nc" id="L299">			contactResponses.add(contactResponse);</span>
+<span class="nc" id="L300">		}</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">		if(Boolean.TRUE.equals(request.getOnlyBlacklistCheckPerform())) {</span>
+<span class="nc" id="L302">			response.setOnlyBlacklistCheckPerform(Boolean.TRUE);</span>
+		}
+<span class="nc" id="L304">		return response;</span>
+	}
+
+	/**
+	 * Business -- 
+	 * For FundsIn(PaymentIN),blacklistService,CountryCheck service,and CardFraudScore service is performed.
+	 * each service is called and there response is set and return
+	 * 
+	 *Implementation---
+	 * 1) Get the InternalServiceRequestData from the request.Initialize isBlacklisted to false.
+	 * 2) InternalServiceRequestData is iterated and by default all services are initialized to Not Required status.
+	 * 3) Then each Service's method is called and the response is set to contactResponse.
+	 * 4) After all the methods are called and the respective responses are set in contactResponse and it is passed to
+	 *    getContactStatus method from which status is returned which is set.
+	 */
+	private InternalServiceResponse performPaymentIn(InternalServiceRequest request) {
+<span class="nc" id="L320">		InternalServiceResponse response = new InternalServiceResponse();</span>
+<span class="nc" id="L321">		List&lt;ContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L322">		response.setContacts(contactResponses);</span>
+<span class="nc" id="L323">		List&lt;InternalServiceRequestData&gt; internalServiceRequestData = request.getSearchdata();</span>
+<span class="nc bnc" id="L324" title="All 2 branches missed.">		for (InternalServiceRequestData requestData : internalServiceRequestData) {</span>
+<span class="nc" id="L325">			ContactResponse contactResponse = createDefaultContactResponse();</span>
+			/*
+			 * For funds IN request with switch/debit method blacklist will be performed on ccname only
+			 */
+<span class="nc bnc" id="L329" title="All 2 branches missed.">			if(!isNullOrEmpty(requestData.getCcName())){</span>
+<span class="nc" id="L330">				BlacklistContactResponse blacklistSTPResponse = serviceExecutor.executeBlacklistService(requestData);</span>
+<span class="nc bnc" id="L331" title="All 2 branches missed.">				if(blacklistSTPResponse.getStatus().equals(Constants.NOT_PERFORMED))</span>
+<span class="nc" id="L332">					blacklistSTPResponse.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L333">				contactResponse.setBlacklist(blacklistSTPResponse);</span>
+<span class="nc" id="L334">			}else{</span>
+<span class="nc" id="L335">				BlacklistContactResponse blacklistSTPResponse = new BlacklistContactResponse();</span>
+<span class="nc" id="L336">				blacklistSTPResponse.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L337">				contactResponse.setBlacklist(blacklistSTPResponse);</span>
+			}
+<span class="nc" id="L339">			CountryCheckContactResponse countryCheckResponse = serviceExecutor.executeCountryCheckService(requestData);</span>
+<span class="nc bnc" id="L340" title="All 2 branches missed.">			if(countryCheckResponse.getStatus().equalsIgnoreCase(Constants.WATCHLIST)){</span>
+<span class="nc" id="L341">				countryCheckResponse.setStatus(Constants.FAIL);</span>
+			}
+<span class="nc bnc" id="L343" title="All 2 branches missed.">			if((CountryCheckErrors.INVALID_REQUEST.getErrorCode()).equals(countryCheckResponse.getErrorcode())){</span>
+<span class="nc" id="L344">				countryCheckResponse.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L345">				countryCheckResponse.setErrorcode(&quot;&quot;);</span>
+<span class="nc" id="L346">				countryCheckResponse.setErrorDescription(&quot;&quot;);</span>
+			}
+<span class="nc" id="L348">			contactResponse.setCountryCheck(countryCheckResponse);</span>
+			//AT-3830
+<span class="nc bnc" id="L350" title="All 2 branches missed.">			if(Boolean.TRUE.equals(request.getIsFraudSightEligible())) {</span>
+<span class="nc" id="L351">			FraudSightScoreResponse fraudSightScoreResponse = serviceExecutor.executeFraudSightScoreService(requestData);</span>
+<span class="nc" id="L352">			contactResponse.setFraudSightCheck(fraudSightScoreResponse);</span>
+<span class="nc" id="L353">			}else {</span>
+<span class="nc" id="L354">				FraudSightScoreResponse fraudSightScoreResponse =new FraudSightScoreResponse();</span>
+<span class="nc" id="L355">				fraudSightScoreResponse.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L356">				contactResponse.setFraudSightCheck(fraudSightScoreResponse);</span>
+			}
+			
+<span class="nc bnc" id="L359" title="All 4 branches missed.">            if(Boolean.FALSE.equals(request.getIsFraudSightEligible()) &amp;&amp; Boolean.TRUE.equals(request.getIsRgDataExists())) {</span>
+<span class="nc" id="L360">			CardFraudScoreResponse cardFraudScoreResponse = serviceExecutor.executeCardFraudScoreService(requestData);</span>
+<span class="nc" id="L361">			contactResponse.setCardFraudCheck(cardFraudScoreResponse);</span>
+<span class="nc" id="L362">			}else {</span>
+<span class="nc" id="L363">				CardFraudScoreResponse cardFraudScoreResponse =new CardFraudScoreResponse();</span>
+<span class="nc" id="L364">				cardFraudScoreResponse.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L365">				contactResponse.setCardFraudCheck(cardFraudScoreResponse);</span>
+			}
+            
+<span class="nc" id="L368">			contactResponse.setId(requestData.getId());</span>
+<span class="nc" id="L369">			contactResponse.setEntityType(requestData.getEntityType());</span>
+<span class="nc" id="L370">			contactResponse.setContactStatus(getContactStatus(contactResponse));</span>
+<span class="nc" id="L371">			contactResponses.add(contactResponse);</span>
+<span class="nc" id="L372">		}</span>
+<span class="nc" id="L373">		return response;</span>
+	}
+	
+	/**
+	 * Business -- 
+	 * For FundsOut(PaymentOut),blacklistService,CountryCheck service is performed.
+	 * each service is called and there response is set and return
+	 *Implementation---
+	 * 1) Get the InternalServiceRequestData from the request.Initialize isBlacklisted to false.
+	 * 2) InternalServiceRequestData is iterated and by default all services are initialized to Not Required status.
+	 * 3) Then each Service's method is called and the response is set to contactResponse.
+	 * 4) After all the methods are called and the respective responses are set in contactResponse and it is passed to
+	 *    getContactStatus method from which status is returned which is set.
+	 */
+	private InternalServiceResponse performPaymentOut(InternalServiceRequest request) {
+<span class="nc" id="L388">		InternalServiceResponse response = new InternalServiceResponse();</span>
+<span class="nc" id="L389">		List&lt;ContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L390">		response.setContacts(contactResponses);</span>
+<span class="nc" id="L391">		List&lt;InternalServiceRequestData&gt; internalServiceRequestData = request.getSearchdata();</span>
+		
+<span class="nc bnc" id="L393" title="All 2 branches missed.">		for (InternalServiceRequestData requestData : internalServiceRequestData) {</span>
+<span class="nc" id="L394">			ContactResponse contactResponse = createDefaultContactResponse();</span>
+<span class="nc" id="L395">			BlacklistContactResponse blacklistSTPResponse = serviceExecutor.executeBlacklistService(requestData);</span>
+<span class="nc" id="L396">			contactResponse.setBlacklist(blacklistSTPResponse);</span>
+<span class="nc" id="L397">			CountryCheckContactResponse countryCheckResponse = serviceExecutor.executeCountryCheckService(requestData);</span>
+		    
+<span class="nc bnc" id="L399" title="All 2 branches missed.">			if(countryCheckResponse.getStatus().equalsIgnoreCase(Constants.WATCHLIST)){</span>
+<span class="nc" id="L400">				countryCheckResponse.setStatus(Constants.FAIL);</span>
+			}
+			
+			try {
+<span class="nc" id="L404">				BlacklistPayrefContactResponse blacklistPayrefCheckResponse= serviceExecutor.executePayRefCheckService(requestData);</span>
+<span class="nc" id="L405">				contactResponse.setBlacklistPayref(blacklistPayrefCheckResponse);</span>
+<span class="nc" id="L406">			} catch (Exception e) {</span>
+<span class="nc" id="L407">				LOG.error(&quot;Error in InternalServicesFacade method performPaymentOut:&quot;, e);</span>
+<span class="nc" id="L408">			}</span>
+<span class="nc" id="L409">			contactResponse.setCountryCheck(countryCheckResponse);</span>
+<span class="nc" id="L410">			contactResponse.setId(requestData.getId());</span>
+<span class="nc" id="L411">			contactResponse.setEntityType(requestData.getEntityType());</span>
+<span class="nc" id="L412">			contactResponse.setContactStatus(getContactStatus(contactResponse));</span>
+<span class="nc" id="L413">			contactResponses.add(contactResponse);</span>
+<span class="nc" id="L414">		}</span>
+<span class="nc" id="L415">		return response;</span>
+	}
+
+	/**
+	 * Checks if is null or empty.
+	 *
+	 * @param str the str
+	 * @return true, if is null or empty
+	 */
+	//checks whether string is null or empty
+	public boolean isNullOrEmpty(String str) {
+<span class="nc" id="L426">		boolean result = true;</span>
+<span class="nc bnc" id="L427" title="All 4 branches missed.">		if (str != null &amp;&amp; !str.isEmpty())</span>
+<span class="nc" id="L428">			return false;</span>
+		
+<span class="nc" id="L430">		return result;</span>
+	}
+	
+	//AT-3658
+	/**
+	 * Perform payment out pay ref.
+	 *
+	 * @param request the request
+	 * @return the internal service response
+	 */
+	private InternalServiceResponse performPaymentOutPayRef(InternalServiceRequest request) {
+<span class="nc" id="L441">		InternalServiceResponse response = new InternalServiceResponse();</span>
+<span class="nc" id="L442">		List&lt;ContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L443">		response.setContacts(contactResponses);</span>
+<span class="nc" id="L444">		List&lt;InternalServiceRequestData&gt; internalServiceRequestData = request.getSearchdata();</span>
+		
+		
+<span class="nc bnc" id="L447" title="All 2 branches missed.">		for (InternalServiceRequestData requestData : internalServiceRequestData) {</span>
+<span class="nc" id="L448">			BlacklistPayrefContactResponse blacklistPayrefContactResponse = new BlacklistPayrefContactResponse();</span>
+<span class="nc" id="L449">			ContactResponse contactResponse = new ContactResponse();</span>
+<span class="nc" id="L450">			contactResponse.setBlacklistPayref(blacklistPayrefContactResponse);</span>
+			try {
+<span class="nc" id="L452">				BlacklistPayrefContactResponse blacklistPayrefCheckResponse= serviceExecutor.executePayRefCheckService(requestData);</span>
+<span class="nc" id="L453">				contactResponse.setBlacklistPayref(blacklistPayrefCheckResponse);</span>
+<span class="nc" id="L454">			} catch (Exception e) {</span>
+<span class="nc" id="L455">				LOG.error(&quot;Error in InternalServicesFacade method performPaymentOutPayRef:&quot;, e);</span>
+<span class="nc" id="L456">			}</span>
+<span class="nc" id="L457">			contactResponse.setId(requestData.getId());</span>
+<span class="nc" id="L458">			contactResponse.setEntityType(requestData.getEntityType());</span>
+<span class="nc" id="L459">			contactResponse.setContactStatus(contactResponse.getBlacklistPayref().getStatus());</span>
+<span class="nc" id="L460">			contactResponses.add(contactResponse);</span>
+<span class="nc" id="L461">		}</span>
+<span class="nc" id="L462">		return response;</span>
+	}
+
+
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

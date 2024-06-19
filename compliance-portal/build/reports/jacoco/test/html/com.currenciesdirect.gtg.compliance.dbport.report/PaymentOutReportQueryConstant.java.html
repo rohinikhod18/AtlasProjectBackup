@@ -1,0 +1,491 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PaymentOutReportQueryConstant.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport.report</a> &gt; <span class="el_source">PaymentOutReportQueryConstant.java</span></div><h1>PaymentOutReportQueryConstant.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport.report;
+
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+
+/**
+ * The Enum PaymentOutReportQueryConstant
+ * @author sayleeb
+ *
+ */
+<span class="fc" id="L10">@SuppressWarnings(&quot;squid:S1192&quot;)</span>
+public enum PaymentOutReportQueryConstant {
+	
+	
+<span class="fc" id="L14">	PAYMENT_OUT_QUEUE_CONTACT_FILTER( &quot;SELECT B.AccountId , A.Id ContactId, ROW_NUMBER() OVER (PARTITION BY B.AccountId ORDER BY B.UpdatedOn) RNum &quot;</span>
+			+ &quot; FROM ContactAttribute A JOIN Contact B ON A.Id = B.ID {WATCHLIST_CATEGORY_FILTER} {WATCHLIST_FILTER} {PAYMENTOUT_QUEUE_COUNTRY_OF_RESIDENCE_FILTER}&quot;),
+	
+<span class="fc" id="L17">	WATCHLIST_FILTER(&quot; EXISTS( SELECT 1 FROM ContactWatchList CL WHERE Reason IN(?) AND a.id = CL.contact ) &quot;),</span>
+	
+<span class="fc" id="L19">	WATCHLIST_CATEGORY_FILTER(&quot; LEFT JOIN ContactWatchList CL ON CL.contact=B.id JOIN watchlist W ON CL.reason=w.id AND w.category IN(?) &quot;),</span>
+	
+<span class="fc" id="L21">	PAYMENT_OUT_QUEUE_ACCOUNT_FILTER( &quot;SELECT A.Id AccountId&quot;</span>
+			+ &quot; FROM AccountAttribute A JOIN ACCOUNT B ON A.id = B.id&quot;),
+	
+<span class="fc" id="L24">	PAYMENT_OUT_QUEUE_PAYMENT_FILTER( &quot;SELECT P.Id AS PaymentId&quot;</span>
+			+ &quot; FROM Comp.PaymentOutAttribute P {COUNTRY_JOIN}  &quot;),
+	
+<span class="fc" id="L27">	CONTACT_FILTER_JOIN(&quot; LEFT JOIN ContactAttributeFilter CF ON Payout.ContactId = CF.ContactId&quot;),</span>
+<span class="fc" id="L28">	ACCOUNT_FILTER_JOIN(&quot; LEFT JOIN AccountAttributeFilter AF ON Payout.AccountId = AF.AccountId &quot;),</span>
+<span class="fc" id="L29">	PAYMENT_FILTER_JOIN(&quot; JOIN PaymentAttributeFilter PF ON PF.PaymentId = payOut.id &quot;),</span>
+<span class="fc" id="L30">	ORG_FILTER_JOIN(&quot;JOIN Organization org  ON org.Id = payout.organizationID&quot;),</span>
+<span class="fc" id="L31">	LEGEL_ENTITY_TABLE_JOIN(&quot;JOIN LegalEntity le ON payout.LegalEntityID = le.ID &quot;),</span>
+<span class="fc" id="L32">	COUNTRY_FILTER_JOIN(&quot;LEFT JOIN  country c ON c.code=P.vBeneficiaryCountry&quot;),</span>
+<span class="fc" id="L33">	USER_FILTER_JOIN(&quot;LEFT JOIN [USER] U ON U.id=ur.UserId&quot;),</span>
+<span class="fc" id="L34">	REPORT_FILTER_NULL_CHECK(&quot; (CF.ContactId IS NOT NULL OR AF.AccountId IS NOT NULL) &quot;),</span>
+<span class="fc" id="L35">	PAYMENTOUT_QUEUE_COUNTRY_OF_RESIDENCE_FILTER(&quot;JOIN country cor ON cor.id = B.country&quot;),</span>
+	
+<span class="fc" id="L37">	PAYMENT_QUEUE_FILTER(&quot;SELECT payOut.id AS resourceID, resourceType, ur.createdby  &quot;</span>
+			+ &quot;FROM paymentout payOut LEFT JOIN  userresourcelock ur ON ur.resourceID = payOut.id and ur.lockreleasedon is NULL AND resourceType = 1 &quot;
+			+ &quot; {CONTACT_FILTER_JOIN} {ACCOUNT_FILTER_JOIN} {PAYMENT_TABLE_JOIN} {ORG_JOIN} {USER_JOIN} {LEGAL_ENTITY_JOIN} JOIN PaymentOutAttribute poa ON poa.id = payOut.id JOIN Account acc ON payout.accountid = acc.id &quot;
+			),
+	
+<span class="fc" id="L42">	GET_PAYMENTOUT_REPORT(&quot;DECLARE @Offset int = ?, @Rows int = ?;&quot;</span>
+			+ &quot;WITH &quot;
+			+ &quot;ContactAttributeFilter AS &quot;
+			+ &quot;( &quot;
+			+ &quot;    {PAYMENT_OUT_QUEUE_CONTACT_FILTER} &quot;
+			+ &quot;), &quot;
+			+ &quot;AccountAttributeFilter AS &quot;
+			+ &quot;( &quot;
+			+ &quot;    {PAYMENT_OUT_QUEUE_ACCOUNT_FILTER} &quot;
+			+ &quot;), &quot;
+			+ &quot;PaymentAttributeFilter AS &quot;
+			+ &quot;( &quot;
+			+ &quot;    {PAYMENT_OUT_QUEUE_PAYMENT_FILTER} &quot;
+			+ &quot;), &quot;
+			+ &quot;SelectedId AS &quot;
+			+ &quot;( &quot;
+			+ &quot;    {PAYMENT_QUEUE_FILTER} &quot;
+			+ &quot;    Order BY {SORT_FIELD_NAME} {ORDER_TYPE} OFFSET @Offset ROWS FETCH NEXT @rows ROWS ONLY &quot;
+			+ &quot;) &quot;
+			+ &quot;SELECT &quot;
+			+ &quot;poa.attributes, &quot;
+			+ &quot;    payout.id AS PaymentOutID, &quot;
+			+ &quot;    payout.accountid AS AccountId, &quot;
+			+ &quot;    payout.contactid AS ContactId, &quot;
+			+ &quot;    payout.compliancestatus AS ComplianceStatus, &quot;
+			+ &quot;    payOut.contractnumber AS Transactions, &quot;
+			+ &quot;    acc.tradeaccountnumber AS Client, &quot;
+			+ &quot;     acc.crmaccountid        AS ACSFID, &quot;
+			+ &quot;    payOut.transactiondate AS [Date], &quot;
+			+ &quot;         acc.[type] &quot;
+			+ &quot;     AS Type, &quot;
+			+ &quot;    CASE &quot;
+			+ &quot;        WHEN acc.[type] = 2 THEN con.NAME &quot;
+			+ &quot;        ELSE acc.NAME &quot;
+			+ &quot;    END AS clientname, &quot;
+			+ &quot;    poa.vbuyingcurrency AS Buy, &quot;
+			+ &quot;    poa.vbuyingamount AS Amount, &quot;
+			+ &quot;    poa.vBeneficiaryAmount AS BeneficiaryAmount, &quot;
+			+ &quot;    concat( poa.vbeneficiaryfirstname,' ', poa.vBeneficiarylastname)AS Beneficiary, &quot;
+			+ &quot;    poa.vReasonOfTransfer  AS ReasonOfTransfer, &quot;
+			+ &quot;    ResourceId, &quot;
+			+ &quot;    us.ssouserid AS LockedBy, &quot;
+			+ &quot;    org.NAME AS Organization, &quot;
+			+ &quot;    acc.LegalEntity, &quot;
+			+ &quot;    poa.vvalueDate AS valueDate, &quot;
+			+ &quot;    poa.vMaturityDate AS maturityDate,&quot;
+			+ &quot;    c.DisplayName AS Country, &quot;
+			+ &quot;    c.Code AS IsoCountry, &quot;
+			+ &quot;    pcse.status AS OverAllStatus, &quot;
+			+ &quot;    CASE &quot;
+			+ &quot;    WHEN acc.[type] = 2 THEN con.PayOutWatchListStatus  &quot;
+			+ &quot;   ELSE acc.PayOutWatchListStatus  END AS WatchListStatus, &quot;//Changes for 2986
+			+ &quot;    payOut.blackliststatus, &quot;
+			+ &quot;    payOut.fraugsterstatus, &quot;
+			+ &quot;    payOut.sanctionstatus, &quot;
+			+ &quot;    payOut.customcheckstatus, &quot;
+			+ &quot;    payOut.intuitionCheckStatus, &quot; // AT-4607
+			+&quot;     payOut.PaymentReferenceStatus&quot;//changes for 3854
+			+ &quot;    FROM &quot;
+			+ &quot;    paymentout payOut &quot;
+			+ &quot;JOIN SelectedId pq ON pq.resourceID = payOut.id &quot;
+			+ &quot;JOIN paymentoutattribute poa ON &quot;
+			+ &quot;    payout.id = poa.id &quot;
+			+ &quot;JOIN paymentcompliancestatusenum pcse ON &quot;
+			+ &quot;    payout.compliancestatus = pcse.id &quot;
+			+ &quot;JOIN account acc ON &quot;
+			+ &quot;    payOut.accountid = acc.id &quot;
+			+ &quot;JOIN contact con ON &quot;
+			+ &quot;    payOut.contactid = con.id &quot;
+			+ &quot;JOIN organization org ON &quot;
+			+ &quot;    org.id = acc.organizationid &quot;
+			+ &quot; LEFT JOIN  country c ON c.code=poa.vBeneficiaryCountry  &quot;
+			+ &quot;LEFT JOIN [user] us ON &quot;
+			+ &quot;    us.id = pq.createdby order by {SORT_FIELD_NAME} {ORDER_TYPE}&quot;),
+	
+<span class="fc" id="L117">	GET_PAYMENTOUT_REPORT_DATA(&quot;WITH &quot;</span>
+			+ &quot;ContactAttributeFilter AS &quot;
+			+ &quot;( &quot;
+			+ &quot;    {PAYMENT_OUT_QUEUE_CONTACT_FILTER} &quot;
+			+ &quot;), &quot;
+			+ &quot;AccountAttributeFilter AS &quot;
+			+ &quot;( &quot;
+			+ &quot;    {PAYMENT_OUT_QUEUE_ACCOUNT_FILTER} &quot;
+			+ &quot;), &quot;
+			+ &quot;PaymentAttributeFilter AS &quot;
+			+ &quot;( &quot;
+			+ &quot;    {PAYMENT_OUT_QUEUE_PAYMENT_FILTER} &quot;
+			+ &quot;), &quot;
+			+ &quot;SelectedId AS &quot;
+			+ &quot; ( &quot;
+			+ &quot;    {PAYMENT_QUEUE_FILTER} &quot;
+			+ &quot;) &quot;
+			+ &quot; SELECT &quot;
+			+ &quot;poa.attributes, &quot;
+			+ &quot; payout.id AS PaymentOutID, &quot;
+			+ &quot; payout.accountid AS AccountId, &quot;
+			+ &quot; payout.contactid AS ContactId, &quot;
+			+ &quot; payout.compliancestatus AS ComplianceStatus, &quot;
+			+ &quot; payOut.contractnumber AS Transactions, &quot;
+			+&quot;                                    payOut.initialStatus AS initialStatus, &quot;//AT-3472
+			+ &quot; acc.tradeaccountnumber AS Client, &quot;
+			+ &quot;     acc.crmaccountid        AS ACSFID, &quot;
+			+ &quot;    payOut.transactiondate AS [Date], &quot;
+			+ &quot;    CASE &quot;
+			+ &quot;        WHEN acc.[type] = 2 THEN 'PFX' &quot;
+			+ &quot;        WHEN acc.[type] = 1 THEN 'CFX' &quot;
+			+ &quot;        ELSE 'CFX(Etailer)' &quot;
+			+ &quot;    END AS Type, &quot;
+			+ &quot;    CASE &quot;
+			+ &quot;        WHEN acc.[type] = 2 THEN con.NAME &quot;
+			+ &quot;        ELSE acc.NAME &quot;
+			+ &quot;    END AS clientname, &quot;
+			+ &quot;    poa.vbuyingcurrency AS Buy, &quot;
+			+ &quot;    poa.vbuyingamount AS Amount, &quot;
+			+ &quot;    poa.vBeneficiaryAmount AS BeneficiaryAmount, &quot;
+			+ &quot;    concat(poa.vBeneficiaryFirstName,' ', poa.vBeneficiaryLastName) AS Beneficiary,  &quot;
+			+ &quot;    poa.vReasonOfTransfer  AS ReasonOfTransfer, &quot;
+			+ &quot;    ResourceId, &quot;
+			+ &quot;    us.ssouserid AS LockedBy, &quot;
+			+ &quot;    org.NAME AS Organization, &quot;
+			+ &quot;    acc.LegalEntity,&quot;
+			+ &quot;    poa.vvalueDate AS valueDate, &quot;
+			+ &quot;    poa.vMaturityDate AS maturityDate,&quot;
+			+ &quot;    c.DisplayName AS Country, &quot;
+			+ &quot;    c.Code AS IsoCountry, &quot;			
+			+ &quot;    pcse.status AS OverAllStatus, &quot;
+			+ &quot;    acc.PayOutWatchListStatus AS WatchListStatus, &quot;
+			+ &quot;    payOut.blackliststatus, &quot;
+			+ &quot;    payOut.fraugsterstatus, &quot;
+			+ &quot;    payOut.sanctionstatus, &quot;
+			+ &quot;    payOut.customcheckstatus, &quot;
+			+ &quot;    payOut.PaymentReferenceStatus ,&quot; //AT-3855
+			+ &quot;    payout.IntuitionCheckStatus &quot; //AT-4717
+			+ &quot;FROM &quot;
+			+ &quot;    paymentout payOut &quot;
+			+ &quot;JOIN SelectedId pq ON pq.resourceID = payOut.id &quot;
+			+ &quot;JOIN paymentoutattribute poa ON &quot;
+			+ &quot;    payout.id = poa.id &quot;
+			+ &quot;JOIN paymentcompliancestatusenum pcse ON &quot;
+			+ &quot;    payout.compliancestatus = pcse.id &quot;
+			+ &quot;JOIN account acc ON &quot;
+			+ &quot;    payOut.accountid = acc.id &quot;
+			+ &quot;JOIN contact con ON &quot;
+			+ &quot;    payOut.contactid = con.id &quot;
+			+ &quot;JOIN organization org ON &quot;
+			+ &quot;    org.id = acc.organizationid &quot;
+			+ &quot; LEFT JOIN  country c ON c.code=poa.vBeneficiaryCountry  &quot;
+			+ &quot;LEFT JOIN [user] us ON &quot;
+			+ &quot;    us.id = pq.createdby ORDER BY  payout.updatedon DESC&quot;),
+	
+<span class="fc" id="L192">	GET_PAYMENTOUT_REPORT_COUNT(</span>
+			&quot;WITH &quot;
+			+ &quot;ContactAttributeFilter AS &quot;
+			+ &quot;( &quot;
+			+ &quot;    {PAYMENT_OUT_QUEUE_CONTACT_FILTER} &quot;
+			+ &quot;), &quot;
+			+ &quot;AccountAttributeFilter AS &quot;
+			+ &quot;( &quot;
+			+ &quot;    {PAYMENT_OUT_QUEUE_ACCOUNT_FILTER} &quot;
+			+ &quot;), &quot;
+			+ &quot;PaymentAttributeFilter AS &quot;
+			+ &quot; ( &quot;
+			+ &quot;    {PAYMENT_OUT_QUEUE_PAYMENT_FILTER} &quot;
+			+ &quot;), &quot;
+			+ &quot;SelectedId AS &quot;
+			+ &quot; ( &quot;
+			+ &quot;    {PAYMENT_QUEUE_FILTER} &quot;
+			+ &quot; ) &quot;
+			+ &quot; SELECT &quot;
+			+ &quot;count(payout.id) as TotalRows  &quot;
+			+ &quot;FROM &quot;
+			+ &quot;    paymentout payOut &quot;
+			+ &quot;JOIN SelectedId pq ON pq.resourceID = payOut.id &quot;
+			+ &quot;JOIN paymentoutattribute poa ON &quot;
+			+ &quot;    payout.id = poa.id &quot;
+			+ &quot;JOIN paymentcompliancestatusenum pcse ON &quot;
+			+ &quot;    payout.compliancestatus = pcse.id &quot;
+			+ &quot;JOIN account acc ON &quot;
+			+ &quot;    payOut.accountid = acc.id &quot;
+			+ &quot;JOIN contact con ON &quot;
+			+ &quot;    payOut.contactid = con.id &quot;
+			+ &quot;JOIN organization org ON &quot;
+			+ &quot;    org.id = acc.organizationid &quot;
+			+ &quot;LEFT JOIN [user] us ON &quot;
+			+ &quot;    us.id = pq.createdby&quot;),
+	
+<span class="fc" id="L228">	GET_PAYMENTOUT_REPORT_WITHOUT_PAGINATION(&quot;SELECT Count(*) AS count from( SELECT * FROM &quot;</span>
+			+ &quot; ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; payout.id AS PaymentOutID, &quot;
+			+ &quot; payout.accountid AS AccountId, &quot;
+			+ &quot; payout.contactid AS ContactId, &quot;
+			+ &quot; payout.compliancestatus AS ComplianceStatus, &quot;
+			+ &quot; payOut.deleted AS Deleted, &quot;
+			+ &quot; payOut.contractnumber AS Transactions, &quot;
+			+ &quot; acc.tradeaccountnumber AS Client, &quot;
+			+ &quot; payOutAttri.transactiondate AS [Date], &quot;
+			+ &quot; con.[NAME] AS ClientName, &quot;
+			+ &quot; acc.[type] AS Type, &quot;
+			+ &quot; payOutAttri.buyingcurrency AS Buy, &quot;
+			+ &quot; payOutAttri.buyingamount AS Amount, &quot;
+			+ &quot; payOutAttri.Attributes AS Attributes, &quot;
+			+ &quot; payOutAttri.beneficiaryfirstname + ' '  + payOutAttri.beneficiarylastname AS Beneficiary, &quot;
+			+ &quot; ur.id AS ResourceId, &quot;
+			+ &quot; (SELECT SSOUserId FROM [User] WHERE id=ur.createdby) AS LockedBy, &quot;
+			+ &quot; (SELECT NAME FROM organization WHERE id = acc.organizationid) AS Organization, &quot;
+			+ &quot;                                               &quot;
+			+ &quot;                                               ( Select ','+(select wl.reason AS WatchListReason from WatchList wl where id=cw.Reason)  AS [text()] &quot;
+			+ &quot;                                                From contactwatchlist cw JOIN contact con ON cw.contact=con.id AND con.accountid = payout.accountid &quot;
+			+ &quot;                                                For XML PATH ('') ) AS WatchListReason, &quot;
+			+ &quot;                       &quot;
+			+ &quot; (SELECT code AS Country FROM country WHERE id = (SELECT beneficiarycountry FROM paymentoutattribute pa WHERE pa.id = payOut.id)) AS Country, &quot;
+			+ &quot; (SELECT status FROM paymentcompliancestatusenum WHERE id = (SELECT compliancestatus FROM paymentout po WHERE payOut.id = po.id)) AS OverAllStatus, &quot;
+			+ &quot; (SELECT Count(*) FROM contactwatchlist cw WHERE cw.contact IN (SELECT id FROM contact WHERE accountid = payOut.accountid)) AS WatchListStatus, &quot;
+			+ &quot; (SELECT TOP 1 status FROM eventservicelog esl WHERE esl.servicetype = (SELECT id FROM compliance_servicetypeenum WHERE code = 'BLACKLIST') AND payOut.id = (SELECT TOP 1 paymentoutid FROM event WHERE id IN ( esl.eventid ) ORDER BY id DESC)) AS BlackListStatus, &quot;
+			+ &quot; (SELECT TOP 1 status FROM eventservicelog esl WHERE esl.servicetype = (SELECT id FROM compliance_servicetypeenum WHERE code = 'FRAUGSTER') AND payOut.id = (SELECT TOP 1 paymentoutid FROM event WHERE id IN ( esl.eventid ) ORDER BY id DESC)) AS FraugsterStatus, &quot;
+			+ &quot; (SELECT TOP 1 status FROM eventservicelog esl WHERE esl.servicetype = (SELECT id FROM compliance_servicetypeenum WHERE code = 'SANCTION') AND esl.entitytype = 'CONTACT' AND payOut.id = (SELECT TOP 1 paymentoutid FROM event WHERE id IN ( esl.eventid ) ORDER BY id DESC) ORDER BY esl.id DESC) AS SanctionConStatus, &quot;
+			+ &quot; (SELECT TOP 1 status FROM eventservicelog esl WHERE esl.servicetype = (SELECT id FROM compliance_servicetypeenum WHERE code = 'SANCTION') AND esl.entitytype = 'BENEFICIARY' AND payOut.id = (SELECT TOP 1 paymentoutid FROM event WHERE id IN ( esl.eventid ) ORDER BY id DESC) ORDER BY esl.id DESC) AS SanctionBeneStatus, &quot;
+			+ &quot; ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; TOP 1 status &quot;
+			+ &quot; FROM eventservicelog esl &quot;
+			+ &quot; WHERE esl.servicetype = &quot;
+			+ &quot; ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; id &quot;
+			+ &quot; FROM compliance_servicetypeenum &quot;
+			+ &quot; WHERE code = 'SANCTION' &quot;
+			+ &quot; ) &quot;
+			+ &quot; AND esl.entitytype = 'BANK' &quot;
+			+ &quot; AND payOut.id = &quot;
+			+ &quot; ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; TOP 1 paymentoutid &quot;
+			+ &quot; FROM event &quot;
+			+ &quot; WHERE id IN ( esl.eventid ) &quot;
+			+ &quot; ORDER BY id DESC &quot;
+			+ &quot; ) &quot;
+			+ &quot; ORDER BY esl.id DESC &quot;
+			+ &quot; ) &quot;
+			+ &quot; AS SanctionBankStatus &quot;
+			+ &quot; FROM paymentout payOut &quot;
+			+ &quot; JOIN paymentoutattribute payOutAttri ON payout.id = payOutAttri.id &quot;
+			+ &quot; JOIN account acc ON payOut.accountid = acc.id &quot;
+			+ &quot; JOIN contact con ON payOut.contactid = con.id &quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON payout.id = ur.resourceid &quot;
+			+ &quot; AND ur.lockreleasedon IS NULL &quot;
+			+ &quot; AND ur.resourcetype = 'PAYMENT_OUT'   ) &quot;
+			+ &quot; AS potemp &quot;
+			+ &quot; WHERE deleted &lt;&gt; 1 ) &quot;
+			+ &quot; AS potemp2 &quot;),
+	
+<span class="fc" id="L294">	GET_PAYMENTOUT_REPORT_INNER_QUERY(&quot;SELECT Top 100 PERCENT Row_number() OVER ( ORDER BY {SORT_FIELD_NAME} {ORDER_TYPE}) AS rownum, potemp2.* from( SELECT potemp.* FROM &quot;</span>
+			+ &quot; ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; payout.id AS PaymentOutID, &quot;
+			+ &quot; payout.accountid AS AccountId, &quot;
+			+ &quot; payout.contactid AS ContactId, &quot;
+			+ &quot; payout.compliancestatus AS ComplianceStatus, &quot;
+			+ &quot; payOut.deleted AS Deleted, &quot;
+			+ &quot; payOut.contractnumber AS Transactions, &quot;
+			+ &quot; acc.tradeaccountnumber AS Client, &quot;
+			+ &quot; payOutAttri.transactiondate AS [Date], &quot;
+			+ &quot; con.[NAME] AS ClientName, &quot;
+			+ &quot; acc.[type] AS Type, &quot;
+			+ &quot; payOutAttri.buyingcurrency AS Buy, &quot;
+			+ &quot; payOutAttri.buyingamount AS Amount, &quot;
+			+ &quot; payOutAttri.Attributes AS Attributes, &quot;
+			+ &quot; payOutAttri.beneficiaryfirstname + ' ' + payOutAttri.beneficiarylastname AS Beneficiary, &quot;
+			+ &quot; ur.id AS ResourceId, &quot;
+			+ &quot; (SELECT SSOUserId FROM [User] WHERE id=ur.createdby) AS LockedBy, &quot;
+			+ &quot; (SELECT NAME FROM organization WHERE id = acc.organizationid) AS Organization, &quot;
+			+ &quot; &quot;
+			+ &quot; ( Select ','+(select wl.reason AS WatchListReason from WatchList wl where id=cw.Reason)  AS [text()] &quot;
+			+ &quot; From contactwatchlist cw JOIN contact con ON cw.contact=con.id AND con.accountid = payout.accountid &quot;
+			+ &quot; For XML PATH ('') ) AS WatchListReason, &quot;
+			+ &quot; &quot;
+			+ &quot; (SELECT code AS Country FROM country WHERE id = (SELECT beneficiarycountry FROM paymentoutattribute pa WHERE pa.id = payOut.id)) AS Country, &quot;
+			+ &quot; (SELECT status FROM paymentcompliancestatusenum WHERE id = (SELECT compliancestatus FROM paymentout po WHERE payOut.id = po.id)) AS OverAllStatus, &quot;
+			+ &quot; (SELECT Count(*) FROM contactwatchlist cw WHERE cw.contact IN (SELECT id FROM contact WHERE accountid = payOut.accountid)) AS WatchListStatus, &quot;
+			+ &quot; (SELECT TOP 1 status FROM eventservicelog esl WHERE esl.servicetype = (SELECT id FROM compliance_servicetypeenum WHERE code = 'BLACKLIST') AND payOut.id = (SELECT TOP 1 paymentoutid FROM event WHERE id IN ( esl.eventid ) ORDER BY id DESC)) AS BlackListStatus, &quot;
+			+ &quot; (SELECT TOP 1 status FROM eventservicelog esl WHERE esl.servicetype = (SELECT id FROM compliance_servicetypeenum WHERE code = 'FRAUGSTER') AND payOut.id = (SELECT TOP 1 paymentoutid FROM event WHERE id IN ( esl.eventid ) ORDER BY id DESC)) AS FraugsterStatus, &quot;
+			+ &quot; (SELECT TOP 1 status FROM eventservicelog esl WHERE esl.servicetype = (SELECT id FROM compliance_servicetypeenum WHERE code = 'SANCTION') AND esl.entitytype = 'CONTACT' AND payOut.id = (SELECT TOP 1 paymentoutid FROM event WHERE id IN ( esl.eventid ) ORDER BY id DESC) ORDER BY esl.id DESC) AS SanctionConStatus, &quot;
+			+ &quot; (SELECT TOP 1 status FROM eventservicelog esl WHERE esl.servicetype = (SELECT id FROM compliance_servicetypeenum WHERE code = 'SANCTION') AND esl.entitytype = 'BENEFICIARY' AND payOut.id = (SELECT TOP 1 paymentoutid FROM event WHERE id IN ( esl.eventid ) ORDER BY id DESC) ORDER BY esl.id DESC) AS SanctionBeneStatus, &quot;
+			+ &quot; ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; TOP 1 status &quot;
+			+ &quot; FROM eventservicelog esl &quot;
+			+ &quot; WHERE esl.servicetype = &quot;
+			+ &quot; ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; id &quot;
+			+ &quot; FROM compliance_servicetypeenum &quot;
+			+ &quot; WHERE code = 'SANCTION' &quot;
+			+ &quot; ) &quot;
+			+ &quot; AND esl.entitytype = 'BANK' &quot;
+			+ &quot; AND payOut.id = &quot;
+			+ &quot; ( &quot;
+			+ &quot; SELECT &quot;
+			+ &quot; TOP 1 paymentoutid &quot;
+			+ &quot; FROM event &quot;
+			+ &quot; WHERE id IN ( esl.eventid ) &quot;
+			+ &quot; ORDER BY id DESC &quot;
+			+ &quot; ) &quot;
+			+ &quot; ORDER BY esl.id DESC &quot;
+			+ &quot; ) &quot;
+			+ &quot; AS SanctionBankStatus &quot;
+			+ &quot; FROM paymentout payOut &quot;
+			+ &quot; JOIN paymentoutattribute payOutAttri ON payout.id = payOutAttri.id &quot;
+			+ &quot; JOIN account acc ON payOut.accountid = acc.id &quot;
+			+ &quot; JOIN contact con ON payOut.contactid = con.id &quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON payout.id = ur.resourceid &quot;
+			+ &quot; AND ur.lockreleasedon IS NULL &quot;
+			+ &quot; AND ur.resourcetype = 'PAYMENT_OUT'   ) &quot;
+			+ &quot; AS potemp &quot;
+			+ &quot; WHERE deleted &lt;&gt; 1 ) &quot;
+			+ &quot; AS potemp2&quot;),
+	
+	
+<span class="fc" id="L361">	GET_PAYMENTOUT_REPORT_PAGINATION_WITH_CRITERIA(&quot;Select * from ({INNER_QUERY}) AS pqueue3 &quot;</span>
+			+ &quot;WHERE  rownum &gt;= ? &quot;
+			+ &quot;AND    rownum &lt;= ?&quot;), 
+	
+	//GET_PAYMENTOUT_REPORT_COUNT(&quot;SELECT COUNT(*) as count FROM PaymentOut&quot;),
+	
+<span class="fc" id="L367">	GET_PAYMENTOUT_REPORT_PAGINATION_WITH_SELECT(&quot;WITH poque AS( &quot;</span>
+			+ &quot;SELECT &quot;
+			+ &quot; Row_number() OVER( ORDER BY payout.id DESC ) AS rownum, &quot;
+			+ &quot; payout.id AS PaymentOutID, &quot;
+			+ &quot; payout.accountid AS AccountId, &quot;
+			+ &quot; payout.contactid AS ContactId,   &quot;
+			+ &quot; payout.compliancestatus AS ComplianceStatus, &quot;
+			+ &quot; payOut.contractnumber AS Transactions, &quot;
+			+ &quot; acc.tradeaccountnumber AS Client, &quot;
+			+ &quot; poa.transactiondate AS [Date], &quot;
+			+ &quot; acc.[type] AS Type, &quot;
+			+ &quot; case when  acc.[type]='PFX' then con.NAME when acc.[type]='CFX' then acc.NAME &quot;
+			+ &quot; END as clientname,&quot;
+			+ &quot; acc.CRMAccountID AS ACSFID,  poa.ReasonOfTransfer AS ReasonOfTransfer,  &quot;
+			+ &quot; poa.buyingcurrency AS Buy, &quot;
+			+ &quot; poa.buyingamount AS Amount, &quot;
+			+ &quot;     poa.Attributes AS Attributes,  poa.BeneAmount AS BeneficiaryAmount, &quot;
+			+ &quot; concat(poa.vBeneficiaryFirstName,' ', poa.vBeneficiaryLastName) AS Beneficiary, &quot;
+			+ &quot; ur.id AS ResourceId, &quot;
+			+ &quot; us.SSOUserId AS LockedBy, &quot;
+			+ &quot; org.NAME AS Organization, &quot;
+			+ &quot; ( Select ','+(select wl.reason AS WatchListReason from WatchList wl where id=cw.Reason)  AS [text()] &quot;
+			+ &quot; From contactwatchlist cw JOIN contact con ON cw.contact=con.id AND con.accountid = payout.accountid &quot;
+			+ &quot; For XML PATH ('') ) AS WatchListReason, &quot;
+			+ &quot; ctr.code AS Country, &quot;
+			+ &quot; pcse.status AS OverAllStatus, &quot;
+			+ &quot; acc.WatchlistStatus AS WatchListStatus, &quot;
+			+ &quot; payOut.BlacklistStatus, &quot;
+			+ &quot; payOut.FraugsterStatus, &quot;
+			+ &quot; payOut.SanctionStatus, &quot;
+			+ &quot; payOut.CustomCheckStatus &quot;
+			+ &quot; FROM paymentout payOut &quot;
+			+ &quot; JOIN paymentoutattribute poa ON payout.id = poa.id &quot;
+			+ &quot; JOIN paymentcompliancestatusenum pcse ON  payout.compliancestatus = pcse.id &quot;
+			+ &quot; JOIN account acc ON payOut.accountid = acc.id &quot;
+			+ &quot; JOIN contact con ON payOut.contactid = con.id &quot;
+			+ &quot; JOIN Country ctr ON poa.beneficiarycountry = ctr.id &quot;
+			+ &quot; JOIN organization org ON org.id = acc.organizationid &quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON  payout.id = ur.resourceid &quot;
+			+ &quot; AND ur.resourcetype = 'PAYMENT_OUT' &quot;
+			+ &quot; LEFT JOIN [user] us ON us.id = ur.createdby &quot;
+			+ &quot; WHERE &quot;
+<span class="fc" id="L409">			+ &quot; poa.transactiondate &gt; DATEADD(day,-&quot; + SearchCriteriaUtil.getDefaultQueueRecordSize() + &quot;,GETDATE()) &quot;</span>
+			+ &quot; AND payOut.deleted = 0 &quot;
+			+ &quot;) SELECT *, (SELECT max( rownum ) FROM poque ) AS 'TotalRows' &quot;
+			+ &quot;FROM &quot;
+			+ &quot; poque &quot;
+			+ &quot;WHERE &quot;
+			+ &quot; rownum &gt;= ? &quot;
+			+ &quot; AND rownum &lt;= ? &quot;),
+	
+	
+<span class="fc" id="L419">	GET_PAYMENTOUT_REPORT_INNER_QUERY_SELECT(&quot; SELECT Row_number() OVER ( ORDER BY {SORT_FIELD_NAME} {ORDER_TYPE}) AS rownum, pqueue2.* from &quot;</span>
+			+ &quot;       ( SELECT pqueue.* FROM ( select&quot;
+			+ &quot; payout.id AS PaymentOutID, &quot;
+			+ &quot; payout.accountid AS AccountId, &quot;
+			+ &quot; payout.contactid AS ContactId, &quot;
+			+ &quot; payout.compliancestatus AS ComplianceStatus, &quot;
+			+ &quot; payOut.contractnumber AS Transactions, &quot;
+			+ &quot; acc.tradeaccountnumber AS Client, &quot;
+			+ &quot; poa.transactiondate AS [Date], &quot;
+			+ &quot; acc.[type] AS Type, &quot;
+			+ &quot; case when  acc.[type]='PFX' then con.NAME when acc.[type]='CFX' then acc.NAME &quot;
+			+ &quot; END as clientname,&quot;
+			+ &quot; poa.buyingcurrency AS Buy, &quot;
+			+ &quot; poa.buyingamount AS Amount, &quot;
+			+ &quot; poa.Attributes AS Attributes,  poa.BeneAmount AS BeneficiaryAmount, acc.CRMAccountID AS ACSFID,  poa.ReasonOfTransfer AS ReasonOfTransfer,  &quot;
+			+ &quot; concat(poa.vBeneficiaryFirstName,' ', poa.vBeneficiaryLastName) AS Beneficiary, &quot;
+			+ &quot; ur.id AS ResourceId, &quot;
+			+ &quot; us.SSOUserId AS LockedBy, &quot;
+			+ &quot; org.NAME AS Organization, &quot;
+			+ &quot; ( Select ',' + (select wl.reason AS WatchListReason from WatchList wl where id=cw.Reason)  AS [text()] &quot;
+			+ &quot; From contactwatchlist cw JOIN contact con ON cw.contact=con.id AND con.accountid = payout.accountid &quot;
+			+ &quot; For XML PATH ('') ) AS WatchListReason, &quot;
+			+ &quot; ctr.code AS Country, ctr.DisplayName AS CountryDisplayName , &quot;
+			+ &quot; pcse.status AS OverAllStatus, &quot;
+			+ &quot; acc.WatchlistStatus AS WatchListStatus, &quot;
+			+ &quot; payOut.BlacklistStatus, &quot;
+			+ &quot; payOut.FraugsterStatus, &quot;
+			+ &quot; payOut.SanctionStatus, &quot;
+			+ &quot; payOut.CustomCheckStatus &quot;
+			+ &quot; FROM paymentout payOut &quot;
+			+ &quot; JOIN paymentoutattribute poa ON payout.id = poa.id &quot;
+			+ &quot; JOIN paymentcompliancestatusenum pcse ON  payout.compliancestatus = pcse.id &quot;
+			+ &quot; JOIN account acc ON payOut.accountid = acc.id &quot;
+			+ &quot; JOIN contact con ON payOut.contactid = con.id &quot;
+			+ &quot; LEFT JOIN Country ctr ON poa.beneficiarycountry = ctr.id &quot;
+			+ &quot; JOIN organization org ON org.id = acc.organizationid &quot;
+			+ &quot; LEFT JOIN userresourcelock ur ON  payout.id = ur.resourceid &quot;
+			+ &quot; AND ur.resourcetype = 'PAYMENT_OUT' AND ur.LockReleasedOn IS NULL &quot;
+			+ &quot; LEFT JOIN [user] us ON us.id = ur.createdby &quot;
+			+ &quot; WHERE &quot;
+			+ &quot; {PAYMENTOUT_DATETIME_CRITERIA} &quot;
+			+ &quot; payOut.deleted = 0 )  As pqueue &quot;),
+	
+<span class="fc" id="L462">	GET_PAYMENTOUT_REPORT_PAGINATION_WITH_CRITERIA_SELECT(&quot;WITH poque AS &quot; </span>
+			+ &quot; ( &quot;
+			+&quot; {INNER_QUERY}&quot;
+			+ &quot;  ) &quot;
+			+ &quot; As pqueue2 ) SELECT &quot;
+			+ &quot;    *, ( SELECT max (rownum) FROM poque) AS 'TotalRows' &quot;
+			+ &quot; FROM poque &quot;
+			+ &quot; WHERE rownum &gt;= ? &quot;
+			+ &quot;  AND rownum &lt;= ? &quot;),
+	
+	
+<span class="fc" id="L473">	GET_PAYMNETOUT_REPORT_WHOLE_DATA( &quot;select rc.* &quot;</span>
+			+ &quot;from( {INNER_QUERY}&quot;
+			+ &quot; )AS  pqueue2 )as rc&quot;
+			);
+	
+	
+	
+       private String query;
+
+<span class="fc" id="L482">		PaymentOutReportQueryConstant(String query) {</span>
+<span class="fc" id="L483">			this.query = query;</span>
+
+<span class="fc" id="L485">		}</span>
+
+		public String getQuery() {
+<span class="fc" id="L488">			return this.query;</span>
+		}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,473 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FraudPredictPort.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">fraugster-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.fraugster.fraugsterport</a> &gt; <span class="el_source">FraudPredictPort.java</span></div><h1>FraudPredictPort.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.fraugster.fraugsterport;
+
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.Invocation.Builder;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import org.jboss.resteasy.client.jaxrs.ResteasyClient;
+import org.jboss.resteasy.client.jaxrs.ResteasyWebTarget;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraudpredict.fundsin.response.FraudPredictFundsInResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraudpredict.fundsout.response.FraudPredictFundsOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraudpredict.request.ProviderOnUpdateSignupRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraudpredict.request.ProviderPaymentInRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraudpredict.request.ProviderPaymentOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraudpredict.request.ProviderSignUpRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraudpredict.signup.response.FraudPredictSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSignupContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.fraugster.core.IFraudPredictProviderService;
+import com.currenciesdirect.gtg.compliance.fraugster.core.domain.FraugsterProviderProperty;
+import com.currenciesdirect.gtg.compliance.fraugster.exception.FraugsterErrors;
+import com.currenciesdirect.gtg.compliance.fraugster.exception.FraugsterException;
+import com.currenciesdirect.gtg.compliance.fraugster.util.ObjectUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * @author swatij
+ *
+ */
+<span class="nc" id="L38">public class FraudPredictPort implements IFraudPredictProviderService{</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L41">	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(FraudPredictPort.class);</span>
+
+	/** The resteasy client handler. */
+<span class="nc" id="L44">	private ResteasyClientHandler resteasyClientHandler = ResteasyClientHandler.getInstance();</span>
+
+	/** The fraud predict transformer. */
+<span class="nc" id="L47">	private FraudPredictTransformer fraudPredictTransformer = FraudPredictTransformer.getInstance();</span>
+
+	/** The i fraugster provider service. */
+<span class="nc" id="L50">	private static IFraudPredictProviderService iFraudPredictProviderService = null;</span>
+
+	/**
+	 * @return iFraudPredictProviderService
+	 */
+	public static IFraudPredictProviderService getInstance() {
+<span class="nc bnc" id="L56" title="All 2 branches missed.">		if (iFraudPredictProviderService == null) {</span>
+<span class="nc" id="L57">			iFraudPredictProviderService = new FraudPredictPort();</span>
+		}
+<span class="nc" id="L59">		return iFraudPredictProviderService;</span>
+	}
+
+	/**
+	 * @param request
+	 * @param fraugsterProviderProperty
+	 * @return fraudDetectionResponse
+	 * @throws FraugsterException
+	 */
+	@Override
+	public FraugsterSignupContactResponse doFraudPredictSignupCheck(FraugsterSignupContactRequest request,
+			FraugsterProviderProperty fraugsterProviderProperty) throws FraugsterException {
+		String jsonProviderSignUpRequest;
+<span class="nc" id="L72">		ResteasyClient client = null;</span>
+<span class="nc" id="L73">		ProviderSignUpRequest providerSignUpRequest = null;</span>
+<span class="nc" id="L74">		Response response = null;</span>
+<span class="nc" id="L75">		FraudPredictSignupResponse fraudPredictDataResponse = new FraudPredictSignupResponse();</span>
+<span class="nc" id="L76">		FraugsterSignupContactResponse fraudDetectionResponse = new FraugsterSignupContactResponse();</span>
+		try {
+<span class="nc" id="L78">			LOG.debug(&quot;Fraudpredict Port STARTED : doFraudpredictCheck() &quot;);</span>
+			/*client = resteasyClientHandler.getRetEasyClient();
+			providerSignUpRequest = fraudPredictTransformer.transformFraudPredictSignupRequest(request);
+			jsonProviderSignUpRequest = JsonConverterUtil.convertToJsonWithoutNull(providerSignUpRequest);
+			LOG.warn(jsonProviderSignUpRequest);
+			ResteasyWebTarget target1 = client.target(fraugsterProviderProperty.getEndPointUrl());
+			Builder clientrequest = target1.request();
+			response = clientrequest.post(Entity.entity(providerSignUpRequest, MediaType.APPLICATION_JSON)); */
+			
+<span class="nc" id="L87">			String json= &quot;{\&quot;frgTransId\&quot;:\&quot;ebbf783b-e83c-4259-b22b-58b652fef830\&quot;,&quot;</span>
+					+ &quot;\&quot;score\&quot;:\&quot;0.00019658374\&quot;,\&quot;fraugsterApproved\&quot;:\&quot;1.0\&quot;,\&quot;id\&quot;:52774,&quot;
+					+ &quot;\&quot;status\&quot;:\&quot;PASS\&quot;,\&quot;percentageFromThreshold\&quot;:\&quot;-97.41\&quot;,&quot;
+					+ &quot;\&quot;decisionDrivers\&quot;:{\&quot;txn_value\&quot;:{\&quot;value\&quot;:\&quot;2,000 - 5,000\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.2272942},\&quot;source\&quot;:{\&quot;value\&quot;:\&quot;WEB\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.2740615},\&quot;reg_mode\&quot;:{\&quot;value\&quot;:\&quot;MOBILE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.067475386},\&quot;affiliate_name\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;STP - TEMPORARY AFFILIATE CODE\&quot;,\&quot;featureImportance\&quot;:-0.5263882},&quot;
+					+ &quot;\&quot;ad_campaign\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.04260528},&quot;
+					+ &quot;\&quot;channel\&quot;:{\&quot;value\&quot;:\&quot;MOBILE\&quot;,\&quot;featureImportance\&quot;:-0.44612977},&quot;
+					+ &quot;\&quot;ip_line_speed\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:0.09510705},&quot;
+					+ &quot;\&quot;search_engine\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.09082934},&quot;
+					+ &quot;\&quot;gender_fullcontact\&quot;:{\&quot;value\&quot;:\&quot;MALE\&quot;,\&quot;featureImportance\&quot;:-0.065191016},&quot;
+					+ &quot;\&quot;browser_lang\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.11581852},&quot;
+					+ &quot;\&quot;screen_resolution\&quot;:{\&quot;value\&quot;:\&quot;750X1334\&quot;,\&quot;featureImportance\&quot;:-0.03602964},&quot;
+					+ &quot;\&quot;country_of_residence\&quot;:{\&quot;value\&quot;:\&quot;GBR\&quot;,\&quot;featureImportance\&quot;:-0.0832874},&quot;
+					+ &quot;\&quot;fullcontact_matched\&quot;:{\&quot;value\&quot;:\&quot;YES\&quot;,\&quot;featureImportance\&quot;:-0.0848447},&quot;
+					+ &quot;\&quot;ip_longitude\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-1.6565734},\&quot;keywords\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.060239006},\&quot;ip_connection_type\&quot;:{\&quot;value&quot;
+					+ &quot;\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.24046624},\&quot;device_type\&quot;:{\&quot;value\&quot;:\&quot;IPHONE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.005574821},\&quot;op_country\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.0},\&quot;residential_status\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.00016981395},\&quot;address_type\&quot;:{\&quot;value\&quot;:\&quot;CURRENT ADDRESS&quot;
+					+ &quot;\&quot;,\&quot;featureImportance\&quot;:0.0},\&quot;device_manufacturer\&quot;:{\&quot;value\&quot;:\&quot;APPLE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.009507372},\&quot;ip_carrier\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.16261506},\&quot;device_name\&quot;:{\&quot;value\&quot;:\&quot;BNT SOFT IPHONE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.028641686},\&quot;ip_anonymizer_status\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.033437513},\&quot;ip_routing_type\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.046029653},\&quot;eid_status\&quot;:{\&quot;value\&quot;:\&quot;1\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.15336347},\&quot;age_range_fullcontact\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;NONE\&quot;,\&quot;featureImportance\&quot;:-0.111547545},\&quot;location_country_fullcontact\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;NONE\&quot;,\&quot;featureImportance\&quot;:-0.0134919975},\&quot;ip_latitude\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;\&quot;,\&quot;featureImportance\&quot;:-1.419807},\&quot;browser_type\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.025675036},\&quot;title\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.19128892},\&quot;referral_text\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;NATURAL\&quot;,\&quot;featureImportance\&quot;:-0.048767813},\&quot;browser_online\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:0.0023156733},\&quot;device_os_type\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;APPLE IOS\&quot;,\&quot;featureImportance\&quot;:-0.060722403},\&quot;sub_source\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;NATURAL\&quot;,\&quot;featureImportance\&quot;:-0.27592996},\&quot;browser_version\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.026970118},\&quot;email_domain\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;GMAIL\&quot;,\&quot;featureImportance\&quot;:-0.46747407},\&quot;branch\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;MOORGATE HO\&quot;,\&quot;featureImportance\&quot;:-0.41487223},\&quot;sanction_status\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;1\&quot;,\&quot;featureImportance\&quot;:0.06794018},\&quot;turnover\&quot;:{\&quot;featureImportance\&quot;:-0.22452144},&quot;
+					+ &quot;\&quot;region_suburb\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.407228},&quot;
+					+ &quot;\&quot;social_profiles_count\&quot;:{\&quot;value\&quot;:\&quot;1.0\&quot;,\&quot;featureImportance\&quot;:-0.17582603},&quot;
+					+ &quot;\&quot;state\&quot;:{\&quot;value\&quot;:\&quot;KEIGHLEY\&quot;,\&quot;featureImportance\&quot;:-0.48905626}}}&quot;;
+			
+<span class="nc" id="L134">			ObjectMapper objectMapper =new ObjectMapper();</span>
+<span class="nc" id="L135">			fraudDetectionResponse = objectMapper.readValue(json, FraugsterSignupContactResponse.class);</span>
+			//fraudDetectionResponse = fraudPredictTransformer.transformFraudPredictSignupResponse(fraudPredictDataResponse);
+<span class="nc" id="L137">			 LOG.warn(&quot;\n -------Fraugster Response Start -------- \n  {}&quot;, json);</span>
+<span class="nc" id="L138">			 LOG.warn(&quot; \n -----------Fraugster Response End ---------&quot;);</span>
+
+		} /*
+			 * catch (FraugsterException e) { throw e; }
+<span class="nc" id="L142">			 */ catch (Exception e) {</span>
+<span class="nc" id="L143">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_SIGNUP, e);</span>
+		} finally {
+
+<span class="nc bnc" id="L146" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L147">				response.close();</span>
+			}
+		}
+<span class="nc" id="L150">		return fraudDetectionResponse;</span>
+	}
+
+	/**
+	 * @param response
+	 * @return
+	 * @throws FraugsterException
+	 */
+	private FraudPredictSignupResponse handleFraudPredictServerTansactionResponse(Response response)
+			throws FraugsterException {
+
+		FraudPredictSignupResponse dataResponse ;
+
+<span class="nc bnc" id="L163" title="All 2 branches missed.">		if (null != response) {</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">			if (response.getStatus() == 200) {</span>
+<span class="nc" id="L165">				dataResponse = response.readEntity(FraudPredictSignupResponse.class);</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">			} else if (response.getStatus() == 500) {</span>
+<span class="nc" id="L167">				throw new FraugsterException(FraugsterErrors.FRAUGSTER_SERVER_GENERIC_EXCEPTION);</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">			} else if (response.getStatus() == 400) {</span>
+<span class="nc" id="L169">				dataResponse = response.readEntity(FraudPredictSignupResponse.class);</span>
+			}
+			else {
+<span class="nc" id="L172">				throw new FraugsterException(FraugsterErrors.FAILED);</span>
+			}
+		} else {
+<span class="nc" id="L175">			throw new FraugsterException(FraugsterErrors.FAILED);</span>
+		}
+<span class="nc" id="L177">		return dataResponse;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.fraugster.core.
+	 * IFraudPredictProviderService#doFraudPredictOnUpdateCheck(com.currenciesdirect
+	 * .gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateContactRequest,
+	 * com.currenciesdirect.gtg.compliance.fraugster.core.domain.
+	 * FraugsterProviderProperty)
+	 */
+	@Override
+	public FraugsterOnUpdateContactResponse doFraudPredictOnUpdateCheck(FraugsterOnUpdateContactRequest request,
+			FraugsterProviderProperty fraugsterProviderProperty) throws FraugsterException {
+		String jsonProviderOnUpdateSignupRequest;
+<span class="nc" id="L193">		Response response = null;</span>
+<span class="nc" id="L194">		ResteasyClient client = null;</span>
+<span class="nc" id="L195">		ProviderOnUpdateSignupRequest providerOnUpdateSignupRequest = null;</span>
+<span class="nc" id="L196">		FraudPredictSignupResponse fraudPredictDataResponse = new FraudPredictSignupResponse();</span>
+<span class="nc" id="L197">		FraugsterOnUpdateContactResponse fraudDetectionResponse = new FraugsterOnUpdateContactResponse();</span>
+
+		try {
+
+<span class="nc" id="L201">			LOG.debug(&quot;Fraudpredict Port STARTED : doFraudpredictCheck() &quot;);</span>
+<span class="nc" id="L202">			client = resteasyClientHandler.getRetEasyClient();</span>
+<span class="nc" id="L203">			providerOnUpdateSignupRequest = fraudPredictTransformer.transformOnUpdateRequest(request);</span>
+<span class="nc" id="L204">			ResteasyWebTarget target1 = client.target(fraugsterProviderProperty.getEndPointUrl());</span>
+<span class="nc" id="L205">			Builder clientrequest = target1.request();</span>
+<span class="nc" id="L206">			jsonProviderOnUpdateSignupRequest = JsonConverterUtil.convertToJsonWithoutNull(providerOnUpdateSignupRequest);</span>
+<span class="nc" id="L207">			LOG.warn(jsonProviderOnUpdateSignupRequest);</span>
+<span class="nc" id="L208">			response = clientrequest.post(Entity.entity(providerOnUpdateSignupRequest, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L209">			fraudPredictDataResponse = handleFraudPredictServerTansactionResponse(response);</span>
+<span class="nc" id="L210">			fraudDetectionResponse = fraudPredictTransformer.transformUpdateResponse(fraudPredictDataResponse);</span>
+
+<span class="nc" id="L212">		} catch (FraugsterException e) {</span>
+<span class="nc" id="L213">			throw e;</span>
+<span class="nc" id="L214">		} catch (Exception e) {</span>
+<span class="nc" id="L215">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_ONUPDATE, e);</span>
+		} finally {
+<span class="nc bnc" id="L217" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L218">				response.close();</span>
+			}
+		}
+<span class="nc" id="L221">		return fraudDetectionResponse;</span>
+
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.fraugster.core.
+	 * IFraudPredictProviderService#doFraudPredictPaymentsInCheck(com.
+	 * currenciesdirect.gtg.compliance.commons.domain.fraugster.
+	 * FraugsterPaymentsInRequest,
+	 * com.currenciesdirect.gtg.compliance.commons.domain.fraugster.
+	 * FraugsterPaymentsInContactRequest,
+	 * com.currenciesdirect.gtg.compliance.fraugster.core.domain.
+	 * FraugsterProviderProperty)
+	 */
+	@Override
+	public FraugsterPaymentsInContactResponse doFraudPredictPaymentsInCheck(FraugsterPaymentsInRequest request,
+			FraugsterPaymentsInContactRequest contact, FraugsterProviderProperty fraugsterProviderProperty)
+			throws FraugsterException {
+<span class="nc" id="L241">		Response response = null;</span>
+<span class="nc" id="L242">		ResteasyClient client = null;</span>
+<span class="nc" id="L243">		FraugsterPaymentsInContactResponse fraudDetectionResponse = new FraugsterPaymentsInContactResponse();</span>
+<span class="nc" id="L244">		ProviderPaymentInRequest fraudPredictProviderRequest = null;</span>
+<span class="nc" id="L245">		FraudPredictFundsInResponse searchResponse = new FraudPredictFundsInResponse();</span>
+		try {
+<span class="nc" id="L247">			LOG.debug(&quot;FraugsterPort STRATED : doFraugsterPaymentsInCheck() &quot;);</span>
+			/*client = resteasyClientHandler.getRetEasyClient();
+			fraudPredictProviderRequest = fraudPredictTransformer.transformPaymentsInRequest(request, contact);
+			ObjectUtils.setNullFieldsToDefault(fraudPredictProviderRequest);
+			ResteasyWebTarget target1 = client.target(fraugsterProviderProperty.getEndPointUrl());
+			Builder clientrequest = target1.request();
+			response = clientrequest.post(Entity.entity(fraudPredictProviderRequest, MediaType.APPLICATION_JSON));
+			searchResponse = handleFraudPredictFundsInServerTansactionResponse(response);
+			fraudDetectionResponse = fraudPredictTransformer.transformPaymentsInResponse(searchResponse);*/
+<span class="nc" id="L256">			String json=&quot;{\&quot;frgTransId\&quot;:\&quot;ebbf783b-e83c-4259-b22b-58b652fef830\&quot;,&quot;</span>
+					+ &quot;\&quot;score\&quot;:\&quot;0.00019658374\&quot;,\&quot;fraugsterApproved\&quot;:\&quot;1.0\&quot;,\&quot;id\&quot;:52774,&quot;
+					+ &quot;\&quot;status\&quot;:\&quot;PASS\&quot;,\&quot;percentageFromThreshold\&quot;:\&quot;-97.41\&quot;,&quot;
+					+ &quot;\&quot;decisionDrivers\&quot;:{\&quot;txn_value\&quot;:{\&quot;value\&quot;:\&quot;2,000 - 5,000\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.2272942},\&quot;source\&quot;:{\&quot;value\&quot;:\&quot;WEB\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.2740615},\&quot;reg_mode\&quot;:{\&quot;value\&quot;:\&quot;MOBILE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.067475386},\&quot;affiliate_name\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;STP - TEMPORARY AFFILIATE CODE\&quot;,\&quot;featureImportance\&quot;:-0.5263882},&quot;
+					+ &quot;\&quot;ad_campaign\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.04260528},&quot;
+					+ &quot;\&quot;channel\&quot;:{\&quot;value\&quot;:\&quot;MOBILE\&quot;,\&quot;featureImportance\&quot;:-0.44612977},&quot;
+					+ &quot;\&quot;ip_line_speed\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:0.09510705},&quot;
+					+ &quot;\&quot;search_engine\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.09082934},&quot;
+					+ &quot;\&quot;gender_fullcontact\&quot;:{\&quot;value\&quot;:\&quot;MALE\&quot;,\&quot;featureImportance\&quot;:-0.065191016},&quot;
+					+ &quot;\&quot;browser_lang\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.11581852},&quot;
+					+ &quot;\&quot;screen_resolution\&quot;:{\&quot;value\&quot;:\&quot;750X1334\&quot;,\&quot;featureImportance\&quot;:-0.03602964},&quot;
+					+ &quot;\&quot;country_of_residence\&quot;:{\&quot;value\&quot;:\&quot;GBR\&quot;,\&quot;featureImportance\&quot;:-0.0832874},&quot;
+					+ &quot;\&quot;fullcontact_matched\&quot;:{\&quot;value\&quot;:\&quot;YES\&quot;,\&quot;featureImportance\&quot;:-0.0848447},&quot;
+					+ &quot;\&quot;ip_longitude\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-1.6565734},\&quot;keywords\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.060239006},\&quot;ip_connection_type\&quot;:{\&quot;value&quot;
+					+ &quot;\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.24046624},\&quot;device_type\&quot;:{\&quot;value\&quot;:\&quot;IPHONE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.005574821},\&quot;op_country\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.0},\&quot;residential_status\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.00016981395},\&quot;address_type\&quot;:{\&quot;value\&quot;:\&quot;CURRENT ADDRESS&quot;
+					+ &quot;\&quot;,\&quot;featureImportance\&quot;:0.0},\&quot;device_manufacturer\&quot;:{\&quot;value\&quot;:\&quot;APPLE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.009507372},\&quot;ip_carrier\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.16261506},\&quot;device_name\&quot;:{\&quot;value\&quot;:\&quot;BNT SOFT IPHONE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.028641686},\&quot;ip_anonymizer_status\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.033437513},\&quot;ip_routing_type\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.046029653},\&quot;eid_status\&quot;:{\&quot;value\&quot;:\&quot;1\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.15336347},\&quot;age_range_fullcontact\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;NONE\&quot;,\&quot;featureImportance\&quot;:-0.111547545},\&quot;location_country_fullcontact\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;NONE\&quot;,\&quot;featureImportance\&quot;:-0.0134919975},\&quot;ip_latitude\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;\&quot;,\&quot;featureImportance\&quot;:-1.419807},\&quot;browser_type\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.025675036},\&quot;title\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.19128892},\&quot;referral_text\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;NATURAL\&quot;,\&quot;featureImportance\&quot;:-0.048767813},\&quot;browser_online\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:0.0023156733},\&quot;device_os_type\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;APPLE IOS\&quot;,\&quot;featureImportance\&quot;:-0.060722403},\&quot;sub_source\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;NATURAL\&quot;,\&quot;featureImportance\&quot;:-0.27592996},\&quot;browser_version\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.026970118},\&quot;email_domain\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;GMAIL\&quot;,\&quot;featureImportance\&quot;:-0.46747407},\&quot;branch\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;MOORGATE HO\&quot;,\&quot;featureImportance\&quot;:-0.41487223},\&quot;sanction_status\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;1\&quot;,\&quot;featureImportance\&quot;:0.06794018},\&quot;turnover\&quot;:{\&quot;featureImportance\&quot;:-0.22452144},&quot;
+					+ &quot;\&quot;region_suburb\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.407228},&quot;
+					+ &quot;\&quot;social_profiles_count\&quot;:{\&quot;value\&quot;:\&quot;1.0\&quot;,\&quot;featureImportance\&quot;:-0.17582603},&quot;
+					+ &quot;\&quot;state\&quot;:{\&quot;value\&quot;:\&quot;KEIGHLEY\&quot;,\&quot;featureImportance\&quot;:-0.48905626}}}&quot;;
+<span class="nc" id="L302">			ObjectMapper objectMapper =new ObjectMapper();</span>
+<span class="nc" id="L303">			fraudDetectionResponse = objectMapper.readValue(json, FraugsterPaymentsInContactResponse.class);</span>
+			
+<span class="nc" id="L305">			String jsonfraudDetection = JsonConverterUtil.convertToJsonWithNull(fraudDetectionResponse);</span>
+<span class="nc" id="L306">			 LOG.warn(&quot;\n -------Fraugster Response Start -------- \n  {}&quot;, jsonfraudDetection);</span>
+<span class="nc" id="L307">			 LOG.warn(&quot; \n -----------Fraugster Response End ---------&quot;);</span>
+
+				/*
+				 * } catch (FraugsterException e) { throw e;
+				 */
+<span class="nc" id="L312">		} catch (Exception e) {</span>
+<span class="nc" id="L313">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_PAYMENTIN, e);</span>
+		} finally {
+<span class="nc bnc" id="L315" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L316">				response.close();</span>
+			}
+		}
+<span class="nc" id="L319">		return fraudDetectionResponse;</span>
+
+	}
+
+	/**
+	 * @param response
+	 * @return dataResponse
+	 * @throws FraugsterException
+	 */
+	private FraudPredictFundsInResponse handleFraudPredictFundsInServerTansactionResponse(Response response)
+			throws FraugsterException {
+
+		FraudPredictFundsInResponse dataResponse;
+
+<span class="nc bnc" id="L333" title="All 2 branches missed.">		if (null != response) {</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">			if (response.getStatus() == 200) {</span>
+<span class="nc" id="L335">				dataResponse = response.readEntity(FraudPredictFundsInResponse.class);</span>
+<span class="nc bnc" id="L336" title="All 2 branches missed.">			} else if (response.getStatus() == 500) {</span>
+<span class="nc" id="L337">				throw new FraugsterException(FraugsterErrors.FRAUGSTER_SERVER_GENERIC_EXCEPTION);</span>
+<span class="nc bnc" id="L338" title="All 2 branches missed.">			} else if (response.getStatus() == 400) {</span>
+<span class="nc" id="L339">				dataResponse = response.readEntity(FraudPredictFundsInResponse.class);</span>
+			} else {
+<span class="nc" id="L341">				throw new FraugsterException(FraugsterErrors.FAILED);</span>
+			}
+		}else {
+<span class="nc" id="L344">                throw new FraugsterException(FraugsterErrors.FAILED);</span>
+		}
+<span class="nc" id="L346">		return dataResponse;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.fraugster.core.
+	 * IFraudPredictProviderService#doFraudPredictPaymentsOutCheck(com.
+	 * currenciesdirect.gtg.compliance.commons.domain.fraugster.
+	 * FraugsterPaymentsOutRequest,
+	 * com.currenciesdirect.gtg.compliance.commons.domain.fraugster.
+	 * FraugsterPaymentsOutContactRequest,
+	 * com.currenciesdirect.gtg.compliance.fraugster.core.domain.
+	 * FraugsterProviderProperty)
+	 */
+	@Override
+	public FraugsterPaymentsOutContactResponse doFraudPredictPaymentsOutCheck(FraugsterPaymentsOutRequest request,
+			FraugsterPaymentsOutContactRequest contact, FraugsterProviderProperty fraugsterProviderProperty)
+			throws FraugsterException {
+<span class="nc" id="L365">		Response response = null;</span>
+<span class="nc" id="L366">		ResteasyClient client = null;</span>
+<span class="nc" id="L367">		FraugsterPaymentsOutContactResponse fraudDetectionResponse = new FraugsterPaymentsOutContactResponse();</span>
+<span class="nc" id="L368">		ProviderPaymentOutRequest fraudPaymentsOutProviderRequest = null;</span>
+<span class="nc" id="L369">		FraudPredictFundsOutResponse dataResponse = new FraudPredictFundsOutResponse();</span>
+		try {
+<span class="nc" id="L371">			LOG.debug(&quot;FraudPredict Port STRATED : doFraudPredictPaymentsOutCheck() &quot;);</span>
+			/*client = resteasyClientHandler.getRetEasyClient();
+			fraudPaymentsOutProviderRequest = fraudPredictTransformer.transformPaymentsOutRequest(request, contact);
+			ResteasyWebTarget target1 = client.target(fraugsterProviderProperty.getEndPointUrl());
+			Builder clientrequest = target1.request();
+			response = clientrequest.post(Entity.entity(fraudPaymentsOutProviderRequest, MediaType.APPLICATION_JSON));
+			dataResponse = handleFraudPredictFundsOutTansactionResponse(response);
+			fraudDetectionResponse = fraudPredictTransformer.transformPaymentsOutResponse(dataResponse);
+		} catch (FraugsterException e) {
+			throw e;
+		} */
+<span class="nc" id="L382">			String json=&quot;{\&quot;frgTransId\&quot;:\&quot;ebbf783b-e83c-4259-b22b-58b652fef830\&quot;,&quot;</span>
+					+ &quot;\&quot;score\&quot;:\&quot;0.00019658374\&quot;,\&quot;fraugsterApproved\&quot;:\&quot;1.0\&quot;,\&quot;id\&quot;:52774,&quot;
+					+ &quot;\&quot;status\&quot;:\&quot;PASS\&quot;,\&quot;percentageFromThreshold\&quot;:\&quot;-97.41\&quot;,&quot;
+					+ &quot;\&quot;decisionDrivers\&quot;:{\&quot;txn_value\&quot;:{\&quot;value\&quot;:\&quot;2,000 - 5,000\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.2272942},\&quot;source\&quot;:{\&quot;value\&quot;:\&quot;WEB\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.2740615},\&quot;reg_mode\&quot;:{\&quot;value\&quot;:\&quot;MOBILE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.067475386},\&quot;affiliate_name\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;STP - TEMPORARY AFFILIATE CODE\&quot;,\&quot;featureImportance\&quot;:-0.5263882},&quot;
+					+ &quot;\&quot;ad_campaign\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.04260528},&quot;
+					+ &quot;\&quot;channel\&quot;:{\&quot;value\&quot;:\&quot;MOBILE\&quot;,\&quot;featureImportance\&quot;:-0.44612977},&quot;
+					+ &quot;\&quot;ip_line_speed\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:0.09510705},&quot;
+					+ &quot;\&quot;search_engine\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.09082934},&quot;
+					+ &quot;\&quot;gender_fullcontact\&quot;:{\&quot;value\&quot;:\&quot;MALE\&quot;,\&quot;featureImportance\&quot;:-0.065191016},&quot;
+					+ &quot;\&quot;browser_lang\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.11581852},&quot;
+					+ &quot;\&quot;screen_resolution\&quot;:{\&quot;value\&quot;:\&quot;750X1334\&quot;,\&quot;featureImportance\&quot;:-0.03602964},&quot;
+					+ &quot;\&quot;country_of_residence\&quot;:{\&quot;value\&quot;:\&quot;GBR\&quot;,\&quot;featureImportance\&quot;:-0.0832874},&quot;
+					+ &quot;\&quot;fullcontact_matched\&quot;:{\&quot;value\&quot;:\&quot;YES\&quot;,\&quot;featureImportance\&quot;:-0.0848447},&quot;
+					+ &quot;\&quot;ip_longitude\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-1.6565734},\&quot;keywords\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.060239006},\&quot;ip_connection_type\&quot;:{\&quot;value&quot;
+					+ &quot;\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.24046624},\&quot;device_type\&quot;:{\&quot;value\&quot;:\&quot;IPHONE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.005574821},\&quot;op_country\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.0},\&quot;residential_status\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.00016981395},\&quot;address_type\&quot;:{\&quot;value\&quot;:\&quot;CURRENT ADDRESS&quot;
+					+ &quot;\&quot;,\&quot;featureImportance\&quot;:0.0},\&quot;device_manufacturer\&quot;:{\&quot;value\&quot;:\&quot;APPLE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:0.009507372},\&quot;ip_carrier\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.16261506},\&quot;device_name\&quot;:{\&quot;value\&quot;:\&quot;BNT SOFT IPHONE\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.028641686},\&quot;ip_anonymizer_status\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.033437513},\&quot;ip_routing_type\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.046029653},\&quot;eid_status\&quot;:{\&quot;value\&quot;:\&quot;1\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.15336347},\&quot;age_range_fullcontact\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;NONE\&quot;,\&quot;featureImportance\&quot;:-0.111547545},\&quot;location_country_fullcontact\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;NONE\&quot;,\&quot;featureImportance\&quot;:-0.0134919975},\&quot;ip_latitude\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;\&quot;,\&quot;featureImportance\&quot;:-1.419807},\&quot;browser_type\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.025675036},\&quot;title\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,&quot;
+					+ &quot;\&quot;featureImportance\&quot;:-0.19128892},\&quot;referral_text\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;NATURAL\&quot;,\&quot;featureImportance\&quot;:-0.048767813},\&quot;browser_online\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:0.0023156733},\&quot;device_os_type\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;APPLE IOS\&quot;,\&quot;featureImportance\&quot;:-0.060722403},\&quot;sub_source\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;NATURAL\&quot;,\&quot;featureImportance\&quot;:-0.27592996},\&quot;browser_version\&quot;:{&quot;
+					+ &quot;\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.026970118},\&quot;email_domain\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;GMAIL\&quot;,\&quot;featureImportance\&quot;:-0.46747407},\&quot;branch\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;MOORGATE HO\&quot;,\&quot;featureImportance\&quot;:-0.41487223},\&quot;sanction_status\&quot;:{\&quot;value\&quot;:&quot;
+					+ &quot;\&quot;1\&quot;,\&quot;featureImportance\&quot;:0.06794018},\&quot;turnover\&quot;:{\&quot;featureImportance\&quot;:-0.22452144},&quot;
+					+ &quot;\&quot;region_suburb\&quot;:{\&quot;value\&quot;:\&quot;\&quot;,\&quot;featureImportance\&quot;:-0.407228},&quot;
+					+ &quot;\&quot;social_profiles_count\&quot;:{\&quot;value\&quot;:\&quot;1.0\&quot;,\&quot;featureImportance\&quot;:-0.17582603},&quot;
+					+ &quot;\&quot;state\&quot;:{\&quot;value\&quot;:\&quot;KEIGHLEY\&quot;,\&quot;featureImportance\&quot;:-0.48905626}}}&quot;;
+<span class="nc" id="L428">			ObjectMapper objectMapper =new ObjectMapper();</span>
+<span class="nc" id="L429">			fraudDetectionResponse = objectMapper.readValue(json, FraugsterPaymentsOutContactResponse.class);</span>
+			
+<span class="nc" id="L431">			String jsonfraudDetection = JsonConverterUtil.convertToJsonWithNull(fraudDetectionResponse);</span>
+<span class="nc" id="L432">			 LOG.warn(&quot;\n -------Fraugster Response Start -------- \n  {}&quot;, jsonfraudDetection);</span>
+<span class="nc" id="L433">			 LOG.warn(&quot; \n -----------Fraugster Response End ---------&quot;);</span>
+			
+<span class="nc" id="L435">		}catch (Exception e) {</span>
+<span class="nc" id="L436">			throw new FraugsterException(FraugsterErrors.ERROR_WHILE_PAYMENTOUT, e);</span>
+		} finally {
+<span class="nc bnc" id="L438" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L439">				response.close();</span>
+			}
+		}
+<span class="nc" id="L442">		return fraudDetectionResponse;</span>
+
+	}
+
+	/**
+	 * @param response
+	 * @return dataResponse
+	 * @throws FraugsterException
+	 */
+	private FraudPredictFundsOutResponse handleFraudPredictFundsOutTansactionResponse(Response response)
+			throws FraugsterException {
+
+		FraudPredictFundsOutResponse dataResponse ;
+
+<span class="nc bnc" id="L456" title="All 2 branches missed.">		if (null != response) {</span>
+<span class="nc bnc" id="L457" title="All 2 branches missed.">			if (response.getStatus() == 200) {</span>
+<span class="nc" id="L458">				dataResponse = response.readEntity(FraudPredictFundsOutResponse.class);</span>
+<span class="nc bnc" id="L459" title="All 2 branches missed.">			} else if (response.getStatus() == 500) {</span>
+<span class="nc" id="L460">				throw new FraugsterException(FraugsterErrors.FRAUGSTER_SERVER_GENERIC_EXCEPTION);</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">			} else if (response.getStatus() == 400) {</span>
+<span class="nc" id="L462">				dataResponse = response.readEntity(FraudPredictFundsOutResponse.class);</span>
+			}else {
+<span class="nc" id="L464">				throw new FraugsterException(FraugsterErrors.FAILED);</span>
+			}
+		}else{
+<span class="nc" id="L467">			throw new FraugsterException(FraugsterErrors.FAILED);</span>
+		}
+<span class="nc" id="L469">		return dataResponse;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

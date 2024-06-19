@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ActivityLogDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">ActivityLogDBServiceImpl.java</span></div><h1>ActivityLogDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.core.IActivityLogDBService;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogDataWrapper;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+
+/**
+ * The Class ActivityLogDBServiceImpl.
+ */
+@Component(&quot;activityLogDBServiceImpl&quot;)
+<span class="fc" id="L26">public class ActivityLogDBServiceImpl extends AbstractDao implements IActivityLogDBService {</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IActivityLogDBService#
+	 * getPaymentInActivityLogs(java.lang.Integer)
+	 */
+	@Override
+	public ActivityLogs getPaymentInActivityLogs(ActivityLogRequest request) throws CompliancePortalException {
+
+<span class="fc" id="L37">		ActivityLogs activityLogs = null;</span>
+<span class="fc" id="L38">		String query = ActivityLogQueryConstant.GET_PAYMENT_IN_ACTIVITY_LOGS_BY_ROWS.getQuery();</span>
+<span class="fc" id="L39">		String countQuery = ActivityLogQueryConstant.GET_PAYMENT_IN_ACTIVITY_LOGS_COUNT.getQuery();</span>
+<span class="fc" id="L40">		Connection connection = null;</span>
+		try {
+<span class="fc" id="L42">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L43">			activityLogs = getPaymentActivityLogData(connection, query, request);</span>
+<span class="fc" id="L44">			activityLogs.setTotalRecords(getTotalCount(connection, countQuery, request));</span>
+<span class="fc" id="L45">		} catch (Exception e) {</span>
+<span class="fc" id="L46">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L48">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L50">		return activityLogs;</span>
+	}
+
+	/**
+	 * Gets the payment in activity log data.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param query
+	 *            the query
+	 * @param request
+	 *            the request
+	 * @return the payment in activity log data
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	private ActivityLogs getPaymentActivityLogData(Connection connection, String query, ActivityLogRequest request)
+			throws CompliancePortalException {
+<span class="fc" id="L68">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="fc" id="L69">		List&lt;ActivityLogDataWrapper&gt; activityLogDataList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L70">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L71">		ResultSet resultSet = null;</span>
+		try {
+<span class="fc" id="L73">			preparedStatement = connection.prepareStatement(query);</span>
+<span class="fc" id="L74">			preparedStatement.setInt(1, request.getAccountId());</span>
+<span class="fc" id="L75">			preparedStatement.setInt(2, request.getMinRecord());</span>
+<span class="fc" id="L76">			preparedStatement.setInt(3, request.getMaxRecord());</span>
+<span class="fc" id="L77">			resultSet = preparedStatement.executeQuery();</span>
+<span class="fc bfc" id="L78" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L79">				ActivityLogDataWrapper activityLogData = new ActivityLogDataWrapper();</span>
+<span class="fc" id="L80">				activityLogData.setCreatedBy(resultSet.getString(Constants.USER));</span>
+<span class="fc" id="L81">				activityLogData.setActivity(resultSet.getString(Constants.ACTIVITY));</span>
+<span class="fc" id="L82">				activityLogData.setActivityType(</span>
+<span class="fc" id="L83">						ActivityType.getActivityLogDisplay(resultSet.getString(Constants.ACTIVITY_TYPE)));</span>
+<span class="fc" id="L84">				Timestamp createdOn = resultSet.getTimestamp(Constants.CREATED_ON);</span>
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">				activityLogData.setCreatedOn(createdOn != null ? DateTimeFormatter.dateTimeFormatter(createdOn) : null);</span>
+<span class="fc" id="L86">				activityLogData.setContractNumber(resultSet.getString(Constants.CONTRACT_NUMBER));</span>
+<span class="fc" id="L87">				activityLogData.setComment(resultSet.getString(Constants.COMMENT));</span>
+<span class="fc" id="L88">				activityLogDataList.add(activityLogData);</span>
+<span class="fc" id="L89">			}</span>
+<span class="fc" id="L90">			activityLogs.setActivityLogData(activityLogDataList);</span>
+<span class="nc" id="L91">		} catch (Exception e) {</span>
+<span class="nc" id="L92">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L94">			closeResultset(resultSet);</span>
+<span class="fc" id="L95">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="fc" id="L97">		return activityLogs;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IActivityLogDBService#
+	 * getPaymentOutActivityLogs(com.currenciesdirect.gtg.compliance.core.domain
+	 * .ActivityLogRequest)
+	 */
+	@Override
+	public ActivityLogs getPaymentOutActivityLogs(ActivityLogRequest request) throws CompliancePortalException {
+
+<span class="fc" id="L110">		ActivityLogs activityLogs = null;</span>
+<span class="fc" id="L111">		String query = ActivityLogQueryConstant.GET_PAYMENT_OUT_ACTIVITY_LOGS_BY_ROWS.getQuery();</span>
+<span class="fc" id="L112">		String countQuery = ActivityLogQueryConstant.GET_PAYMENT_OUT_ACTIVITY_LOGS_COUNT.getQuery();</span>
+<span class="fc" id="L113">		Connection connection = null;</span>
+		try {
+<span class="fc" id="L115">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L116">			activityLogs = getPaymentActivityLogData(connection, query, request);</span>
+<span class="fc" id="L117">			activityLogs.setTotalRecords(getTotalCount(connection, countQuery, request));</span>
+<span class="fc" id="L118">		} catch (Exception e) {</span>
+<span class="fc" id="L119">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L121">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L123">		return activityLogs;</span>
+	}
+
+	/**
+	 * Gets the total count.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param countQuery
+	 *            the count query
+	 * @param request
+	 *            the request
+	 * @return the total count
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	private Integer getTotalCount(Connection connection, String countQuery, ActivityLogRequest request)
+			throws CompliancePortalException {
+<span class="fc" id="L141">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L142">		ResultSet resultSet = null;</span>
+<span class="fc" id="L143">		int totalcount = 0;</span>
+		try {
+<span class="fc" id="L145">			preparedStatement = connection.prepareStatement(countQuery);</span>
+<span class="fc" id="L146">			preparedStatement.setInt(1, request.getAccountId());</span>
+<span class="fc" id="L147">			resultSet = preparedStatement.executeQuery();</span>
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">			while (resultSet.next()) {</span>
+<span class="nc" id="L149">				totalcount = resultSet.getInt(&quot;TotalCount&quot;);</span>
+			}
+<span class="nc" id="L151">		} catch (Exception e) {</span>
+<span class="nc" id="L152">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L154">			closeResultset(resultSet);</span>
+<span class="fc" id="L155">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="fc" id="L157">		return totalcount;</span>
+	}
+
+	/**
+	 * Gets the payment out activity log data.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param query
+	 *            the query
+	 * @param request
+	 *            the request
+	 * @return the payment out activity log data
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IActivityLogDBService#
+	 * getRegistrationActivityLogs(com.currenciesdirect.gtg.compliance.core.
+	 * domain.ActivityLogRequest)
+	 */
+	@Override
+	public ActivityLogs getRegistrationActivityLogs(ActivityLogRequest request) throws CompliancePortalException {
+
+<span class="fc" id="L184">		ActivityLogs activityLogs = null;</span>
+<span class="fc" id="L185">		String query = ActivityLogQueryConstant.GET_REGISTRATION_ACTIVITY_LOGS.getQuery();</span>
+<span class="fc" id="L186">		String countQuery = ActivityLogQueryConstant.GET_REGISTRATION_ACTIVITY_LOGS_COUNT.getQuery();</span>
+<span class="fc" id="L187">		Connection connection = null;</span>
+		try {
+<span class="fc" id="L189">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L190">			activityLogs = getRegistrationLogData(connection, query, request);</span>
+<span class="fc" id="L191">			activityLogs.setTotalRecords(getTotalCount(connection, countQuery, request));</span>
+<span class="fc" id="L192">		} catch (Exception e) {</span>
+<span class="fc" id="L193">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L195">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L197">		return activityLogs;</span>
+	}
+
+	/**
+	 * Gets the registration log data.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param query
+	 *            the query
+	 * @param request
+	 *            the request
+	 * @return the registration log data
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	private ActivityLogs getRegistrationLogData(Connection connection, String query, ActivityLogRequest request)
+			throws CompliancePortalException {
+<span class="fc" id="L215">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="fc" id="L216">		List&lt;ActivityLogDataWrapper&gt; activityLogDataList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L217">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L218">		ResultSet resultSet = null;</span>
+		try {
+<span class="fc" id="L220">			preparedStatement = connection.prepareStatement(query);</span>
+<span class="fc" id="L221">			preparedStatement.setInt(1, request.getAccountId());</span>
+<span class="fc" id="L222">			preparedStatement.setInt(2, request.getMinRecord());</span>
+<span class="fc" id="L223">			preparedStatement.setInt(3, request.getMaxRecord());</span>
+<span class="fc" id="L224">			resultSet = preparedStatement.executeQuery();</span>
+<span class="fc bfc" id="L225" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L226">				ActivityLogDataWrapper activityLogData = new ActivityLogDataWrapper();</span>
+<span class="fc" id="L227">				activityLogData.setCreatedBy(resultSet.getString(Constants.USER));</span>
+<span class="fc" id="L228">				activityLogData.setActivity(resultSet.getString(Constants.ACTIVITY));</span>
+<span class="fc" id="L229">				activityLogData.setActivityType(</span>
+<span class="fc" id="L230">						ActivityType.getActivityLogDisplay(resultSet.getString(Constants.ACTIVITY_TYPE)));</span>
+<span class="fc" id="L231">				Timestamp createdOn = resultSet.getTimestamp(Constants.CREATED_ON);</span>
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">				activityLogData.setCreatedOn(createdOn != null ? DateTimeFormatter.dateTimeFormatter(createdOn) : null);</span>
+<span class="fc" id="L233">				activityLogData.setContractNumber(&quot;--&quot;);</span>
+<span class="fc" id="L234">				activityLogData.setComment(resultSet.getString(Constants.COMMENT));</span>
+<span class="fc" id="L235">				activityLogDataList.add(activityLogData);</span>
+<span class="fc" id="L236">			}</span>
+<span class="fc" id="L237">			activityLogs.setActivityLogData(activityLogDataList);</span>
+<span class="nc" id="L238">		} catch (Exception e) {</span>
+<span class="nc" id="L239">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L241">			closeResultset(resultSet);</span>
+<span class="fc" id="L242">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="fc" id="L244">		return activityLogs;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.core.IActivityLogDBService#
+	 * getAllActivityLogs(com.currenciesdirect.gtg.compliance.core.domain.
+	 * ActivityLogRequest)
+	 */
+	@Override
+	public ActivityLogs getAllActivityLogs(ActivityLogRequest request) throws CompliancePortalException {
+
+<span class="fc" id="L257">		ActivityLogs activityLogs = null;</span>
+<span class="fc" id="L258">		String query = ActivityLogQueryConstant.GET_ALL_ACTIVITY_LOGS.getQuery();</span>
+
+<span class="fc" id="L260">		Connection connection = null;</span>
+		try {
+<span class="fc" id="L262">			connection = getConnection(Boolean.TRUE);</span>
+<span class="fc" id="L263">			activityLogs = getAllActivityLogData(connection, query, request);</span>
+<span class="fc" id="L264">		} catch (Exception e) {</span>
+<span class="fc" id="L265">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L267">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L269">		return activityLogs;</span>
+	}
+
+	/**
+	 * Gets the consolidated registration, payment in, payment out activity log
+	 * data.
+	 *
+	 * @param connection
+	 *            the connection
+	 * @param query
+	 *            the query
+	 * @param request
+	 *            the request
+	 * @return the consolidated registration, payment in, payment out activity
+	 *         log data
+	 * @throws CompliancePortalException
+	 *             the compliance portal exception
+	 */
+	private ActivityLogs getAllActivityLogData(Connection connection, String query, ActivityLogRequest request)
+			throws CompliancePortalException {
+<span class="fc" id="L289">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="fc" id="L290">		List&lt;ActivityLogDataWrapper&gt; activityLogDataList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L291">		PreparedStatement preparedStatement = null;</span>
+<span class="fc" id="L292">		ResultSet resultSet = null;</span>
+		try {
+<span class="fc" id="L294">			preparedStatement = connection.prepareStatement(query);</span>
+<span class="fc" id="L295">			final Integer accountId = request.getAccountId();</span>
+<span class="fc" id="L296">			preparedStatement.setInt(1, accountId);</span>
+<span class="fc" id="L297">			preparedStatement.setInt(2, request.getMinRecord());</span>
+<span class="fc" id="L298">			preparedStatement.setInt(3, request.getMaxRecord());</span>
+<span class="fc" id="L299">			resultSet = preparedStatement.executeQuery();</span>
+<span class="fc bfc" id="L300" title="All 2 branches covered.">			while (resultSet.next()) {</span>
+<span class="fc" id="L301">				activityLogs.setTotalRecords(resultSet.getInt(&quot;totalrecords&quot;));</span>
+<span class="fc" id="L302">				ActivityLogDataWrapper activityLogData = new ActivityLogDataWrapper();</span>
+<span class="fc" id="L303">				activityLogData.setCreatedBy(resultSet.getString(Constants.USER));</span>
+<span class="fc" id="L304">				activityLogData.setActivity(resultSet.getString(Constants.ACTIVITY));</span>
+<span class="fc" id="L305">				activityLogData.setActivityType(</span>
+<span class="fc" id="L306">						ActivityType.getActivityLogDisplay(resultSet.getString(Constants.ACTIVITY_TYPE)));</span>
+<span class="fc" id="L307">				Timestamp createdOn = resultSet.getTimestamp(Constants.CREATED_ON);</span>
+<span class="pc bpc" id="L308" title="1 of 2 branches missed.">				activityLogData.setCreatedOn(createdOn != null ? DateTimeFormatter.dateTimeFormatter(createdOn) : null);</span>
+<span class="fc" id="L309">				activityLogData.setContractNumber(resultSet.getString(Constants.CONTRACT_NUMBER));</span>
+<span class="fc" id="L310">				activityLogData.setComment(resultSet.getString(Constants.COMMENT));</span>
+<span class="fc" id="L311">				activityLogDataList.add(activityLogData);</span>
+<span class="fc" id="L312">			}</span>
+<span class="fc" id="L313">			activityLogs.setActivityLogData(activityLogDataList);</span>
+<span class="nc" id="L314">		} catch (Exception e) {</span>
+<span class="nc" id="L315">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L317">			closeResultset(resultSet);</span>
+<span class="fc" id="L318">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="fc" id="L320">		return activityLogs;</span>
+	}
+	
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

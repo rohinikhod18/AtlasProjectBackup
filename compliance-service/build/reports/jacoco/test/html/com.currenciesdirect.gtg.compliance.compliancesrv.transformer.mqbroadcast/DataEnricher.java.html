@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DataEnricher.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.mqbroadcast</a> &gt; <span class="el_source">DataEnricher.java</span></div><h1>DataEnricher.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.mqbroadcast;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.BroadCastEntityTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.BroadCastQueueDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.BroadCastQueueRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MQMessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+<span class="nc" id="L24">public class DataEnricher {</span>
+
+<span class="nc" id="L26">	private static final Logger LOG = LoggerFactory.getLogger(DataEnricher.class);</span>
+	
+	/**
+	 * @param message
+	 * @return message
+	 * @throws ComplianceException
+	 */
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MQMessageContext&gt; process(Message&lt;MQMessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L35">		BroadCastQueueDBServiceImpl broadCastQueueDBServiceImpl = new BroadCastQueueDBServiceImpl();</span>
+<span class="nc" id="L36">		BroadCastQueueRequest broadCastQueueRequest = (BroadCastQueueRequest) message.getPayload().getRequest();</span>
+<span class="nc" id="L37">		String statusJson = JsonConverterUtil.convertToJsonWithNull(broadCastQueueRequest.getStatusJson());</span>
+<span class="nc" id="L38">		RegistrationResponse regStatusJson = JsonConverterUtil.convertToObject(RegistrationResponse.class, statusJson);</span>
+<span class="nc" id="L39">		String entityType = broadCastQueueRequest.getEntityType();</span>
+		try {
+<span class="nc bnc" id="L41" title="All 2 branches missed.">			if( (BroadCastEntityTypeEnum.ADDCONTACT.toString().equals(entityType) </span>
+<span class="nc bnc" id="L42" title="All 2 branches missed.">					|| BroadCastEntityTypeEnum.SIGNUP.toString().equals(entityType) </span>
+<span class="nc bnc" id="L43" title="All 2 branches missed.">					|| BroadCastEntityTypeEnum.UPDATE.toString().equals(entityType)) 			</span>
+<span class="nc bnc" id="L44" title="All 2 branches missed.">					&amp;&amp; Constants.CFX.equals(regStatusJson.getAccount().getCustType())) {</span>
+<span class="nc" id="L45">				addRegistrationResponseDates(regStatusJson,broadCastQueueRequest);</span>
+<span class="nc" id="L46">				ComplianceAccount allContacts = broadCastQueueDBServiceImpl.getContactsDetails(regStatusJson.getAccount().getAccountSFID());</span>
+				List&lt;ComplianceContact&gt; contactList;
+<span class="nc" id="L48">				contactList = getContact(regStatusJson,allContacts);</span>
+<span class="nc" id="L49">				regStatusJson.getAccount().setContacts(contactList);</span>
+<span class="nc" id="L50">				broadCastQueueRequest.setStatusJson(regStatusJson);</span>
+<span class="nc" id="L51">				message.getPayload().setRequest(broadCastQueueRequest);</span>
+			}
+<span class="nc" id="L53">			setSpecificFieldsValuesToNull(regStatusJson);</span>
+		}
+<span class="nc" id="L55">		catch(Exception e) {</span>
+<span class="nc" id="L56">			LOG.error(&quot;Error DataEnricher process method:&quot;, e);</span>
+<span class="nc" id="L57">		}</span>
+<span class="nc" id="L58">		return message;</span>
+	}
+
+	/**
+	 * Gets all the contact response and add it in the request
+	 * @param regStatusJson
+	 * @param allContacts
+	 * @return contact List
+	 */
+	private List&lt;ComplianceContact&gt; getContact(RegistrationResponse regStatusJson, ComplianceAccount allContacts) {
+<span class="nc" id="L68">		List&lt;ComplianceContact&gt; contactList = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">		for(ComplianceContact contact : allContacts.getContacts()) {</span>
+<span class="nc" id="L70">			ComplianceContact contacts = new ComplianceContact();</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">			if(ComplianceReasonCode.BLACKLISTED.getReasonCode().equals(regStatusJson.getAccount().getResponseCode())) {</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">				if(regStatusJson.getAccount().getSpecificContact().getContactSFID().equals(contact.getContactSFID())) {</span>
+<span class="nc" id="L73">					contacts.setResponseCode(regStatusJson.getAccount().getResponseCode());</span>
+<span class="nc" id="L74">					contacts.setResponseDescription(regStatusJson.getAccount().getResponseDescription());</span>
+<span class="nc" id="L75">					contacts.setReasonForInactive(regStatusJson.getAccount().getReasonForInactive());</span>
+				}
+				else {
+<span class="nc" id="L78">					contacts.setResponseCode(regStatusJson.getAccount().getOtherContacts().getResponseCode());</span>
+<span class="nc" id="L79">					contacts.setResponseDescription(regStatusJson.getAccount().getOtherContacts().getResponseDescription());</span>
+				}
+			}
+			else {
+<span class="nc" id="L83">				contacts.setResponseCode(regStatusJson.getAccount().getResponseCode());</span>
+<span class="nc" id="L84">				contacts.setResponseDescription(regStatusJson.getAccount().getResponseDescription());</span>
+			}
+<span class="nc" id="L86">			contacts.setCcs(regStatusJson.getAccount().getAcs());</span>
+<span class="nc" id="L87">			contacts.setContactSFID(contact.getContactSFID());</span>
+<span class="nc" id="L88">			contacts.setTradeContactID(contact.getTradeContactID());</span>
+<span class="nc" id="L89">			contactList.add(contacts);</span>
+<span class="nc" id="L90">		}</span>
+<span class="nc" id="L91">		return contactList;</span>
+	}
+	
+	/**
+	 * Remove the fields from request
+	 * @param regStatusJson
+	 */
+	private void setSpecificFieldsValuesToNull(RegistrationResponse regStatusJson) {
+<span class="nc bnc" id="L99" title="All 2 branches missed.">		if(null != regStatusJson.getAccount()) {</span>
+<span class="nc" id="L100">			regStatusJson.getAccount().setSpecificContact(null);</span>
+<span class="nc" id="L101">			regStatusJson.getAccount().setOtherContacts(null);</span>
+<span class="nc" id="L102">			regStatusJson.getAccount().setCustType(null);</span>
+<span class="nc" id="L103">			regStatusJson.getAccount().setEventType(null);</span>
+		}
+<span class="nc" id="L105">	}</span>
+	
+	/**
+	 * Set Registered and Registration in date
+	 * @param regStatusJson
+	 * @param broadCastQueueRequest
+	 */
+	@SuppressWarnings(&quot;unchecked&quot;)
+	private void addRegistrationResponseDates(RegistrationResponse regStatusJson, BroadCastQueueRequest broadCastQueueRequest) {
+		Map&lt;String,Object&gt; accounts;
+<span class="nc" id="L115">		accounts = (Map&lt;String, Object&gt;) broadCastQueueRequest.getStatusJson();</span>
+<span class="nc" id="L116">		accounts = (Map&lt;String, Object&gt;) accounts.get(&quot;account&quot;);</span>
+<span class="nc" id="L117">		String regDate = (String) accounts.get(&quot;registeredDate&quot;);</span>
+<span class="nc" id="L118">		String regInDate = (String) accounts.get(&quot;registrationInDate&quot;);</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">		if(null != regDate)</span>
+<span class="nc" id="L120">			regStatusJson.getAccount().setRegisteredDate(DateTimeFormatter.convertStringToTimestamp(regDate));</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">		if(null != regInDate)</span>
+<span class="nc" id="L122">			regStatusJson.getAccount().setRegistrationInDate(DateTimeFormatter.convertStringToTimestamp(regInDate));</span>
+<span class="nc" id="L123">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

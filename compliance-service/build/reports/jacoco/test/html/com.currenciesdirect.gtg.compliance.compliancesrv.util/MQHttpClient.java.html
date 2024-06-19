@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MQHttpClient.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.util</a> &gt; <span class="el_source">MQHttpClient.java</span></div><h1>MQHttpClient.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.util;
+
+import java.io.IOException;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
+
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.Invocation.Builder;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.jboss.resteasy.client.jaxrs.ResteasyClient;
+import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
+import org.jboss.resteasy.client.jaxrs.ResteasyWebTarget;
+import org.jboss.resteasy.client.jaxrs.engines.ApacheHttpClient4Engine;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.MQProviderRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.mq.MQProviderResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MQMessageContext;
+
+/**
+ * The Class MQHttpClient.
+ */
+<span class="nc" id="L33">public final class MQHttpClient {</span>
+
+	/** The Constant ERROR_CODE_URL_BASE. */
+	private static final String ERROR_CODE_URL_BASE = &quot;Error Code:{}, urlBase:{}&quot;;
+
+	/** The Constant LOG. */
+<span class="nc" id="L39">	private static final Logger LOG = LoggerFactory.getLogger(MQHttpClient.class);</span>
+
+	/** The url base. */
+	private String urlBase;
+
+	/** The method. */
+	private String method;
+
+	/** The resteasy client handler. */
+<span class="nc" id="L48">	private ResteasyClientHandler resteasyClientHandler = ResteasyClientHandler.getInstance();</span>
+
+	/**
+	 * Gets the url base.
+	 *
+	 * @return the url base
+	 */
+	public String getUrlBase() {
+<span class="nc" id="L56">		return urlBase;</span>
+	}
+
+	/**
+	 * Sets the url base.
+	 *
+	 * @param urlBase
+	 *            the new url base
+	 */
+	public void setUrlBase(String urlBase) {
+<span class="nc" id="L66">		this.urlBase = urlBase;</span>
+<span class="nc" id="L67">	}</span>
+
+	/**
+	 * Gets the method.
+	 *
+	 * @return the method
+	 */
+	public String getMethod() {
+<span class="nc" id="L75">		return method;</span>
+	}
+
+	/**
+	 * Sets the method.
+	 *
+	 * @param method
+	 *            the new method
+	 */
+	public void setMethod(String method) {
+<span class="nc" id="L85">		this.method = method;</span>
+<span class="nc" id="L86">	}</span>
+
+	/**
+	 * The Enum Singleton.
+	 */
+<span class="nc" id="L91">	private enum Singleton {</span>
+
+		/** The client. */
+<span class="nc" id="L94">		CLIENT;</span>
+
+		/** The thread safe client. */
+		private final CloseableHttpClient threadSafeClient;
+
+		/** The monitor. */
+		private final IdleConnectionMonitorThread monitor;
+
+		/** The client. */
+<span class="nc" id="L103">		private ResteasyClient client = null;</span>
+
+		/**
+		 * Instantiates a new singleton.
+		 */
+<span class="nc" id="L108">		private Singleton() {</span>
+<span class="nc" id="L109">			PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();</span>
+<span class="nc" id="L110">			cm.setMaxTotal(200);</span>
+<span class="nc" id="L111">			cm.setDefaultMaxPerRoute(20);</span>
+<span class="nc" id="L112">			threadSafeClient = HttpClients.custom().setConnectionManager(cm).build();</span>
+<span class="nc" id="L113">			ApacheHttpClient4Engine engine = new ApacheHttpClient4Engine(threadSafeClient);</span>
+<span class="nc" id="L114">			client = new ResteasyClientBuilder().connectionPoolSize(10).maxPooledPerRoute(10).httpEngine(engine)</span>
+<span class="nc" id="L115">					.build();</span>
+
+<span class="nc" id="L117">			monitor = new IdleConnectionMonitorThread(cm);</span>
+<span class="nc" id="L118">			monitor.setDaemon(true);</span>
+<span class="nc" id="L119">			monitor.start();</span>
+<span class="nc" id="L120">		}</span>
+
+		/**
+		 * Gets the.
+		 *
+		 * @return the resteasy client
+		 */
+		public ResteasyClient get() {
+<span class="nc" id="L128">			return client;</span>
+		}
+
+	}
+
+	/**
+	 * Gets the client.
+	 *
+	 * @return the client
+	 */
+	public static ResteasyClient getClient() {
+<span class="nc" id="L139">		return Singleton.CLIENT.get();</span>
+	}
+
+	/**
+	 * The Class IdleConnectionMonitorThread.
+	 */
+	private static class IdleConnectionMonitorThread extends Thread {
+
+		private static final String ERROR = &quot;Error&quot;;
+
+		/** The cm. */
+		private final PoolingHttpClientConnectionManager cm;
+
+		/** The stop signal. */
+<span class="nc" id="L153">		private final BlockingQueue&lt;Stop&gt; stopSignal = new ArrayBlockingQueue&lt;&gt;(1);</span>
+
+		/**
+		 * The Class Stop.
+		 */
+<span class="nc" id="L158">		private static class Stop {</span>
+
+			/** The stop queue. */
+<span class="nc" id="L161">			private final BlockingQueue&lt;Stop&gt; stopQueue = new ArrayBlockingQueue&lt;&gt;(1);</span>
+
+			/**
+			 * Stopped.
+			 */
+			public void stopped() {
+<span class="nc" id="L167">				stopQueue.add(this);</span>
+<span class="nc" id="L168">			}</span>
+
+			/**
+			 * Wait for stopped.
+			 *
+			 * @throws InterruptedException
+			 *             the interrupted exception
+			 */
+			public void waitForStopped() throws InterruptedException {
+<span class="nc" id="L177">				stopQueue.take();</span>
+<span class="nc" id="L178">			}</span>
+
+		}
+
+		/**
+		 * Instantiates a new idle connection monitor thread.
+		 *
+		 * @param cm
+		 *            the cm
+		 */
+		IdleConnectionMonitorThread(PoolingHttpClientConnectionManager cm) {
+<span class="nc" id="L189">			super();</span>
+<span class="nc" id="L190">			this.cm = cm;</span>
+<span class="nc" id="L191">		}</span>
+
+		/*
+		 * (non-Javadoc)
+		 * 
+		 * @see java.lang.Thread#run()
+		 */
+		@Override
+		public void run() {
+			try {
+				Stop stopRequest;
+<span class="nc bnc" id="L202" title="All 2 branches missed.">				while ((stopRequest = stopSignal.poll(600, TimeUnit.SECONDS)) == null) {</span>
+<span class="nc" id="L203">					cm.closeExpiredConnections();</span>
+<span class="nc" id="L204">					cm.closeIdleConnections(600, TimeUnit.SECONDS);</span>
+<span class="nc" id="L205">					LOG.trace(&quot;Stats: {}&quot;, cm.getTotalStats());</span>
+				}
+<span class="nc" id="L207">				stopRequest.stopped();</span>
+<span class="nc" id="L208">			} catch (InterruptedException ex) {</span>
+<span class="nc" id="L209">				Thread.currentThread().interrupt();</span>
+<span class="nc" id="L210">				LOG.trace(ERROR, ex);</span>
+<span class="nc" id="L211">			}</span>
+<span class="nc" id="L212">		}</span>
+
+		/**
+		 * Shutdown.
+		 *
+		 * @throws InterruptedException
+		 *             the interrupted exception
+		 */
+		public void shutdown() throws InterruptedException {
+<span class="nc" id="L221">			LOG.trace(&quot;Shutting down client pool&quot;);</span>
+<span class="nc" id="L222">			Stop stop = new Stop();</span>
+<span class="nc" id="L223">			stopSignal.add(stop);</span>
+<span class="nc" id="L224">			stop.waitForStopped();</span>
+			try {
+<span class="nc" id="L226">				Singleton.CLIENT.threadSafeClient.close();</span>
+<span class="nc" id="L227">			} catch (IOException e) {</span>
+<span class="nc" id="L228">				LOG.trace(&quot;Client pool shut down&quot;, e);</span>
+<span class="nc" id="L229">			}</span>
+<span class="nc" id="L230">			cm.close();</span>
+<span class="nc" id="L231">			LOG.trace(&quot;Client pool shut down&quot;);</span>
+<span class="nc" id="L232">		}</span>
+
+	}
+
+	/**
+	 * Shutdown.
+	 *
+	 * @throws InterruptedException
+	 *             the interrupted exception
+	 */
+	public static void shutdown() throws InterruptedException {
+<span class="nc" id="L243">		Singleton.CLIENT.monitor.shutdown();</span>
+<span class="nc" id="L244">	}</span>
+
+	/**
+	 * Send request.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MQMessageContext&gt; sendRequest(Message&lt;MQMessageContext&gt; message) {
+<span class="nc bnc" id="L254" title="All 2 branches missed.">		if (message != null) {</span>
+			
+<span class="nc" id="L256">			String request = JsonConverterUtil.convertToJsonWithNull(message.getPayload().getMqProviderRequest());</span>
+<span class="nc" id="L257">            LOG.info(&quot;------ MQ Provider request : {} &quot;,request);</span>
+			
+<span class="nc" id="L259">			MQProviderResponse response = sendRequest(urlBase, &quot;POST&quot;, message.getPayload().getMqProviderRequest());</span>
+<span class="nc bnc" id="L260" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L261">				message.getPayload().setMqProviderResponse(response);</span>
+			}
+		}
+
+<span class="nc" id="L265">		return MessageBuilder.fromMessage(message).build();</span>
+	}
+
+	/**
+	 * Send request.
+	 *
+	 * @param url
+	 *            the url
+	 * @param method
+	 *            the method
+	 * @param request
+	 *            the request
+	 * @return the MQ provider response
+	 */
+	public MQProviderResponse sendRequest(String url, String method, Object request) {
+<span class="nc" id="L280">		Response response = null;</span>
+<span class="nc" id="L281">		MQProviderResponse responseObject = null;</span>
+		try {
+<span class="nc" id="L283">			ResteasyClient resteasyClient = resteasyClientHandler.getRetEasyClient();</span>
+<span class="nc" id="L284">			ResteasyWebTarget target = resteasyClient.target(url);</span>
+<span class="nc" id="L285">			Builder clientrequest = target.request();</span>
+<span class="nc bnc" id="L286" title="All 3 branches missed.">			switch (method) {</span>
+			case &quot;POST&quot;:
+<span class="nc" id="L288">				response = clientrequest.post(Entity.entity(request, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L289">				break;</span>
+			case &quot;PUT&quot;:
+<span class="nc" id="L291">				response = clientrequest.put(Entity.entity(request, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L292">				break;</span>
+			default:
+<span class="nc" id="L294">				response = clientrequest.get();</span>
+			}
+<span class="nc bnc" id="L296" title="All 4 branches missed.">			if (response.getStatus() == 200 &amp;&amp; response.hasEntity()) {</span>
+<span class="nc" id="L297">				responseObject = response.readEntity(MQProviderResponse.class);</span>
+<span class="nc bnc" id="L298" title="All 2 branches missed.">			} else if (response.getStatus() == 404) {</span>
+<span class="nc" id="L299">				LOG.error(ERROR_CODE_URL_BASE, InternalProcessingCode.SERVICE_UNAVAILABLE, urlBase);</span>
+<span class="nc" id="L300">				responseObject = new MQProviderResponse();</span>
+<span class="nc" id="L301">				responseObject.setStatus(Constants.NOT_FOUND);</span>
+<span class="nc bnc" id="L302" title="All 2 branches missed.">			} else if (response.getStatus() == 500) {</span>
+<span class="nc" id="L303">				LOG.error(ERROR_CODE_URL_BASE, InternalProcessingCode.INTERNAL_SERVER_ERROR, urlBase);</span>
+			} else {
+<span class="nc" id="L305">				LOG.error(ERROR_CODE_URL_BASE, InternalProcessingCode.SERVICE_ERROR, urlBase);</span>
+			}
+<span class="nc" id="L307">		} catch (Exception e) {</span>
+<span class="nc" id="L308">			responseObject = new MQProviderResponse();</span>
+<span class="nc" id="L309">			responseObject.setStatus(Constants.NOT_FOUND);</span>
+<span class="nc" id="L310">			LOG.error(&quot;Error {1}&quot;, e);</span>
+		} finally {
+			try {
+<span class="nc bnc" id="L313" title="All 2 branches missed.">				if (response != null)</span>
+<span class="nc" id="L314">					response.close();</span>
+<span class="nc" id="L315">			} catch (Exception e) {</span>
+<span class="nc" id="L316">				LOG.error(&quot;Error while closing resource : &quot;, e);</span>
+<span class="nc" id="L317">			}</span>
+		}
+
+<span class="nc" id="L320">		return responseObject;</span>
+	}
+
+	/**
+	 * Send request to data lake.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 */
+	public Message&lt;MQMessageContext&gt; sendRequestToDataLake(Message&lt;MQMessageContext&gt; message) {
+<span class="nc bnc" id="L331" title="All 2 branches missed.">		if (message != null) {</span>
+
+<span class="nc" id="L333">			Response response = sendRequestToDataLake(urlBase, &quot;POST&quot;, message.getPayload().getMqProviderRequest());</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L335">				message.getPayload().setDatalakeResponse(response);</span>
+			}
+		}
+
+<span class="nc" id="L339">		return MessageBuilder.fromMessage(message).build();</span>
+	}
+
+	/**
+	 * Send request to data lake.
+	 *
+	 * @param url
+	 *            the url
+	 * @param method
+	 *            the method
+	 * @param mqProviderRequest
+	 *            the mq provider request
+	 * @return the response
+	 */
+	private Response sendRequestToDataLake(String url, String method, MQProviderRequest mqProviderRequest) {
+<span class="nc" id="L354">		Response response = null;</span>
+		try {
+<span class="nc" id="L356">			ResteasyClient resteasyClient = resteasyClientHandler.getRetEasyClient();</span>
+<span class="nc" id="L357">			ResteasyWebTarget target = resteasyClient.target(url);</span>
+<span class="nc" id="L358">			Builder clientrequest = target.request();</span>
+
+<span class="nc" id="L360">			String jsonMQProviderRequest = JsonConverterUtil.convertToJsonWithoutNull(mqProviderRequest);</span>
+<span class="nc" id="L361">			LOG.warn(&quot;\n -------sendRequestToDataLake mqProvider Request Start -------- \n  {}&quot;, jsonMQProviderRequest);</span>
+<span class="nc" id="L362">			LOG.warn(&quot; \n -----------sendRequestToDataLake mqProvider Request End ---------&quot;);</span>
+
+<span class="nc bnc" id="L364" title="All 3 branches missed.">			switch (method) {</span>
+			case &quot;POST&quot;:
+<span class="nc" id="L366">				response = clientrequest.post(Entity.entity(mqProviderRequest, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L367">				break;</span>
+			case &quot;PUT&quot;:
+<span class="nc" id="L369">				response = clientrequest.put(Entity.entity(mqProviderRequest, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L370">				break;</span>
+			default:
+<span class="nc" id="L372">				response = clientrequest.get();</span>
+			}
+			
+<span class="nc" id="L375">			String jsonMQProviderResponse = JsonConverterUtil.convertToJsonWithoutNull(response);</span>
+<span class="nc" id="L376">			LOG.warn(&quot;\n -------sendRequestToDataLake mqProvider Response Start -------- \n  {}&quot;, jsonMQProviderResponse);</span>
+<span class="nc" id="L377">			LOG.warn(&quot; \n -----------sendRequestToDataLake mqProvider Response End ---------&quot;);</span>
+			
+<span class="nc bnc" id="L379" title="All 2 branches missed.">			if (response.getStatus() == 200) {</span>
+<span class="nc" id="L380">				LOG.warn(&quot;Successfully dumped into Data Lake for account ID {}&quot;,mqProviderRequest.getAccountCID());</span>
+<span class="nc bnc" id="L381" title="All 2 branches missed.">			} else if (response.getStatus() == 404) {</span>
+<span class="nc" id="L382">				LOG.error(ERROR_CODE_URL_BASE, InternalProcessingCode.SERVICE_UNAVAILABLE, urlBase);</span>
+<span class="nc bnc" id="L383" title="All 2 branches missed.">			} else if (response.getStatus() == 500) {</span>
+<span class="nc" id="L384">				LOG.error(ERROR_CODE_URL_BASE, InternalProcessingCode.INTERNAL_SERVER_ERROR, urlBase);</span>
+			} else {
+<span class="nc" id="L386">				LOG.error(ERROR_CODE_URL_BASE, InternalProcessingCode.SERVICE_ERROR, urlBase);</span>
+			}
+<span class="nc" id="L388">		} catch (Exception e) {</span>
+<span class="nc" id="L389">			LOG.error(&quot;Error {1}&quot;, e);</span>
+		} finally {
+			try {
+<span class="nc bnc" id="L392" title="All 2 branches missed.">				if (response != null) {</span>
+<span class="nc" id="L393">					response.close();</span>
+				}
+<span class="nc" id="L395">			} catch (Exception e) {</span>
+<span class="nc" id="L396">				LOG.error(&quot;Error while closing resource : &quot;, e);</span>
+<span class="nc" id="L397">			}</span>
+		}
+
+<span class="nc" id="L400">		return response;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

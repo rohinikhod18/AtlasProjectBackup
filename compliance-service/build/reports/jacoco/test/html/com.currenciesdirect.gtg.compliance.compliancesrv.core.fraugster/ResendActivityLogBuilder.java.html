@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ResendActivityLogBuilder.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.fraugster</a> &gt; <span class="el_source">ResendActivityLogBuilder.java</span></div><h1>ResendActivityLogBuilder.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.fraugster;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.integration.annotation.ServiceActivator;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogData;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityTemplateEnum;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityType;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterResendResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FundsInFraugsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FundsOutFruagsterResendRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class ResendActivityLogBuilder.
+ */
+<span class="nc" id="L41">public class ResendActivityLogBuilder {</span>
+
+	/** The Constant LOGGER. */
+<span class="nc" id="L44">	private static final Logger LOGGER = LoggerFactory.getLogger(ResendActivityLogBuilder.class);</span>
+
+	/**
+	 * Builds the activity logs.
+	 *
+	 * @param fResendMessage the f resend message
+	 * @return the message
+	 */
+	@ServiceActivator
+	public Message&lt;MessageContext&gt; buildActivityLogs(Message&lt;MessageContext&gt; fResendMessage) {
+
+		try {
+<span class="nc" id="L56">			UserProfile userProfile = (UserProfile) fResendMessage.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L57">			String userName = userProfile.getPreferredUserName();</span>
+<span class="nc" id="L58">			MessageExchange fExchange = fResendMessage.getPayload()</span>
+<span class="nc" id="L59">					.getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L60">			ServiceInterfaceType serviceType = fResendMessage.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L61">					.getServiceInterface();</span>
+<span class="nc" id="L62">			ActivityLogs resendActivityLogs = null;</span>
+		    String summary;
+<span class="nc" id="L64">			FraugsterResendResponse fResendResponse = new FraugsterResendResponse();</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">			if (ServiceInterfaceType.FUNDSOUT==serviceType) {</span>
+				
+<span class="nc" id="L67">				FundsOutFruagsterResendRequest resendRequest = fResendMessage.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L68">						.getRequest(FundsOutFruagsterResendRequest.class);</span>
+<span class="nc" id="L69">				FundsOutRequest fRequest = resendRequest.getAdditionalAttribute(Constants.OLD_REQUEST,</span>
+						FundsOutRequest.class);
+<span class="nc" id="L71">				EventServiceLog resendLog = fExchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L72">						EntityEnum.CONTACT.name(), fRequest.getContactId());</span>
+<span class="nc" id="L73">				List&lt;PaymentOutActivityLogDto&gt; activityLogDtos = getPaymentOutActivityLog(fRequest, userName,</span>
+						resendLog);
+<span class="nc" id="L75">				resendActivityLogs = getPaymentOutActivityLogData(activityLogDtos);</span>
+<span class="nc" id="L76">				fResendResponse.setActivityLogs(resendActivityLogs);</span>
+<span class="nc" id="L77">				fResendResponse.setSummary(JsonConverterUtil.convertToObject(FraugsterSummary.class, resendLog.getSummary()));</span>
+<span class="nc" id="L78">				fResendResponse.setEventServiceLogId(resendLog.getEventServiceLogId());</span>
+<span class="nc" id="L79">				fResendResponse.addAttribute(&quot;paymentOutActivities&quot;, activityLogDtos);</span>
+			 }
+		
+<span class="nc bnc" id="L82" title="All 2 branches missed.">	         if(ServiceInterfaceType.FUNDSIN==serviceType){</span>
+				
+<span class="nc" id="L84">				FundsInFraugsterResendRequest resendRequest = fResendMessage.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L85">						.getRequest(FundsInFraugsterResendRequest.class);</span>
+<span class="nc" id="L86">				FundsInCreateRequest fRequest = resendRequest.getAdditionalAttribute(Constants.OLD_REQUEST,</span>
+						FundsInCreateRequest.class);
+				
+<span class="nc" id="L89">				Contact contact = (Contact) resendRequest.getAdditionalAttribute(Constants.FIELD_CONTACT);</span>
+<span class="nc" id="L90">				EventServiceLog resendLog = fExchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L91">						EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L92">				summary = resendLog.getSummary();</span>
+<span class="nc" id="L93">				setFraugsterSummaryData(userName, summary, fResendResponse, resendLog);</span>
+<span class="nc" id="L94">				List&lt;PaymentInActivityLogDto&gt; activityLogDtos = getPaymentInActivityLog(fRequest, userName,</span>
+						resendLog);
+<span class="nc" id="L96">				resendActivityLogs = getPaymentInActivityLogData(activityLogDtos);</span>
+<span class="nc" id="L97">				fResendResponse.setActivityLogs(resendActivityLogs);</span>
+<span class="nc" id="L98">				fResendResponse.setEventServiceLogId(resendLog.getEventServiceLogId());</span>
+<span class="nc" id="L99">				fResendResponse.addAttribute(&quot;paymentInActivities&quot;, activityLogDtos);</span>
+			}
+
+<span class="nc" id="L102">			fResendMessage.getPayload().getGatewayMessageExchange().setResponse(fResendResponse);</span>
+<span class="nc" id="L103">		} catch (Exception ex) {</span>
+<span class="nc" id="L104">			LOGGER.error(&quot;Error building log : &quot;, ex);</span>
+<span class="nc" id="L105">			fResendMessage.getPayload().setFailed(true);</span>
+<span class="nc" id="L106">		}</span>
+
+<span class="nc" id="L108">		return fResendMessage;</span>
+	}
+	
+	
+	/**
+	 * @param activityLogDtos
+	 * @return the Activity Logs   getPaymentInActivityLogData
+	 */
+	private ActivityLogs getPaymentInActivityLogData(List&lt;PaymentInActivityLogDto&gt; activityLogDtos) {
+<span class="nc" id="L117">		ActivityLogs activityLogs = null;</span>
+<span class="nc bnc" id="L118" title="All 4 branches missed.">		if (activityLogDtos != null &amp;&amp; !activityLogDtos.isEmpty()) {</span>
+<span class="nc" id="L119">			activityLogs = getPaymentInActivityLogsResponse(activityLogDtos);</span>
+		}
+<span class="nc" id="L121">		return activityLogs;</span>
+	}
+	
+
+    /**
+     * Get the payment in activity log
+	 * @param request
+	 * @param userName
+	 * @param log
+	 * @return
+	 */
+    private  List&lt;PaymentInActivityLogDto&gt; getPaymentInActivityLog(FundsInCreateRequest request, String userName, EventServiceLog log){
+		
+<span class="nc" id="L134">		List&lt;PaymentInActivityLogDto&gt; activityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L135">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L136">			PaymentInActivityLogDto activityLogDto = new PaymentInActivityLogDto();</span>
+<span class="nc" id="L137">			activityLogDto.setPaymentInId(request.getFundsInId());</span>
+<span class="nc" id="L138">			activityLogDto.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L139">			activityLogDto.setActivityBy(userName);</span>
+<span class="nc" id="L140">			activityLogDto.setCreatedBy(userName);</span>
+<span class="nc" id="L141">			activityLogDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L142">			activityLogDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L143">			activityLogDto.setTimeStatmp(timestamp);</span>
+<span class="nc" id="L144">			activityLogDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L145">			PaymentInActivityLogDetailDto activityLogDetailDto = new PaymentInActivityLogDetailDto();</span>
+<span class="nc" id="L146">			activityLogDto.setActivityLogDetailDto(activityLogDetailDto);</span>
+<span class="nc" id="L147">			activityLogDetailDto.setActivityType(ActivityType.PAYMENT_IN_FRAUGSTER_RECHECK);</span>
+<span class="nc" id="L148">			activityLogDetailDto.setLog(getPaymentInFraugsterLog(request,log));</span>
+<span class="nc" id="L149">			activityLogDetailDto.setCreatedBy(userName);</span>
+<span class="nc" id="L150">			activityLogDetailDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L151">			activityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L152">			activityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L153">			activityLogDtos.add(activityLogDto);</span>
+<span class="nc" id="L154">		return activityLogDtos;</span>
+	}
+    
+    	
+	/**
+	 * 
+	 * Get payment in fraugster log
+	 * @param request
+	 * @param log
+	 * @return 
+	 */
+  private String getPaymentInFraugsterLog(FundsInCreateRequest request, EventServiceLog log){
+<span class="nc" id="L166">	  String prevFStatus = request.getAdditionalAttribute(Constants.FRAUGSTER_STATUS, String.class);</span>
+			
+<span class="nc" id="L168">	  return ActivityTemplateEnum.PAYMENT_RECHECK.getTemplate().replace(&quot;{RECHECK_SERVICE_NAME}&quot;, &quot;FraudPredict&quot;)</span>
+<span class="nc" id="L169">				.replace(&quot;{PRE_STATUS}&quot;, prevFStatus).replace(&quot;{UPDATED_STATUS}&quot;, log.getStatus());</span>
+		}	
+		
+	/**
+	 * Set fraugster summary data
+	 * @param userName
+	 * @param summary
+	 * @param resendResponse
+	 * @param eventServiceLog
+	 */
+	private void setFraugsterSummaryData(String userName, String summary, FraugsterResendResponse resendResponse,
+			EventServiceLog eventServiceLog) {
+<span class="nc bnc" id="L181" title="All 2 branches missed.">		if(summary != null) {</span>
+<span class="nc" id="L182">		     FraugsterSummary fraugsterSummary = JsonConverterUtil.convertToObject(FraugsterSummary.class, summary);</span>
+<span class="nc" id="L183">			 fraugsterSummary.setEventServiceLogId(eventServiceLog.getEventServiceLogId());</span>
+<span class="nc" id="L184">			 fraugsterSummary.setUpdatedBy(userName);</span>
+<span class="nc" id="L185">			 resendResponse.setSummary(fraugsterSummary);</span>
+			}
+<span class="nc" id="L187">		}	</span>
+	
+	/**
+	 * Get payment in activity log response
+	 * @param activityLogDtos
+	 * @return activityLogs
+	 */
+	private ActivityLogs getPaymentInActivityLogsResponse(List&lt;PaymentInActivityLogDto&gt; activityLogDtos){
+<span class="nc" id="L195">			ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L196">				List&lt;ActivityLogData&gt; activityData = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">			for (PaymentInActivityLogDto profileActivityLogDto : activityLogDtos) {</span>
+<span class="nc" id="L198">			    ActivityLogData activity = new ActivityLogData();</span>
+<span class="nc" id="L199">			    activity.setActivity(profileActivityLogDto.getActivityLogDetailDto().getLog());</span>
+<span class="nc" id="L200">				activity.setActivityType(ActivityType.PAYMENT_IN_FRAUGSTER_RECHECK.getModule() +&quot; &quot;+ActivityType.PAYMENT_IN_FRAUGSTER_RECHECK.getType());</span>
+<span class="nc" id="L201">				activity.setCreatedBy(profileActivityLogDto.getActivityBy());</span>
+<span class="nc" id="L202">				activity.setCreatedOn(profileActivityLogDto.getCreatedOn().toString());</span>
+<span class="nc" id="L203">				activityData.add(activity);</span>
+<span class="nc" id="L204">			  }</span>
+<span class="nc" id="L205">				activityLogs.setActivityLogData(activityData);</span>
+<span class="nc" id="L206">				return activityLogs;</span>
+		 }
+	
+	
+	/**
+	 * Gets the payment out activity log.
+	 *
+	 * @param request the request
+	 * @param userName the user name
+	 * @param logs the logs
+	 * @return the payment out activity log
+	 */
+	private List&lt;PaymentOutActivityLogDto&gt; getPaymentOutActivityLog(FundsOutRequest request, String userName,
+			EventServiceLog logs) {
+
+<span class="nc" id="L221">		List&lt;PaymentOutActivityLogDto&gt; activityLogDtos = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L222">		Timestamp timestamp = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L223">		PaymentOutActivityLogDto fPOActivityLogDto = new PaymentOutActivityLogDto();</span>
+<span class="nc" id="L224">		fPOActivityLogDto.setPaymentOutId(request.getFundsOutId());</span>
+<span class="nc" id="L225">		fPOActivityLogDto.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L226">		fPOActivityLogDto.setActivityBy(userName);</span>
+<span class="nc" id="L227">		fPOActivityLogDto.setCreatedBy(userName);</span>
+<span class="nc" id="L228">		fPOActivityLogDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L229">		fPOActivityLogDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L230">		fPOActivityLogDto.setTimeStatmp(timestamp);</span>
+<span class="nc" id="L231">		fPOActivityLogDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L232">		PaymentOutActivityLogDetailDto fPOActivityLogDetailDto = new PaymentOutActivityLogDetailDto();</span>
+<span class="nc" id="L233">		fPOActivityLogDto.setActivityLogDetailDto(fPOActivityLogDetailDto);</span>
+<span class="nc" id="L234">		fPOActivityLogDetailDto.setActivityType(ActivityType.PAYMENT_OUT_FRAUGSTER_REPEAT);</span>
+<span class="nc" id="L235">		fPOActivityLogDetailDto.setLog(getPaymentOutFraugsterLog(request, logs));</span>
+<span class="nc" id="L236">		fPOActivityLogDetailDto.setCreatedBy(userName);</span>
+<span class="nc" id="L237">		fPOActivityLogDetailDto.setUpdatedBy(userName);</span>
+<span class="nc" id="L238">		fPOActivityLogDetailDto.setCreatedOn(timestamp);</span>
+<span class="nc" id="L239">		fPOActivityLogDetailDto.setUpdatedOn(timestamp);</span>
+<span class="nc" id="L240">		activityLogDtos.add(fPOActivityLogDto);</span>
+<span class="nc" id="L241">		return activityLogDtos;</span>
+	}
+
+	/**
+	 * Gets the payment out fraugster log.
+	 *
+	 * @param request the request
+	 * @param log the log
+	 * @return the payment out fraugster log
+	 */
+	private String getPaymentOutFraugsterLog(FundsOutRequest request, EventServiceLog log) {
+<span class="nc" id="L252">		String prevFStatus = request.getAdditionalAttribute(Constants.FRAUGSTER_STATUS, String.class);</span>
+<span class="nc" id="L253">		return ActivityTemplateEnum.PAYMENT_RECHECK.getTemplate().replace(&quot;{RECHECK_SERVICE_NAME}&quot;, &quot;FraudPredict&quot;)</span>
+<span class="nc" id="L254">				.replace(&quot;{PRE_STATUS}&quot;, prevFStatus).replace(&quot;{UPDATED_STATUS}&quot;, log.getStatus());</span>
+
+	}
+
+	/**
+	 * Gets the payment out activity log data.
+	 *
+	 * @param activityLogDtos the activity log dtos
+	 * @return the payment out activity log data
+	 */
+	private ActivityLogs getPaymentOutActivityLogData(List&lt;PaymentOutActivityLogDto&gt; activityLogDtos) {
+<span class="nc" id="L265">		ActivityLogs activityLogs = null;</span>
+<span class="nc bnc" id="L266" title="All 4 branches missed.">		if (activityLogDtos != null &amp;&amp; !activityLogDtos.isEmpty()) {</span>
+<span class="nc" id="L267">			activityLogs = getPaymentOutActivityLogsResponse(activityLogDtos);</span>
+		}
+<span class="nc" id="L269">		return activityLogs;</span>
+	}
+
+	/**
+	 * Gets the payment out activity logs response.
+	 *
+	 * @param activityLogDtos the activity log dtos
+	 * @return the payment out activity logs response
+	 */
+	private ActivityLogs getPaymentOutActivityLogsResponse(List&lt;PaymentOutActivityLogDto&gt; activityLogDtos) {
+<span class="nc" id="L279">		ActivityLogs activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L280">		List&lt;ActivityLogData&gt; activityData = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">		for (PaymentOutActivityLogDto profileActivityLogDto : activityLogDtos) {</span>
+<span class="nc" id="L282">			ActivityLogData activity = new ActivityLogData();</span>
+<span class="nc" id="L283">			activity.setActivity(profileActivityLogDto.getActivityLogDetailDto().getLog());</span>
+<span class="nc" id="L284">			activity.setActivityType(ActivityType.PAYMENT_OUT_FRAUGSTER_REPEAT.getModule() + &quot; &quot;</span>
+<span class="nc" id="L285">					+ ActivityType.PAYMENT_OUT_FRAUGSTER_REPEAT.getType());</span>
+<span class="nc" id="L286">			activity.setCreatedBy(profileActivityLogDto.getActivityBy());</span>
+<span class="nc" id="L287">			activity.setCreatedOn(profileActivityLogDto.getCreatedOn().toString());</span>
+<span class="nc" id="L288">			activityData.add(activity);</span>
+<span class="nc" id="L289">		}</span>
+<span class="nc" id="L290">		activityLogs.setActivityLogData(activityData);</span>
+<span class="nc" id="L291">		return activityLogs;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

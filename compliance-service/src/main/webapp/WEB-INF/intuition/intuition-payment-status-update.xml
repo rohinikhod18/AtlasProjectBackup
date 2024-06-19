@@ -1,0 +1,181 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<int:channel id="INTUITION.STATUS_UPDATE.in.channel" />
+
+	<int:chain id="intuition.status.update.initChain"
+		input-channel="INTUITION.STATUS_UPDATE.in.channel">
+		<int:header-enricher id="fundsin.HeaderEnricher">
+			<int:header name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+		</int:header-enricher>
+
+		<int:service-activator
+			id="intuition.status.update.messageValidator"
+			ref="intuition.status.update.MessageValidator" />
+
+		<int:router expression="payload.getValidationResult()"
+			default-output-channel="INTUITION.STATUS_UPDATE.DataEnricher">
+			<int:mapping value="FAIL"
+				channel="INTUITION.STATUS_UPDATE.REPLY.HANDLER" />
+			<int:mapping value="SUCCESS"
+				channel="INTUITION.STATUS_UPDATE.DataEnricher" />
+		</int:router>
+	</int:chain>
+
+	<int:chain
+		input-channel="INTUITION.STATUS_UPDATE.DataEnricher">
+
+		<int:service-activator
+			id="intuition.status.update.dataEnrich"
+			ref="intuition.status.update.DataEnrich"
+			method="enrichDataForIntuitionPayment" />
+			
+		<int:filter discard-channel="INTUITION.STATUS_UPDATE.ERROR.HANDLER" expression="!payload.isFailed()" />
+
+		<int:service-activator
+			id="intuition.status.update.createEvent" ref="eventDBServiceImpl"
+			method="createEvent" />
+
+		<int:service-activator
+			id="intuition.status.update.insertIntoEventServiceLog"
+			ref="eventDBServiceImpl"
+			method="createIntuitionPaymentUpdateEventSerivceLog" />
+
+		<int:service-activator
+			ref="intuition.status.update.PaymentRuleService" />
+
+		<int:service-activator
+			ref="intuition.status.update.TransactionMonitoringDBServiceImpl"
+			method="updateIntuitionPaymentStatusAndRiskLevel" />
+		
+		<int:service-activator
+			id="fundsin.kafkaTxExecutor"
+			ref="kafkaTxExecutorServiceImpl"
+			method="executeKafkaTx" />
+		
+
+		<int:router
+			expression="payload.isIntuitionStatusUpdateEligible()"
+			default-output-channel="INTUITION.STATUS_UPDATE.REPLY.HANDLER">
+			<int:mapping value="true"
+				channel="INTUITION.STATUS_UPDATE.TMUpdate" />
+			<int:mapping value="false"
+				channel="INTUITION.STATUS_UPDATE.REPLY.HANDLER" />
+		</int:router>
+
+	</int:chain>
+
+	<int:chain input-channel="INTUITION.STATUS_UPDATE.TMUpdate">
+
+		<int:router expression="payload.paymentTMTransform()"
+			default-output-channel="INTUITION.STATUS_UPDATE.REPLY.HANDLER">
+			<int:mapping value="FUNDSIN"
+				channel="INTUITION.STATUS_UPDATE.TMFundsIn" />
+			<int:mapping value="FUNDSOUT"
+				channel="INTUITION.STATUS_UPDATE.TMFundsOut" />
+		</int:router>
+
+	</int:chain>
+
+	<int:chain input-channel="INTUITION.STATUS_UPDATE.TMFundsIn"
+		output-channel="INTUITION.STATUS_UPDATE.REPLY.HANDLER">
+
+		<int:transformer
+			ref="intuition.status.update.transactionMonitoringTransformer.fundsin"
+			method="transformRequest" />
+		<int:service-activator
+			id="intuition.status.update.TRANSACTIONMONITORING_FUNDSIN"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_FUNDSIN_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsInRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentInResponse" />
+		</int:service-activator>
+
+	</int:chain>
+
+	<int:chain input-channel="INTUITION.STATUS_UPDATE.TMFundsOut"
+		output-channel="INTUITION.STATUS_UPDATE.REPLY.HANDLER">
+
+		<int:transformer
+			ref="intuition.status.update.transactionMonitoringTransformer.fundsout"
+			method="transformRequest" />
+		<int:service-activator
+			id="intuition.status.update.TRANSACTIONMONITORING_FUNDSOUT"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_FUNDSOUT_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse" />
+		</int:service-activator>
+
+	</int:chain>
+
+	<int:chain
+		input-channel="INTUITION.STATUS_UPDATE.REPLY.HANDLER"
+		output-channel="nullChannel">
+		<int:service-activator
+			ref="intuitionResponseHandler"
+			method="responseHandlerForIntuitionPaymentStatusUpdate" />
+	</int:chain>
+	
+	<int:chain
+		input-channel="INTUITION.STATUS_UPDATE.ERROR.HANDLER"
+		output-channel="nullChannel">
+		<int:service-activator
+			ref="intuitionResponseHandler"
+			method="logError" />
+	</int:chain>
+
+	<bean id="intuitionResponseHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.IntuitionResponseHandler" />
+
+	<bean id="intuition.status.update.MessageValidator"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.MessageValidator" />
+
+	<bean id="intuition.status.update.DataEnrich"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.DataEnricher" />
+
+	<bean id="intuition.status.update.PaymentRuleService"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.rules.IntuitionPaymentStatusUpdateRuleService" />
+
+	<bean
+		id="intuition.status.update.TransactionMonitoringDBServiceImpl"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.dbport.TransactionMonitoringDBServiceImpl" />
+
+	<bean
+		id="intuition.status.update.transactionMonitoringTransformer.fundsin"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsin.TransactionMonitoringTransformer" />
+
+	<bean
+		id="intuition.status.update.transactionMonitoringTransformer.fundsout"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.TransactionMonitoringTransformer" />
+
+</beans>

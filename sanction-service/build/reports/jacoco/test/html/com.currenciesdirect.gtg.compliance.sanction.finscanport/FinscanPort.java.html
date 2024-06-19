@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FinscanPort.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">sanction-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.sanction.finscanport</a> &gt; <span class="el_source">FinscanPort.java</span></div><h1>FinscanPort.java</h1><pre class="source lang-java linenums">/*******************************************************************************
+ * 
+ * Copyright 2017 Currencies Direct Ltd, United Kingdom
+ * 
+ * Compliance: FinscanPort.java
+ ******************************************************************************/
+package com.currenciesdirect.gtg.compliance.sanction.finscanport;
+
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.config.ProviderProperty;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse;
+import com.currenciesdirect.gtg.compliance.sanction.core.ISanctionService;
+import com.currenciesdirect.gtg.compliance.sanction.core.domain.SanctionGetStatusRequest;
+import com.currenciesdirect.gtg.compliance.sanction.core.domain.SanctionGetStatusResponse;
+import com.currenciesdirect.gtg.compliance.sanction.exception.SanctionErrors;
+import com.currenciesdirect.gtg.compliance.sanction.exception.SanctionException;
+import com.currenciesdirect.gtg.compliance.sanction.util.Constants;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.innovativesystems.ArrayOfLSTServicesLookupRequest;
+import com.innovativesystems.LSTServicesGetStatusRequest;
+import com.innovativesystems.LSTServicesGetStatusResponse;
+import com.innovativesystems.LSTServicesLookup;
+import com.innovativesystems.LSTServicesLookupSoap;
+import javax.xml.namespace.QName;
+
+/**
+ * The Class FinscanPort.
+ * 
+ * @author abhijitg
+ */
+public class FinscanPort implements ISanctionService {
+
+	/** The Constant LOG. */
+<span class="fc" id="L47">	private static final Logger LOG = LoggerFactory.getLogger(FinscanPort.class);</span>
+
+	/** The finscan port. */
+<span class="fc" id="L50">	private static FinscanPort finscanPort = new FinscanPort();</span>
+
+	/** The finscan transformer. */
+<span class="fc" id="L53">	private static FinscanTransformer finscanTransformer = FinscanTransformer.getInstance();</span>
+	
+	private static final String QNAME_SERVICE_URL = &quot;http://innovativesystems.com/&quot;;
+	
+	private static final String QNAME_SERVICE = &quot;LSTServicesLookup&quot;;
+
+	/**
+	 * Instantiates a new finscan port.
+	 */
+	private FinscanPort() {
+
+	}
+
+	/**
+	 * Gets the single instance of FinscanPort.
+	 *
+	 * @return single instance of FinscanPort
+	 */
+	public static FinscanPort getInstance() {
+<span class="fc" id="L72">		return finscanPort;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.currenciesdirect.gtg.es.compliance.sanction.core.ISanctionService#
+	 * checkSanctionDetails(com.currenciesdirect.gtg.es.compliance.sanction.core
+	 * .domain.SanctionRequest)
+	 */
+	@Override
+	public SanctionResponse checkSanctionDetails(SanctionRequest sanctionRequest,
+			ProviderProperty providerProperty) throws SanctionException {
+<span class="nc" id="L86">		com.innovativesystems.LSTServicesLookupMultiResponse multiResponse = null;</span>
+<span class="nc" id="L87">		ArrayOfLSTServicesLookupRequest serviceLookUpRequest = null;</span>
+<span class="nc" id="L88">		SanctionResponse sanctionResponse = new SanctionResponse();</span>
+		try {
+<span class="nc" id="L90">			LOG.debug(&quot;Calling SLLookUpMultiTask ,Request : {}&quot;, sanctionRequest);</span>
+<span class="nc" id="L91">			serviceLookUpRequest = finscanTransformer.transformRequestObject(sanctionRequest, providerProperty);			</span>
+<span class="nc" id="L92">			URL endpointUrl = new URL(providerProperty.getEndPointUrl());</span>
+<span class="nc" id="L93">			QName serviceName = new QName(QNAME_SERVICE_URL,QNAME_SERVICE);</span>
+<span class="nc" id="L94">			LSTServicesLookup lSTServicesLookup = new LSTServicesLookup(endpointUrl,serviceName);</span>
+<span class="nc" id="L95">			LSTServicesLookupSoap serviceLookUpStub = lSTServicesLookup.getLSTServicesLookupSoap();</span>
+<span class="nc" id="L96">			multiResponse = serviceLookUpStub.slLookupMulti(serviceLookUpRequest);</span>
+<span class="nc" id="L97">			sanctionResponse = finscanTransformer.transformResponseObject(sanctionRequest, multiResponse,</span>
+<span class="nc" id="L98">					providerProperty.getAlwaysPass());</span>
+
+<span class="nc" id="L100">			ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L101">			sanctionResponse.setProviderResponse(mapper.writeValueAsString(multiResponse));</span>
+<span class="nc" id="L102">		} catch (SanctionException sanctionException) {</span>
+<span class="nc" id="L103">			LOG.warn(SanctionErrors.ERRROR_IN_FINSCAN_PORT.getErrorDescription(), sanctionException);</span>
+<span class="nc" id="L104">			sanctionResponse.setErrorCode(sanctionException.getSanctionErrors().getErrorCode());</span>
+<span class="nc" id="L105">			sanctionResponse.setErrorDescription(sanctionException.getSanctionErrors().getErrorDescription());</span>
+<span class="nc" id="L106">			prepareSampleResponses(sanctionRequest, sanctionResponse);</span>
+<span class="nc" id="L107">			checkAlwaysPassForLookupMulti(sanctionResponse, providerProperty.getAlwaysPass());</span>
+<span class="nc" id="L108">		} catch (Exception e) {</span>
+<span class="nc" id="L109">			LOG.error(SanctionErrors.ERRROR_IN_FINSCAN_PORT.getErrorDescription(), e);</span>
+<span class="nc" id="L110">			sanctionResponse</span>
+<span class="nc" id="L111">					.setErrorCode(SanctionErrors.ERROR_WHILE_SENDING_REQUEST_TO_SANCTION_PROVIDER.getErrorCode());</span>
+<span class="nc" id="L112">			sanctionResponse.setErrorDescription(</span>
+<span class="nc" id="L113">					SanctionErrors.ERROR_WHILE_SENDING_REQUEST_TO_SANCTION_PROVIDER.getErrorDescription());</span>
+<span class="nc" id="L114">			prepareSampleResponses(sanctionRequest, sanctionResponse);</span>
+<span class="nc" id="L115">			checkAlwaysPassForLookupMulti(sanctionResponse, providerProperty.getAlwaysPass());</span>
+<span class="nc" id="L116">		}</span>
+<span class="nc" id="L117">		return sanctionResponse;</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.sanction.core.ISanctionService#
+	 * getSanctionStatus(com.currenciesdirect.gtg.compliance.sanction.core.
+	 * domain.SanctionGetStatusRequest,
+	 * com.currenciesdirect.gtg.compliance.sanction.core.domain.
+	 * SanctionProviderProperty)
+	 */
+	@Override
+	public SanctionGetStatusResponse getSanctionStatus(SanctionGetStatusRequest statusRequest,
+			ProviderProperty providerProperty) throws SanctionException {
+<span class="nc" id="L132">		SanctionGetStatusResponse sanctionResponse = new SanctionGetStatusResponse();</span>
+<span class="nc" id="L133">		LSTServicesGetStatusResponse getStatusResponse = new LSTServicesGetStatusResponse();</span>
+<span class="nc" id="L134">		LSTServicesGetStatusRequest getStatusRequest = new LSTServicesGetStatusRequest();</span>
+		try {
+<span class="nc" id="L136">			LOG.debug(&quot;Calling Get Status Request : {}&quot; ,statusRequest);</span>
+<span class="nc" id="L137">			getStatusRequest = finscanTransformer.transformGetContactStatusRequest(statusRequest, providerProperty);</span>
+<span class="nc" id="L138">			URL endpointUrl = new URL(providerProperty.getEndPointUrl());</span>
+<span class="nc" id="L139">			QName serviceName = new QName(QNAME_SERVICE_URL,QNAME_SERVICE);</span>
+<span class="nc" id="L140">			LSTServicesLookup lSTServicesLookup = new LSTServicesLookup(endpointUrl,serviceName);</span>
+<span class="nc" id="L141">			LSTServicesLookupSoap serviceLookUpStub = lSTServicesLookup.getLSTServicesLookupSoap();</span>
+<span class="nc" id="L142">			getStatusResponse = serviceLookUpStub.slGetStatus(getStatusRequest);</span>
+
+<span class="nc" id="L144">			sanctionResponse = finscanTransformer.transformContactStatusResponse(getStatusResponse, statusRequest,</span>
+<span class="nc" id="L145">					providerProperty.getAlwaysPass());</span>
+
+<span class="nc" id="L147">		} catch (SanctionException sanctionException) {</span>
+<span class="nc" id="L148">			LOG.warn(SanctionErrors.ERRROR_IN_FINSCAN_PORT.getErrorDescription(), sanctionException);</span>
+<span class="nc" id="L149">			sanctionResponse.setApplicationId(statusRequest.getApplicationId());</span>
+<span class="nc" id="L150">			sanctionResponse.setId(statusRequest.getId());</span>
+<span class="nc" id="L151">			sanctionResponse.setErrorCode(sanctionException.getSanctionErrors().getErrorCode());</span>
+<span class="nc" id="L152">			sanctionResponse.setErrorDescription(sanctionException.getSanctionErrors().getErrorDescription());</span>
+<span class="nc" id="L153">			checkAlwaysPassForGetStatusResponse(sanctionResponse, providerProperty);</span>
+<span class="nc" id="L154">		} catch (Exception e) {</span>
+<span class="nc" id="L155">			LOG.error(SanctionErrors.ERRROR_IN_FINSCAN_PORT.getErrorDescription(), e);</span>
+<span class="nc" id="L156">			sanctionResponse.setApplicationId(statusRequest.getApplicationId());</span>
+<span class="nc" id="L157">			sanctionResponse.setId(statusRequest.getId());</span>
+<span class="nc" id="L158">			sanctionResponse</span>
+<span class="nc" id="L159">					.setErrorCode(SanctionErrors.ERROR_WHILE_SENDING_REQUEST_TO_SANCTION_PROVIDER.getErrorCode());</span>
+<span class="nc" id="L160">			sanctionResponse.setErrorDescription(</span>
+<span class="nc" id="L161">					SanctionErrors.ERROR_WHILE_SENDING_REQUEST_TO_SANCTION_PROVIDER.getErrorDescription());</span>
+<span class="nc" id="L162">			sanctionResponse.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L163">			checkAlwaysPassForGetStatusResponse(sanctionResponse, providerProperty);</span>
+<span class="nc" id="L164">		}</span>
+<span class="nc" id="L165">		return sanctionResponse;</span>
+	}
+
+	/**
+	 * Check always pass for get status response.
+	 *
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @param providerProperty
+	 *            the provider property
+	 */
+	// for testing purpose only.. need to remove alwayspass hook after testing
+	private void checkAlwaysPassForGetStatusResponse(SanctionGetStatusResponse sanctionResponse,
+			ProviderProperty providerProperty) {
+<span class="nc bnc" id="L179" title="All 4 branches missed.">		if (null != providerProperty.getAlwaysPass() &amp;&amp; providerProperty.getAlwaysPass()) {</span>
+<span class="nc" id="L180">			sanctionResponse.setStatus(Constants.PASS);</span>
+		}
+<span class="nc" id="L182">	}</span>
+
+	/**
+	 * Prepare sample responses.
+	 *
+	 * @param sanctionRequest
+	 *            the sanction request
+	 * @param sanctionResponse
+	 *            the sanction response
+	 */
+	private void prepareSampleResponses(SanctionRequest sanctionRequest, SanctionResponse sanctionResponse) {
+<span class="nc" id="L193">		List&lt;SanctionContactResponse&gt; contactResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L194">		List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponses = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L195">		List&lt;SanctionBankResponse&gt; bankResponses = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L197" title="All 4 branches missed.">		if (null != sanctionRequest.getContactrequests() &amp;&amp; !sanctionRequest.getContactrequests().isEmpty()) {</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">			for (SanctionContactRequest contactRequest : sanctionRequest.getContactrequests()) {</span>
+<span class="nc" id="L199">				SanctionContactResponse contactResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L200">				contactResponse.setStatus(Constants.FAIL);</span>
+<span class="nc" id="L201">				contactResponse.setContactId(contactRequest.getContactId());</span>
+<span class="nc" id="L202">				contactResponse.setSanctionId(contactRequest.getSanctionId());</span>
+<span class="nc" id="L203">				contactResponse.setErrorCode(sanctionResponse.getErrorCode());</span>
+<span class="nc" id="L204">				contactResponse.setErrorDescription(sanctionResponse.getErrorDescription());</span>
+<span class="nc" id="L205">				contactResponses.add(contactResponse);</span>
+<span class="nc" id="L206">			}</span>
+<span class="nc" id="L207">			sanctionResponse.setContactResponses(contactResponses);</span>
+		}
+
+<span class="nc bnc" id="L210" title="All 4 branches missed.">		if (null != sanctionRequest.getBeneficiaryRequests() &amp;&amp; !sanctionRequest.getBeneficiaryRequests().isEmpty()) {</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">			for (SanctionBeneficiaryRequest beneficiaryRequest : sanctionRequest.getBeneficiaryRequests()) {</span>
+<span class="nc" id="L212">				SanctionBeneficiaryResponse beneficiaryResponse = new SanctionBeneficiaryResponse();</span>
+<span class="nc" id="L213">				beneficiaryResponse.setStatus(Constants.FAIL);</span>
+<span class="nc" id="L214">				beneficiaryResponse.setBeneficiaryId(beneficiaryRequest.getBeneficiaryId());</span>
+<span class="nc" id="L215">				beneficiaryResponse.setSanctionId(beneficiaryRequest.getSanctionId());</span>
+<span class="nc" id="L216">				beneficiaryResponse.setErrorCode(sanctionResponse.getErrorCode());</span>
+<span class="nc" id="L217">				beneficiaryResponse.setErrorDescription(sanctionResponse.getErrorDescription());</span>
+<span class="nc" id="L218">				beneficiaryResponses.add(beneficiaryResponse);</span>
+<span class="nc" id="L219">			}</span>
+<span class="nc" id="L220">			sanctionResponse.setBeneficiaryResponses(beneficiaryResponses);</span>
+		}
+
+<span class="nc bnc" id="L223" title="All 4 branches missed.">		if (null != sanctionRequest.getBankRequests() &amp;&amp; !sanctionRequest.getBankRequests().isEmpty()) {</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">			for (SanctionBankRequest bankRequest : sanctionRequest.getBankRequests()) {</span>
+<span class="nc" id="L225">				SanctionBankResponse bankResponse = new SanctionBankResponse();</span>
+<span class="nc" id="L226">				bankResponse.setStatus(Constants.FAIL);</span>
+<span class="nc" id="L227">				bankResponse.setBankID(bankRequest.getBankId());</span>
+<span class="nc" id="L228">				bankResponse.setSanctionId(bankRequest.getSanctionId());</span>
+<span class="nc" id="L229">				bankResponse.setErrorCode(sanctionResponse.getErrorCode());</span>
+<span class="nc" id="L230">				bankResponse.setErrorDescription(sanctionResponse.getErrorDescription());</span>
+<span class="nc" id="L231">				bankResponses.add(bankResponse);</span>
+<span class="nc" id="L232">			}</span>
+<span class="nc" id="L233">			sanctionResponse.setBankResponses(bankResponses);</span>
+		}
+
+<span class="nc" id="L236">	}</span>
+
+	/**
+	 * Check always pass for lookup multi.
+	 *
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @param alwaysPass
+	 *            the always pass
+	 */
+	// for testing purpose only.. need to remove alwayspass hook after testing
+	private void checkAlwaysPassForLookupMulti(SanctionResponse sanctionResponse, Boolean alwaysPass) {
+<span class="nc" id="L248">		List&lt;SanctionContactResponse&gt; contactResponses = sanctionResponse.getContactResponses();</span>
+<span class="nc" id="L249">		List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponses = sanctionResponse.getBeneficiaryResponses();</span>
+<span class="nc" id="L250">		List&lt;SanctionBankResponse&gt; bankResponses = sanctionResponse.getBankResponses();</span>
+
+<span class="nc bnc" id="L252" title="All 4 branches missed.">		if (null != contactResponses &amp;&amp; !contactResponses.isEmpty()) {</span>
+<span class="nc" id="L253">			checkAlwaysPassForContact(sanctionResponse, alwaysPass, contactResponses);</span>
+		}
+
+<span class="nc bnc" id="L256" title="All 4 branches missed.">		if (null != beneficiaryResponses &amp;&amp; !beneficiaryResponses.isEmpty()) {</span>
+<span class="nc" id="L257">			checkAlwaysPassForBeneficiary(sanctionResponse, alwaysPass, beneficiaryResponses);</span>
+		}
+
+<span class="nc bnc" id="L260" title="All 4 branches missed.">		if (null != bankResponses &amp;&amp; !bankResponses.isEmpty()) {</span>
+<span class="nc" id="L261">			checkAlwaysPassForBank(sanctionResponse, alwaysPass, bankResponses);</span>
+		}
+
+<span class="nc" id="L264">	}</span>
+
+	/**
+	 * Check always pass for bank.
+	 *
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @param alwaysPass
+	 *            the always pass
+	 * @param bankResponses
+	 *            the bank responses
+	 */
+	// for testing purpose only.. need to remove alwayspass hook after testing
+	private void checkAlwaysPassForBank(SanctionResponse sanctionResponse, Boolean alwaysPass,
+			List&lt;SanctionBankResponse&gt; bankResponses) {
+<span class="nc bnc" id="L279" title="All 2 branches missed.">		for (SanctionBankResponse bankResponse : bankResponses) {</span>
+<span class="nc bnc" id="L280" title="All 4 branches missed.">			if (null != alwaysPass &amp;&amp; alwaysPass) {</span>
+<span class="nc" id="L281">				bankResponse.setStatus(Constants.PASS);</span>
+			}
+<span class="nc" id="L283">		}</span>
+<span class="nc" id="L284">		sanctionResponse.setBankResponses(bankResponses);</span>
+<span class="nc" id="L285">	}</span>
+
+	/**
+	 * Check always pass for beneficiary.
+	 *
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @param alwaysPass
+	 *            the always pass
+	 * @param beneficiaryResponses
+	 *            the beneficiary responses
+	 */
+	// for testing purpose only.. need to remove alwayspass hook after testing
+	private void checkAlwaysPassForBeneficiary(SanctionResponse sanctionResponse, Boolean alwaysPass,
+			List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponses) {
+<span class="nc bnc" id="L300" title="All 2 branches missed.">		for (SanctionBeneficiaryResponse beneficiaryResponse : beneficiaryResponses) {</span>
+<span class="nc bnc" id="L301" title="All 4 branches missed.">			if (null != alwaysPass &amp;&amp; alwaysPass) {</span>
+<span class="nc" id="L302">				beneficiaryResponse.setStatus(Constants.PASS);</span>
+			}
+<span class="nc" id="L304">		}</span>
+<span class="nc" id="L305">		sanctionResponse.setBeneficiaryResponses(beneficiaryResponses);</span>
+<span class="nc" id="L306">	}</span>
+
+	/**
+	 * Check always pass for contact.
+	 *
+	 * @param sanctionResponse
+	 *            the sanction response
+	 * @param alwaysPass
+	 *            the always pass
+	 * @param contactResponses
+	 *            the contact responses
+	 */
+	// for testing purpose only.. need to remove alwayspass hook after testing
+	private void checkAlwaysPassForContact(SanctionResponse sanctionResponse, Boolean alwaysPass,
+			List&lt;SanctionContactResponse&gt; contactResponses) {
+<span class="nc bnc" id="L321" title="All 2 branches missed.">		for (SanctionContactResponse contactResponse : contactResponses) {</span>
+<span class="nc bnc" id="L322" title="All 4 branches missed.">			if (null != alwaysPass &amp;&amp; alwaysPass) {</span>
+<span class="nc" id="L323">				contactResponse.setStatus(Constants.PASS);</span>
+			}
+<span class="nc" id="L325">		}</span>
+<span class="nc" id="L326">		sanctionResponse.setContactResponses(contactResponses);</span>
+<span class="nc" id="L327">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

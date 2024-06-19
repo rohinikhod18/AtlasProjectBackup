@@ -1,0 +1,79 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="CARD.POST_TRANSACTION.in.channel" />
+
+	<int:chain input-channel="CARD.POST_TRANSACTION.in.channel">
+
+		<int:header-enricher>
+			<int:header name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header name="username"
+				expression="headers['username']" />
+		</int:header-enricher>
+
+		<int:service-activator
+			ref="cardMessageValidator" method="processForPostCardTransaction" />
+
+		<int:router expression="payload.getValidationResult()">
+			<int:mapping value="FAIL"
+				channel="POST_CARD_TRANSACTION_RESPONSE.CHANNEL" />
+			<int:mapping value="SUCCESS"
+				channel="POST_CARD_TRANSACTION_INTUITION.CHANNEL" />
+		</int:router>
+	</int:chain>
+
+	<int:chain
+		input-channel="POST_CARD_TRANSACTION_INTUITION.CHANNEL"
+		output-channel="POST_CARD_TRANSACTION_RESPONSE.CHANNEL">
+
+		<int:transformer ref="postCardTransactionTransfomer"
+			method="transformRequest" />
+
+		<int:service-activator
+			id="POST_TRANSACTION.TRANSACTIONMONITORING" method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TM_POST_CARD_TRANSACTION_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPostCardTransactionResponse" />
+		</int:service-activator>
+		
+		<int:transformer ref="postCardTransactionTransfomer"
+			method="transformResponse" />
+
+	</int:chain>
+
+	<int:chain
+		input-channel="POST_CARD_TRANSACTION_RESPONSE.CHANNEL"
+		output-channel="nullChannel">
+		<int:service-activator ref="responseHandler"/>
+	</int:chain>
+
+	<bean id="postCardTransactionTransfomer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.card.PostCardTransactionTransfomer" />
+
+	<bean id="responseHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.card.PostCardTransactionResponseBuilder" />
+</beans>

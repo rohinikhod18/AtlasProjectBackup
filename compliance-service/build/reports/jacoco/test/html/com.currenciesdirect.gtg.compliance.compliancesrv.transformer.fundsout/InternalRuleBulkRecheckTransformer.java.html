@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>InternalRuleBulkRecheckTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout</a> &gt; <span class="el_source">InternalRuleBulkRecheckTransformer.java</span></div><h1>InternalRuleBulkRecheckTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistPayRefSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistPayrefContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.CardFraudScoreResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.ContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.CountryCheckContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.GlobalCheckContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalRuleSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequestData;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.IpContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.IpSummary;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ProvideCacheLoader;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractInternalRulesTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+<span class="nc" id="L40">public class InternalRuleBulkRecheckTransformer extends AbstractInternalRulesTransformer {</span>
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L43">	private static final Logger LOGGER = LoggerFactory.getLogger(InternalRuleBulkRecheckTransformer.class);</span>
+
+	/** The Constant NOT_AVAILABLE. */
+	private static final String NOT_AVAILABLE = &quot;Not Available&quot;;
+	
+	/** The country cache. */
+<span class="nc" id="L49">	private ProvideCacheLoader countryCache = ProvideCacheLoader.getInstance();</span>
+	
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="nc" id="L54">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L55">			FundsOutRequest fundsOutRequest = (FundsOutRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L56">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+
+<span class="nc" id="L58">			Account account = (Account) fundsOutRequest.getAdditionalAttribute(&quot;account&quot;);</span>
+<span class="nc" id="L59">			Contact contact = (Contact) fundsOutRequest.getAdditionalAttribute(&quot;contact&quot;);</span>
+<span class="nc" id="L60">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest().getAdditionalAttribute(&quot;eventId&quot;);</span>
+
+<span class="nc" id="L62">			InternalServiceRequest internalServiceRequest = new InternalServiceRequest();</span>
+<span class="nc" id="L63">			ContactResponse defaultResponse = new ContactResponse();</span>
+<span class="nc" id="L64">			BlacklistSummary blacklistSummary = new BlacklistSummary();</span>
+<span class="nc" id="L65">			BlacklistPayRefSummary blacklistPayRefSummary = new BlacklistPayRefSummary();//Add for AT-4131</span>
+			ServiceStatus serviceStatus;
+<span class="nc bnc" id="L67" title="All 2 branches missed.">			if (fundsOutRequest.getAdditionalAttribute(Constants.PERFORM_CHECKS).equals(Boolean.TRUE)) {</span>
+<span class="nc" id="L68">				serviceStatus = ServiceStatus.NOT_PERFORMED;</span>
+
+<span class="nc" id="L70">				internalServiceRequest.setCorrelationID(fundsOutRequest.getCorrelationID());</span>
+<span class="nc" id="L71">				internalServiceRequest.setOrgCode(fundsOutRequest.getOrgCode());</span>
+<span class="nc" id="L72">				internalServiceRequest.setAccountSFId(account.getAccSFID());</span>
+<span class="nc" id="L73">				internalServiceRequest.setIsAllCheckPerform(Boolean.TRUE);</span>
+<span class="nc" id="L74">				List&lt;InternalServiceRequestData&gt; datas = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L76">				InternalServiceRequestData beneData = new InternalServiceRequestData();</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">				if (null != fundsOutRequest.getBeneficiary().getCountry()) {</span>
+<span class="nc" id="L78">					beneData.setCountry(</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">							null != countryCache.getCountryFullName(fundsOutRequest.getBeneficiary().getCountry())</span>
+<span class="nc" id="L80">									? countryCache.getCountryFullName(fundsOutRequest.getBeneficiary().getCountry())</span>
+									: &quot;&quot;);
+				}
+<span class="nc" id="L83">				beneData.setName(fundsOutRequest.getBeneficiary().getFullName());</span>
+<span class="nc" id="L84">				beneData.setAccountNumber(fundsOutRequest.getBeneficiary().getAccountNumber());</span>
+<span class="nc" id="L85">				beneData.setBankName(fundsOutRequest.getBeneficiary().getBeneficaryBankName());</span>
+<span class="nc" id="L86">				beneData.setEntityType(EntityEnum.BENEFICIARY.name());</span>
+<span class="nc" id="L87">				beneData.setId(fundsOutRequest.getFundsOutId());</span>
+<span class="nc" id="L88">				beneData.setPayementRefernce(fundsOutRequest.getBeneficiary().getPaymentReference());//add AT-4131</span>
+
+<span class="nc" id="L90">				datas.add(beneData);</span>
+
+<span class="nc" id="L92">				internalServiceRequest.setSearchdata(datas);</span>
+<span class="nc" id="L93">				internalServiceRequest.setRequestType(Constants.PAYMENT_OUT);</span>
+
+<span class="nc" id="L95">			} else {</span>
+<span class="nc" id="L96">				serviceStatus = ServiceStatus.NOT_REQUIRED;</span>
+
+			}
+
+<span class="nc" id="L100">			setInternalRuleServiceStatus(defaultResponse, contact, serviceStatus);</span>
+<span class="nc" id="L101">			blacklistSummary.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L102">			blacklistPayRefSummary.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L103">			List&lt;Contact&gt; contacts = new ArrayList&lt;&gt;(1);</span>
+<span class="nc" id="L104">			contacts.add(contact);</span>
+
+<span class="nc" id="L106">			MessageExchange ccExchange = createMessageExchange(internalServiceRequest,</span>
+<span class="nc" id="L107">					createInternalRuleServiceDefaultResponse(contacts), ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L108">			ccExchange.addEventServiceLog(</span>
+<span class="nc" id="L109">					createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L110">							ServiceProviderEnum.BLACKLIST, fundsOutRequest.getBeneficiary().getBeneficiaryId(),</span>
+<span class="nc" id="L111">							fundsOutRequest.getVersion(), EntityEnum.BENEFICIARY.name(), token.getUserID(),</span>
+<span class="nc" id="L112">							defaultResponse.getBlacklist(), blacklistSummary, serviceStatus));</span>
+
+<span class="nc" id="L114">			ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.HRC_SERVICE,</span>
+<span class="nc" id="L115">					ServiceProviderEnum.COUNTRYCHECK, fundsOutRequest.getBeneficiary().getBeneficiaryId(),</span>
+<span class="nc" id="L116">					fundsOutRequest.getVersion(), EntityEnum.BENEFICIARY.name(), token.getUserID(), defaultResponse,</span>
+<span class="nc" id="L117">					defaultResponse.getCountryCheck(), serviceStatus));</span>
+<span class="nc" id="L118">			message.getPayload().removeMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+			
+<span class="nc" id="L120">			ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.BLACKLIST_PAY_REF_SERVICE,</span>
+<span class="nc" id="L121">					ServiceProviderEnum.BLACKLIST_PAY_REF, fundsOutRequest.getBeneficiary().getBeneficiaryId(),</span>
+<span class="nc" id="L122">					fundsOutRequest.getVersion(), EntityEnum.BENEFICIARY.name(), token.getUserID(), defaultResponse,</span>
+					blacklistPayRefSummary, serviceStatus));
+<span class="nc" id="L124">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L125">		} catch (Exception e) {</span>
+<span class="nc" id="L126">			LOGGER.error(&quot;Exception in transformRequest()&quot;, e);</span>
+<span class="nc" id="L127">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L128">		}</span>
+<span class="nc" id="L129">		return message;</span>
+	}
+
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="nc" id="L135">			FundsOutRequest fundsOutRequest = (FundsOutRequest) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L136">					.getRequest();</span>
+<span class="nc" id="L137">			MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L138">			InternalServiceRequest internalServiceRequest = exchange.getRequest(InternalServiceRequest.class);</span>
+<span class="nc" id="L139">			InternalServiceResponse internalServiceResponse = (InternalServiceResponse) exchange.getResponse();</span>
+
+<span class="nc bnc" id="L141" title="All 2 branches missed.">			if (internalServiceResponse == null) {</span>
+<span class="nc" id="L142">				transformResponseForServiceFailure(internalServiceRequest, exchange, fundsOutRequest);</span>
+			} else {
+<span class="nc" id="L144">				List&lt;ContactResponse&gt; contactResponses = internalServiceResponse.getContacts();</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">				for (ContactResponse response : contactResponses) {</span>
+
+<span class="nc" id="L147">					EventServiceLog blacklistLog = null;</span>
+<span class="nc" id="L148">					EventServiceLog countryCheckLog = null;</span>
+<span class="nc" id="L149">					InternalRuleSummary internalRuleSummary = new InternalRuleSummary();</span>
+
+<span class="nc" id="L151">					transformResponseForBeneficiary(fundsOutRequest, exchange, response, blacklistLog, countryCheckLog,</span>
+							internalRuleSummary);
+<span class="nc" id="L153">				}</span>
+			}
+<span class="nc" id="L155">		} catch (Exception e) {</span>
+<span class="nc" id="L156">			LOGGER.error(&quot;Exception in transformResponse()&quot;, e);</span>
+<span class="nc" id="L157">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L158">		}</span>
+<span class="nc" id="L159">		return message;</span>
+	}
+	
+	/**
+	 * Sets the internal rule service status.
+	 *
+	 * @param defaultResponse the default response
+	 * @param contact the contact
+	 * @param serviceStatus the service status
+	 * @return the contact response
+	 */
+	private ContactResponse setInternalRuleServiceStatus(ContactResponse defaultResponse, Contact contact,
+			ServiceStatus serviceStatus) {
+
+<span class="nc" id="L173">		GlobalCheckContactResponse globalCheck = new GlobalCheckContactResponse();</span>
+<span class="nc" id="L174">		BlacklistContactResponse blacklist = new BlacklistContactResponse();</span>
+<span class="nc" id="L175">		IpContactResponse ipCheck = new IpContactResponse();</span>
+<span class="nc" id="L176">		CountryCheckContactResponse countryCheck = new CountryCheckContactResponse();</span>
+<span class="nc" id="L177">		IpSummary defaultIpSummary = new IpSummary();</span>
+
+<span class="nc" id="L179">		blacklist.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L180">		blacklist.setData(null);</span>
+<span class="nc" id="L181">		countryCheck.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L182">		globalCheck.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L183">		globalCheck.setCountry(contact.getCountry());</span>
+<span class="nc" id="L184">		countryCheck.setCountry(contact.getCountry());</span>
+<span class="nc" id="L185">		ipCheck.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L186">		ipCheck.setIpAddress(contact.getIpAddress());</span>
+<span class="nc" id="L187">		defaultIpSummary.setStatus(serviceStatus.name());</span>
+<span class="nc" id="L188">		defaultIpSummary.setIpAddress(contact.getIpAddress());</span>
+
+<span class="nc" id="L190">		defaultResponse.setBlacklist(blacklist);</span>
+<span class="nc" id="L191">		defaultResponse.setGlobalCheck(globalCheck);</span>
+<span class="nc" id="L192">		defaultResponse.setCountryCheck(countryCheck);</span>
+<span class="nc" id="L193">		return defaultResponse;</span>
+	}
+	
+	/**
+	 * Creates the internal rule service default response.
+	 *
+	 * @param contacts the contacts
+	 * @return the internal service response
+	 */
+	protected InternalServiceResponse createInternalRuleServiceDefaultResponse(List&lt;Contact&gt; contacts) {
+<span class="nc" id="L203">		InternalServiceResponse response = new InternalServiceResponse();</span>
+<span class="nc" id="L204">		List&lt;ContactResponse&gt; responseList = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">		for (Contact contact : contacts) {</span>
+<span class="nc" id="L206">			ContactResponse contactResponse = new ContactResponse();</span>
+<span class="nc" id="L207">			GlobalCheckContactResponse globalCheckContactResponse = new GlobalCheckContactResponse();</span>
+<span class="nc" id="L208">			BlacklistContactResponse blacklistContactResponse = new BlacklistContactResponse();</span>
+<span class="nc" id="L209">			IpContactResponse ipContactResponse = new IpContactResponse();</span>
+<span class="nc" id="L210">			CountryCheckContactResponse countryCheckContactResponse = new CountryCheckContactResponse();</span>
+<span class="nc" id="L211">			CardFraudScoreResponse cardFraudScoreResponse = new CardFraudScoreResponse();</span>
+<span class="nc" id="L212">			BlacklistPayrefContactResponse blacklistpayref= new BlacklistPayrefContactResponse();</span>
+<span class="nc" id="L213">			contactResponse.setId(contact.getId());</span>
+<span class="nc" id="L214">			globalCheckContactResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L215">			blacklistContactResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L216">			blacklistpayref.setPaymentReference(ServiceStatus.NOT_REQUIRED.name());//AT-4131</span>
+<span class="nc" id="L217">			ipContactResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L218">			countryCheckContactResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L219">			cardFraudScoreResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L220">			contactResponse.setContactStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L221">			contactResponse.setCardFraudCheck(cardFraudScoreResponse);</span>
+<span class="nc" id="L222">			contactResponse.setIpCheck(ipContactResponse);</span>
+<span class="nc" id="L223">			contactResponse.setCountryCheck(countryCheckContactResponse);</span>
+<span class="nc" id="L224">			contactResponse.setGlobalCheck(globalCheckContactResponse);</span>
+<span class="nc" id="L225">			contactResponse.setBlacklist(blacklistContactResponse);</span>
+<span class="nc" id="L226">			contactResponse.setBlacklistPayref(blacklistpayref);</span>
+<span class="nc" id="L227">			responseList.add(contactResponse);</span>
+<span class="nc" id="L228">		}</span>
+<span class="nc" id="L229">		response.setContacts(responseList);</span>
+<span class="nc" id="L230">		return response;</span>
+	}
+	
+	/**
+	 * Transform response for service failure.
+	 *
+	 * @param internalServiceRequest the internal service request
+	 * @param exchange the exchange
+	 * @param fundsOutRequest the funds out request
+	 */
+	private void transformResponseForServiceFailure(InternalServiceRequest internalServiceRequest,
+			MessageExchange exchange, FundsOutRequest fundsOutRequest) {
+<span class="nc" id="L242">		InternalServiceResponse internalServiceResponse = new InternalServiceResponse();</span>
+<span class="nc" id="L243">		internalServiceResponse.setStatus(ServiceStatus.FAIL.name());</span>
+<span class="nc" id="L244">		List&lt;ContactResponse&gt; contactResponseList = new ArrayList&lt;&gt;();</span>
+
+		try {
+<span class="nc bnc" id="L247" title="All 2 branches missed.">			for (InternalServiceRequestData contact : internalServiceRequest.getSearchdata()) {</span>
+
+<span class="nc" id="L249">				ContactResponse response = new ContactResponse();</span>
+<span class="nc" id="L250">				BlacklistContactResponse blacklist = new BlacklistContactResponse();</span>
+<span class="nc" id="L251">				CountryCheckContactResponse countryCheck = new CountryCheckContactResponse();</span>
+<span class="nc" id="L252">				BlacklistPayrefContactResponse blacklistPayrefContactResponse = new BlacklistPayrefContactResponse();//Add for AT-4131</span>
+<span class="nc" id="L253">				BlacklistSummary blacklistSummary = new BlacklistSummary();</span>
+<span class="nc" id="L254">				BlacklistPayRefSummary blacklistPayRefSummary = new BlacklistPayRefSummary();//Add for AT-4131</span>
+
+<span class="nc" id="L256">				response.setBlacklist(blacklist);</span>
+<span class="nc" id="L257">				blacklist.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L258">				blacklist.setData(null);</span>
+<span class="nc" id="L259">				blacklistSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L260">				blacklistSummary.setAccountNumber(NOT_AVAILABLE);</span>
+<span class="nc" id="L261">				blacklistSummary.setBankName(NOT_AVAILABLE);</span>
+<span class="nc" id="L262">				blacklistSummary.setName(NOT_AVAILABLE);</span>
+<span class="nc" id="L263">				countryCheck.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L264">				response.setBlacklist(blacklist);</span>
+<span class="nc" id="L265">				response.setCountryCheck(countryCheck);</span>
+<span class="nc" id="L266">				blacklistPayrefContactResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L267">				blacklistPayRefSummary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L268">				response.setBlacklistPayref(blacklistPayrefContactResponse);</span>
+<span class="nc" id="L269">				response.setId(contact.getId());</span>
+<span class="nc" id="L270">				response.setEntityType(contact.getEntityType());</span>
+<span class="nc" id="L271">				Integer logId = fundsOutRequest.getBeneficiary().getBeneficiaryId();</span>
+
+<span class="nc" id="L273">				EventServiceLog blacklistLog = exchange.getEventServiceLog(ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L274">						EntityEnum.BENEFICIARY.name(), logId);</span>
+<span class="nc" id="L275">				EventServiceLog countryCheckLog = exchange.getEventServiceLog(ServiceTypeEnum.HRC_SERVICE,</span>
+<span class="nc" id="L276">						EntityEnum.BENEFICIARY.name(), logId);</span>
+				//Add for AT-4131
+<span class="nc" id="L278">				EventServiceLog blacklistPayRefLog = exchange.getEventServiceLog(ServiceTypeEnum.BLACKLIST_PAY_REF_SERVICE,</span>
+<span class="nc" id="L279">						EntityEnum.BENEFICIARY.name(), logId);</span>
+
+<span class="nc" id="L281">				updateEventServiceLogEntry(blacklistLog, blacklistSummary, response.getBlacklist(),</span>
+<span class="nc" id="L282">						ServiceStatus.SERVICE_FAILURE.name());</span>
+
+<span class="nc" id="L284">				updateEventServiceLogEntry(countryCheckLog, response.getCountryCheck(), response.getCountryCheck(),</span>
+<span class="nc" id="L285">						ServiceStatus.SERVICE_FAILURE.name());</span>
+				//Add for AT-4131
+<span class="nc" id="L287">				updateEventServiceLogEntry(blacklistPayRefLog, blacklistPayRefSummary, response.getBlacklistPayref(),</span>
+<span class="nc" id="L288">						ServiceStatus.SERVICE_FAILURE.name());</span>
+
+<span class="nc" id="L290">				contactResponseList.add(response);</span>
+<span class="nc" id="L291">			}</span>
+<span class="nc" id="L292">			internalServiceResponse.setContacts(contactResponseList);</span>
+<span class="nc" id="L293">			exchange.setResponse(internalServiceResponse);</span>
+
+<span class="nc" id="L295">		} catch (Exception e) {</span>
+<span class="nc" id="L296">			LOGGER.error(&quot;{1}&quot;,e);</span>
+<span class="nc" id="L297">		}</span>
+<span class="nc" id="L298">	}</span>
+	
+	/**
+	 * Transform response for beneficiary.
+	 *
+	 * @param fundsOutRequest the funds out request
+	 * @param exchange the exchange
+	 * @param response the response
+	 * @param blacklistLog the blacklist log
+	 * @param countryCheckLog the country check log
+	 * @param internalRuleSummary the internal rule summary
+	 */
+	private void transformResponseForBeneficiary(FundsOutRequest fundsOutRequest, MessageExchange exchange,
+			ContactResponse response, EventServiceLog blacklistLog, EventServiceLog countryCheckLog,
+			InternalRuleSummary internalRuleSummary) {
+		Integer logId;
+<span class="nc" id="L314">		EventServiceLog blacklistPayRefLog = null;</span>
+		try {
+
+<span class="nc bnc" id="L317" title="All 2 branches missed.">			if (EntityEnum.BENEFICIARY.name().equals(response.getEntityType())) {</span>
+<span class="nc" id="L318">				logId = fundsOutRequest.getBeneficiary().getBeneficiaryId();</span>
+
+<span class="nc" id="L320">				blacklistLog = exchange.getEventServiceLog(ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L321">						EntityEnum.BENEFICIARY.name(), logId);</span>
+<span class="nc" id="L322">				countryCheckLog = exchange.getEventServiceLog(ServiceTypeEnum.HRC_SERVICE,</span>
+<span class="nc" id="L323">						EntityEnum.BENEFICIARY.name(), logId);</span>
+				//Add for AT-4131
+<span class="nc" id="L325">				blacklistPayRefLog = exchange.getEventServiceLog(ServiceTypeEnum.BLACKLIST_PAY_REF_SERVICE,</span>
+<span class="nc" id="L326">						EntityEnum.BENEFICIARY.name(), logId);</span>
+
+<span class="nc" id="L328">				updateEventServiceLogEntry(blacklistLog, createBlacklistSummary(response), response.getBlacklist(),</span>
+<span class="nc" id="L329">						response.getBlacklist().getStatus());</span>
+<span class="nc" id="L330">				updateEventServiceLogEntry(countryCheckLog, response.getCountryCheck(), response.getCountryCheck(),</span>
+<span class="nc" id="L331">						response.getCountryCheck().getStatus());</span>
+<span class="nc" id="L332">				updateEventServiceLogEntry(blacklistPayRefLog, createBlacklistPayRefSummary(response), response.getBlacklistPayref(),</span>
+<span class="nc" id="L333">						response.getBlacklistPayref().getStatus());</span>
+				
+<span class="nc" id="L335">				internalRuleSummary.setBlacklistSummary(createBlacklistSummary(response));</span>
+<span class="nc" id="L336">				internalRuleSummary.setHrcSummary(response.getCountryCheck());</span>
+<span class="nc" id="L337">				internalRuleSummary.setBlacklistPayRefSummary(createBlacklistPayRefSummary(response));</span>
+			}
+<span class="nc" id="L339">		} catch (Exception e) {</span>
+<span class="nc" id="L340">			LOGGER.error(&quot;Error in reposne mapping&quot;, e);</span>
+<span class="nc" id="L341">			updateEventServiceLogEntry(blacklistLog, null, null, response.getBlacklist().getStatus());</span>
+<span class="nc" id="L342">			updateEventServiceLogEntry(countryCheckLog, null, null, response.getCountryCheck().getStatus());</span>
+<span class="nc" id="L343">			updateEventServiceLogEntry(blacklistPayRefLog, null, null, response.getBlacklistPayref().getStatus());</span>
+<span class="nc" id="L344">		}</span>
+<span class="nc" id="L345">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

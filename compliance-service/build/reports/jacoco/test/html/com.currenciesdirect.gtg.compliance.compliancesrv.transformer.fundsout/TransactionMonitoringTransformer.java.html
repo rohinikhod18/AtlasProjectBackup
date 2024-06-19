@@ -1,0 +1,636 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TransactionMonitoringTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout</a> &gt; <span class="el_source">TransactionMonitoringTransformer.java</span></div><h1>TransactionMonitoringTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout;
+
+import java.util.Arrays;
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailHeaderForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.EmailPayloadForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.commhub.request.SendEmailRequestForTM;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistPayRefSummary;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringFundsProviderResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsSummary;
+import com.currenciesdirect.gtg.compliance.commons.externalservice.commhubport.ICommHubServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ProvideCacheLoader;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.FundsOutDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.NewRegistrationDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.FundsOutResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+/**
+ * The Class TransactionMonitoringTransformer.
+ */
+<span class="nc" id="L46">public class TransactionMonitoringTransformer extends AbstractTransformer{</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L49">	private static final Logger LOG = LoggerFactory.getLogger(TransactionMonitoringTransformer.class);</span>
+	
+	/** The funds in DB service impl. */
+	@Autowired
+	protected FundsOutDBServiceImpl fundsOutDBServiceImpl;
+
+	/** The i comm hub service impl. */
+	@Autowired
+	private ICommHubServiceImpl iCommHubServiceImpl;
+	
+	@Autowired
+	protected NewRegistrationDBServiceImpl newRegistrationDBServiceImpl;
+	
+	/** The country cache. */
+<span class="nc" id="L63">	private ProvideCacheLoader countryCache = ProvideCacheLoader.getInstance();</span>
+	
+	/** The Constant ACCOUNT_TM_FLAG. */
+	private static final String ACCOUNT_TM_FLAG = &quot;AccountTMFlag&quot;;
+	
+	/**
+	 * Transform request.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+		try {
+			
+<span class="nc bnc" id="L78" title="All 2 branches missed.">			if(message.getPayload().getGatewayMessageExchange().getOperation() == OperationEnum.FUNDS_OUT) {</span>
+<span class="nc" id="L79">				tranformNewPaymentOutRequest(message);</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">			} else if(message.getPayload().getGatewayMessageExchange().getOperation() == OperationEnum.DELETE_OPI) {</span>
+<span class="nc" id="L81">				transformDeleteOpiPaymentOutRequest(message); // Add for AT-4699</span>
+			} else{
+<span class="nc" id="L83">				tranformRepeatCheckPaymentOutRequest(message);</span>
+			}
+			
+<span class="nc" id="L86">		} catch (Exception e) {</span>
+<span class="nc" id="L87">			LOG.error(&quot;Error in Transaction Monitoring transformer class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L88">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L89">		}</span>
+<span class="nc" id="L90">		return message;</span>
+	}
+	
+
+	private void tranformNewPaymentOutRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+<span class="nc" id="L95">		UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L96">		MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L97">		FundsOutRequest fundsOutRequest = (FundsOutRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L98">		FundsOutResponse fundsOutResponse = (FundsOutResponse) messageExchange.getResponse(); //AT-4715</span>
+<span class="nc" id="L99">		Account account = (Account) fundsOutRequest.getAdditionalAttribute(&quot;account&quot;);</span>
+<span class="nc" id="L100">		Contact contact = (Contact) fundsOutRequest.getAdditionalAttribute(Constants.FIELD_CONTACT);</span>
+<span class="nc" id="L101">		TransactionMonitoringPaymentsOutRequest transactionMonitoringPaymentsOutRequest = new TransactionMonitoringPaymentsOutRequest();</span>
+		
+<span class="nc" id="L103">		Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L104">				.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+		
+<span class="nc" id="L106">		Integer accountTMFlag = (Integer) fundsOutRequest.getAdditionalAttribute(ACCOUNT_TM_FLAG);</span>
+		
+<span class="nc bnc" id="L108" title="All 6 branches missed.">		if(accountTMFlag == 1 || accountTMFlag == 2 || accountTMFlag == 4) {</span>
+<span class="nc" id="L109">			transactionMonitoringPaymentsOutRequest = createServiceRequest(</span>
+<span class="nc" id="L110">					fundsOutRequest, messageExchange.getServiceInterface().name());</span>
+<span class="nc" id="L111">			transactionMonitoringPaymentsOutRequest.setAccountId(account.getId());</span>
+<span class="nc" id="L112">			transactionMonitoringPaymentsOutRequest.setContactId(contact.getId());</span>
+<span class="nc" id="L113">			transactionMonitoringPaymentsOutRequest.setCreatedBy(token.getUserID());</span>
+<span class="nc" id="L114">			transactionMonitoringPaymentsOutRequest.setCreditFrom(getCreditFromValue(fundsOutRequest,</span>
+<span class="nc" id="L115">					account.getAffiliateName()));// Add For AT-5454</span>
+<span class="nc" id="L116">			transformComplianceLog(account.getId(), transactionMonitoringPaymentsOutRequest); //AT-5578</span>
+<span class="nc" id="L117">			String stpFlag = fundsOutRequest.getAdditionalAttribute(&quot;AtlasSTPFlag&quot;).toString();</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">			if(accountTMFlag == 4)</span>
+<span class="nc" id="L119">				stpFlag += &quot;;DCP&quot;; //AT-5294</span>
+<span class="nc" id="L120">			transactionMonitoringPaymentsOutRequest.setAtlasSTPFlag(stpFlag);</span>
+
+<span class="nc" id="L122">			transformTransactionMonitoringRequestSetAllChecksStatus(message, contact,</span>
+					transactionMonitoringPaymentsOutRequest, fundsOutRequest);
+
+<span class="nc" id="L125">			transformTransactionMonitoringRequestSetWatchlist(contact.getId(), transactionMonitoringPaymentsOutRequest);</span>
+		}
+		
+<span class="nc" id="L128">		transactionMonitoringPaymentsOutRequest.setAccountTMFlag(accountTMFlag);</span>
+<span class="nc" id="L129">		transactionMonitoringPaymentsOutRequest.setFundsOutId(fundsOutRequest.getFundsOutId());</span>
+<span class="nc" id="L130">		transactionMonitoringPaymentsOutRequest.setRequestType(&quot;payment_out&quot;);</span>
+<span class="nc" id="L131">		transactionMonitoringPaymentsOutRequest.addAttribute(ACCOUNT_TM_FLAG, accountTMFlag);</span>
+<span class="nc" id="L132">		transactionMonitoringPaymentsOutRequest.setEtailer(</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">				(account.getCompany() != null) ? account.getCompany().getEtailer() : Boolean.toString(false)); // AT-4815</span>
+
+<span class="nc" id="L135">		TransactionMonitoringPaymentOutResponse transactionMonitoringPaymentOutResponse = new TransactionMonitoringPaymentOutResponse();</span>
+<span class="nc" id="L136">		transactionMonitoringPaymentOutResponse.setId(fundsOutRequest.getFundsOutId());</span>
+<span class="nc" id="L137">		transactionMonitoringPaymentOutResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+		
+<span class="nc" id="L139">		TransactionMonitoringPaymentsSummary transactionMonitoringPaymentOutSummary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L140">		transactionMonitoringPaymentOutSummary.setStatus(transactionMonitoringPaymentOutResponse.getStatus());</span>
+
+<span class="nc bnc" id="L142" title="All 2 branches missed.">		if(fundsOutResponse.getStatus() != null)//AT-4716</span>
+<span class="nc" id="L143">			transactionMonitoringPaymentsOutRequest.setUpdateStatus(fundsOutResponse.getStatus());</span>
+		else
+<span class="nc" id="L145">			transactionMonitoringPaymentsOutRequest.setUpdateStatus(FundsOutComplianceStatus.HOLD.name());</span>
+		
+<span class="nc" id="L147">		MessageExchange ccExchange = createMessageExchange(transactionMonitoringPaymentsOutRequest, transactionMonitoringPaymentOutResponse,</span>
+				ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);
+<span class="nc" id="L149">		ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId,</span>
+<span class="nc" id="L150">				ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, ServiceProviderEnum.TRANSACTION_MONITORING_FUNDSOUT, fundsOutRequest.getFundsOutId(),</span>
+<span class="nc" id="L151">				account.getVersion(), EntityEnum.ACCOUNT.name(), token.getUserID(), transactionMonitoringPaymentOutResponse,</span>
+				transactionMonitoringPaymentOutSummary));
+
+<span class="nc" id="L154">		message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L155">	}</span>
+
+	//AT-4451
+	private void tranformRepeatCheckPaymentOutRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="nc" id="L160">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L161">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L162">			FundsOutRequest fundsOut = (FundsOutRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L163">			Integer tradePayId = fundsOut.getBeneficiary().getPaymentFundsoutId();</span>
+<span class="nc" id="L164">			transformCommonRequest(message, token, messageExchange, tradePayId);</span>
+			
+<span class="nc" id="L166">		} catch (Exception e) {</span>
+<span class="nc" id="L167">			LOG.error(&quot;Error in Transaction Monitoring Repeat Check transformer class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L168">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L169">		}</span>
+		
+<span class="nc" id="L171">	}</span>
+
+	private void transformDeleteOpiPaymentOutRequest(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="nc" id="L175">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L176">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L177">			FundsOutDeleteRequest fundsOutDeleteRequest = (FundsOutDeleteRequest) messageExchange.getRequest();</span>
+<span class="nc" id="L178">			Integer tradePayId = fundsOutDeleteRequest.getPaymentFundsoutId();</span>
+<span class="nc" id="L179">			transformCommonRequest(message, token, messageExchange, tradePayId);</span>
+<span class="nc" id="L180">		} catch (Exception e) {</span>
+<span class="nc" id="L181">			LOG.error(&quot;Error in Transaction Monitoring Delete Opi Check transformer class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L182">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L183">		}</span>
+
+<span class="nc" id="L185">	}</span>
+	
+	/**
+	 * @param message
+	 * @param token
+	 * @param messageExchange
+	 * @param fundsOut
+	 * @throws ComplianceException
+	 */
+	private void transformCommonRequest(Message&lt;MessageContext&gt; message, UserProfile token,
+			MessageExchange messageExchange, Integer tradePayId) throws ComplianceException {
+<span class="nc" id="L196">		TransactionMonitoringPaymentsOutRequest transactionMonitoringPaymentsOutRequest = new TransactionMonitoringPaymentsOutRequest();</span>
+		
+<span class="nc" id="L198">		FundsOutRequest fundsOutRequest = fundsOutDBServiceImpl.getFundsOutDetailsForIntuition(tradePayId);</span>
+		
+<span class="nc" id="L200">		Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest()</span>
+<span class="nc" id="L201">				.getAdditionalAttribute(Constants.FIELD_EVENTID);</span>
+		
+<span class="nc" id="L203">		Integer accTMFlag = (Integer) fundsOutRequest.getAdditionalAttribute(ACCOUNT_TM_FLAG);</span>
+		
+<span class="nc bnc" id="L205" title="All 6 branches missed.">		if (accTMFlag == 1 || accTMFlag == 2 || accTMFlag == 4) {</span>
+<span class="nc" id="L206">			transactionMonitoringPaymentsOutRequest = createServiceRequest(fundsOutRequest,</span>
+<span class="nc" id="L207">					messageExchange.getServiceInterface().name());</span>
+<span class="nc" id="L208">			transactionMonitoringPaymentsOutRequest.setAccountId(fundsOutRequest.getAccId());</span>
+<span class="nc" id="L209">			transactionMonitoringPaymentsOutRequest.setContactId(fundsOutRequest.getContactId());</span>
+<span class="nc" id="L210">			transactionMonitoringPaymentsOutRequest.setCreatedBy(token.getUserID());</span>
+<span class="nc" id="L211">			transactionMonitoringPaymentsOutRequest.setCreditFrom(getCreditFromValue(fundsOutRequest,</span>
+<span class="nc" id="L212">					(String) fundsOutRequest.getAdditionalAttribute(&quot;AffiliateName&quot;)));// Add For AT-5454</span>
+<span class="nc" id="L213">			transformAllCheckResponseForRepeatCheck(fundsOutRequest, transactionMonitoringPaymentsOutRequest);</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">			if (fundsOutRequest.getBeneficiary().getPaymentReference() != null</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">					&amp;&amp; fundsOutRequest.getBeneficiary().getPaymentReference().length() &gt; 2) {</span>
+<span class="nc" id="L216">				fundsOutDBServiceImpl.getPaymentReferenceMatchKeywordForIntuition(</span>
+<span class="nc" id="L217">						fundsOutRequest.getBeneficiary().getBeneficiaryId(), transactionMonitoringPaymentsOutRequest);</span>
+			}
+<span class="nc" id="L219">			transformTransactionMonitoringRequestSetWatchlist(fundsOutRequest.getContactId(),</span>
+					transactionMonitoringPaymentsOutRequest);
+<span class="nc" id="L221">			transactionMonitoringPaymentsOutRequest.setUpdateStatus((String) fundsOutRequest.getAdditionalAttribute(&quot;status&quot;));</span>
+<span class="nc" id="L222">			String statusUpdateReason = fundsOutDBServiceImpl.getStatusUpdateReasonForIntuition(fundsOutRequest);</span>
+<span class="nc" id="L223">			transactionMonitoringPaymentsOutRequest.setStatusUpdateReason(statusUpdateReason);</span>
+<span class="nc" id="L224">			transactionMonitoringPaymentsOutRequest.setAtlasSTPFlag((String) fundsOutRequest.getAdditionalAttribute(&quot;STPFlag&quot;));</span>
+			
+<span class="nc bnc" id="L226" title="All 2 branches missed.">			if(message.getPayload().getGatewayMessageExchange().getOperation() == OperationEnum.RECHECK_FAILURES) {</span>
+				
+<span class="nc" id="L228">				setUpdateCheckStatus(message, transactionMonitoringPaymentsOutRequest, fundsOutRequest);</span>
+			}
+		}
+		
+<span class="nc" id="L232">		transactionMonitoringPaymentsOutRequest.setAccountTMFlag(accTMFlag);</span>
+<span class="nc" id="L233">		transactionMonitoringPaymentsOutRequest.setFundsOutId(fundsOutRequest.getFundsOutId());</span>
+<span class="nc" id="L234">		transactionMonitoringPaymentsOutRequest.setRequestType(&quot;payment_out_update&quot;);</span>
+<span class="nc" id="L235">		transactionMonitoringPaymentsOutRequest</span>
+<span class="nc bnc" id="L236" title="All 2 branches missed.">				.setEtailer(((String) fundsOutRequest.getAdditionalAttribute(Constants.ETAILER) != null)</span>
+<span class="nc" id="L237">						? (String) fundsOutRequest.getAdditionalAttribute(Constants.ETAILER)</span>
+<span class="nc" id="L238">						: Boolean.toString(false)); //Added for AT-5310</span>
+
+<span class="nc" id="L240">		TransactionMonitoringPaymentOutResponse transactionMonitoringPaymentOutResponse = new TransactionMonitoringPaymentOutResponse();</span>
+<span class="nc" id="L241">		transactionMonitoringPaymentOutResponse.setId(fundsOutRequest.getFundsOutId());</span>
+<span class="nc" id="L242">		transactionMonitoringPaymentOutResponse.setStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+		
+<span class="nc" id="L244">		TransactionMonitoringPaymentsSummary transactionMonitoringPaymentOutSummary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L245">		transactionMonitoringPaymentOutSummary.setStatus(transactionMonitoringPaymentOutResponse.getStatus());</span>
+		
+<span class="nc" id="L247">		Integer accountVersion = (Integer) fundsOutRequest.getAdditionalAttribute(&quot;AccountVersion&quot;);</span>
+
+<span class="nc" id="L249">		MessageExchange ccExchange = createMessageExchange(transactionMonitoringPaymentsOutRequest, transactionMonitoringPaymentOutResponse,</span>
+				ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);
+<span class="nc" id="L251">		ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId,</span>
+<span class="nc" id="L252">				ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, ServiceProviderEnum.TRANSACTION_MONITORING_FUNDSOUT, fundsOutRequest.getFundsOutId(),</span>
+<span class="nc" id="L253">				accountVersion, EntityEnum.ACCOUNT.name(), token.getUserID(), transactionMonitoringPaymentOutResponse,</span>
+				transactionMonitoringPaymentOutSummary));
+		
+<span class="nc" id="L256">		transactionMonitoringPaymentsOutRequest.addAttribute(ACCOUNT_TM_FLAG, accTMFlag);</span>
+		
+<span class="nc" id="L258">		message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L259">	}</span>
+
+	/**
+	 * @param message
+	 * @param transactionMonitoringPaymentsOutRequest
+	 * @param fundsOutRequest
+	 */
+	private void setUpdateCheckStatus(Message&lt;MessageContext&gt; message,
+			TransactionMonitoringPaymentsOutRequest transactionMonitoringPaymentsOutRequest,
+			FundsOutRequest fundsOutRequest) {
+<span class="nc bnc" id="L269" title="All 2 branches missed.">		if (message.getPayload().isInternalRuleServiceEligible()) {</span>
+<span class="nc" id="L270">			MessageExchange blackListexchange = message.getPayload()</span>
+<span class="nc" id="L271">					.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L272">			EventServiceLog blacklistLog = blackListexchange.getEventServiceLog(</span>
+<span class="nc" id="L273">					ServiceTypeEnum.BLACK_LIST_SERVICE, EntityEnum.BENEFICIARY.name(),</span>
+<span class="nc" id="L274">					fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L275">			EventServiceLog countryCheckLog = blackListexchange.getEventServiceLog(ServiceTypeEnum.HRC_SERVICE,</span>
+<span class="nc" id="L276">					EntityEnum.BENEFICIARY.name(), fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L277">			EventServiceLog paymentReference = blackListexchange.getEventServiceLog(</span>
+<span class="nc" id="L278">					ServiceTypeEnum.BLACKLIST_PAY_REF_SERVICE, EntityEnum.BENEFICIARY.name(),</span>
+<span class="nc" id="L279">					fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L280">			transactionMonitoringPaymentsOutRequest.setBlacklistStatus(blacklistLog.getStatus());</span>
+<span class="nc" id="L281">			transactionMonitoringPaymentsOutRequest.setCountryCheckStatus(countryCheckLog.getStatus());</span>
+<span class="nc" id="L282">			transactionMonitoringPaymentsOutRequest.setPaymentReferenceCheck(paymentReference.getStatus());</span>
+		}
+		
+<span class="nc bnc" id="L285" title="All 2 branches missed.">		if (message.getPayload().isSanctionEligible()) {</span>
+<span class="nc" id="L286">			MessageExchange sanctionExchange = message.getPayload()</span>
+<span class="nc" id="L287">					.getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L288">			EventServiceLog sanctionConLog = sanctionExchange.getEventServiceLog(</span>
+<span class="nc" id="L289">					ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.CONTACT.name(),</span>
+<span class="nc" id="L290">					fundsOutRequest.getContactId());</span>
+<span class="nc" id="L291">			EventServiceLog sanctionBenLog = sanctionExchange.getEventServiceLog(</span>
+<span class="nc" id="L292">					ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.BENEFICIARY.name(),</span>
+<span class="nc" id="L293">					fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L294">			EventServiceLog sanctionBankLog = sanctionExchange.getEventServiceLog(</span>
+<span class="nc" id="L295">					ServiceTypeEnum.SANCTION_SERVICE, EntityEnum.BANK.name(),</span>
+<span class="nc" id="L296">					fundsOutRequest.getBeneficiary().getBeneficiaryBankid());</span>
+<span class="nc" id="L297">			transactionMonitoringPaymentsOutRequest.setSanctionContactStatus(sanctionConLog.getStatus());</span>
+<span class="nc" id="L298">			transactionMonitoringPaymentsOutRequest.setSanctionBeneficiaryStatus(sanctionBenLog.getStatus());</span>
+<span class="nc" id="L299">			transactionMonitoringPaymentsOutRequest.setSanctionBankStatus(sanctionBankLog.getStatus());</span>
+		}
+		
+<span class="nc bnc" id="L302" title="All 2 branches missed.">		if (message.getPayload().isFraugsterEligible()) {</span>
+<span class="nc" id="L303">			MessageExchange fraugsterExchange = message.getPayload()</span>
+<span class="nc" id="L304">					.getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L305">			EventServiceLog fraugsterLog = fraugsterExchange.getEventServiceLog(</span>
+<span class="nc" id="L306">					ServiceTypeEnum.FRAUGSTER_SERVICE, EntityEnum.CONTACT.name(),</span>
+<span class="nc" id="L307">					fundsOutRequest.getContactId());</span>
+<span class="nc" id="L308">			transactionMonitoringPaymentsOutRequest.setFraudPredictStatus(fraugsterLog.getStatus());</span>
+		}
+		
+<span class="nc bnc" id="L311" title="All 2 branches missed.">		if (message.getPayload().isCustomCheckEligible()) {</span>
+<span class="nc" id="L312">			MessageExchange customExchange = message.getPayload()</span>
+<span class="nc" id="L313">					.getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+<span class="nc" id="L314">			EventServiceLog customLog = customExchange.getEventServiceLog(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE,</span>
+<span class="nc" id="L315">					EntityEnum.BENEFICIARY.name(), fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L316">			transactionMonitoringPaymentsOutRequest.setCustomCheckStatus(customLog.getStatus());</span>
+		}
+<span class="nc" id="L318">	}</span>
+	
+	//AT-4451
+	private void transformAllCheckResponseForRepeatCheck(FundsOutRequest fundsOutRequest,
+			TransactionMonitoringPaymentsOutRequest transactionMonitoringPaymentsOutRequest) throws ComplianceException {
+<span class="nc" id="L323">		String countryCheckStatus = fundsOutDBServiceImpl.getCountryCheckStatusForIntuition(fundsOutRequest);</span>
+<span class="nc" id="L324">		transactionMonitoringPaymentsOutRequest.setCountryCheckStatus(countryCheckStatus);</span>
+<span class="nc" id="L325">		fundsOutDBServiceImpl.getSanctionStatusForIntuition(fundsOutRequest, transactionMonitoringPaymentsOutRequest);</span>
+<span class="nc" id="L326">		transactionMonitoringPaymentsOutRequest</span>
+<span class="nc" id="L327">				.setBlacklistStatus((String) fundsOutRequest.getAdditionalAttribute(&quot;BLACKLIST_STATUS&quot;));</span>
+<span class="nc" id="L328">		transactionMonitoringPaymentsOutRequest</span>
+<span class="nc" id="L329">				.setCustomCheckStatus((String) fundsOutRequest.getAdditionalAttribute(&quot;CUSTOM_CHECK_STATUS&quot;));</span>
+<span class="nc" id="L330">		transactionMonitoringPaymentsOutRequest</span>
+<span class="nc" id="L331">				.setFraudPredictStatus((String) fundsOutRequest.getAdditionalAttribute(&quot;FRAUGSTER_STATUS&quot;));</span>
+<span class="nc" id="L332">		transactionMonitoringPaymentsOutRequest</span>
+<span class="nc" id="L333">				.setPaymentReferenceCheck((String) fundsOutRequest.getAdditionalAttribute(&quot;PAYMENT_REFERENCE_STATUS&quot;));</span>
+<span class="nc" id="L334">	}</span>
+
+
+	private TransactionMonitoringPaymentsOutRequest createServiceRequest(FundsOutRequest fundsOutRequest, String type) throws ComplianceException {
+<span class="nc" id="L338">		TransactionMonitoringPaymentsOutRequest request = new TransactionMonitoringPaymentsOutRequest();</span>
+		
+<span class="nc" id="L340">		request.setAccountNumber(fundsOutRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L341">		request.setTransactionId(fundsOutRequest.getBeneficiary().getPaymentFundsoutId());</span>
+<span class="nc" id="L342">		request.setTimeStamp(fundsOutRequest.getBeneficiary().getTransactionDateTime());</span>
+<span class="nc" id="L343">		request.setOrgCode(fundsOutRequest.getOrgCode());</span>
+<span class="nc" id="L344">		request.setSourceApplication(fundsOutRequest.getSourceApplication());</span>
+<span class="nc" id="L345">		request.setTradeAccountNumber(fundsOutRequest.getTradeAccountNumber());</span>
+<span class="nc" id="L346">		request.setTradeContactId(fundsOutRequest.getTrade().getTradeContactId());</span>
+<span class="nc" id="L347">		request.setCustType(fundsOutRequest.getTrade().getCustType());</span>
+<span class="nc" id="L348">		request.setPurposeOfTrade(fundsOutRequest.getTrade().getPurposeOfTrade());</span>
+<span class="nc" id="L349">		request.setSellingAmount(fundsOutRequest.getTrade().getSellingAmount());</span>
+<span class="nc" id="L350">		request.setBuyingAmount(fundsOutRequest.getTrade().getBuyingAmount());</span>
+<span class="nc" id="L351">		request.setSellingAmountBaseValue(null);</span>
+<span class="nc" id="L352">		request.setTransactionCurrency(null);</span>
+<span class="nc" id="L353">		request.setContractNumber(fundsOutRequest.getTrade().getContractNumber());</span>
+<span class="nc" id="L354">		request.setThirdPartyPayment(fundsOutRequest.getTrade().getThirdPartyPayment());</span>
+<span class="nc" id="L355">		request.setCustomerLegalEntity(fundsOutRequest.getTrade().getCustLegalEntity());</span>
+<span class="nc" id="L356">		request.setMaturityDate(fundsOutRequest.getTrade().getMaturityDate());</span>
+<span class="nc" id="L357">		request.setDealDate(fundsOutRequest.getTrade().getDealDate());</span>
+<span class="nc" id="L358">		request.setBuyingAmount(fundsOutRequest.getTrade().getBuyingAmount());</span>
+<span class="nc" id="L359">		request.setMaturityDate(fundsOutRequest.getTrade().getMaturityDate());</span>
+<span class="nc" id="L360">		request.setValueDate(fundsOutRequest.getTrade().getValueDate());</span>
+<span class="nc" id="L361">		request.setBuyingAmountBaseValue(fundsOutRequest.getTrade().getBuyingAmountBaseValue());</span>
+<span class="nc" id="L362">		request.setBuyCurrency(fundsOutRequest.getTrade().getBuyCurrency());</span>
+<span class="nc" id="L363">		request.setSellCurrency(fundsOutRequest.getTrade().getSellCurrency());</span>
+		//AT-5337
+<span class="nc" id="L365">		request.setInitiatingParentContact(fundsOutRequest.getTrade().getInitiatingParentContact());</span>
+		
+<span class="nc bnc" id="L367" title="All 2 branches missed.">		if(fundsOutRequest.getDeviceInfo() != null) {</span>
+<span class="nc" id="L368">			request.setScreenResolution(fundsOutRequest.getDeviceInfo().getScreenResolution());</span>
+<span class="nc" id="L369">			request.setBrowserType(fundsOutRequest.getDeviceInfo().getBrowserName());</span>
+<span class="nc" id="L370">			request.setBrowserVersion(fundsOutRequest.getDeviceInfo().getBrowserMajorVersion());</span>
+<span class="nc" id="L371">			request.setDeviceType(fundsOutRequest.getDeviceInfo().getDeviceType());</span>
+<span class="nc" id="L372">			request.setDeviceName(fundsOutRequest.getDeviceInfo().getDeviceName());</span>
+<span class="nc" id="L373">			request.setDeviceVersion(fundsOutRequest.getDeviceInfo().getDeviceVersion());</span>
+<span class="nc" id="L374">			request.setDeviceId(fundsOutRequest.getDeviceInfo().getDeviceId());</span>
+<span class="nc" id="L375">			request.setDeviceManufacturer(fundsOutRequest.getDeviceInfo().getDeviceManufacturer());</span>
+<span class="nc" id="L376">			request.setOsType(fundsOutRequest.getDeviceInfo().getOsName());</span>
+<span class="nc" id="L377">			request.setBrowserLanguage(fundsOutRequest.getDeviceInfo().getBrowserLanguage());</span>
+		}
+	
+<span class="nc" id="L380">		request.setPhone(fundsOutRequest.getBeneficiary().getPhone());</span>
+<span class="nc" id="L381">		request.setFirstName(fundsOutRequest.getBeneficiary().getFirstName());</span>
+<span class="nc" id="L382">		request.setLastName(fundsOutRequest.getBeneficiary().getLastName());</span>
+<span class="nc" id="L383">		request.setEmail(fundsOutRequest.getBeneficiary().getEmail());</span>
+<span class="nc" id="L384">		request.setCountry(countryCache.getCountryShortCode(fundsOutRequest.getBeneficiary().getCountry()));</span>
+<span class="nc" id="L385">		request.setAccountNumber(fundsOutRequest.getBeneficiary().getAccountNumber());</span>
+<span class="nc" id="L386">		request.setCurrencyCode(fundsOutRequest.getBeneficiary().getCurrencyCode());</span>
+<span class="nc" id="L387">		request.setPaymentReference(fundsOutRequest.getBeneficiary().getPaymentReference());</span>
+<span class="nc" id="L388">		request.setOpiCreatedDate(fundsOutRequest.getBeneficiary().getOpiCreatedDate());</span>
+<span class="nc" id="L389">		request.setAmount(fundsOutRequest.getBeneficiary().getAmount());</span>
+<span class="nc" id="L390">		request.setBeneficaryType(fundsOutRequest.getBeneficiary().getBeneficiaryType());</span>
+<span class="nc" id="L391">		request.setBeneficiaryBankAddress(fundsOutRequest.getBeneficiary().getBeneficaryBankAddress());</span>
+<span class="nc" id="L392">		request.setBeneficiaryBankId(fundsOutRequest.getBeneficiary().getBeneficiaryBankid().toString());</span>
+<span class="nc" id="L393">		request.setBeneficiaryBankName(fundsOutRequest.getBeneficiary().getBeneficaryBankName());</span>
+<span class="nc" id="L394">		request.setBeneficiaryId(fundsOutRequest.getBeneficiary().getBeneficiaryBankid().toString());</span>
+		
+<span class="nc" id="L396">		request.setVersion(fundsOutRequest.getVersion());</span>
+<span class="nc" id="L397">		request.setOsrId(fundsOutRequest.getOsrId());</span>
+<span class="nc" id="L398">		request.setType(type);</span>
+<span class="nc" id="L399">		request.setFundsOutId(fundsOutRequest.getFundsOutId());</span>
+		
+<span class="nc" id="L401">		return request;</span>
+	}
+	
+	
+	private void transformTransactionMonitoringRequestSetAllChecksStatus(Message&lt;MessageContext&gt; message, Contact contact,
+			TransactionMonitoringPaymentsOutRequest transactionMonitoringPaymentsOutRequest, FundsOutRequest fundsOutRequest) {
+		
+<span class="nc" id="L408">		MessageExchange blackListexchange = message.getPayload()</span>
+<span class="nc" id="L409">				.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L410">		MessageExchange sanctionExchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L411">		MessageExchange fraugsterExchange = message.getPayload().getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE);</span>
+<span class="nc" id="L412">		MessageExchange customExchange = message.getPayload().getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+
+
+<span class="nc" id="L415">		EventServiceLog blacklistLog = blackListexchange.getEventServiceLog(ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L416">				EntityEnum.BENEFICIARY.name(), fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L417">		EventServiceLog countryCheckLog = blackListexchange.getEventServiceLog(ServiceTypeEnum.HRC_SERVICE,</span>
+<span class="nc" id="L418">				EntityEnum.BENEFICIARY.name(), fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L419">		EventServiceLog sanctionConLog = sanctionExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L420">				EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L421">		EventServiceLog sanctionBenLog = sanctionExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L422">				EntityEnum.BENEFICIARY.name(), fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L423">		EventServiceLog sanctionBankLog = sanctionExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L424">				EntityEnum.BANK.name(), fundsOutRequest.getBeneficiary().getBeneficiaryBankid());</span>
+<span class="nc" id="L425">		EventServiceLog fraugsterLog = fraugsterExchange.getEventServiceLog(ServiceTypeEnum.FRAUGSTER_SERVICE,</span>
+<span class="nc" id="L426">				EntityEnum.CONTACT.name(), contact.getId());</span>
+<span class="nc" id="L427">		EventServiceLog customLog = customExchange.getEventServiceLog(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE,</span>
+<span class="nc" id="L428">				EntityEnum.BENEFICIARY.name(), fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L429">		EventServiceLog paymentReference = blackListexchange.getEventServiceLog(</span>
+<span class="nc" id="L430">				ServiceTypeEnum.BLACKLIST_PAY_REF_SERVICE, EntityEnum.BENEFICIARY.name(),</span>
+<span class="nc" id="L431">				fundsOutRequest.getBeneficiary().getBeneficiaryId());</span>
+		
+<span class="nc" id="L433">		transactionMonitoringPaymentsOutRequest.setBlacklistStatus(blacklistLog.getStatus());</span>
+<span class="nc" id="L434">		transactionMonitoringPaymentsOutRequest.setCountryCheckStatus(countryCheckLog.getStatus());</span>
+<span class="nc" id="L435">		transactionMonitoringPaymentsOutRequest.setSanctionContactStatus(sanctionConLog.getStatus());</span>
+<span class="nc" id="L436">		transactionMonitoringPaymentsOutRequest.setSanctionBeneficiaryStatus(sanctionBenLog.getStatus());</span>
+<span class="nc" id="L437">		transactionMonitoringPaymentsOutRequest.setSanctionBankStatus(sanctionBankLog.getStatus());</span>
+<span class="nc" id="L438">		transactionMonitoringPaymentsOutRequest.setFraudPredictStatus(fraugsterLog.getStatus());</span>
+<span class="nc" id="L439">		transactionMonitoringPaymentsOutRequest.setCustomCheckStatus(customLog.getStatus());</span>
+<span class="nc" id="L440">		transactionMonitoringPaymentsOutRequest.setPaymentReferenceCheck(paymentReference.getStatus());</span>
+		
+<span class="nc" id="L442">		BlacklistPayRefSummary blacklistPayRefSummary = JsonConverterUtil.convertToObject(BlacklistPayRefSummary.class,</span>
+<span class="nc" id="L443">				paymentReference.getSummary());</span>
+<span class="nc bnc" id="L444" title="All 2 branches missed.">		if (blacklistPayRefSummary.getPaymentReference() != null</span>
+<span class="nc bnc" id="L445" title="All 2 branches missed.">				&amp;&amp; blacklistPayRefSummary.getPaymentReference().length() &gt; 2) {</span>
+<span class="nc" id="L446">			transactionMonitoringPaymentsOutRequest</span>
+<span class="nc" id="L447">					.setPaymentRefMatchedKeyword(blacklistPayRefSummary.getSanctionText());</span>
+		}
+
+<span class="nc" id="L450">	}</span>
+	
+	
+	private void transformTransactionMonitoringRequestSetWatchlist(Integer contactID,
+			TransactionMonitoringPaymentsOutRequest transactionMonitoringPaymentsOutRequest) throws ComplianceException {
+
+<span class="nc" id="L456">		List&lt;String&gt; watchList = fundsOutDBServiceImpl.getContactWatchlist(contactID);</span>
+<span class="nc" id="L457">		transactionMonitoringPaymentsOutRequest.setWatchlist(watchList);</span>
+
+<span class="nc" id="L459">	}</span>
+	
+	/**
+	 * Transform response.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L469">		MessageExchange exchange = null;</span>
+		try {
+<span class="nc" id="L471">			exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L472">			TransactionMonitoringPaymentOutResponse response = (TransactionMonitoringPaymentOutResponse) exchange</span>
+<span class="nc" id="L473">					.getResponse();</span>
+<span class="nc" id="L474">			TransactionMonitoringPaymentsOutRequest request = (TransactionMonitoringPaymentsOutRequest) exchange</span>
+<span class="nc" id="L475">					.getRequest();</span>
+<span class="nc" id="L476">			FundsOutResponse fundsOutResponse = (FundsOutResponse) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L477">					.getResponse();</span>
+
+		
+<span class="nc bnc" id="L480" title="All 4 branches missed.">			if (response != null &amp;&amp; !response.getStatus().equalsIgnoreCase(Constants.SERVICE_FAILURE)</span>
+<span class="nc bnc" id="L481" title="All 2 branches missed.">					&amp;&amp; !response.getStatus().equalsIgnoreCase(Constants.NOT_REQUIRED)) {</span>
+<span class="nc" id="L482">				TransactionMonitoringFundsProviderResponse tmProviderResponse = response</span>
+<span class="nc" id="L483">						.getTransactionMonitoringFundsProviderResponse();</span>
+<span class="nc" id="L484">				TransactionMonitoringPaymentsSummary summary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L485">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L486">						ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L487">						request.getFundsOutId());</span>
+<span class="nc" id="L488">				summary.setStatus(tmProviderResponse.getStatus());</span>
+<span class="nc" id="L489">				summary.setFundsOutId(request.getFundsOutId());</span>
+<span class="nc" id="L490">				summary.setRuleScore(tmProviderResponse.getRuleScore());</span>
+<span class="nc" id="L491">				summary.setRuleRiskLevel(tmProviderResponse.getRuleRiskLevel());</span>
+<span class="nc" id="L492">				summary.setClientRiskLevel(tmProviderResponse.getClientRiskLevel());</span>
+<span class="nc" id="L493">				summary.setClientRiskScore(tmProviderResponse.getClientRiskScore());</span>
+<span class="nc" id="L494">				summary.setCorrelationId(response.getCorrelationId());</span>
+<span class="nc" id="L495">				summary.setUserId(tmProviderResponse.getUserId());</span>
+<span class="nc" id="L496">				summary.setAction(tmProviderResponse.getAction());</span>
+<span class="nc" id="L497">				eventServiceLog.setStatus(response.getStatus());</span>
+<span class="nc" id="L498">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L499">				tmProviderResponse.setCorrelationId(response.getCorrelationId());</span>
+<span class="nc" id="L500">				eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithNull(tmProviderResponse));</span>
+<span class="nc" id="L501">				fundsOutResponse.addAttribute(&quot;ClientRiskLevel&quot;, tmProviderResponse.getClientRiskLevel());</span>
+<span class="nc bnc" id="L502" title="All 4 branches missed.">			}else if(response != null &amp;&amp; response.getStatus().equalsIgnoreCase(Constants.NOT_REQUIRED)) {</span>
+<span class="nc" id="L503">				TransactionMonitoringFundsProviderResponse tmProviderResponse = new TransactionMonitoringFundsProviderResponse();</span>
+<span class="nc" id="L504">				TransactionMonitoringPaymentsSummary summary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L505">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L506">						ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L507">						request.getFundsOutId());</span>
+<span class="nc" id="L508">				summary.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L509">				summary.setFundsOutId(request.getFundsOutId());</span>
+<span class="nc" id="L510">				tmProviderResponse.setStatus(Constants.NOT_REQUIRED);</span>
+<span class="nc" id="L511">				eventServiceLog.setStatus(response.getStatus());</span>
+<span class="nc" id="L512">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L513">				eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmProviderResponse));</span>
+<span class="nc bnc" id="L514" title="All 4 branches missed.">			}else if(response != null &amp;&amp; response.getHttpStatus() == 400) {</span>
+<span class="nc" id="L515">				TransactionMonitoringFundsProviderResponse tmProviderResponse = new TransactionMonitoringFundsProviderResponse();</span>
+<span class="nc" id="L516">				TransactionMonitoringPaymentsSummary summary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L517">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L518">						ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L519">						request.getFundsOutId());</span>
+<span class="nc" id="L520">				summary.setStatus(response.getStatus());</span>
+<span class="nc" id="L521">				summary.setFundsOutId(request.getFundsOutId());</span>
+<span class="nc" id="L522">				summary.setCorrelationId(response.getCorrelationId());</span>
+<span class="nc" id="L523">				eventServiceLog.setStatus(response.getStatus());</span>
+<span class="nc" id="L524">				eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L525">				tmProviderResponse.setCorrelationId(response.getCorrelationId());</span>
+<span class="nc" id="L526">				tmProviderResponse.setStatus(response.getStatus());</span>
+<span class="nc" id="L527">				eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithNull(tmProviderResponse));</span>
+				
+<span class="nc" id="L529">				sendAlertEmailForInvalidRequest(request.getContractNumber(), &quot;PaymentOUT&quot;, response);</span>
+<span class="nc" id="L530">			}else {</span>
+<span class="nc" id="L531">				response = createDefaultFailureResponse(exchange, request);</span>
+			}
+
+<span class="nc" id="L534">		} catch (Exception e) {</span>
+<span class="nc" id="L535">			LOG.error(&quot;Error in Transaction Monitoring transformer class : transformResponse -&quot;, e);</span>
+<span class="nc" id="L536">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L537">		}</span>
+<span class="nc" id="L538">		return message;</span>
+	}
+
+
+	/**
+	 * Creates the default failure response.
+	 *
+	 * @param exchange the exchange
+	 * @param request the request
+	 * @param contact the contact
+	 * @return the transaction monitoring payment in response
+	 */
+	private TransactionMonitoringPaymentOutResponse createDefaultFailureResponse(MessageExchange exchange, TransactionMonitoringPaymentsOutRequest request) {
+<span class="nc" id="L551">		TransactionMonitoringPaymentOutResponse response = new TransactionMonitoringPaymentOutResponse();</span>
+<span class="nc" id="L552">		TransactionMonitoringPaymentsSummary summary = new TransactionMonitoringPaymentsSummary();</span>
+<span class="nc" id="L553">		TransactionMonitoringFundsProviderResponse tmProviderResponse = new TransactionMonitoringFundsProviderResponse();</span>
+		
+<span class="nc" id="L555">		EventServiceLog eventServiceLog = exchange.getEventServiceLog(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE,</span>
+<span class="nc" id="L556">				EntityEnum.ACCOUNT.name(), request.getFundsOutId());</span>
+<span class="nc" id="L557">		response.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L558">		summary.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L559">		tmProviderResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L560">		eventServiceLog.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L561">		eventServiceLog.setSummary(JsonConverterUtil.convertToJsonWithoutNull(summary));</span>
+<span class="nc" id="L562">		eventServiceLog.setProviderResponse(JsonConverterUtil.convertToJsonWithoutNull(tmProviderResponse));</span>
+		
+<span class="nc" id="L564">		exchange.setResponse(response);</span>
+<span class="nc" id="L565">		return response;</span>
+	}
+	
+	/**
+	 * Send alert email for invalid request.
+	 *
+	 * @param contractNumber the contract number
+	 * @param type the type
+	 */
+	private void sendAlertEmailForInvalidRequest(String contractNumber, String type, TransactionMonitoringPaymentOutResponse response) {
+
+<span class="nc" id="L576">		SendEmailRequestForTM sendTMEmailRequest = new SendEmailRequestForTM();</span>
+<span class="nc" id="L577">		EmailHeaderForTM header = new EmailHeaderForTM();</span>
+<span class="nc" id="L578">		EmailPayloadForTM payload = new EmailPayloadForTM();</span>
+
+<span class="nc" id="L580">		header.setSourceSystem(&quot;Atlas&quot;);</span>
+<span class="nc" id="L581">		header.setOrgCode(&quot;Currencies Direct&quot;);</span>
+<span class="nc" id="L582">		header.setLegalEntity(&quot;CDLGB&quot;);</span>
+
+<span class="nc" id="L584">		String email = System.getProperty(&quot;intuition.sendTo&quot;);</span>
+<span class="nc" id="L585">		List&lt;String&gt; list = Arrays.asList(email.split(&quot;,&quot;));</span>
+
+<span class="nc" id="L587">		payload.setEmailId(list);</span>
+<span class="nc" id="L588">		payload.setSubject(&quot;Intuition request failed&quot;);</span>
+<span class="nc" id="L589">		payload.setEmailContent(type +&quot; request for Contract Number &quot;+ contractNumber +&quot; to Intuition failed, due to intuition error desc : &quot;+</span>
+<span class="nc" id="L590">				response.getErrorDesc() +&quot;. &lt;BR&gt;&quot;+response.getErrorDescription()+&quot;. &lt;br&gt; Please alert dev team.&quot;);</span>
+<span class="nc" id="L591">		payload.setFromEmilId(System.getProperty(&quot;intuition.sendFrom&quot;));</span>
+<span class="nc" id="L592">		payload.setReplyToEmailId(System.getProperty(&quot;intuition.sendFrom&quot;));</span>
+
+<span class="nc" id="L594">		sendTMEmailRequest.setTmHeader(header);</span>
+<span class="nc" id="L595">		sendTMEmailRequest.setTmPayload(payload);</span>
+
+<span class="nc" id="L597">		iCommHubServiceImpl.sendEmailForTMAlert(sendTMEmailRequest, true);</span>
+
+<span class="nc" id="L599">	}</span>
+	
+	/**
+	 * Gets the credit from value.
+	 *
+	 * @param fundsOutRequest the funds out request
+	 * @param affilateName the affilate name
+	 * @return the credit from value
+	 * 
+	 * Add for AT-5454
+	 */
+	private String getCreditFromValue(FundsOutRequest fundsOutRequest, String affilateName) {
+
+<span class="nc" id="L612">		String creditFrom = &quot;&quot;;</span>
+
+<span class="nc bnc" id="L614" title="All 2 branches missed.">		if (fundsOutRequest.getTrade().getCustType().equalsIgnoreCase(&quot;CFX&quot;)</span>
+<span class="nc bnc" id="L615" title="All 4 branches missed.">				&amp;&amp; fundsOutRequest.getOrgCode().equalsIgnoreCase(&quot;TorFxOz&quot;)</span>
+<span class="nc bnc" id="L616" title="All 2 branches missed.">				&amp;&amp; (affilateName != null &amp;&amp; affilateName.equalsIgnoreCase(&quot;MoneyTech&quot;))) {</span>
+<span class="nc bnc" id="L617" title="All 2 branches missed.">			if (fundsOutRequest.getTrade().getCreditFrom() != null</span>
+<span class="nc bnc" id="L618" title="All 2 branches missed.">					&amp;&amp; fundsOutRequest.getTrade().getCreditFrom().equalsIgnoreCase(&quot;MoneyTech&quot;)) {</span>
+<span class="nc" id="L619">				return fundsOutRequest.getTrade().getCreditFrom();</span>
+			} else {
+<span class="nc" id="L621">				creditFrom = &quot;Client-MoneyTech&quot;;</span>
+			}
+
+		}
+
+<span class="nc" id="L626">		return creditFrom;</span>
+	}
+	
+	//AT-5578
+	private void transformComplianceLog(Integer accountID,
+			TransactionMonitoringPaymentsOutRequest transactionMonitoringPaymentsOutRequest) throws ComplianceException {
+<span class="nc" id="L632">		String complianceLog = newRegistrationDBServiceImpl.getComplianceLogForIntuition(accountID);</span>
+<span class="nc" id="L633">		transactionMonitoringPaymentsOutRequest.setComplianceLog(complianceLog);</span>
+<span class="nc" id="L634">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,421 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>KafkaDataLakeTxDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">KafkaDataLakeTxDBServiceImpl.java</span></div><h1>KafkaDataLakeTxDBServiceImpl.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.DateTimeFormatter;
+import com.currenciesdirect.kafka.transaction.CDTransaction;
+import com.currenciesdirect.kafka.transaction.MessageData;
+import com.currenciesdirect.kafka.transaction.MessageHeader;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.kafkatxdatalake.KafkaFailedTxRequestAudit;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.kafkatxdatalake.KafkaFailedRetryRequest;
+
+/**
+ * The Class KafkaAuditDBServiceImpl.
+ *
+ * @author prashant.verma
+ */
+@Service
+@SuppressWarnings(&quot;squid:S2095&quot;)
+<span class="nc" id="L35">public class KafkaDataLakeTxDBServiceImpl extends AbstractDao {</span>
+	
+<span class="nc" id="L37">	private static final Logger LOG = LoggerFactory.getLogger(KafkaDataLakeTxDBServiceImpl.class);</span>
+
+	/**
+	 * Save failed kafka request in KafkaRequestFailedAudit.
+	 *
+	 * @param CDTransaction
+	 *            the message
+	 * @param String
+	 *            the messageId
+	 * @param String
+	 *            the topic                      
+	 * @return Long
+	 * 			  the auditId
+	 */
+	public Long auditFailedKafkaRequest(CDTransaction cdTransaction, String messageId, String topic) throws ComplianceException {
+		
+<span class="nc" id="L53">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L54">		ResultSet rs = null;</span>
+<span class="nc" id="L55">		Long auditId = null;</span>
+<span class="nc" id="L56">		Connection conn = null;</span>
+		try {
+<span class="nc" id="L58">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L59">			preparedStatment = conn.prepareStatement(DBQueryConstant.AUDIT_FAILED_KAFKA_INSERT_QUERY.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L61">			preparedStatment.setString(1, messageId);</span>
+<span class="nc" id="L62">			preparedStatment.setString(2, cdTransaction.toString());</span>
+<span class="nc" id="L63">			preparedStatment.setString(3, topic);</span>
+<span class="nc" id="L64">			preparedStatment.setString(4, &quot;PENDING&quot;);</span>
+<span class="nc" id="L65">			preparedStatment.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L66">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L67">			preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L68">			preparedStatment.execute();</span>
+<span class="nc" id="L69">			rs = preparedStatment.getGeneratedKeys();</span>
+<span class="nc bnc" id="L70" title="All 2 branches missed.">			if (rs.next()) {</span>
+<span class="nc" id="L71">				auditId = rs.getLong(1);</span>
+			}
+
+<span class="nc" id="L74">		} catch (Exception e) {</span>
+<span class="nc" id="L75">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L77">			closeResultset(rs);</span>
+<span class="nc" id="L78">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L79">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L81">		return auditId;</span>
+	}
+
+	/**
+	 * Save into payments in.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param fundsInRequest
+	 *            the funds in request
+	 * @param accountID
+	 *            the account ID
+	 * @param contactID
+	 *            the contact ID
+	 * @param userID
+	 *            the user ID
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	
+	public List&lt;KafkaFailedTxRequestAudit&gt; getFailedTxRequests(KafkaFailedRetryRequest kafkaFailedRetryRequest) throws ComplianceException {
+
+<span class="nc" id="L103">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L104">		ResultSet rs = null;</span>
+<span class="nc" id="L105">		KafkaFailedTxRequestAudit kafkaFailedTx = null;</span>
+<span class="nc" id="L106">		Connection conn = null;</span>
+<span class="nc" id="L107">		List&lt;KafkaFailedTxRequestAudit&gt; failedAuditTxList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L108">		LOG.info(&quot;getFailedTxRequests() - kafkaFailedRetryRequest : &quot;+kafkaFailedRetryRequest);</span>
+		try {
+<span class="nc bnc" id="L110" title="All 2 branches missed.">			String ids = kafkaFailedRetryRequest.getAuditIds()!=null ? String.join(&quot;,&quot;, kafkaFailedRetryRequest.getAuditIds()) : null;</span>
+<span class="nc" id="L111">			String startDate = kafkaFailedRetryRequest.getFromDate();</span>
+<span class="nc" id="L112">			String endDate = kafkaFailedRetryRequest.getToDate();</span>
+			
+<span class="nc" id="L114">			conn = getConnection(Boolean.FALSE);</span>
+			
+<span class="nc" id="L116">			String query = (DBQueryConstant.GET_FAILED_KAFKA_TX_QUERY.getQuery());</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">					if(ids != null) {</span>
+<span class="nc" id="L118">						query = query + &quot; and AuditId in (?) &quot;;</span>
+					}
+<span class="nc bnc" id="L120" title="All 4 branches missed.">					if(startDate!=null &amp;&amp; endDate !=null) {</span>
+<span class="nc" id="L121">						query = query + &quot; and (CreatedOn &gt; ? and CreatedOn &lt; ?)&quot;;</span>
+					}
+			
+<span class="nc" id="L124">			LOG.info(&quot;getFailedTxRequests() - query : &quot;+query);</span>
+
+<span class="nc" id="L126">			preparedStatment = conn.prepareStatement(query);</span>
+<span class="nc" id="L127">			preparedStatment.setString(1, &quot;PENDING&quot;);</span>
+<span class="nc bnc" id="L128" title="All 6 branches missed.">			if(ids != null &amp;&amp; startDate!=null &amp;&amp; endDate !=null) {</span>
+<span class="nc" id="L129">				preparedStatment.setString(2, ids);</span>
+<span class="nc" id="L130">				preparedStatment.setTimestamp(3, DateTimeFormatter.convertStringToTimestamp(startDate));</span>
+<span class="nc" id="L131">				preparedStatment.setTimestamp(4, DateTimeFormatter.convertStringToTimestamp(endDate));</span>
+			}
+<span class="nc bnc" id="L133" title="All 2 branches missed.">			else if(ids != null) {</span>
+<span class="nc" id="L134">				preparedStatment.setString(2, ids);</span>
+			}
+<span class="nc bnc" id="L136" title="All 4 branches missed.">			else if(startDate!=null &amp;&amp; endDate !=null) {</span>
+<span class="nc" id="L137">				preparedStatment.setTimestamp(2, DateTimeFormatter.convertStringToTimestamp(startDate));</span>
+<span class="nc" id="L138">				preparedStatment.setTimestamp(3, DateTimeFormatter.convertStringToTimestamp(endDate));</span>
+			}
+<span class="nc" id="L140">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L142" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L143">				kafkaFailedTx = new KafkaFailedTxRequestAudit();</span>
+<span class="nc" id="L144">				kafkaFailedTx.setAuditId(rs.getLong(&quot;AuditId&quot;));</span>
+<span class="nc" id="L145">				kafkaFailedTx.setMessageId(rs.getString(&quot;MessageId&quot;));</span>
+<span class="nc" id="L146">				kafkaFailedTx.setMessage(rs.getString(&quot;MessageContent&quot;));</span>
+<span class="nc" id="L147">				kafkaFailedTx.setTopic(rs.getString(&quot;Topic&quot;));</span>
+<span class="nc" id="L148">				kafkaFailedTx.setStatus(rs.getString(&quot;Status&quot;));</span>
+<span class="nc" id="L149">				kafkaFailedTx.setCreatedOn(rs.getTimestamp(&quot;CreatedOn&quot;));</span>
+<span class="nc" id="L150">				kafkaFailedTx.setUpdatedOn(rs.getTimestamp(&quot;UpdatedOn&quot;));</span>
+<span class="nc" id="L151">				kafkaFailedTx.setErrorMessage(rs.getString(&quot;ErrorMessage&quot;));</span>
+<span class="nc" id="L152">				failedAuditTxList.add(kafkaFailedTx);</span>
+			}
+<span class="nc" id="L154">		} catch (Exception e) {</span>
+<span class="nc" id="L155">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L157">			closeResultset(rs);</span>
+<span class="nc" id="L158">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L159">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L161">		return failedAuditTxList;</span>
+	}
+	
+	public CDTransaction getFundsInTxDetails(Integer tradePaymentId) throws ComplianceException {
+<span class="nc" id="L165">		String method = &quot;KafkaDataLakeTxDBServiceImpl() - getFundsInTxDetails : &quot;;</span>
+<span class="nc" id="L166">		LOG.info(method + &quot;tradePaymentId : &quot;+tradePaymentId);</span>
+
+<span class="nc" id="L168">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L169">		ResultSet rs = null;</span>
+<span class="nc" id="L170">		CDTransaction cdTransaction = null;</span>
+<span class="nc" id="L171">		Connection conn = null;</span>
+		try {
+<span class="nc" id="L173">			conn = getConnection(Boolean.FALSE);</span>
+			
+<span class="nc" id="L175">			String query = (DBQueryConstant.GET_PAYMENT_IN_TX_DETAILS_QUERY.getQuery());</span>
+<span class="nc" id="L176">			LOG.info(method + &quot;query : &quot;+query);</span>
+<span class="nc" id="L177">			preparedStatment = conn.prepareStatement(query);</span>
+<span class="nc" id="L178">			preparedStatment.setInt(1, tradePaymentId);</span>
+<span class="nc" id="L179">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L181" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L182">				cdTransaction = new CDTransaction();</span>
+				
+<span class="nc" id="L184">				MessageHeader header = new MessageHeader();</span>
+<span class="nc" id="L185">				header.setCdId(tradePaymentId.toString());</span>
+<span class="nc" id="L186">				header.setSource(Constants.HEADER_SOURCE_ATLAS);</span>
+<span class="nc" id="L187">				header.setTransactionDateTime((new Timestamp(System.currentTimeMillis())).toString());</span>
+<span class="nc" id="L188">				header.setTransactionName(Constants.TRANSACTION_NAME_PAYIN);</span>
+<span class="nc" id="L189">				cdTransaction.setMessageHeader(header);</span>
+				
+<span class="nc" id="L191">				MessageData messageData = new MessageData();</span>
+
+<span class="nc" id="L193">				messageData.setSystemId(rs.getString(Constants.ID_KEY));</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">				messageData.setOrganizationID(rs.getString(Constants.ORG_ID_KEY)!=null?rs.getInt(Constants.ORG_ID_KEY):null);</span>
+<span class="nc" id="L195">				messageData.setOrganizationCode(rs.getString(Constants.ORG_CODE_KEY));</span>
+<span class="nc" id="L196">				messageData.setOrganizationName(rs.getString(Constants.ORG_NAME_KEY));</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">				messageData.setAccountID(rs.getString(Constants.ACCOUNT_ID_KEY)!=null?rs.getInt(Constants.ACCOUNT_ID_KEY):null);</span>
+<span class="nc" id="L198">				messageData.setAccountName(rs.getString(Constants.ACCOUNT_NAME_KEY));</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">				messageData.setTitanAccountId(rs.getString(Constants.TRADE_ACCOUNT_ID_KEY)!=null?rs.getInt(Constants.TRADE_ACCOUNT_ID_KEY):null);</span>
+<span class="nc" id="L200">				messageData.setCRMAccountID(rs.getString(Constants.CRM_ACCOUNT_ID_KEY));</span>
+<span class="nc" id="L201">				messageData.setTitanAccountNumber(rs.getString(Constants.TRADE_ACCOUNT_NUMBER_KEY));</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">				messageData.setContactID(rs.getString(Constants.CONTACT_ID_KEY)!=null?rs.getInt(Constants.CONTACT_ID_KEY):null);</span>
+<span class="nc" id="L203">				messageData.setContactName(rs.getString(Constants.CONTACT_NAME_KEY));</span>
+<span class="nc" id="L204">				messageData.setInstructionNumber(rs.getString(Constants.TRADE_CONTRACT_NUMBER_KEY));</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">				messageData.setTitanPaymentID(rs.getString(Constants.TRADE_PAYMENT_ID_KEY)!=null?rs.getInt(Constants.TRADE_PAYMENT_ID_KEY):null);</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">				messageData.setCreatedByUserId(rs.getString(Constants.CREATED_BY_KEY)!=null?rs.getInt(Constants.CREATED_BY_KEY):null);</span>
+<span class="nc" id="L207">				messageData.setCreatedBySSOUserId(rs.getString(Constants.CREATED_BY_SSOUSER_ID_KEY));</span>
+<span class="nc" id="L208">				messageData.setCreatedOn(rs.getString(Constants.CREATED_ON_KEY));</span>
+<span class="nc bnc" id="L209" title="All 2 branches missed.">				messageData.setUpdatedByUserId(rs.getString(Constants.UPDATED_BY_KEY)!=null?rs.getInt(Constants.UPDATED_BY_KEY):null);</span>
+<span class="nc" id="L210">				messageData.setUpdatedBySSOUserId(rs.getString(Constants.UPDATED_BY_SSOUSER_ID_KEY));</span>
+<span class="nc" id="L211">				messageData.setUpdatedOn(rs.getString(Constants.UPDATED_ON_KEY));</span>
+<span class="nc" id="L212">				messageData.setTransactionDate(rs.getString(Constants.TRANSACTION_DATE_KEY));</span>
+<span class="nc" id="L213">				messageData.setDescription(rs.getString(Constants.DESCRIPTION_KEY));</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">				messageData.setComplianceStatusId(rs.getString(Constants.COMPLIANCE_STATUS_ID_KEY)!=null?rs.getInt(Constants.COMPLIANCE_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L215">				messageData.setComplianceStatus(rs.getString(Constants.COMPLIANCE_STATUS_KEY));</span>
+<span class="nc" id="L216">				messageData.setComplianceDoneOn(rs.getString(Constants.COMPLIANCE_DONE_ON_KEY));</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">				messageData.setFraugsterStatusId(rs.getString(Constants.FRAUGSTER_STATUS_ID_KEY)!=null?rs.getInt(Constants.FRAUGSTER_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L218">				messageData.setFraugsterStatus(rs.getString(Constants.FRAUGSTER_STATUS_KEY));</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">				messageData.setSanctionStatusId(rs.getString(Constants.SANCTION_STATUS_ID_KEY)!=null?rs.getInt(Constants.SANCTION_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L220">				messageData.setSanctionStatus(rs.getString(Constants.SANCTION_STATUS_KEY));</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">				messageData.setBlacklistStatusId(rs.getString(Constants.BLACKLIST_STATUS_ID_KEY)!=null?rs.getInt(Constants.BLACKLIST_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L222">				messageData.setBlacklistStatus(rs.getString(Constants.BLACKLIST_STATUS_KEY));</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">				messageData.setCustomCheckStatusId(rs.getString(Constants.CUSTOM_CHECK_STATUS_ID_KEY)!=null?rs.getInt(Constants.CUSTOM_CHECK_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L224">				messageData.setCustomCheckStatus(rs.getString(Constants.CUSTOM_CHECK_STATUS_KEY));</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">				messageData.setIsOnQueue(rs.getString(Constants.IS_ON_QUEUE_KEY)!=null?rs.getInt(Constants.IS_ON_QUEUE_KEY):null);</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">				messageData.setSTPFlag(rs.getString(Constants.STP_FLAG_KEY)!=null?rs.getInt(Constants.STP_FLAG_KEY):null);</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">				messageData.setLegacyTradePaymentId(rs.getString(Constants.LEGACY_TRADE_PAYMENT_ID_KEY)!=null?rs.getInt(Constants.LEGACY_TRADE_PAYMENT_ID_KEY):null);</span>
+<span class="nc" id="L228">				messageData.setLegacyTradeContractNumber(rs.getString(Constants.LEGACY_TRADE_CONTRACT_NUMBER_KEY));</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">				messageData.setLegalEntityID(rs.getString(Constants.LEGAL_ENTITY_ID_KEY)!=null?rs.getInt(Constants.LEGAL_ENTITY_ID_KEY):null);</span>
+<span class="nc" id="L230">				messageData.setLegalEntityCode(rs.getString(Constants.LEGAL_ENTITY_CODE_KEY));</span>
+<span class="nc" id="L231">				messageData.setLegalEntityName(rs.getString(Constants.LEGAL_ENTITY_NAME_KEY));</span>
+<span class="nc" id="L232">				messageData.setInitialStatus(rs.getString(Constants.INITIAL_STATUS_KEY));</span>
+<span class="nc" id="L233">				messageData.setIntuitionClientRiskLevel(rs.getString(Constants.INTUITION_CLIENT_RISK_LEVEL_KEY));</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">				messageData.setIntuitionCheckStatusId(rs.getString(Constants.INTUITION_CHECK_STATUS_ID_KEY)!=null?rs.getInt(Constants.INTUITION_CHECK_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L235">				messageData.setIntuitionCheckStatus(rs.getString(Constants.INTUITION_CHECK_STATUS_KEY));</span>
+<span class="nc bnc" id="L236" title="All 2 branches missed.">				messageData.setDebitCardFraudCheckStatusId(rs.getString(Constants.DEBITCARD_FRAUD_CHECK_STATUS_ID_KEY)!=null?rs.getInt(Constants.DEBITCARD_FRAUD_CHECK_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L237">				messageData.setDebitCardFraudCheckStatus(rs.getString(Constants.DEBITCARD_FRAUD_CHECK_STATUS_KEY));</span>
+<span class="nc" id="L238">				messageData.setPaymentClearedOn(rs.getString(Constants.PAYMENT_CLEARED_ON_KEY));</span>
+<span class="nc bnc" id="L239" title="All 2 branches missed.">				messageData.setActivityID(rs.getString(Constants.ACTIVITY_ID_KEY)!=null?rs.getInt(Constants.ACTIVITY_ID_KEY):null);</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">				messageData.setActivityBy(rs.getString(Constants.ACTIVITY_BY_KEY)!=null?rs.getInt(Constants.ACTIVITY_BY_KEY):null);</span>
+<span class="nc" id="L241">				messageData.setActivityByUserId(rs.getString(Constants.ACTIVITY_BY_USER_ID_KEY));</span>
+<span class="nc" id="L242">				messageData.setActivityTimestamp(rs.getString(Constants.ACTIVITY_TIMESTAMP_KEY));</span>
+<span class="nc" id="L243">				messageData.setActivityComments(rs.getString(Constants.ACTIVITY_COMMENTS_KEY));</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">				messageData.setActivityCreatedBy(rs.getString(Constants.ACTIVITY_CREATED_BY_KEY)!=null?rs.getInt(Constants.ACTIVITY_CREATED_BY_KEY):null);</span>
+<span class="nc" id="L245">				messageData.setActivityCreatedByUserId(rs.getString(Constants.ACTIVITY_CREATED_BY_USER_ID_KEY));</span>
+<span class="nc" id="L246">				messageData.setActivityCreatedOn(rs.getString(Constants.ACTIVITY_CREATED_ON_KEY));</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">				messageData.setActivityType(rs.getString(Constants.ACTIVITY_TYPE_KEY)!=null?rs.getInt(Constants.ACTIVITY_TYPE_KEY):null);</span>
+<span class="nc" id="L248">				messageData.setActivityTypeModule(rs.getString(Constants.ACTIVITY_TYPE_MODULE_KEY));</span>
+<span class="nc" id="L249">				messageData.setActivityTypeValue(rs.getString(Constants.ACTIVITY_TYPE_VALUE_KEY));</span>
+<span class="nc" id="L250">				messageData.setActivityDetailsCreatedOn(rs.getString(Constants.ACTIVITY_DETAILS_CREATED_ON_KEY));</span>
+<span class="nc" id="L251">				messageData.setActivityLog(rs.getString(Constants.ACTIVITY_LOG_KEY));</span>
+<span class="nc bnc" id="L252" title="All 2 branches missed.">				messageData.setDeleted((rs.getInt(Constants.DELETED_KEY)==1)?true:false);</span>
+				
+<span class="nc" id="L254">				cdTransaction.setMessageData(messageData);</span>
+<span class="nc" id="L255">			}</span>
+<span class="nc" id="L256">		} catch (Exception e) {</span>
+<span class="nc" id="L257">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L259">			closeResultset(rs);</span>
+<span class="nc" id="L260">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L261">			closeConnection(conn);</span>
+		}
+<span class="nc" id="L263">		LOG.info(method + &quot;cdTransaction : &quot;+cdTransaction);</span>
+<span class="nc" id="L264">		return cdTransaction;</span>
+	}
+	
+	public CDTransaction getFundsOutTxDetails(Integer tradePaymentId) throws ComplianceException {
+
+<span class="nc" id="L269">		String method = &quot;KafkaDataLakeTxDBServiceImpl() - getFundsOutTxDetails : &quot;;</span>
+<span class="nc" id="L270">		LOG.info(method + &quot;tradePaymentId : &quot;+tradePaymentId);</span>
+
+<span class="nc" id="L272">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L273">		ResultSet rs = null;</span>
+<span class="nc" id="L274">		CDTransaction cdTransaction = null;</span>
+<span class="nc" id="L275">		Connection conn = null;</span>
+		try {
+<span class="nc" id="L277">			conn = getConnection(Boolean.FALSE);</span>
+			
+<span class="nc" id="L279">			String query = (DBQueryConstant.GET_PAYMENT_OUT_TX_DETAILS_QUERY.getQuery());</span>
+<span class="nc" id="L280">			LOG.info(method + &quot;query : &quot;+query);</span>
+
+<span class="nc" id="L282">			preparedStatment = conn.prepareStatement(query);</span>
+<span class="nc" id="L283">			preparedStatment.setInt(1, tradePaymentId);</span>
+<span class="nc" id="L284">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L286" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L287">				cdTransaction = new CDTransaction();</span>
+				
+<span class="nc" id="L289">				MessageHeader header = new MessageHeader();</span>
+<span class="nc" id="L290">				header.setCdId(tradePaymentId.toString());</span>
+<span class="nc" id="L291">				header.setSource(Constants.HEADER_SOURCE_ATLAS);</span>
+<span class="nc" id="L292">				header.setTransactionDateTime((new Timestamp(System.currentTimeMillis())).toString());</span>
+<span class="nc" id="L293">				header.setTransactionName(Constants.TRANSACTION_NAME_PAYOUT);</span>
+<span class="nc" id="L294">				cdTransaction.setMessageHeader(header);</span>
+				
+<span class="nc" id="L296">				MessageData messageData = new MessageData();</span>
+<span class="nc" id="L297">				messageData.setSystemId(rs.getString(Constants.ID_KEY));</span>
+<span class="nc bnc" id="L298" title="All 2 branches missed.">				messageData.setOrganizationID(rs.getString(Constants.ORG_ID_KEY)!=null?rs.getInt(Constants.ORG_ID_KEY):null);</span>
+<span class="nc" id="L299">				messageData.setOrganizationCode(rs.getString(Constants.ORG_CODE_KEY));</span>
+<span class="nc" id="L300">				messageData.setOrganizationName(rs.getString(Constants.ORG_NAME_KEY));</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">				messageData.setAccountID(rs.getString(Constants.ACCOUNT_ID_KEY)!=null?rs.getInt(Constants.ACCOUNT_ID_KEY):null);</span>
+<span class="nc" id="L302">				messageData.setAccountName(rs.getString(Constants.ACCOUNT_NAME_KEY));</span>
+<span class="nc bnc" id="L303" title="All 2 branches missed.">				messageData.setTitanAccountId(rs.getString(Constants.TRADE_ACCOUNT_ID_KEY)!=null?rs.getInt(Constants.TRADE_ACCOUNT_ID_KEY):null);</span>
+<span class="nc" id="L304">				messageData.setCRMAccountID(rs.getString(Constants.CRM_ACCOUNT_ID_KEY));</span>
+<span class="nc" id="L305">				messageData.setTitanAccountNumber(rs.getString(Constants.TRADE_ACCOUNT_NUMBER_KEY));</span>
+<span class="nc bnc" id="L306" title="All 2 branches missed.">				messageData.setContactID(rs.getString(Constants.CONTACT_ID_KEY)!=null?rs.getInt(Constants.CONTACT_ID_KEY):null);</span>
+<span class="nc" id="L307">				messageData.setContactName(rs.getString(Constants.CONTACT_NAME_KEY));</span>
+<span class="nc" id="L308">				messageData.setInstructionNumber(rs.getString(Constants.TRADE_CONTRACT_NUMBER_KEY));</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">				messageData.setTitanPaymentID(rs.getString(Constants.TRADE_PAYMENT_ID_KEY)!=null?rs.getInt(Constants.TRADE_PAYMENT_ID_KEY):null);</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">				messageData.setCreatedByUserId(rs.getString(Constants.CREATED_BY_KEY)!=null?rs.getInt(Constants.CREATED_BY_KEY):null);</span>
+<span class="nc" id="L311">				messageData.setCreatedBySSOUserId(rs.getString(Constants.CREATED_BY_SSOUSER_ID_KEY));</span>
+<span class="nc" id="L312">				messageData.setCreatedOn(rs.getString(Constants.CREATED_ON_KEY));</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">				messageData.setUpdatedByUserId(rs.getString(Constants.UPDATED_BY_KEY)!=null?rs.getInt(Constants.UPDATED_BY_KEY):null);</span>
+<span class="nc" id="L314">				messageData.setUpdatedBySSOUserId(rs.getString(Constants.UPDATED_BY_SSOUSER_ID_KEY));</span>
+<span class="nc" id="L315">				messageData.setUpdatedOn(rs.getString(Constants.UPDATED_ON_KEY));</span>
+<span class="nc" id="L316">				messageData.setTransactionDate(rs.getString(Constants.TRANSACTION_DATE_KEY));</span>
+<span class="nc" id="L317">				messageData.setDescription(rs.getString(Constants.DESCRIPTION_KEY));</span>
+<span class="nc bnc" id="L318" title="All 2 branches missed.">				messageData.setComplianceStatusId(rs.getString(Constants.COMPLIANCE_STATUS_ID_KEY)!=null?rs.getInt(Constants.COMPLIANCE_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L319">				messageData.setComplianceStatus(rs.getString(Constants.COMPLIANCE_STATUS_KEY));</span>
+<span class="nc" id="L320">				messageData.setComplianceDoneOn(rs.getString(Constants.COMPLIANCE_DONE_ON_KEY));</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">				messageData.setFraugsterStatusId(rs.getString(Constants.FRAUGSTER_STATUS_ID_KEY)!=null?rs.getInt(Constants.FRAUGSTER_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L322">				messageData.setFraugsterStatus(rs.getString(Constants.FRAUGSTER_STATUS_KEY));</span>
+<span class="nc bnc" id="L323" title="All 2 branches missed.">				messageData.setSanctionStatusId(rs.getString(Constants.SANCTION_STATUS_ID_KEY)!=null?rs.getInt(Constants.SANCTION_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L324">				messageData.setSanctionStatus(rs.getString(Constants.SANCTION_STATUS_KEY));</span>
+<span class="nc bnc" id="L325" title="All 2 branches missed.">				messageData.setBlacklistStatusId(rs.getString(Constants.BLACKLIST_STATUS_ID_KEY)!=null?rs.getInt(Constants.BLACKLIST_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L326">				messageData.setBlacklistStatus(rs.getString(Constants.BLACKLIST_STATUS_KEY));</span>
+<span class="nc bnc" id="L327" title="All 2 branches missed.">				messageData.setCustomCheckStatusId(rs.getString(Constants.CUSTOM_CHECK_STATUS_ID_KEY)!=null?rs.getInt(Constants.CUSTOM_CHECK_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L328">				messageData.setCustomCheckStatus(rs.getString(Constants.CUSTOM_CHECK_STATUS_KEY));</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">				messageData.setIsOnQueue(rs.getString(Constants.IS_ON_QUEUE_KEY)!=null?rs.getInt(Constants.IS_ON_QUEUE_KEY):null);</span>
+<span class="nc bnc" id="L330" title="All 2 branches missed.">				messageData.setSTPFlag(rs.getString(Constants.STP_FLAG_KEY)!=null?rs.getInt(Constants.STP_FLAG_KEY):null);</span>
+<span class="nc bnc" id="L331" title="All 2 branches missed.">				messageData.setLegacyTradePaymentId(rs.getString(Constants.LEGACY_TRADE_PAYMENT_ID_KEY)!=null?rs.getInt(Constants.LEGACY_TRADE_PAYMENT_ID_KEY):null);</span>
+<span class="nc" id="L332">				messageData.setLegacyTradeContractNumber(rs.getString(Constants.LEGACY_TRADE_CONTRACT_NUMBER_KEY));</span>
+<span class="nc bnc" id="L333" title="All 2 branches missed.">				messageData.setLegalEntityID(rs.getString(Constants.LEGAL_ENTITY_ID_KEY)!=null?rs.getInt(Constants.LEGAL_ENTITY_ID_KEY):null);</span>
+<span class="nc" id="L334">				messageData.setLegalEntityCode(rs.getString(Constants.LEGAL_ENTITY_CODE_KEY));</span>
+<span class="nc" id="L335">				messageData.setLegalEntityName(rs.getString(Constants.LEGAL_ENTITY_NAME_KEY));</span>
+<span class="nc" id="L336">				messageData.setInitialStatus(rs.getString(Constants.INITIAL_STATUS_KEY));</span>
+<span class="nc" id="L337">				messageData.setIntuitionClientRiskLevel(rs.getString(Constants.INTUITION_CLIENT_RISK_LEVEL_KEY));</span>
+<span class="nc bnc" id="L338" title="All 2 branches missed.">				messageData.setIntuitionCheckStatusId(rs.getString(Constants.INTUITION_CHECK_STATUS_ID_KEY)!=null?rs.getInt(Constants.INTUITION_CHECK_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L339">				messageData.setIntuitionCheckStatus(rs.getString(Constants.INTUITION_CHECK_STATUS_KEY));</span>
+<span class="nc bnc" id="L340" title="All 2 branches missed.">				messageData.setPaymentReferenceStatusId(rs.getString(Constants.PAYMENT_REF_STATUS_ID_KEY)!=null?rs.getInt(Constants.PAYMENT_REF_STATUS_ID_KEY):null);</span>
+<span class="nc" id="L341">				messageData.setPaymentReferenceStatus(rs.getString(Constants.PAYMENT_REF_STATUS_KEY));</span>
+<span class="nc" id="L342">				messageData.setPaymentClearedOn(rs.getString(Constants.PAYMENT_CLEARED_ON_KEY));</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">				messageData.setActivityID(rs.getString(Constants.ACTIVITY_ID_KEY)!=null?rs.getInt(Constants.ACTIVITY_ID_KEY):null);</span>
+<span class="nc bnc" id="L344" title="All 2 branches missed.">				messageData.setActivityBy(rs.getString(Constants.ACTIVITY_BY_KEY)!=null?rs.getInt(Constants.ACTIVITY_BY_KEY):null);</span>
+<span class="nc" id="L345">				messageData.setActivityByUserId(rs.getString(Constants.ACTIVITY_BY_USER_ID_KEY));</span>
+<span class="nc" id="L346">				messageData.setActivityTimestamp(rs.getString(Constants.ACTIVITY_TIMESTAMP_KEY));</span>
+<span class="nc" id="L347">				messageData.setActivityComments(rs.getString(Constants.ACTIVITY_COMMENTS_KEY));</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">				messageData.setActivityCreatedBy(rs.getString(Constants.ACTIVITY_CREATED_BY_KEY)!=null?rs.getInt(Constants.ACTIVITY_CREATED_BY_KEY):null);</span>
+<span class="nc" id="L349">				messageData.setActivityCreatedByUserId(rs.getString(Constants.ACTIVITY_CREATED_BY_USER_ID_KEY));</span>
+<span class="nc" id="L350">				messageData.setActivityCreatedOn(rs.getString(Constants.ACTIVITY_CREATED_ON_KEY));</span>
+<span class="nc bnc" id="L351" title="All 2 branches missed.">				messageData.setActivityType(rs.getString(Constants.ACTIVITY_TYPE_KEY)!=null?rs.getInt(Constants.ACTIVITY_TYPE_KEY):null);</span>
+<span class="nc" id="L352">				messageData.setActivityTypeModule(rs.getString(Constants.ACTIVITY_TYPE_MODULE_KEY));</span>
+<span class="nc" id="L353">				messageData.setActivityTypeValue(rs.getString(Constants.ACTIVITY_TYPE_VALUE_KEY));</span>
+<span class="nc" id="L354">				messageData.setActivityDetailsCreatedOn(rs.getString(Constants.ACTIVITY_DETAILS_CREATED_ON_KEY));</span>
+<span class="nc" id="L355">				messageData.setActivityLog(rs.getString(Constants.ACTIVITY_LOG_KEY));</span>
+<span class="nc bnc" id="L356" title="All 2 branches missed.">				messageData.setDeleted((rs.getInt(Constants.DELETED_KEY)==1)?true:false);</span>
+				
+<span class="nc" id="L358">				cdTransaction.setMessageData(messageData);</span>
+<span class="nc" id="L359">			}</span>
+<span class="nc" id="L360">		} catch (Exception e) {</span>
+<span class="nc" id="L361">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L363">			closeResultset(rs);</span>
+<span class="nc" id="L364">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L365">			closeConnection(conn);</span>
+		}
+
+<span class="nc" id="L368">		LOG.info(method + &quot;cdTransaction : &quot;+cdTransaction);</span>
+<span class="nc" id="L369">		return cdTransaction;</span>
+	}
+	
+	public Integer getTradePaymentIDFromFundsInID(Integer fundsInID)  throws ComplianceException {
+
+<span class="nc" id="L374">		String method = &quot;KafkaDataLakeTxDBServiceImpl - getTradePaymentIDFromFundsInID : &quot;;</span>
+<span class="nc" id="L375">		String query = (DBQueryConstant.GET_TRADE_PAYMENT_ID_FROM_FUNDS_IN_ID.getQuery());</span>
+<span class="nc" id="L376">		LOG.info(method + &quot;FundsIn ID : &quot;+fundsInID+ &quot;query : &quot;+query);</span>
+<span class="nc" id="L377">		ResultSet rs = null;</span>
+		
+<span class="nc" id="L379">		try(Connection conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L380">					PreparedStatement preparedStatment = conn.prepareStatement(query);) </span>
+		{
+<span class="nc" id="L382">			preparedStatment.setInt(1, fundsInID);</span>
+<span class="nc" id="L383">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L385" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L386" title="All 2 branches missed.">				return rs.getString(Constants.TRADE_PAYMENT_ID_KEY)!=null?rs.getInt(Constants.TRADE_PAYMENT_ID_KEY):null;</span>
+			}
+<span class="nc" id="L388">			return null;</span>
+<span class="nc" id="L389">		}catch (Exception e) {</span>
+<span class="nc" id="L390">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		}finally {
+<span class="nc" id="L392">			closeResultset(rs);</span>
+		}
+	}
+	
+	public Integer getTradePaymentIDFromFundsOutID(Integer fundsOutID)  throws ComplianceException {
+
+<span class="nc" id="L398">		String method = &quot;KafkaDataLakeTxDBServiceImpl - getTradePaymentIDFromFundsOutID : &quot;;</span>
+<span class="nc" id="L399">		String query = (DBQueryConstant.GET_TRADE_PAYMENT_ID_FROM_FUNDS_OUT_ID.getQuery());</span>
+<span class="nc" id="L400">		LOG.info(method + &quot;FundsOut ID : &quot;+fundsOutID+ &quot;query : &quot;+query);</span>
+<span class="nc" id="L401">		ResultSet rs = null;</span>
+		
+<span class="nc" id="L403">		try(Connection conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L404">				PreparedStatement preparedStatment = conn.prepareStatement(query); )</span>
+		{
+<span class="nc" id="L406">			preparedStatment.setInt(1, fundsOutID);</span>
+<span class="nc" id="L407">			rs = preparedStatment.executeQuery();</span>
+
+<span class="nc bnc" id="L409" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc bnc" id="L410" title="All 2 branches missed.">				return rs.getString(Constants.TRADE_PAYMENT_ID_KEY)!=null?rs.getInt(Constants.TRADE_PAYMENT_ID_KEY):null;</span>
+			}
+<span class="nc" id="L412">			return null;</span>
+
+<span class="nc" id="L414">		}catch (Exception e) {</span>
+<span class="nc" id="L415">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		}finally {
+<span class="nc" id="L417">			closeResultset(rs);</span>
+		}
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

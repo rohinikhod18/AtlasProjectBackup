@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TitanController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.httpport</a> &gt; <span class="el_source">TitanController.java</span></div><h1>TitanController.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.httpport;
+
+import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
+import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.ModelAndView;
+
+import com.currenciesdirect.gtg.compliance.core.ITitanService;
+import com.currenciesdirect.gtg.compliance.core.domain.cardpilot.CardPilotRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.cardpilot.CardPilotResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.fxtickets.FXTicketDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.fxtickets.FXTicketResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.fxtickets.FxTicketDetailsRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.fxtickets.FxTicketPortalRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.Wallet;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletTransaction;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletTransactionDetailsResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.wallets.WalletTransactionRequest;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+
+/**
+ * The Class TitanController.
+ */
+@Controller
+<span class="fc" id="L45">public class TitanController extends BaseController {</span>
+
+	/** The Constant Two Decimal . */
+	private static final String TWO_DECIMAL = &quot;#,##0.00&quot;;
+
+	/** The Constant ORGANIZATION_NOT_MIGRATED. */
+	public static final String ORGANIZATION_NOT_MIGRATED = &quot;Organization not migrated&quot;;
+
+	/** The i titan service. */
+	@Autowired
+	@Qualifier(&quot;titanServiceImpl&quot;)
+	private ITitanService iTitanService;
+
+	/** The log. */
+<span class="fc" id="L59">	private Logger log = LoggerFactory.getLogger(TitanController.class);</span>
+
+	/**
+	 * Gets the customer all wallet details.
+	 *
+	 * @param walletRequest
+	 *            the wallet request
+	 * @return the customer all wallet details
+	 */
+	@PostMapping(value = &quot;/getCustomerAllWalletList&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public WalletResponse getCustomerAllWalletDetails(@RequestBody WalletRequest walletRequest) {
+
+<span class="fc" id="L74">		String orgCode = walletRequest.getOrgCode();</span>
+<span class="fc" id="L75">		Boolean result = checkIsOrganizationAllowed(orgCode);</span>
+		WalletResponse walletResponse;
+
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">		if (Boolean.TRUE.equals(result)) {</span>
+			try {
+<span class="fc" id="L80">				walletResponse = iTitanService.getCustomerAllWalletDetails(walletRequest);</span>
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">				if (null != walletResponse.getWalletList())</span>
+<span class="fc" id="L82">					roundTwoDecimalsForWalletDetails(walletResponse.getWalletList());</span>
+
+<span class="fc" id="L84">			} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L85">				log.error(&quot;Error in getCustomerAllWalletDetails method of Titancontroller class&quot;, e);</span>
+<span class="fc" id="L86">				walletResponse = new WalletResponse();</span>
+<span class="fc" id="L87">				walletResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L88">				walletResponse.setErrorDescription(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L89">			}</span>
+		} else {
+<span class="nc" id="L91">			walletResponse = new WalletResponse();</span>
+<span class="nc" id="L92">			walletResponse.setResponseCode(&quot;555&quot;);</span>
+<span class="nc" id="L93">			walletResponse.setResponseDescription(ORGANIZATION_NOT_MIGRATED);</span>
+		}
+<span class="fc" id="L95">		return walletResponse;</span>
+	}
+
+	/**
+	 * Gets the customer wallet transaction details.
+	 *
+	 * @param walletTransactionRequest
+	 *            the wallet transaction request
+	 * @return the customer wallet transaction details
+	 */
+	@PostMapping(value = &quot;/getCustomerWalletTransactionDetails&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ModelAndView getCustomerWalletTransactionDetails(
+			@RequestBody WalletTransactionRequest walletTransactionRequest) {
+<span class="fc" id="L111">		ModelAndView modelAndView = new ModelAndView();</span>
+		WalletTransactionDetailsResponse walletTransactionDetailsResponse;
+<span class="fc" id="L113">		String orgCode = walletTransactionRequest.getOrgCode();</span>
+<span class="fc" id="L114">		Boolean result = checkIsOrganizationAllowed(orgCode);</span>
+
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">		if (Boolean.TRUE.equals(result)) {</span>
+			try {
+<span class="fc" id="L118">				walletTransactionDetailsResponse = iTitanService</span>
+<span class="fc" id="L119">						.getCustomerWalletTransactionDetails(walletTransactionRequest);</span>
+<span class="pc bpc" id="L120" title="1 of 2 branches missed.">				if (null != walletTransactionDetailsResponse.getWalletTransactionList()</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">						&amp;&amp; null != walletTransactionDetailsResponse.getWallet()) {</span>
+<span class="fc" id="L122">					roundTwoDecimalsForWalletTransaction(walletTransactionDetailsResponse.getWalletTransactionList());</span>
+<span class="fc" id="L123">					roundTwoDecimalsForWallet(walletTransactionDetailsResponse.getWallet());</span>
+<span class="fc" id="L124">					formatDate(walletTransactionDetailsResponse.getWalletTransactionList());</span>
+				}
+
+<span class="fc" id="L127">				walletTransactionDetailsResponse.setOrgCode(walletTransactionRequest.getOrgCode());</span>
+<span class="fc" id="L128">				walletTransactionDetailsResponse.setAccountNumber(walletTransactionRequest.getAccountNumber());</span>
+<span class="fc" id="L129">				modelAndView.addObject(&quot;walletTransactionDetails&quot;, walletTransactionDetailsResponse);</span>
+<span class="fc" id="L130">				modelAndView.setViewName(ViewNameEnum.WALLET_DETAILS.getViewName());</span>
+<span class="nc" id="L131">			} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L132">				log.error(&quot;Error in getCustomerWalletTransactionDetails method of Titancontroller class&quot;, e);</span>
+<span class="nc" id="L133">				walletTransactionDetailsResponse = new WalletTransactionDetailsResponse();</span>
+<span class="nc" id="L134">				walletTransactionDetailsResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L135">				walletTransactionDetailsResponse</span>
+<span class="nc" id="L136">						.setErrorDescription(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="pc" id="L137">			}</span>
+		} else {
+<span class="nc" id="L139">			walletTransactionDetailsResponse = new WalletTransactionDetailsResponse();</span>
+<span class="nc" id="L140">			walletTransactionDetailsResponse.setResponseCode(&quot;555&quot;);</span>
+<span class="nc" id="L141">			walletTransactionDetailsResponse.setResponseDescription(ORGANIZATION_NOT_MIGRATED);</span>
+		}
+<span class="fc" id="L143">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the customer FX ticket list.
+	 *
+	 * @param fxTicketPortalRequest
+	 *            the fx ticket portal request
+	 * @return the customer FX ticket list
+	 */
+	@PostMapping(value = &quot;/getCustomerFXTicketList&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public FXTicketResponse getCustomerFXTicketList(@RequestBody FxTicketPortalRequest fxTicketPortalRequest) {
+
+		FXTicketResponse fxTicketResponse;
+<span class="fc" id="L160">		String orgCode = fxTicketPortalRequest.getFxTicketSearchCriteria().getFxTicketFilter().getOrganization().get(0);</span>
+<span class="fc" id="L161">		Boolean result = checkIsOrganizationAllowed(orgCode);</span>
+
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">		if (Boolean.TRUE.equals(result)) {</span>
+			try {
+<span class="fc" id="L165">				fxTicketResponse = iTitanService.getCustomerFXTicketList(fxTicketPortalRequest);</span>
+<span class="fc" id="L166">			} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L167">				log.error(&quot;Error in getCustomerFXTicketList method of Titancontroller class&quot;, e);</span>
+<span class="fc" id="L168">				fxTicketResponse = new FXTicketResponse();</span>
+<span class="fc" id="L169">				fxTicketResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L170">				fxTicketResponse.setErrorDescription(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L171">			}</span>
+		} else {
+<span class="nc" id="L173">			fxTicketResponse = new FXTicketResponse();</span>
+<span class="nc" id="L174">			fxTicketResponse.setResponseCode(&quot;555&quot;);</span>
+<span class="nc" id="L175">			fxTicketResponse.setResponseDescription(ORGANIZATION_NOT_MIGRATED);</span>
+		}
+<span class="fc" id="L177">		return fxTicketResponse;</span>
+
+	}
+
+	/**
+	 * Gets the customer FX ticke details.
+	 *
+	 * @param fxTicketDetailsRequest
+	 *            the fx ticket details request
+	 * @return the customer FX ticke details
+	 */
+	@PostMapping(value = &quot;/getCustomerFXTicketDetails&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ModelAndView getCustomerFXTickeDetails(@RequestBody FxTicketDetailsRequest fxTicketDetailsRequest) {
+
+<span class="fc" id="L194">		ModelAndView modelAndView = new ModelAndView();</span>
+		FXTicketDetails fxTicketDetailsResponse;
+<span class="fc" id="L196">		String orgCode = fxTicketDetailsRequest.getFxTicketDetailRequestList().get(0).getFxTicketPayload()</span>
+<span class="fc" id="L197">				.getOrganizationCode();</span>
+<span class="fc" id="L198">		Boolean result = checkIsOrganizationAllowed(orgCode);</span>
+
+<span class="pc bpc" id="L200" title="1 of 2 branches missed.">		if (Boolean.TRUE.equals(result)) {</span>
+			try {
+<span class="fc" id="L202">				fxTicketDetailsResponse = iTitanService.getCustomerFXTicketDetails(fxTicketDetailsRequest);</span>
+<span class="fc" id="L203">			} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L204">				log.error(&quot;Error in getCustomerFXTickeDetails method of Titancontroller class&quot;, e);</span>
+<span class="fc" id="L205">				fxTicketDetailsResponse = new FXTicketDetails();</span>
+<span class="fc" id="L206">				fxTicketDetailsResponse.setResponseCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L207">				fxTicketDetailsResponse.setResponseDescription(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L208">			}</span>
+		} else {
+<span class="nc" id="L210">			fxTicketDetailsResponse = new FXTicketDetails();</span>
+<span class="nc" id="L211">			fxTicketDetailsResponse.setResponseCode(&quot;555&quot;);</span>
+<span class="nc" id="L212">			fxTicketDetailsResponse.setResponseDescription(ORGANIZATION_NOT_MIGRATED);</span>
+		}
+<span class="fc" id="L214">		modelAndView.setViewName(&quot;fxticketdetails&quot;);</span>
+<span class="fc" id="L215">		modelAndView.addObject(&quot;fxTicketDetailWrapper&quot;, fxTicketDetailsResponse);</span>
+<span class="fc" id="L216">		return modelAndView;</span>
+	}
+
+	/**
+	 * Check is organization allowed.
+	 *
+	 * @param orgCode
+	 *            the org code
+	 * @return the boolean
+	 */
+	public Boolean checkIsOrganizationAllowed(String orgCode) {
+<span class="fc" id="L227">		Boolean result = Boolean.FALSE;</span>
+<span class="fc" id="L228">		String titanOrganizations = System.getProperty(&quot;titan.supported.organizations&quot;);</span>
+<span class="pc bpc" id="L229" title="1 of 4 branches missed.">		if (null != titanOrganizations &amp;&amp; titanOrganizations.contains(orgCode)) {</span>
+<span class="fc" id="L230">			result =Boolean.TRUE;</span>
+<span class="fc" id="L231">			return result;</span>
+		}
+<span class="fc" id="L233">		return result;</span>
+	}
+
+	/**
+	 * @param walletDetails
+	 */
+	public void roundTwoDecimalsForWalletDetails(List&lt;WalletDetails&gt; walletDetails) {
+<span class="fc bfc" id="L240" title="All 2 branches covered.">		for (WalletDetails walletDet : walletDetails) {</span>
+<span class="fc" id="L241">			DecimalFormat decimalFormat = new DecimalFormat(TWO_DECIMAL);</span>
+<span class="fc" id="L242">			walletDet.setWalletAvailableBalance(decimalFormat.format(walletDet.getAvailableBalance()));</span>
+<span class="fc" id="L243">			walletDet.setWalletTotalBalance(decimalFormat.format(walletDet.getTotalBalance()));</span>
+<span class="fc" id="L244">		}</span>
+<span class="fc" id="L245">	}</span>
+
+	/**
+	 * @param walletTransaction
+	 */
+	public void roundTwoDecimalsForWalletTransaction(List&lt;WalletTransaction&gt; walletTransaction) {
+<span class="fc bfc" id="L251" title="All 2 branches covered.">		for (WalletTransaction walletTrans : walletTransaction) {</span>
+<span class="fc" id="L252">			DecimalFormat decimalFormat = new DecimalFormat(TWO_DECIMAL);</span>
+<span class="fc" id="L253">			walletTrans.setWalletAmount(decimalFormat.format(walletTrans.getAmount()));</span>
+<span class="fc" id="L254">		}</span>
+<span class="fc" id="L255">	}</span>
+
+	/**
+	 * @param wallet
+	 */
+	public void roundTwoDecimalsForWallet(Wallet wallet) {
+<span class="fc" id="L261">		DecimalFormat decimalFormat = new DecimalFormat(TWO_DECIMAL);</span>
+<span class="fc" id="L262">		wallet.setWalletAvailableBalance(decimalFormat.format(wallet.getAvailableBalance()));</span>
+<span class="fc" id="L263">		wallet.setWalletTotalBalance(decimalFormat.format(wallet.getTotalBalance()));</span>
+<span class="fc" id="L264">	}</span>
+
+	/**
+	 * @param walletTransaction
+	 */
+	public void formatDate(List&lt;WalletTransaction&gt; walletTransaction) {
+<span class="fc bfc" id="L270" title="All 2 branches covered.">		for (WalletTransaction walletTrans : walletTransaction) {</span>
+<span class="fc" id="L271">			SimpleDateFormat sdf = new SimpleDateFormat(&quot;yyyy-MM-dd'T'HH:mm:ss'Z'&quot;, Locale.US);</span>
+<span class="fc" id="L272">			sdf.setTimeZone(TimeZone.getTimeZone(&quot;GMT&quot;));</span>
+<span class="fc" id="L273">			walletTrans.setTransDate(sdf.format(walletTrans.getTransactionDate()));</span>
+<span class="fc" id="L274">		}</span>
+<span class="fc" id="L275">	}</span>
+
+	/**
+	 * Gets the card pilot list.
+	 *
+	 * @param cardPilotRequest the card pilot request
+	 * @return the card pilot list
+	 * 
+	 * AT-4625
+	 */
+	@PostMapping(value = &quot;/getCardPilotList&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public CardPilotResponse getCardPilotList(@RequestBody CardPilotRequest cardPilotRequest) {
+
+		CardPilotResponse cardPilotResponse;
+		
+			try {
+<span class="nc" id="L294">				cardPilotResponse = iTitanService.getCardPilotList(cardPilotRequest);</span>
+<span class="nc" id="L295">			} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L296">				log.error(&quot;Error in getCustomerFXTicketList method of Titancontroller class&quot;, e);</span>
+<span class="nc" id="L297">				cardPilotResponse = new CardPilotResponse();</span>
+<span class="nc" id="L298">				cardPilotResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L299">				cardPilotResponse.setErrorDescription(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L300">			}</span>
+<span class="nc" id="L301">		return cardPilotResponse;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

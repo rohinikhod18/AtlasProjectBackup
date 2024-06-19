@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CustomCheckBulkRecheckTransformer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout</a> &gt; <span class="el_source">CustomCheckBulkRecheckTransformer.java</span></div><h1>CustomCheckBulkRecheckTransformer.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout;
+
+import java.util.LinkedHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.request.CustomChecksRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.EuPoiCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.VelocityCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.WhiteListCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutBaseRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceProviderEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.AbstractTransformer;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+<span class="nc" id="L30">public class CustomCheckBulkRecheckTransformer extends AbstractTransformer{</span>
+<span class="nc" id="L31">	private static final Logger LOG = LoggerFactory.getLogger(CustomCheckBulkRecheckTransformer.class);</span>
+
+	@SuppressWarnings(&quot;unchecked&quot;)
+	@Override
+	public Message&lt;MessageContext&gt; transformRequest(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="nc" id="L37">			UserProfile token = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L38">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L39">			FundsOutBaseRequest fundsOutRequest=(FundsOutBaseRequest) messageExchange.getRequest();</span>
+
+<span class="nc" id="L41">			Integer eventId = (Integer) message.getPayload().getGatewayMessageExchange().getRequest().getAdditionalAttribute(&quot;eventId&quot;);</span>
+			
+<span class="nc" id="L43">			Account account = (Account) fundsOutRequest.getAdditionalAttribute(&quot;account&quot;);</span>
+<span class="nc" id="L44">			Contact contact = (Contact) fundsOutRequest.getAdditionalAttribute(&quot;contact&quot;);//Add for AT-3349</span>
+
+			
+<span class="nc" id="L47">			CustomChecksRequest serviceRequest =  new CustomChecksRequest();</span>
+<span class="nc" id="L48">			serviceRequest.setOrgCode(fundsOutRequest.getOrgCode());</span>
+<span class="nc" id="L49">			serviceRequest.setPaymentTransId(fundsOutRequest.getFundsOutId());</span>
+<span class="nc" id="L50">			serviceRequest.setAccId(account.getId());</span>
+			// ??  is below correct?
+<span class="nc" id="L52">			serviceRequest.setBuyAmountOnAccount(account.getMaxTransactionAmount());</span>
+<span class="nc" id="L53">			serviceRequest.setBuyCurrencyOnAccount(account.getBuyingCurrency());</span>
+<span class="nc" id="L54">			serviceRequest.setReasonsOfTransferOnAccount(account.getPurposeOfTran());</span>
+<span class="nc" id="L55">			serviceRequest.setSellAmountOnAccount(account.getMaxTransactionAmount());</span>
+<span class="nc" id="L56">			serviceRequest.setSellCurrencyOnAccount(account.getSellingCurrency());</span>
+<span class="nc" id="L57">			serviceRequest.setZeroFundsClearAfterLEDate((boolean) fundsOutRequest.getAdditionalAttribute(Constants.ZERO_EU_FUNDS_CLEARED_AFTER_LE_DATE));//Add for AT-3349</span>
+<span class="nc" id="L58">			serviceRequest.setPoiExistsFlag(contact.getPoiExists()); //Add for AT-3349</span>
+			
+			//ADD for AT-3161
+<span class="nc bnc" id="L61" title="All 2 branches missed.">			if(account.getCustType().equals(&quot;PFX&quot;)){</span>
+				//changes for AT-3243
+<span class="nc" id="L63">				serviceRequest.setfPScoreUpdateOn((LinkedHashMap&lt;String, String&gt;) fundsOutRequest.getAdditionalAttribute(&quot;FraugsterPreviousScore&amp;UpdatedOn&quot;));</span>
+			}
+			
+			Integer beneId;
+<span class="nc" id="L67">			ServiceProviderEnum provider =  ServiceProviderEnum.CUSTOM_CHECKS_SERVICE;</span>
+<span class="nc" id="L68">			FundsOutRequest details = (FundsOutRequest)  messageExchange.getRequest();</span>
+<span class="nc" id="L69">			beneId =  details.getBeneficiary().getBeneficiaryId();</span>
+<span class="nc" id="L70">			details.setType(&quot;FUNDS_OUT_ADD&quot;);</span>
+<span class="nc" id="L71">			serviceRequest.setESDocument(details);</span>
+<span class="nc" id="L72">			CustomCheckResponse serviceResponse = new CustomCheckResponse();</span>
+<span class="nc" id="L73">			MessageExchange ccExchange = createMessageExchange(serviceRequest, serviceResponse, ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+<span class="nc" id="L74">			setCustomCheckResponseStatus(token, fundsOutRequest, eventId, ccExchange, beneId, provider,</span>
+					serviceResponse);
+<span class="nc" id="L76">			message.getPayload().removeMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+<span class="nc" id="L77">			message.getPayload().appendMessageExchange(ccExchange);</span>
+<span class="nc" id="L78">		} catch (Exception e) {</span>
+<span class="nc" id="L79">			LOG.error(&quot;Error in CustomCheckBulkRecheckTransformer class : transformRequest -&quot;, e);</span>
+<span class="nc" id="L80">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L81">		}</span>
+<span class="nc" id="L82">		return message;</span>
+	}
+
+	@Override
+	public Message&lt;MessageContext&gt; transformResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L87">		FundsOutRequest fReuqest = null;</span>
+<span class="nc" id="L88">		MessageExchange exchange = null;</span>
+<span class="nc" id="L89">		EventServiceLog log = null;</span>
+		try {
+<span class="nc" id="L91">			exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE);</span>
+<span class="nc" id="L92">			CustomChecksRequest serviceRequest = exchange.getRequest(CustomChecksRequest.class);</span>
+<span class="nc" id="L93">			fReuqest = (FundsOutRequest) serviceRequest.getESDocument();</span>
+
+<span class="nc" id="L95">			CustomCheckResponse serviceResponse = (CustomCheckResponse) exchange.getResponse();</span>
+<span class="nc" id="L96">			log = exchange.getEventServiceLog(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE, EntityEnum.BENEFICIARY.name(),</span>
+<span class="nc" id="L97">					fReuqest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">			if(null != serviceResponse) {</span>
+<span class="nc" id="L99">				updateEventServiceLogEntry(log, serviceResponse, serviceResponse, serviceResponse.getOverallStatus());</span>
+<span class="nc" id="L100">				serviceResponse.setCheckedOn(log.getUpdatedOn().toString());</span>
+			} else {
+<span class="nc" id="L102">				serviceResponse = createDefaultServiceDownResponse();</span>
+<span class="nc" id="L103">				log = exchange.getEventServiceLog(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE,</span>
+<span class="nc" id="L104">							EntityEnum.BENEFICIARY.name(), fReuqest.getBeneficiary().getBeneficiaryId());</span>
+<span class="nc" id="L105">				updateEventServiceLogEntry(log, serviceResponse, serviceResponse, serviceResponse.getOverallStatus());</span>
+<span class="nc" id="L106">				exchange.setResponse(serviceResponse);</span>
+			}
+			
+<span class="nc" id="L109">		} catch (Exception e) {</span>
+<span class="nc" id="L110">			LOG.error(&quot;Error in CustomCheckBulkRecheckTransformer class : transformResponse -&quot;, e);</span>
+			try {
+<span class="nc" id="L112">				CustomCheckResponse serviceResponse = createDefaultServiceDownResponse();</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">				if (fReuqest != null) {</span>
+<span class="nc" id="L114">					log = exchange.getEventServiceLog(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE,</span>
+<span class="nc" id="L115">							EntityEnum.BENEFICIARY.name(), fReuqest.getBeneficiary().getBeneficiaryId());</span>
+				}
+<span class="nc" id="L117">				updateEventServiceLogEntry(log, serviceResponse, serviceResponse, serviceResponse.getOverallStatus());</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">				if (exchange != null)</span>
+<span class="nc" id="L119">					exchange.setResponse(serviceResponse);</span>
+<span class="nc" id="L120">			} catch (Exception ex) {</span>
+<span class="nc" id="L121">				LOG.error(&quot;Error in CustomCheckBulkRecheckTransformer class : transformResponse -&quot;, ex);</span>
+<span class="nc" id="L122">				message.getPayload().setFailed(true);</span>
+<span class="nc" id="L123">			}</span>
+<span class="nc" id="L124">		}</span>
+
+<span class="nc" id="L126">		return message;</span>
+	}
+	
+	/**
+	 * @param token
+	 * @param fundsOutRequest
+	 * @param eventId
+	 * @param eventServiceLogs
+	 * @param beneId
+	 * @param provider
+	 * @param serviceResponse
+	 */
+	private void setCustomCheckResponseStatus(UserProfile token, FundsOutBaseRequest fundsOutRequest, Integer eventId,
+			MessageExchange ccExchange, Integer beneId, ServiceProviderEnum provider,
+			CustomCheckResponse serviceResponse) {
+<span class="nc bnc" id="L141" title="All 2 branches missed.">		if(fundsOutRequest.getAdditionalAttribute(Constants.PERFORM_CHECKS).equals(Boolean.TRUE)){</span>
+<span class="nc" id="L142">			serviceResponse.setOverallStatus(ServiceStatus.NOT_PERFORMED.name());</span>
+<span class="nc" id="L143">			ccExchange.addEventServiceLog(createEventServiceLogEntry(eventId, ServiceTypeEnum.CUSTOM_CHECKS_SERVICE, </span>
+<span class="nc" id="L144">					provider, beneId, fundsOutRequest.getVersion(), EntityEnum.BENEFICIARY.name(), token.getUserID(), </span>
+					serviceResponse, serviceResponse));
+		}else {
+			//Add EuPoiCheckResponse for AT-3349
+<span class="nc" id="L148">			VelocityCheckResponse velocityCheckResponse = new VelocityCheckResponse();</span>
+<span class="nc" id="L149">			WhiteListCheckResponse whiteListCheckResponse = new WhiteListCheckResponse();</span>
+<span class="nc" id="L150">			EuPoiCheckResponse euPoiCheckResponse = new EuPoiCheckResponse();</span>
+<span class="nc" id="L151">			velocityCheckResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L152">			whiteListCheckResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L153">			euPoiCheckResponse.setStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L154">			serviceResponse.setVelocityCheck(velocityCheckResponse);</span>
+<span class="nc" id="L155">			serviceResponse.setWhiteListCheck(whiteListCheckResponse);</span>
+<span class="nc" id="L156">			serviceResponse.setEuPoiCheck(euPoiCheckResponse);</span>
+<span class="nc" id="L157">			serviceResponse.setFraudPredictStatus(ServiceStatus.NOT_REQUIRED.name());//Add for AT-3161</span>
+<span class="nc" id="L158">			serviceResponse.setOverallStatus(ServiceStatus.NOT_REQUIRED.name());</span>
+<span class="nc" id="L159">			ccExchange.addEventServiceLog(createEventServiceLogEntryWithStatus(eventId, ServiceTypeEnum.CUSTOM_CHECKS_SERVICE, </span>
+<span class="nc" id="L160">					provider, beneId, fundsOutRequest.getVersion(), EntityEnum.BENEFICIARY.name(), token.getUserID(), </span>
+					serviceResponse, serviceResponse, ServiceStatus.NOT_REQUIRED));
+		}
+<span class="nc" id="L163">	}</span>
+	
+	private CustomCheckResponse createDefaultServiceDownResponse(){
+<span class="nc" id="L166">		CustomCheckResponse serviceResponse = new CustomCheckResponse();</span>
+<span class="nc" id="L167">		VelocityCheckResponse velocityCheckResponse = new VelocityCheckResponse();</span>
+<span class="nc" id="L168">		velocityCheckResponse.setBeneCheck(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L169">		velocityCheckResponse.setNoOffundsoutTxn(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L170">		velocityCheckResponse.setPermittedAmoutcheck(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L171">		velocityCheckResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L172">		WhiteListCheckResponse whiteListCheckResponse = new WhiteListCheckResponse();</span>
+<span class="nc" id="L173">		whiteListCheckResponse.setAmoutRange(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L174">		whiteListCheckResponse.setCurrency(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L175">		whiteListCheckResponse.setReasonOfTransfer(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L176">		whiteListCheckResponse.setThirdParty(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L177">		whiteListCheckResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L178">		EuPoiCheckResponse euPoiCheckResponse = new EuPoiCheckResponse();//Add for AT-3349</span>
+<span class="nc" id="L179">		euPoiCheckResponse.setStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L180">		serviceResponse.setVelocityCheck(velocityCheckResponse);</span>
+<span class="nc" id="L181">		serviceResponse.setWhiteListCheck(whiteListCheckResponse);</span>
+<span class="nc" id="L182">		serviceResponse.setEuPoiCheck(euPoiCheckResponse);</span>
+<span class="nc" id="L183">		serviceResponse.setFraudPredictStatus(ServiceStatus.SERVICE_FAILURE.name());//Add for AT-3161</span>
+<span class="nc" id="L184">		serviceResponse.setOverallStatus(ServiceStatus.SERVICE_FAILURE.name());</span>
+<span class="nc" id="L185">		return serviceResponse;</span>
+		
+	}
+	
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

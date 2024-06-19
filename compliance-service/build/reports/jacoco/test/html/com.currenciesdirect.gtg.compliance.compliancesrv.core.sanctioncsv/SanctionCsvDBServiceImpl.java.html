@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SanctionCsvDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.sanctioncsv</a> &gt; <span class="el_source">SanctionCsvDBServiceImpl.java</span></div><h1>SanctionCsvDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.sanctioncsv;
+
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.AbstractDao;
+
+@SuppressWarnings({ &quot;squid:S2095&quot;, &quot;squid:S1319&quot; })
+<span class="nc" id="L23">public class SanctionCsvDBServiceImpl extends AbstractDao {</span>
+
+<span class="nc" id="L25">	private int pfxMonthDuration = Integer.parseInt(System.getProperty(&quot;sanction.csv.months.pfx&quot;));</span>
+
+<span class="nc" id="L27">	private int cfxMonthDuration = Integer.parseInt(System.getProperty(&quot;sanction.csv.months.cfx&quot;));</span>
+
+<span class="nc" id="L29">	private static final Logger LOG = LoggerFactory.getLogger(SanctionCsvDBServiceImpl.class);</span>
+
+	public static final String CLNTS = &quot;CLNTS&quot;;
+
+<span class="nc" id="L33">	public static final Integer CREATED_BY = 1;</span>
+
+<span class="nc" id="L35">	private SimpleDateFormat format = new SimpleDateFormat(&quot;yyyy-MM-dd&quot;);</span>
+	
+<span class="nc" id="L37">	private SimpleDateFormat dobFormat = new SimpleDateFormat(&quot;dd/MM/yyyy&quot;);</span>
+	/**
+	 * Gets the sanction csv data.
+	 *
+	 * @param message the message
+	 * @return the sanction csv data
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;SanctionCsvMessageContext&gt; getSanctionCsvData(Message&lt;SanctionCsvMessageContext&gt; message)
+			throws ComplianceException {
+
+<span class="nc" id="L48">		HashMap&lt;String, List&lt;SanctionCsvRequest&gt;&gt; sanctionCsvRequestMap = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L49">		List&lt;Integer&gt; sanctionCsvContactList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L51">			getSanctionCsvPfxData(sanctionCsvRequestMap, sanctionCsvContactList);</span>
+<span class="nc" id="L52">			message.getPayload().setSanctionCsvFileData(sanctionCsvRequestMap);</span>
+<span class="nc" id="L53">		} catch (Exception e) {</span>
+<span class="nc" id="L54">			LOG.error(&quot;Error while returning sanction csv data :&quot;, e);</span>
+<span class="nc" id="L55">		}</span>
+<span class="nc" id="L56">		return message;</span>
+	}
+
+	/**
+	 * Gets the sanction csv pfx data.
+	 *
+	 * @param sanctionCsvRequestMap  the sanction csv request map
+	 * @param sanctionCsvRequestList the sanction csv request list
+	 * @param sanctionCsvContactList the sanction csv contact list
+	 * @return the sanction csv pfx data
+	 * @throws ComplianceException the compliance exception
+	 */
+	// Sanction CSV PFX Data
+	public HashMap&lt;String, List&lt;SanctionCsvRequest&gt;&gt; getSanctionCsvPfxData(
+			HashMap&lt;String, List&lt;SanctionCsvRequest&gt;&gt; sanctionCsvRequestMap,
+			 List&lt;Integer&gt; sanctionCsvContactList)
+			throws ComplianceException {
+<span class="nc" id="L73">		Connection connection = null;</span>
+<span class="nc" id="L74">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L75">		ResultSet rs = null;</span>
+<span class="nc" id="L76">		List&lt;SanctionCsvRequest&gt; sanctionCsvPfxRequestList = new ArrayList&lt;&gt;();</span>
+		try {
+
+<span class="nc" id="L79">			Calendar calendar = Calendar.getInstance();</span>
+<span class="nc" id="L80">			calendar.add(Calendar.MONTH, -pfxMonthDuration);</span>
+<span class="nc" id="L81">			Date date = calendar.getTime();</span>
+<span class="nc" id="L82">			String dateFromForPfx = format.format(date);</span>
+
+<span class="nc" id="L84">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L85">			preparedStatement = connection.prepareStatement(SanctionCsvQueryConstant.GET_PFX_DETAILS.getQuery());</span>
+<span class="nc" id="L86">			preparedStatement.setString(1, dateFromForPfx);</span>
+<span class="nc" id="L87">			preparedStatement.setString(2, dateFromForPfx);</span>
+<span class="nc" id="L88">			preparedStatement.setString(3, dateFromForPfx);</span>
+<span class="nc" id="L89">			preparedStatement.setString(4, dateFromForPfx);</span>
+<span class="nc" id="L90">			rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L92">				SanctionCsvRequest sanctionCsvRequest = new SanctionCsvRequest();</span>
+<span class="nc" id="L93">				sanctionCsvRequest.setSourceCode(CLNTS);</span>
+<span class="nc" id="L94">				sanctionCsvRequest.setClientId(rs.getString(SanctionCsvDBColumns.CLIENT_ID.getName()));</span>
+<span class="nc" id="L95">				sanctionCsvRequest.setCommentID(rs.getString(SanctionCsvDBColumns.COMMENT_ID.getName()));</span>
+<span class="nc" id="L96">				sanctionCsvRequest.setStatusIndicator(&quot;I&quot;);</span>
+<span class="nc" id="L97">				sanctionCsvRequest.setFullName(rs.getString(SanctionCsvDBColumns.FULLNAME.getName()));</span>
+<span class="nc" id="L98">				sanctionCsvRequest.setCountry(rs.getString(SanctionCsvDBColumns.COUNTRY.getName()));</span>
+<span class="nc" id="L99">				String dob = (rs.getString(SanctionCsvDBColumns.DOB.getName()));</span>
+<span class="nc" id="L100">				setDateOfBirth(sanctionCsvRequest, dob);</span>
+<span class="nc" id="L101">				sanctionCsvRequest.setRecordeType(&quot;I&quot;);</span>
+<span class="nc" id="L102">				sanctionCsvPfxRequestList.add(sanctionCsvRequest);</span>
+<span class="nc" id="L103">				sanctionCsvContactList.add(rs.getInt(SanctionCsvDBColumns.CONTACT_ID.getName()));</span>
+<span class="nc" id="L104">			}</span>
+<span class="nc" id="L105">				sanctionCsvRequestMap.put(&quot;PFX&quot;, sanctionCsvPfxRequestList);</span>
+<span class="nc" id="L106">				LOG.info(&quot;Extracted sanction CSV PFX data:&quot;);</span>
+
+<span class="nc" id="L108">				getSanctionCsvCfxAccountData(sanctionCsvRequestMap, sanctionCsvContactList);</span>
+<span class="nc" id="L109">		} catch (Exception e) {</span>
+<span class="nc" id="L110">			LOG.error(&quot;Error while fetching sanction csv PFX data :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L112">			closeResultset(rs);</span>
+<span class="nc" id="L113">			closeConnection(connection);</span>
+<span class="nc" id="L114">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L116">		return sanctionCsvRequestMap;</span>
+	}
+
+	/**
+	 * Gets the sanction csv cfx account data.
+	 *
+	 * @param sanctionCsvRequestMap the sanction csv request map
+	 * @param sanctionCsvContactList the sanction csv contact list
+	 * @return the sanction csv cfx account data
+	 * @throws ComplianceException the compliance exception
+	 */
+	// Sanction CSV CFX Data
+	public HashMap&lt;String, List&lt;SanctionCsvRequest&gt;&gt; getSanctionCsvCfxAccountData(
+			HashMap&lt;String, List&lt;SanctionCsvRequest&gt;&gt; sanctionCsvRequestMap,
+			List&lt;Integer&gt; sanctionCsvContactList)
+			throws ComplianceException {
+
+<span class="nc" id="L133">		Connection connection = null;</span>
+<span class="nc" id="L134">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L135">		ResultSet rs = null;</span>
+<span class="nc" id="L136">		List&lt;SanctionCsvRequest&gt; sanctionCsvCfxRequestList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L138">			Calendar cale = Calendar.getInstance();</span>
+<span class="nc" id="L139">			cale.add(Calendar.MONTH, -cfxMonthDuration);</span>
+<span class="nc" id="L140">			Date newDate = cale.getTime();</span>
+<span class="nc" id="L141">			String dateFromForCfx = format.format(newDate);</span>
+
+<span class="nc" id="L143">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L144">			preparedStatement = connection.prepareStatement(SanctionCsvQueryConstant.GET_CFX_ACCOUNT_DETAILS.getQuery());</span>
+<span class="nc" id="L145">			preparedStatement.setString(1, dateFromForCfx);</span>
+<span class="nc" id="L146">			preparedStatement.setString(2, dateFromForCfx);</span>
+<span class="nc" id="L147">			preparedStatement.setString(3, dateFromForCfx);</span>
+<span class="nc" id="L148">			preparedStatement.setString(4, dateFromForCfx);</span>
+<span class="nc" id="L149">			rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L151">				SanctionCsvRequest sanctionCsvRequest = new SanctionCsvRequest();</span>
+<span class="nc" id="L152">				sanctionCsvRequest.setSourceCode(CLNTS);</span>
+<span class="nc" id="L153">				sanctionCsvRequest.setClientId(rs.getString(SanctionCsvDBColumns.CLIENT_ID.getName()));</span>
+<span class="nc" id="L154">				sanctionCsvRequest.setCommentID(rs.getString(SanctionCsvDBColumns.COMMENT_ID.getName()));</span>
+<span class="nc" id="L155">				sanctionCsvRequest.setStatusIndicator(&quot;I&quot;);</span>
+<span class="nc" id="L156">				sanctionCsvRequest.setFullName(rs.getString(SanctionCsvDBColumns.FULLNAME.getName()));</span>
+<span class="nc" id="L157">				sanctionCsvRequest.setCountry(rs.getString(SanctionCsvDBColumns.COUNTRY.getName()));</span>
+<span class="nc" id="L158">				String dob = (rs.getString(SanctionCsvDBColumns.DOB.getName()));</span>
+<span class="nc" id="L159">				setDateOfBirth(sanctionCsvRequest, dob);</span>
+<span class="nc" id="L160">				sanctionCsvRequest.setRecordeType(&quot;I&quot;);</span>
+<span class="nc" id="L161">				sanctionCsvCfxRequestList.add(sanctionCsvRequest);</span>
+<span class="nc" id="L162">				sanctionCsvContactList.add(rs.getInt(SanctionCsvDBColumns.CONTACT_ID.getName()));</span>
+<span class="nc" id="L163">			}</span>
+<span class="nc" id="L164">				getSanctionCsvCfxContactData(sanctionCsvRequestMap, sanctionCsvCfxRequestList, sanctionCsvContactList);</span>
+<span class="nc" id="L165">		} catch (Exception e) {</span>
+<span class="nc" id="L166">			LOG.error(&quot;Error while fetching sanction csv CFX data :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L168">			closeResultset(rs);</span>
+<span class="nc" id="L169">			closeConnection(connection);</span>
+<span class="nc" id="L170">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L172">		return sanctionCsvRequestMap;</span>
+	}
+
+	/**
+	 * Gets the sanction csv cfx contact data.
+	 *
+	 * @param sanctionCsvRequestMap the sanction csv request map
+	 * @param sanctionCsvCfxRequestList the sanction csv cfx request list
+	 * @param sanctionCsvContactList the sanction csv contact list
+	 * @return the sanction csv cfx contact data
+	 * @throws ComplianceException the compliance exception
+	 */
+	public HashMap&lt;String, List&lt;SanctionCsvRequest&gt;&gt; getSanctionCsvCfxContactData(
+			HashMap&lt;String, List&lt;SanctionCsvRequest&gt;&gt; sanctionCsvRequestMap,
+			List&lt;SanctionCsvRequest&gt; sanctionCsvCfxRequestList, List&lt;Integer&gt; sanctionCsvContactList)
+			throws ComplianceException {
+
+<span class="nc" id="L189">		Connection connection = null;</span>
+<span class="nc" id="L190">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L191">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L193">			Calendar cale = Calendar.getInstance();</span>
+<span class="nc" id="L194">			cale.add(Calendar.MONTH, -cfxMonthDuration);</span>
+<span class="nc" id="L195">			Date newDate = cale.getTime();</span>
+<span class="nc" id="L196">			String dateFromForCfx = format.format(newDate);</span>
+
+<span class="nc" id="L198">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L199">			preparedStatement = connection.prepareStatement(SanctionCsvQueryConstant.GET_CFX_CONTACT_DETAILS.getQuery());</span>
+<span class="nc" id="L200">			preparedStatement.setString(1, dateFromForCfx);</span>
+<span class="nc" id="L201">			preparedStatement.setString(2, dateFromForCfx);</span>
+<span class="nc" id="L202">			preparedStatement.setString(3, dateFromForCfx);</span>
+<span class="nc" id="L203">			preparedStatement.setString(4, dateFromForCfx);</span>
+<span class="nc" id="L204">			rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L206">				SanctionCsvRequest sanctionCsvRequest = new SanctionCsvRequest();</span>
+<span class="nc" id="L207">				sanctionCsvRequest.setSourceCode(CLNTS);</span>
+<span class="nc" id="L208">				sanctionCsvRequest.setClientId(rs.getString(SanctionCsvDBColumns.CLIENT_ID.getName()));</span>
+<span class="nc" id="L209">				sanctionCsvRequest.setCommentID(rs.getString(SanctionCsvDBColumns.COMMENT_ID.getName()));</span>
+<span class="nc" id="L210">				sanctionCsvRequest.setStatusIndicator(&quot;I&quot;);</span>
+<span class="nc" id="L211">				sanctionCsvRequest.setFullName(rs.getString(SanctionCsvDBColumns.FULLNAME.getName()));</span>
+<span class="nc" id="L212">				sanctionCsvRequest.setCountry(rs.getString(SanctionCsvDBColumns.COUNTRY.getName()));</span>
+<span class="nc" id="L213">				String dob = (rs.getString(SanctionCsvDBColumns.DOB.getName()));</span>
+<span class="nc" id="L214">				setDateOfBirth(sanctionCsvRequest, dob);</span>
+<span class="nc" id="L215">				sanctionCsvRequest.setRecordeType(&quot;I&quot;);</span>
+<span class="nc" id="L216">				sanctionCsvCfxRequestList.add(sanctionCsvRequest);</span>
+<span class="nc" id="L217">				sanctionCsvContactList.add(rs.getInt(SanctionCsvDBColumns.CONTACT_ID.getName()));</span>
+<span class="nc" id="L218">			}</span>
+<span class="nc" id="L219">			sanctionCsvRequestMap.put(&quot;CFX&quot;, sanctionCsvCfxRequestList);</span>
+<span class="nc" id="L220">			LOG.info(&quot;Extracted sanction CSV CFX data:&quot;);</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">			if (sanctionCsvContactList != null) {</span>
+<span class="nc" id="L222">				addWatchList(sanctionCsvContactList);</span>
+			}
+<span class="nc" id="L224">			getSanctionCsvDebtorData(sanctionCsvRequestMap);</span>
+<span class="nc" id="L225">		} catch (Exception e) {</span>
+<span class="nc" id="L226">			LOG.error(&quot;Error while fetching sanction csv CFX data :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L228">			closeResultset(rs);</span>
+<span class="nc" id="L229">			closeConnection(connection);</span>
+<span class="nc" id="L230">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L232">		return sanctionCsvRequestMap;</span>
+	}
+
+	/**
+	 * Gets the sanction csv debtor data.
+	 *
+	 * @param sanctionCsvRequestMap  the sanction csv request map
+	 * @param sanctionCsvRequestList the sanction csv request list
+	 * @return the sanction csv debtor data
+	 * @throws ComplianceException the compliance exception
+	 */
+	public HashMap&lt;String, List&lt;SanctionCsvRequest&gt;&gt; getSanctionCsvDebtorData(
+			HashMap&lt;String, List&lt;SanctionCsvRequest&gt;&gt; sanctionCsvRequestMap) throws ComplianceException {
+<span class="nc" id="L245">		Connection connection = null;</span>
+<span class="nc" id="L246">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L247">		ResultSet rs = null;</span>
+<span class="nc" id="L248">		List&lt;SanctionCsvRequest&gt; sanctionCsvDebtorRequestList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L250">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L251">			preparedStatement = connection.prepareStatement(SanctionCsvQueryConstant.GET_DEBTOR_DETAILS.getQuery());</span>
+<span class="nc" id="L252">			rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L254">				SanctionCsvRequest sanctionCsvRequest = new SanctionCsvRequest();</span>
+<span class="nc" id="L255">				sanctionCsvRequest.setSourceCode(CLNTS);</span>
+<span class="nc" id="L256">				sanctionCsvRequest.setClientId(rs.getString(SanctionCsvDBColumns.DEBTOR_CLIENT_ID.getName()));</span>
+<span class="nc" id="L257">				sanctionCsvRequest.setCommentID(rs.getString(SanctionCsvDBColumns.COMMENT_ID.getName()));</span>
+<span class="nc" id="L258">				sanctionCsvRequest.setStatusIndicator(&quot;I&quot;);</span>
+<span class="nc" id="L259">				sanctionCsvRequest.setFullName(rs.getString(SanctionCsvDBColumns.FULLNAME.getName()));</span>
+<span class="nc" id="L260">				sanctionCsvRequest.setCountry(rs.getString(SanctionCsvDBColumns.COUNTRY.getName()));</span>
+<span class="nc" id="L261">				String dob = (rs.getString(SanctionCsvDBColumns.DOB.getName()));</span>
+<span class="nc" id="L262">				setDateOfBirth(sanctionCsvRequest, dob);</span>
+<span class="nc" id="L263">				sanctionCsvRequest.setRecordeType(&quot;I&quot;);</span>
+<span class="nc" id="L264">				sanctionCsvDebtorRequestList.add(sanctionCsvRequest);</span>
+<span class="nc" id="L265">			}</span>
+<span class="nc" id="L266">			sanctionCsvRequestMap.put(&quot;DEBTOR&quot;, sanctionCsvDebtorRequestList);</span>
+<span class="nc" id="L267">			LOG.info(&quot;Extracted sanction CSV Debtor's data:&quot;);</span>
+
+<span class="nc" id="L269">		} catch (Exception e) {</span>
+<span class="nc" id="L270">			LOG.error(&quot;Error while fetching sanction csv Debtor's data :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L272">			closeResultset(rs);</span>
+<span class="nc" id="L273">			closeConnection(connection);</span>
+<span class="nc" id="L274">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L276">		return sanctionCsvRequestMap;</span>
+	}
+
+	/**
+	 * Sets the date of birth.
+	 *
+	 * @param sanctionCsvRequest the sanction csv request
+	 * @param dob the dob
+	 * @throws ParseException the parse exception
+	 */
+	private void setDateOfBirth(SanctionCsvRequest sanctionCsvRequest, String dob) throws ParseException {
+<span class="nc bnc" id="L287" title="All 4 branches missed.">		if(dob!=null &amp;&amp; !dob.isEmpty()) {</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">			if(dob.contains(&quot;-&quot;)) {</span>
+<span class="nc" id="L289">			Date parseDate = format.parse(dob);</span>
+<span class="nc" id="L290">			String birthDate = dobFormat.format(parseDate);</span>
+<span class="nc" id="L291">			sanctionCsvRequest.setDob(birthDate);</span>
+<span class="nc" id="L292">			}</span>
+		} else {
+<span class="nc" id="L294">			sanctionCsvRequest.setDob(dob);</span>
+		}
+<span class="nc" id="L296">	}</span>
+	
+	/**
+	 * Adds the watch list.
+	 *
+	 * @param sanctionCsvContactList the sanction csv contact list
+	 * @throws IOException         Signals that an I/O exception has occurred.
+	 * @throws ComplianceException the compliance exception
+	 */
+	public void addWatchList(List&lt;Integer&gt; sanctionCsvContactList) throws IOException, ComplianceException {
+<span class="nc" id="L306">		Connection connection = null;</span>
+<span class="nc" id="L307">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L308">		Timestamp createdOn = new Timestamp(System.currentTimeMillis());</span>
+<span class="nc" id="L309">		List&lt;Integer&gt; finalContactList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L310">		List&lt;Integer&gt; contactList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L312">			int reason = getWatchlistReason();</span>
+<span class="nc" id="L313">			int watchListReason = reason;</span>
+<span class="nc" id="L314">			connection = getConnection(Boolean.TRUE);</span>
+
+<span class="nc" id="L316">			contactList=checkContactWatchlisEntry(sanctionCsvContactList);</span>
+<span class="nc" id="L317">			finalContactList=contactList.stream().distinct().collect(Collectors.toList());// to exclude douplicate entry</span>
+			
+			// To add Watchlist
+<span class="nc" id="L320">			preparedStatement = connection</span>
+<span class="nc" id="L321">					.prepareStatement(SanctionCsvQueryConstant.INSERT_INACTIVE_FINSCAN_WATCHLIST.getQuery());</span>
+<span class="nc bnc" id="L322" title="All 2 branches missed.">			for (Integer ContactID : finalContactList) {</span>
+<span class="nc" id="L323">				Integer parameterIndex = 1;</span>
+<span class="nc" id="L324">				preparedStatement.setInt(parameterIndex, watchListReason);</span>
+<span class="nc" id="L325">				parameterIndex++;</span>
+<span class="nc" id="L326">				preparedStatement.setInt(parameterIndex, ContactID);</span>
+<span class="nc" id="L327">				parameterIndex++;</span>
+<span class="nc" id="L328">				preparedStatement.setInt(parameterIndex, CREATED_BY);</span>
+<span class="nc" id="L329">				parameterIndex++;</span>
+<span class="nc" id="L330">				preparedStatement.setTimestamp(parameterIndex, createdOn);</span>
+<span class="nc" id="L331">				preparedStatement.addBatch();</span>
+<span class="nc" id="L332">			}</span>
+<span class="nc" id="L333">			LOG.info(&quot;Watchlist added to all sanction CSV contacts&quot;);</span>
+<span class="nc" id="L334">		} catch (Exception e) {</span>
+<span class="nc" id="L335">			LOG.error(&quot;Error in addWatchList() for Sanction Csv Contacts : &quot;, e);</span>
+		} finally {
+<span class="nc" id="L337">			closeConnection(connection);</span>
+<span class="nc" id="L338">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L340">	}</span>
+
+	/**
+	 * Gets the watchlist reason.
+	 *
+	 * @return the watchlist reason
+	 * @throws ComplianceException the compliance exception
+	 */
+	// To get Watchlist Id
+	public Integer getWatchlistReason() throws ComplianceException {
+<span class="nc" id="L350">		Connection connection = null;</span>
+<span class="nc" id="L351">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L352">		ResultSet rs = null;</span>
+<span class="nc" id="L353">		Integer reason = null;</span>
+		try {
+<span class="nc" id="L355">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L356">			preparedStatement = connection.prepareStatement(SanctionCsvQueryConstant.GET_WATCHLIST_ID.getQuery());</span>
+<span class="nc" id="L357">			preparedStatement.setString(1, &quot;Finscan Inactive&quot;);</span>
+<span class="nc" id="L358">			rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L360">				reason = rs.getInt(&quot;Reason&quot;);</span>
+			}
+<span class="nc" id="L362">		} catch (Exception e) {</span>
+<span class="nc" id="L363">			LOG.error(&quot;Error while fetching Watchlist reason in getWatchlistReason() :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L365">			closeResultset(rs);</span>
+<span class="nc" id="L366">			closeConnection(connection);</span>
+<span class="nc" id="L367">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L369">		return reason;</span>
+	}
+
+	/**
+	 * Check contact watchlis entry.
+	 *
+	 * @param sanctionCsvContactList the sanction csv contact list
+	 * @return the list
+	 * @throws ComplianceException the compliance exception
+	 */
+	public List&lt;Integer&gt; checkContactWatchlisEntry(List&lt;Integer&gt; sanctionCsvContactList) throws ComplianceException {
+<span class="nc" id="L380">		Connection connection = null;</span>
+<span class="nc" id="L381">		PreparedStatement preparedStatement = null;</span>
+<span class="nc" id="L382">		ResultSet rs = null;</span>
+<span class="nc" id="L383">		Integer reason = getWatchlistReason();</span>
+<span class="nc" id="L384">		int watchListReason = reason;</span>
+<span class="nc" id="L385">		List&lt;Integer&gt; existingContactList = new ArrayList&lt;&gt;();</span>
+		try {
+<span class="nc" id="L387">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L388">			preparedStatement = connection</span>
+<span class="nc" id="L389">					.prepareStatement(SanctionCsvQueryConstant.CHECK_CONTACT_EXISTS_IN_CONTACTWATCHLIST.getQuery());</span>
+<span class="nc" id="L390">			preparedStatement.setInt(1, watchListReason);</span>
+<span class="nc" id="L391">			rs = preparedStatement.executeQuery();</span>
+<span class="nc bnc" id="L392" title="All 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L393">				existingContactList.add(rs.getInt(SanctionCsvDBColumns.CONTACT_ID.getName()));</span>
+			}
+<span class="nc" id="L395">			sanctionCsvContactList.removeAll(existingContactList);</span>
+<span class="nc" id="L396">		} catch (Exception e) {</span>
+<span class="nc" id="L397">			LOG.error(&quot;Error while checking contact Entry In Contact Watchlist :&quot;, e);</span>
+		} finally {
+<span class="nc" id="L399">			closeResultset(rs);</span>
+<span class="nc" id="L400">			closeConnection(connection);</span>
+<span class="nc" id="L401">			closePrepareStatement(preparedStatement);</span>
+		}
+<span class="nc" id="L403">		return sanctionCsvContactList;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

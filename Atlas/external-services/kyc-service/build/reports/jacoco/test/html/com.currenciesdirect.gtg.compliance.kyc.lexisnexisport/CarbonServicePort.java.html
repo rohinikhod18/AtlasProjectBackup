@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CarbonServicePort.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">kyc-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.kyc.lexisnexisport</a> &gt; <span class="el_source">CarbonServicePort.java</span></div><h1>CarbonServicePort.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.kyc.lexisnexisport;
+
+import java.util.concurrent.Callable;
+
+import javax.xml.namespace.QName;
+import javax.xml.ws.BindingProvider;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.kyc.KYCContactResponse;
+import com.currenciesdirect.gtg.compliance.kyc.core.IKYCProviderService;
+import com.currenciesdirect.gtg.compliance.kyc.core.domain.KYCProviderProperty;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCErrors;
+import com.currenciesdirect.gtg.compliance.kyc.exception.KYCException;
+import com.currenciesdirect.gtg.compliance.kyc.util.Constants;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.verid.carbon.integration.Carbon;
+import com.verid.carbon.integration.CarbonWebService;
+import com.verid.carbon.integration.TransactionIdentityVerification;
+import com.verid.carbon.integration.TransactionResponse;
+
+/**
+ * The Class CarbonServicePort.
+ */
+public class CarbonServicePort implements IKYCProviderService, Callable&lt;KYCContactResponse&gt; {
+
+	/** The Constant LOG. */
+<span class="nc" id="L30">	private static final Logger LOG = LoggerFactory.getLogger(CarbonServicePort.class);</span>
+
+	/** The request. */
+	private KYCContactRequest request;
+
+	/** The property. */
+	private KYCProviderProperty property;
+
+	/**
+	 * Instantiates a new carbon service port.
+	 *
+	 * @param request
+	 *            the request
+	 * @param property
+	 *            the property
+	 */
+<span class="nc" id="L46">	public CarbonServicePort(KYCContactRequest request, KYCProviderProperty property) {</span>
+<span class="nc" id="L47">		this.request = request;</span>
+<span class="nc" id="L48">		this.property = property;</span>
+<span class="nc" id="L49">	}</span>
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see java.util.concurrent.Callable#call()
+	 */
+	@Override
+	public KYCContactResponse call() throws Exception {
+<span class="nc" id="L58">		return checkKYCdetails(request, property);</span>
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.currenciesdirect.gtg.compliance.kyc.core.IKYCProviderService#
+	 * checkKYCdetails(com.currenciesdirect.gtg.compliance.commons.domain.kyc.
+	 * KYCContactRequest,
+	 * com.currenciesdirect.gtg.compliance.kyc.core.domain.KYCProviderProperty)
+	 */
+	@Override
+	public KYCContactResponse checkKYCdetails(KYCContactRequest request, KYCProviderProperty property)
+			throws KYCException {
+<span class="nc" id="L72">		KYCContactResponse response = new KYCContactResponse();</span>
+<span class="nc" id="L73">		CarbonServiceTransformer carbonServiceTransformer = CarbonServiceTransformer.getInstance();</span>
+		try {
+<span class="nc" id="L75">			QName serviceName = new QName(property.getQname(), &quot;CarbonWebService&quot;);</span>
+<span class="nc" id="L76">			CarbonWebService ss = new CarbonWebService(</span>
+<span class="nc" id="L77">					CarbonWebService.class.getClassLoader().getResource(&quot;resources/ws_1.wsdl&quot;), serviceName);</span>
+<span class="nc" id="L78">			Carbon port = ss.getCarbonSoapPort();</span>
+<span class="nc" id="L79">			BindingProvider prov = (BindingProvider) port;</span>
+<span class="nc" id="L80">			prov.getRequestContext().put(BindingProvider.ENDPOINT_ADDRESS_PROPERTY, property.getEndPointUrl());</span>
+<span class="nc" id="L81">			prov.getRequestContext().put(BindingProvider.USERNAME_PROPERTY, property.getUserName());</span>
+<span class="nc" id="L82">			prov.getRequestContext().put(BindingProvider.PASSWORD_PROPERTY, property.getPassWord());</span>
+
+<span class="nc" id="L84">			TransactionIdentityVerification transactionIdentityVerification = carbonServiceTransformer</span>
+<span class="nc" id="L85">					.transformRequestObject(request, property);</span>
+<span class="nc" id="L86">			TransactionResponse transactionResponse = port.identityVerification(transactionIdentityVerification);</span>
+
+<span class="nc" id="L88">			ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L89">			String json = mapper.writeValueAsString(transactionResponse);</span>
+<span class="nc" id="L90">			response.setProviderResponse(json);</span>
+<span class="nc" id="L91">			response.setProviderName(Constants.CARBONSERVICE_PROVIDER);</span>
+<span class="nc" id="L92">			response.setProviderMethod(Constants.CARBONSERVICE_PROVIDER_METHOD);</span>
+<span class="nc" id="L93">			response.setOverallScore(&quot;--&quot;);</span>
+<span class="nc" id="L94">			handleCarbonServiceResponse(response, transactionResponse);</span>
+<span class="nc" id="L95">			response.setContactSFId(request.getContactSFId());</span>
+<span class="nc" id="L96">			response.setId(request.getId());</span>
+			
+<span class="nc" id="L98">		} catch (KYCException exception) {</span>
+<span class="nc" id="L99">			response.setBandText(Constants.NOT_PERFORMED);</span>
+<span class="nc" id="L100">			response.setStatus(Constants.NOT_PERFORMED);</span>
+<span class="nc" id="L101">			response.setOverallScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L102">			logDebug(exception);</span>
+<span class="nc" id="L103">			response.setContactSFId(request.getContactSFId());</span>
+<span class="nc" id="L104">			response.setId(request.getId());</span>
+<span class="nc" id="L105">			response.setProviderName(Constants.CARBONSERVICE_PROVIDER);</span>
+<span class="nc" id="L106">			response.setProviderMethod(Constants.CARBONSERVICE_PROVIDER_METHOD);</span>
+<span class="nc" id="L107">			response.setErrorCode(exception.getkycErrors().getErrorCode());</span>
+<span class="nc" id="L108">			response.setErrorDescription(exception.getDescription());</span>
+<span class="nc" id="L109">		} catch (Exception e) {</span>
+<span class="nc" id="L110">			LOG.error(&quot; Error in CarbonServicePort : checkKYCdetails()&quot;, e);</span>
+<span class="nc" id="L111">			response.setBandText(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L112">			response.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L113">			response.setOverallScore(Constants.NOT_AVAILABLE);</span>
+<span class="nc" id="L114">			response.setContactSFId(request.getContactSFId());</span>
+<span class="nc" id="L115">			response.setId(request.getId());</span>
+<span class="nc" id="L116">			response.setProviderName(Constants.CARBONSERVICE_PROVIDER);</span>
+<span class="nc" id="L117">			response.setProviderMethod(Constants.CARBONSERVICE_PROVIDER_METHOD);</span>
+<span class="nc" id="L118">			response.setErrorCode(KYCErrors.ERROR_WHILE_SENDING_REQUEST_TO_CARBONSERVICE_KYC_PROVIDER.getErrorCode());</span>
+<span class="nc" id="L119">			response.setErrorDescription(</span>
+<span class="nc" id="L120">					KYCErrors.ERROR_WHILE_SENDING_REQUEST_TO_CARBONSERVICE_KYC_PROVIDER.getErrorDescription());</span>
+<span class="nc" id="L121">		}</span>
+<span class="nc bnc" id="L122" title="All 4 branches missed.">		if(property.getAlwaysPass()!=null &amp;&amp; property.getAlwaysPass()){</span>
+<span class="nc" id="L123">			response.setBandText(Constants.PASS);</span>
+<span class="nc" id="L124">			response.setStatus(Constants.PASS);</span>
+		}
+<span class="nc" id="L126">		return response;</span>
+	}
+
+	/**
+	 * Log debug.
+	 *
+	 * @param exception
+	 *            the exception
+	 */
+	private void logDebug(Throwable exception) {
+<span class="nc" id="L136">		LOG.debug(&quot;Error in class CarbonService Port :&quot;, exception);</span>
+<span class="nc" id="L137">	}</span>
+
+	/**
+	 * Handle carbon service response.
+	 *
+	 * @param response
+	 *            the response
+	 * @param transactionResponse
+	 *            the transaction response
+	 */
+	private void handleCarbonServiceResponse(KYCContactResponse response, TransactionResponse transactionResponse) {
+<span class="nc" id="L148">		if (!Constants.PASSED</span>
+<span class="nc bnc" id="L149" title="All 2 branches missed.">				.equalsIgnoreCase(transactionResponse.getTransactionStatus().getTransactionResult().toString())) {</span>
+<span class="nc" id="L150">			setFailureResponse(response, transactionResponse);</span>
+		} else {
+<span class="nc" id="L152">			response.setStatus(Constants.PASS);</span>
+<span class="nc" id="L153">			response.setBandText(Constants.PASS);</span>
+		}
+<span class="nc" id="L155">	}</span>
+
+	/**
+	 * Sets the failure response.
+	 *
+	 * @param response
+	 *            the response
+	 * @param transactionResponse
+	 *            the transaction response
+	 */
+	private void setFailureResponse(KYCContactResponse response, TransactionResponse transactionResponse) {
+<span class="nc" id="L166">		if (Constants.FAILED</span>
+<span class="nc bnc" id="L167" title="All 2 branches missed.">				.equalsIgnoreCase(transactionResponse.getTransactionStatus().getTransactionResult().toString())</span>
+				|| Constants.INVALID_TXN_INITIATED
+<span class="nc bnc" id="L169" title="All 2 branches missed.">						.equalsIgnoreCase(transactionResponse.getInformation().get(0).getDetailCode())</span>
+				|| Constants.ERROR
+<span class="nc bnc" id="L171" title="All 2 branches missed.">						.equalsIgnoreCase(transactionResponse.getTransactionStatus().getTransactionResult().toString())) {</span>
+<span class="nc" id="L172">			response.setStatus(Constants.FAIL);</span>
+<span class="nc" id="L173">			response.setBandText(Constants.FAIL);</span>
+		} else{
+<span class="nc" id="L175">			response.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L176">			response.setBandText(Constants.SERVICE_FAILURE);</span>
+		}
+<span class="nc" id="L178">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationErrorHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.reg</a> &gt; <span class="el_source">RegistrationErrorHandler.java</span></div><h1>RegistrationErrorHandler.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.reg;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.Message;
+import org.springframework.web.context.request.async.DeferredResult;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessageResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ContactComplianceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.dbport.BroadCastQueueDBServiceImpl;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Contact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.transformer.mqbroadcast.SaveToBroadCastTransformer;
+
+/**
+ * The Class RegistrationErrorHandler.
+ *
+ * @author abhijeetg
+ */
+<span class="nc" id="L36">public class RegistrationErrorHandler {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L39">	private static final Logger LOG = LoggerFactory.getLogger(RegistrationErrorHandler.class);</span>
+
+	/** The broad cast queue DB service impl. */
+	@Autowired
+	@Qualifier(&quot;reg.BroadCastQueueDBServiceImpl&quot;)
+	private BroadCastQueueDBServiceImpl broadCastQueueDBServiceImpl;
+
+	/** The save to broad cast transformer. */
+	@Autowired
+	@Qualifier(&quot;saveToBroadCastTransformer&quot;)
+	private SaveToBroadCastTransformer saveToBroadCastTransformer;
+
+	/**
+	 * Log error.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; logError(Message&lt;MessageContext&gt; message) throws ComplianceException {
+
+<span class="nc" id="L62">		RegistrationResponse response = null;</span>
+		try {
+<span class="nc" id="L64">			response = createResponse(message);</span>
+<span class="nc" id="L65">			message.getPayload().getGatewayMessageExchange().setResponse(response);</span>
+<span class="nc" id="L66">			saveToBroadCastTransformer.transformRequest(message);</span>
+<span class="nc" id="L67">			broadCastQueueDBServiceImpl.saveIntoBroadcastQueue(message);</span>
+<span class="nc" id="L68">		} catch (Exception e) {</span>
+<span class="nc" id="L69">			LOG.error(&quot;Error in RegistrationErrorHandler {1}&quot;, e);</span>
+<span class="nc" id="L70">		}</span>
+
+		@SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L73">		DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message.getHeaders()</span>
+<span class="nc" id="L74">				.get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+		ResponseEntity&lt;ServiceMessageResponse&gt; responseEntity;
+<span class="nc" id="L76">		responseEntity = new ResponseEntity&lt;&gt;(response, HttpStatus.OK);</span>
+<span class="nc" id="L77">		deferredResult.setResult(responseEntity);</span>
+<span class="nc" id="L78">		LOG.warn(&quot;logError--&gt;Response : {}&quot;, responseEntity);</span>
+<span class="nc" id="L79">		return message;</span>
+	}
+
+	/**
+	 * Creates the response.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the registration response
+	 */
+	private RegistrationResponse createResponse(Message&lt;MessageContext&gt; message) {
+<span class="nc" id="L90">		MessageContext context = message.getPayload();</span>
+<span class="nc" id="L91">		MessageExchange exchange = context.getGatewayMessageExchange();</span>
+<span class="nc" id="L92">		RegistrationServiceRequest request = (RegistrationServiceRequest) exchange.getRequest();</span>
+<span class="nc" id="L93">		RegistrationResponse response = new RegistrationResponse();</span>
+<span class="nc" id="L94">		response.setOsrID(request.getOsrId());</span>
+<span class="nc" id="L95">		Account account = request.getAccount();</span>
+<span class="nc" id="L96">		response.setOrgCode(request.getOrgCode());</span>
+<span class="nc" id="L97">		ComplianceAccount accountResponse = new ComplianceAccount();</span>
+<span class="nc" id="L98">		accountResponse.setAccountSFID(account.getAccSFID());</span>
+<span class="nc" id="L99">		accountResponse.setAcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L100">		accountResponse.setResponseCode(ComplianceReasonCode.SYSTEM_FAILURE.getReasonCode());</span>
+<span class="nc" id="L101">		accountResponse.setResponseDescription(ComplianceReasonCode.SYSTEM_FAILURE.getReasonDescription());</span>
+<span class="nc" id="L102">		accountResponse.setTradeAccountID(account.getTradeAccountID());</span>
+<span class="nc" id="L103">		accountResponse.setContacts(getErrorContactResponseList(request.getAccount().getContacts()));</span>
+<span class="nc" id="L104">		response.setAccount(accountResponse);</span>
+<span class="nc" id="L105">		context.getGatewayMessageExchange().setResponse(response);</span>
+
+<span class="nc" id="L107">		return response;</span>
+	}
+
+	/**
+	 * Gets the error contact response list.
+	 *
+	 * @param contacts
+	 *            the contacts
+	 * @return the error contact response list
+	 */
+	private List&lt;ComplianceContact&gt; getErrorContactResponseList(List&lt;Contact&gt; contacts) {
+<span class="nc" id="L118">		List&lt;ComplianceContact&gt; contactResponseList = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">		for (Contact contact : contacts) {</span>
+<span class="nc" id="L120">			ComplianceContact cResponse = new ComplianceContact();</span>
+<span class="nc" id="L121">			cResponse.setContactSFID(contact.getContactSFID());</span>
+<span class="nc" id="L122">			cResponse.setCcs(ContactComplianceStatus.INACTIVE);</span>
+<span class="nc" id="L123">			cResponse.setResponseCode(ComplianceReasonCode.SYSTEM_FAILURE.getReasonCode());</span>
+<span class="nc" id="L124">			cResponse.setResponseDescription(ComplianceReasonCode.SYSTEM_FAILURE.getReasonDescription());</span>
+<span class="nc" id="L125">			cResponse.setTradeContactID(contact.getTradeContactID());</span>
+<span class="nc" id="L126">			contactResponseList.add(cResponse);</span>
+<span class="nc" id="L127">		}</span>
+<span class="nc" id="L128">		return contactResponseList;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

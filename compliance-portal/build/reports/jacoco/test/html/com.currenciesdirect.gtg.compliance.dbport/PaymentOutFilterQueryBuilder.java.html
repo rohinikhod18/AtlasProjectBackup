@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PaymentOutFilterQueryBuilder.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport</a> &gt; <span class="el_source">PaymentOutFilterQueryBuilder.java</span></div><h1>PaymentOutFilterQueryBuilder.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport;
+
+import com.currenciesdirect.gtg.compliance.core.domain.paymentout.PaymentOutFilter;
+import com.currenciesdirect.gtg.compliance.dbport.enums.AccountTMFlagEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.ServiceStatusEnum;
+
+/**
+ * The class PaymentOutFilterQueryBuilder
+ */
+public class PaymentOutFilterQueryBuilder extends AbstractFilterQueryBuilder {
+
+	private PaymentOutFilter filter;
+
+	/**
+	 * Instantiates a new payment out filter query builder.
+	 *
+	 * @param filter        the filter
+	 * @param query         the query
+	 * @param isFilterApply the is filter apply
+	 */
+	public PaymentOutFilterQueryBuilder(PaymentOutFilter filter, String query) {
+<span class="nc" id="L22">		super(query, false);</span>
+<span class="nc" id="L23">		this.filter = filter;</span>
+<span class="nc" id="L24">	}</span>
+
+	@Override
+	public void addFilter() {
+		
+<span class="nc" id="L29">		String[] orgaizations = filter.getOrganization();</span>
+<span class="nc bnc" id="L30" title="All 2 branches missed.">		if (orgaizations != null) {</span>
+<span class="nc" id="L31">			addInCriteria(&quot;org.Name&quot;, orgaizations, CriteriaBuilder.AND);</span>
+		}
+		
+<span class="nc" id="L34">		String[] legalEntity = filter.getLegalEntity();</span>
+<span class="nc bnc" id="L35" title="All 2 branches missed.">		if (legalEntity != null) {</span>
+<span class="nc" id="L36">			addInCriteria(&quot;le.Code&quot;, legalEntity, CriteriaBuilder.AND);</span>
+		}
+
+<span class="nc" id="L39">		addSerivesCriteria();</span>
+
+<span class="nc" id="L41">		String[] owner = filter.getOwner();</span>
+
+<span class="nc bnc" id="L43" title="All 2 branches missed.">		if (owner != null) {</span>
+<span class="nc" id="L44">			addInCriteria(PayOutQueDBColumns.REGOWNER.getName(), owner, CriteriaBuilder.AND);</span>
+		}
+
+<span class="nc" id="L47">		String registeredFrom = filter.getDateFrom();</span>
+<span class="nc" id="L48">		String registeredTo = filter.getDateTo();</span>
+<span class="nc" id="L49">		addDateTimeCriteria(&quot;TransactionDate&quot;, registeredFrom, registeredTo, CriteriaBuilder.AND);</span>
+		
+<span class="nc" id="L51">	}</span>
+
+	private void addSerivesCriteria() {
+<span class="nc" id="L54">		addBlacklistCriteria();</span>
+<span class="nc" id="L55">		addSanctionCriteria();</span>
+<span class="nc" id="L56">		addFraugsterCriteria();</span>
+<span class="nc" id="L57">		addCustomCheckCriteria();</span>
+<span class="nc" id="L58">		addIntuitionCheckCriteria();//Added for AT-4614</span>
+<span class="nc" id="L59">		addTransactionMonitoringRequest();//Added for AT-4656</span>
+<span class="nc" id="L60">	}</span>
+	
+	//Added for AT-4656
+		private void addTransactionMonitoringRequest() {
+<span class="nc" id="L64">			String[] transactionmonitoringrequest = filter.getTransactionMonitoringRequest();</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">			if (Boolean.FALSE.equals(validateServiceStatus(transactionmonitoringrequest))) {</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">				if (&quot;PASS&quot;.equals(transactionmonitoringrequest[0])) {</span>
+					//Added for AT-4850
+<span class="nc" id="L68">					String[] passCriteriaQueue= {AccountTMFlagEnum.ACCOUNTTMFLAG1.getDatabaseStatus().toString(),AccountTMFlagEnum.ACCOUNTTMFLAG2.getDatabaseStatus().toString(),AccountTMFlagEnum.ACCOUNTTMFLAG4.getDatabaseStatus().toString()};</span>
+<span class="nc" id="L69">					addInCriteria(PayOutQueDBColumns.FILTER_BY_TRAANSACTIONMONITORING_REQUEST.getName(), passCriteriaQueue, CriteriaBuilder.AND);</span>
+<span class="nc bnc" id="L70" title="All 2 branches missed.">				} else if(&quot;FAIL&quot;.equals(transactionmonitoringrequest[0])) {</span>
+					//Added for AT-4850
+<span class="nc" id="L72">				String[] failCriteriaQueue= {AccountTMFlagEnum.ACCOUNTTMFLAG0.getDatabaseStatus().toString(),AccountTMFlagEnum.ACCOUNTTMFLAG3.getDatabaseStatus().toString()};</span>
+<span class="nc" id="L73">				addInCriteria(PayOutQueDBColumns.FILTER_BY_TRAANSACTIONMONITORING_REQUEST.getName(), failCriteriaQueue, CriteriaBuilder.AND);</span>
+				}
+			}
+<span class="nc" id="L76">		}</span>
+	
+	//Added for AT-4614
+    private void addIntuitionCheckCriteria() {
+<span class="nc" id="L80">        String[] intuitionCheckStatus = filter.getIntuitionStatus();</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        if (Boolean.FALSE.equals(validateServiceStatus(intuitionCheckStatus))) {</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">            if (&quot;PASS&quot;.equals(intuitionCheckStatus[0])) {</span>
+<span class="nc" id="L83">                addEqualCriteria(PayOutQueDBColumns.FILTER_BY_INTUITIONCHECK.getName(),</span>
+<span class="nc" id="L84">                        ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+            } else {
+            	//Added for AT-4842
+<span class="nc" id="L87">				String[] intuitionFailQueueStatus= {ServiceStatusEnum.PASS.getDatabaseStatus().toString(),ServiceStatusEnum.NOT_REQUIRED.getDatabaseStatus().toString()};</span>
+<span class="nc" id="L88">				addNotInCriteria(PayOutQueDBColumns.FILTER_BY_INTUITIONCHECK.getName(), intuitionFailQueueStatus, CriteriaBuilder.AND);</span>
+        
+            }
+        }
+<span class="nc" id="L92">    }</span>
+
+	private void addCustomCheckCriteria() {
+<span class="nc" id="L95">		String[] customCheckStatus = filter.getCustomCheckStatus();</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">		if (Boolean.FALSE.equals(validateServiceStatus(customCheckStatus))) {</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">			if (&quot;PASS&quot;.equals(customCheckStatus[0])) {</span>
+<span class="nc" id="L98">				addEqualCriteria(PayOutQueDBColumns.FILTER_BY_CUSTOMCHECKSTATUS.getName(),</span>
+<span class="nc" id="L99">						ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			} else {
+<span class="nc" id="L101">				addNotEqualCriteria(PayOutQueDBColumns.FILTER_BY_CUSTOMCHECKSTATUS.getName(),</span>
+<span class="nc" id="L102">						ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+<span class="nc" id="L103">				addNotEqualCriteria(PayOutQueDBColumns.FILTER_BY_CUSTOMCHECKSTATUS.getName(),</span>
+<span class="nc" id="L104">						ServiceStatusEnum.NOT_REQUIRED.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			}
+		}
+
+<span class="nc" id="L108">	}</span>
+
+	private void addBlacklistCriteria() {
+<span class="nc" id="L111">		String[] blacklistStatus = filter.getBlacklistStatus();</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">		if (Boolean.FALSE.equals(validateServiceStatus(blacklistStatus))) {</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">			if (&quot;PASS&quot;.equals(blacklistStatus[0])) {</span>
+<span class="nc" id="L114">				addEqualCriteria(PayOutQueDBColumns.FILTER_BY_BLACKLISTSTATUS.getName(),</span>
+<span class="nc" id="L115">						ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			} else {
+<span class="nc" id="L117">				addNotEqualCriteria(PayOutQueDBColumns.FILTER_BY_BLACKLISTSTATUS.getName(),</span>
+<span class="nc" id="L118">						ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+<span class="nc" id="L119">				addNotEqualCriteria(PayOutQueDBColumns.FILTER_BY_BLACKLISTSTATUS.getName(),</span>
+<span class="nc" id="L120">						ServiceStatusEnum.NOT_REQUIRED.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			}
+
+		}
+<span class="nc" id="L124">	}</span>
+
+	private void addSanctionCriteria() {
+<span class="nc" id="L127">		String[] sanctionStatus = filter.getSanctionStatus();</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">		if (Boolean.FALSE.equals(validateServiceStatus(sanctionStatus))) {</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">			if (&quot;PASS&quot;.equals(sanctionStatus[0])) {</span>
+<span class="nc" id="L130">				addEqualCriteria(PayOutQueDBColumns.FILTER_BY_SANCTIONSTATUS.getName(),</span>
+<span class="nc" id="L131">						ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+<span class="nc" id="L132">				String[] blacklistPayRefQueueStatus= {ServiceStatusEnum.PASS.getDatabaseStatus().toString(),ServiceStatusEnum.NOT_PERFORMED.getDatabaseStatus().toString(),ServiceStatusEnum.NOT_REQUIRED.getDatabaseStatus().toString()};</span>
+<span class="nc" id="L133">				addInCriteria(PayOutQueDBColumns.FILTER_BY_BLACKLISTPAYREFSTATUS.getName(), blacklistPayRefQueueStatus,  CriteriaBuilder.AND);</span>
+<span class="nc" id="L134">			} else {</span>
+
+<span class="nc" id="L136">				addNotEqualCriteria2(PayOutQueDBColumns.FILTER_BY_SANCTIONSTATUS.getName(),</span>
+<span class="nc" id="L137">						ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+<span class="nc" id="L138">				addNotEqualCriteria3(PayOutQueDBColumns.FILTER_BY_BLACKLISTPAYREFSTATUS.getName(),</span>
+<span class="nc" id="L139">						ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+
+			}
+		}
+<span class="nc" id="L143">	}</span>
+
+	private void addFraugsterCriteria() {
+<span class="nc" id="L146">		String[] fraugsterStatus = filter.getFraugsterStatus();</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">		if (Boolean.FALSE.equals(validateServiceStatus(fraugsterStatus))) {</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">			if (&quot;PASS&quot;.equals(fraugsterStatus[0])) {</span>
+<span class="nc" id="L149">				addEqualCriteria(PayOutQueDBColumns.FILTER_BY_FRAUGSTERSTATUS.getName(),</span>
+<span class="nc" id="L150">						ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			} else {
+<span class="nc" id="L152">				addNotEqualCriteria(PayOutQueDBColumns.FILTER_BY_FRAUGSTERSTATUS.getName(),</span>
+<span class="nc" id="L153">						ServiceStatusEnum.PASS.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+<span class="nc" id="L154">				addNotEqualCriteria(PayOutQueDBColumns.FILTER_BY_FRAUGSTERSTATUS.getName(),</span>
+<span class="nc" id="L155">						ServiceStatusEnum.NOT_REQUIRED.getDatabaseStatus().toString(), CriteriaBuilder.AND);</span>
+			}
+		}
+<span class="nc" id="L158">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,619 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RegistrationController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.httpport</a> &gt; <span class="el_source">RegistrationController.java</span></div><h1>RegistrationController.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.httpport;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.ModelAndView;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.request.Contact;
+import com.currenciesdirect.gtg.compliance.core.IRegistrationService;
+import com.currenciesdirect.gtg.compliance.core.domain.AccountHistoryRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.AccountHistoryResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ActivityLogs;
+import com.currenciesdirect.gtg.compliance.core.domain.DeviceInfoRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.DeviceInfoResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.IRegistrationDetails;
+import com.currenciesdirect.gtg.compliance.core.domain.LockResourceRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.LockResourceResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.ProviderResponseLogRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ProviderResponseLogResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationCfxDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.RegistrationViewMoreRequest;
+import com.currenciesdirect.gtg.compliance.core.domain.ViewMoreResponse;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationDetailsDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationQueueDto;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationQueueFilter;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.domain.registration.RegistrationUpdateRequest;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.FunctionsAllowed;
+import com.currenciesdirect.gtg.compliance.iam.core.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.util.JsonConverterUtil;
+import com.currenciesdirect.gtg.compliance.util.UserPermissionFilterBuilder;
+
+/**
+ * The Class RegistrationController.
+ */
+/**
+ * @author rajeshs
+ *
+ */
+@Controller
+<span class="fc" id="L56">public class RegistrationController extends BaseController {</span>
+
+	private static final String REGISTRATION_QUEUE_DTO = &quot;registrationQueueDto&quot;;
+
+  @Autowired
+	@Qualifier(&quot;registrationServiceImpl&quot;)
+	private IRegistrationService iRegistrationService;
+
+<span class="fc" id="L64">	private Logger log = LoggerFactory.getLogger(RegistrationController.class);</span>
+
+	/**
+	 * Gets the registration queue.
+	 *
+	 * @param user
+	 *            the user
+	 * @return the registration queue
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_REGISTRTION_QUQUE })
+	@GetMapping(value = &quot;/reg&quot;)
+	public ModelAndView getRegistrationQueue(@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L76">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="fc" id="L77">		RegistrationQueueDto registrationQueueDto = null;</span>
+<span class="fc" id="L78">		String jsonUser = JsonConverterUtil.convertToJsonWithNull(user);</span>
+<span class="fc" id="L79">		log.debug(jsonUser);</span>
+		try {
+<span class="fc" id="L81">			RegistrationQueueFilter filter = UserPermissionFilterBuilder</span>
+<span class="fc" id="L82">					.getFilterFromUserPermission(user.getPermissions(), RegistrationQueueFilter.class);</span>
+<span class="fc" id="L83">			filter.setUserProfile(user);</span>
+<span class="fc" id="L84">			RegistrationSearchCriteria searchCriteria = new RegistrationSearchCriteria();</span>
+<span class="fc" id="L85">			searchCriteria.setFilter(filter);</span>
+<span class="fc" id="L86">			modelAndView.setViewName(ViewNameEnum.REGISTRATION_QUEUE.getViewName());</span>
+<span class="fc" id="L87">			registrationQueueDto = iRegistrationService.getRegistrationQueueWithCriteria(searchCriteria);</span>
+<span class="fc" id="L88">			registrationQueueDto.setUser(user);</span>
+<span class="fc" id="L89">			modelAndView.addObject(REGISTRATION_QUEUE_DTO, registrationQueueDto);</span>
+<span class="nc" id="L90">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L91">			log.debug(&quot;&quot;, e);</span>
+<span class="nc" id="L92">			registrationQueueDto = new RegistrationQueueDto();</span>
+<span class="nc" id="L93">			registrationQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L94">			registrationQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L95">		}</span>
+<span class="fc" id="L96">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the registration queue.
+	 *
+	 * @param user
+	 *            the user
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @return the registration queue
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_REGISTRTION_QUQUE })
+	@PostMapping(value = &quot;/reg&quot;)
+	public ModelAndView getRegistrationQueueWithCriteria(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria) {
+<span class="nc" id="L112">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="nc" id="L113">		RegistrationQueueDto registrationQueueDto = null;</span>
+<span class="nc" id="L114">		String jsonUser = JsonConverterUtil.convertToJsonWithNull(user);</span>
+<span class="nc" id="L115">		log.debug(jsonUser);</span>
+		try {
+
+<span class="nc" id="L118">			RegistrationSearchCriteria searchCriteriaobj = JsonConverterUtil</span>
+<span class="nc" id="L119">					.convertToObject(RegistrationSearchCriteria.class, searchCriteria);</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">			if (searchCriteriaobj == null) {</span>
+<span class="nc" id="L121">				searchCriteriaobj = new RegistrationSearchCriteria();</span>
+<span class="nc" id="L122">				searchCriteriaobj.setFilter(new RegistrationQueueFilter());</span>
+			}
+<span class="nc" id="L124">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L125">					user.getPermissions());</span>
+<span class="nc" id="L126">			searchCriteriaobj.getFilter().setUserProfile(user);</span>
+<span class="nc" id="L127">			modelAndView.setViewName(ViewNameEnum.REGISTRATION_QUEUE.getViewName());</span>
+<span class="nc" id="L128">			registrationQueueDto = iRegistrationService.getRegistrationQueueWithCriteria(searchCriteriaobj);</span>
+<span class="nc" id="L129">			registrationQueueDto.setUser(user);</span>
+<span class="nc" id="L130">			modelAndView.addObject(REGISTRATION_QUEUE_DTO, registrationQueueDto);</span>
+<span class="nc" id="L131">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L132">			log.debug(&quot;&quot;, e);</span>
+<span class="nc" id="L133">			registrationQueueDto = new RegistrationQueueDto();</span>
+<span class="nc" id="L134">			registrationQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L135">			registrationQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L136">		}</span>
+<span class="nc" id="L137">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the registration queue.
+	 *
+	 * @param request
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return the registration queue
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_VIEW_REGISTRTION_QUQUE })
+	@PostMapping(value = &quot;/regQueue&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public RegistrationQueueDto getRegistrationQueueWithCriteria(@RequestBody RegistrationSearchCriteria request,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L156">		RegistrationQueueDto registrationQueueDto = null;</span>
+		try {
+<span class="fc" id="L158">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(request.getFilter(), user.getPermissions());</span>
+<span class="fc" id="L159">			request.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L160">			registrationQueueDto = iRegistrationService.getRegistrationQueueWithCriteria(request);</span>
+<span class="fc" id="L161">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L162">			log.debug(&quot;&quot;, e);</span>
+<span class="fc" id="L163">			registrationQueueDto = new RegistrationQueueDto();</span>
+<span class="fc" id="L164">			registrationQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L165">			registrationQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L166">		}</span>
+<span class="fc" id="L167">		registrationQueueDto.setUser(user);</span>
+<span class="fc" id="L168">		return registrationQueueDto;</span>
+	}
+
+	/**
+	 * Gets the registration queue with criteria for dashboard.
+	 *
+	 * @param custType
+	 *            the cust type
+	 * @param user
+	 *            the user
+	 * @return the registration queue with criteria for dashboard
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/regQueueWithCriteria&quot;)
+	public ModelAndView getRegistrationQueueWithCriteriaForDashboard(
+			@RequestParam(value = &quot;custType&quot;, required = false) String custType,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L187">		ModelAndView modelAndView = new ModelAndView();</span>
+<span class="fc" id="L188">		RegistrationQueueDto registrationQueueDto = null;</span>
+		try {
+<span class="fc" id="L190">			modelAndView.setViewName(ViewNameEnum.REGISTRATION_QUEUE.getViewName());</span>
+<span class="fc" id="L191">			RegistrationSearchCriteria searchCriteria = new RegistrationSearchCriteria();</span>
+<span class="fc" id="L192">			RegistrationQueueFilter queueFilter = new RegistrationQueueFilter();</span>
+
+<span class="fc" id="L194">			queueFilter.setCustType(new String[] { custType });</span>
+<span class="fc" id="L195">			searchCriteria.setFilter(queueFilter);</span>
+<span class="fc" id="L196">			searchCriteria.getFilter().setUserProfile(user);</span>
+<span class="fc" id="L197">			searchCriteria.setCustType(custType);</span>
+<span class="fc" id="L198">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteria.getFilter(),</span>
+<span class="fc" id="L199">					user.getPermissions());</span>
+<span class="fc" id="L200">			registrationQueueDto = iRegistrationService.getRegistrationQueueWithCriteria(searchCriteria);</span>
+<span class="fc" id="L201">			registrationQueueDto.setUser(user);</span>
+<span class="fc" id="L202">			registrationQueueDto.setCustType(custType);</span>
+<span class="fc" id="L203">			registrationQueueDto.setIsDashboardSearchCriteria(Boolean.TRUE);</span>
+<span class="fc" id="L204">			modelAndView.addObject(REGISTRATION_QUEUE_DTO, registrationQueueDto);</span>
+<span class="nc" id="L205">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L206">			log.debug(&quot;&quot;, e);</span>
+<span class="nc" id="L207">			registrationQueueDto = new RegistrationQueueDto();</span>
+<span class="nc" id="L208">			registrationQueueDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L209">			registrationQueueDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L210">		}</span>
+
+<span class="fc" id="L212">		return modelAndView;</span>
+	}
+
+	/**
+	 * Gets the registration details.
+	 *
+	 * @param contactId
+	 *            the contact id
+	 * @param custType
+	 *            the cust type
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @param source
+	 *            the source
+	 * @param user
+	 *            the user
+	 * @return the registration details
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/registrationDetails&quot;)
+	public ModelAndView getRegistrationDetails(@RequestParam(value = &quot;contactId&quot;, required = false) Integer contactId,
+			@RequestParam(value = &quot;custType&quot;, required = false) String custType,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria,
+			@RequestParam(value = &quot;source&quot;, required = false) String source,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+
+<span class="nc" id="L240">		ModelAndView modelAndView = new ModelAndView();</span>
+		IRegistrationDetails registrationDetailsDto;
+		try {
+<span class="nc" id="L243">			RegistrationSearchCriteria searchCriteriaobj = JsonConverterUtil</span>
+<span class="nc" id="L244">					.convertToObject(RegistrationSearchCriteria.class, searchCriteria);</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">			if (searchCriteriaobj == null) {</span>
+<span class="nc" id="L246">				searchCriteriaobj = new RegistrationSearchCriteria();</span>
+<span class="nc" id="L247">				searchCriteriaobj.setFilter(new RegistrationQueueFilter());</span>
+			}
+<span class="nc" id="L249">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L250">					user.getPermissions());</span>
+<span class="nc" id="L251">			searchCriteriaobj.getFilter().setUserProfile(user);</span>
+
+<span class="nc bnc" id="L253" title="All 2 branches missed.">			if ((&quot;PFX&quot;).equals(custType)) {</span>
+<span class="nc" id="L254">				modelAndView.setViewName(ViewNameEnum.REGISTRATIN_DETAILS.getViewName());</span>
+			} else {
+<span class="nc" id="L256">				modelAndView.setViewName(ViewNameEnum.CFX_REGISTRATION_DETAILS.getViewName());</span>
+			}
+<span class="nc bnc" id="L258" title="All 2 branches missed.">			if (isValidRequest(contactId, custType)) {</span>
+<span class="nc" id="L259">				registrationDetailsDto = iRegistrationService.getRegistrationDetails(contactId, custType,</span>
+						searchCriteriaobj);
+<span class="nc" id="L261">				registrationDetailsDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteriaobj));</span>
+			} else {
+<span class="nc" id="L263">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+<span class="nc" id="L265">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L266">			log.debug(&quot;&quot;, e);</span>
+<span class="nc" id="L267">			registrationDetailsDto = new RegistrationDetailsDto();</span>
+<span class="nc" id="L268">			registrationDetailsDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L269">			registrationDetailsDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L270">		}</span>
+<span class="nc" id="L271">		registrationDetailsDto.setIsPagenationRequired(Boolean.TRUE);</span>
+<span class="nc" id="L272">		registrationDetailsDto.setUser(user);</span>
+<span class="nc" id="L273">		registrationDetailsDto.setSource(source);</span>
+<span class="nc" id="L274">		modelAndView.addObject(&quot;regDetails&quot;, registrationDetailsDto);</span>
+<span class="nc" id="L275">		return modelAndView;</span>
+	}
+
+	/**
+	 * Update profile.
+	 *
+	 * @param profileUpdateRequest
+	 *            the profile update request
+	 * @param user
+	 *            the user
+	 * @return the string
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/profileUpdate&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ActivityLogs updateProfile(@RequestBody RegistrationUpdateRequest profileUpdateRequest,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+<span class="fc" id="L296">		profileUpdateRequest.setUser(user);</span>
+<span class="fc" id="L297">		ActivityLogs activityLogs = null;</span>
+		try {
+<span class="fc" id="L299">			activityLogs = iRegistrationService.updateContact(profileUpdateRequest);</span>
+<span class="fc" id="L300">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L301">			log.debug(&quot;&quot;, e);</span>
+<span class="fc" id="L302">			activityLogs = new ActivityLogs();</span>
+<span class="fc" id="L303">			activityLogs.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L304">			activityLogs.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L305">		}</span>
+<span class="fc" id="L306">		activityLogs.setUser(user);</span>
+<span class="fc" id="L307">		return activityLogs;</span>
+	}
+
+	/**
+	 * Lock Resource.
+	 *
+	 * @param lockResourceRequest
+	 *            the lock resource request
+	 * @param user
+	 *            the user
+	 * @return lockResourceResponse
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/lockResource&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public LockResourceResponse lockResource(@RequestBody LockResourceRequest lockResourceRequest,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+
+<span class="fc" id="L329">		LockResourceResponse lockResourceResponse = null;</span>
+		try {
+<span class="fc" id="L331">			lockResourceRequest.setUser(user);</span>
+<span class="fc" id="L332">			lockResourceResponse = iRegistrationService.lockResource(lockResourceRequest);</span>
+<span class="fc" id="L333">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L334">			log.debug(&quot;&quot;, e);</span>
+<span class="fc" id="L335">			lockResourceResponse = new LockResourceResponse();</span>
+<span class="fc" id="L336">			lockResourceResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L337">			lockResourceResponse.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L338">		}</span>
+<span class="fc" id="L339">		return lockResourceResponse;</span>
+	}
+
+	/**
+	 * Lock resource list.
+	 *
+	 * @param lockResourceRequest
+	 *            the lock resource request
+	 * @param user
+	 *            the user
+	 * @return the lock resource response
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/lockResourceMultiContact&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public LockResourceResponse lockResourceList(@RequestBody LockResourceRequest lockResourceRequest,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+
+<span class="fc" id="L361">		LockResourceResponse lockResourceResponse = null;</span>
+		try {
+<span class="fc" id="L363">			lockResourceRequest.setUser(user);</span>
+<span class="fc" id="L364">			lockResourceResponse = iRegistrationService.lockResourceMultiContacts(lockResourceRequest);</span>
+<span class="fc" id="L365">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L366">			log.debug(&quot;&quot;, e);</span>
+<span class="fc" id="L367">			lockResourceResponse = new LockResourceResponse();</span>
+<span class="fc" id="L368">			lockResourceResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L369">			lockResourceResponse.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L370">		}</span>
+<span class="fc" id="L371">		return lockResourceResponse;</span>
+	}
+
+	/**
+	 * Gets the activites.
+	 *
+	 * @param activityLogRequest
+	 *            the request
+	 * @param user
+	 *            the user
+	 * @return the activites
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/regActivites&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ActivityLogs getActivites(@RequestBody ActivityLogRequest activityLogRequest,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+
+<span class="nc" id="L393">		ActivityLogs activityLogs = null;</span>
+		try {
+<span class="nc" id="L395">			activityLogRequest.setUser(user);</span>
+<span class="nc" id="L396">			activityLogs = iRegistrationService.getActivityLogs(activityLogRequest);</span>
+<span class="nc" id="L397">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L398">			log.debug(&quot;&quot;, e);</span>
+<span class="nc" id="L399">			activityLogs = new ActivityLogs();</span>
+<span class="nc" id="L400">			activityLogs.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L401">			activityLogs.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L402">		}</span>
+<span class="nc" id="L403">		return activityLogs;</span>
+	}
+
+	/**
+	 * View More Details
+	 * 
+	 * @param viewMoreRequest
+	 * @return viewMoreResponse
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/viewMoreDetails&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ViewMoreResponse viewMoreDetails(@RequestBody RegistrationViewMoreRequest viewMoreRequest) {
+
+<span class="nc" id="L421">		ViewMoreResponse viewMoreResponse = null;</span>
+		try {
+<span class="nc" id="L423">			viewMoreResponse = iRegistrationService.viewMoreDetails(viewMoreRequest);</span>
+<span class="nc" id="L424">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L425">			log.debug(&quot;&quot;, e);</span>
+<span class="nc" id="L426">			viewMoreResponse = new ViewMoreResponse();</span>
+<span class="nc" id="L427">			viewMoreResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L428">			viewMoreResponse.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L429">		}</span>
+<span class="nc" id="L430">		return viewMoreResponse;</span>
+	}
+
+	/**
+	 * View More Details.
+	 *
+	 * @param providerResRequest
+	 *            the request
+	 * @return viewMoreResponse
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/getProviderResponse&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public ProviderResponseLogResponse getProviderResponse(@RequestBody ProviderResponseLogRequest providerResRequest) {
+
+<span class="fc" id="L449">		ProviderResponseLogResponse providerResponseLogResponse = null;</span>
+		try {
+<span class="fc" id="L451">			providerResponseLogResponse = iRegistrationService.getProviderResponse(providerResRequest);</span>
+<span class="fc" id="L452">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L453">			log.debug(&quot;&quot;, e);</span>
+<span class="fc" id="L454">			providerResponseLogResponse = new ProviderResponseLogResponse();</span>
+<span class="fc" id="L455">			providerResponseLogResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L456">			providerResponseLogResponse.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L457">		}</span>
+<span class="fc" id="L458">		return providerResponseLogResponse;</span>
+	}
+
+	/**
+	 * Gets the registration details.
+	 *
+	 * @param contactId
+	 *            the contact id
+	 * @param custType
+	 *            the cust type
+	 * @param searchCriteria
+	 *            the search criteria
+	 * @param user
+	 *            the user
+	 * @return the registration details
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/registrationDashboardDetails&quot;)
+	public ModelAndView getRegistrationDashboardDetails(
+			@RequestParam(value = &quot;contactId&quot;, required = false) Integer contactId,
+			@RequestParam(value = &quot;custType&quot;, required = false) String custType,
+			@RequestParam(value = &quot;searchCriteria&quot;, required = false) String searchCriteria,
+			@RequestAttribute(&quot;user&quot;) UserProfile user) {
+
+<span class="nc" id="L484">		ModelAndView modelAndView = new ModelAndView();</span>
+		IRegistrationDetails registrationDetailsDto;
+
+		try {
+			
+<span class="nc" id="L489">			RegistrationSearchCriteria searchCriteriaobj = JsonConverterUtil</span>
+<span class="nc" id="L490">					.convertToObject(RegistrationSearchCriteria.class, searchCriteria);</span>
+<span class="nc bnc" id="L491" title="All 2 branches missed.">			if (searchCriteriaobj == null) {</span>
+<span class="nc" id="L492">				searchCriteriaobj = new RegistrationSearchCriteria();</span>
+<span class="nc" id="L493">				searchCriteriaobj.setFilter(new RegistrationQueueFilter());</span>
+			}
+<span class="nc" id="L495">			UserPermissionFilterBuilder.overrideUserPermissionOnFilter(searchCriteriaobj.getFilter(),</span>
+<span class="nc" id="L496">					user.getPermissions());</span>
+<span class="nc" id="L497">			searchCriteriaobj.getFilter().setUserProfile(user);</span>
+			
+<span class="nc bnc" id="L499" title="All 2 branches missed.">			if ((&quot;PFX&quot;).equals(custType)) {</span>
+<span class="nc" id="L500">				modelAndView.setViewName(ViewNameEnum.REGISTRATIN_DETAILS.getViewName());</span>
+			} else {
+<span class="nc" id="L502">				modelAndView.setViewName(ViewNameEnum.CFX_REGISTRATION_DETAILS.getViewName());</span>
+			}
+			
+<span class="nc bnc" id="L505" title="All 2 branches missed.">			if (isValidRegDashboardRequest(contactId, custType)) {</span>
+<span class="nc" id="L506">				registrationDetailsDto = iRegistrationService.getRegistrationDetails(contactId, custType,searchCriteriaobj);</span>
+<span class="nc" id="L507">				registrationDetailsDto.setSearchCriteria(JsonConverterUtil.convertToJsonWithNull(searchCriteriaobj));</span>
+			} else {
+<span class="nc" id="L509">				throw new CompliancePortalException(CompliancePortalErrors.INVALID_REQUEST);</span>
+			}
+<span class="nc" id="L511">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L512">			log.debug(&quot;&quot;, e);</span>
+<span class="nc" id="L513">			registrationDetailsDto = new RegistrationDetailsDto();</span>
+<span class="nc" id="L514">			registrationDetailsDto.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L515">			registrationDetailsDto.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L516">		}</span>
+
+<span class="nc bnc" id="L518" title="All 2 branches missed.">		if (registrationDetailsDto instanceof RegistrationCfxDetailsDto) {</span>
+<span class="nc" id="L519">			RegistrationCfxDetailsDto cfxDetailsDto = (RegistrationCfxDetailsDto) registrationDetailsDto;</span>
+<span class="nc" id="L520">			cfxDetailsDto.setIsPagenationRequired(Boolean.FALSE);</span>
+<span class="nc" id="L521">		} else {</span>
+<span class="nc" id="L522">			RegistrationDetailsDto cfxDetailsDto = (RegistrationDetailsDto) registrationDetailsDto;</span>
+<span class="nc" id="L523">			cfxDetailsDto.setIsPagenationRequired(Boolean.FALSE);</span>
+		}
+
+<span class="nc" id="L526">		registrationDetailsDto.setUser(user);</span>
+<span class="nc" id="L527">		modelAndView.addObject(&quot;regDetails&quot;, registrationDetailsDto);</span>
+<span class="nc" id="L528">		return modelAndView;</span>
+	}
+
+	private boolean isValidRequest(Integer contactId, String custType) {
+<span class="nc bnc" id="L532" title="All 4 branches missed.">		return (null != contactId &amp;&amp; !isNullOrEmpty(custType));</span>
+	}
+
+	private boolean isValidRegDashboardRequest(Integer contactId, String custType) {
+<span class="nc bnc" id="L536" title="All 4 branches missed.">		return (null != contactId &amp;&amp; !isNullOrEmpty(custType));</span>
+	}
+
+	private boolean isNullOrEmpty(String str) {
+<span class="nc" id="L540">		boolean result = true;</span>
+<span class="nc bnc" id="L541" title="All 4 branches missed.">		if (str != null &amp;&amp; !str.isEmpty())</span>
+<span class="nc" id="L542">			return false;</span>
+
+<span class="nc" id="L544">		return result;</span>
+	}
+
+	/**
+	 * View Device Info Details.
+	 *
+	 * @param deviceInfoRequest
+	 *            the request
+	 * @return viewMoreResponse
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/getDeviceInfo&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public DeviceInfoResponse getDeviceInfo(@RequestBody DeviceInfoRequest deviceInfoRequest) {
+
+<span class="fc" id="L563">		DeviceInfoResponse deviceInfoResponse = null;</span>
+		try {
+<span class="fc" id="L565">			deviceInfoResponse = iRegistrationService.getDeviceInfo(deviceInfoRequest);</span>
+<span class="fc" id="L566">		} catch (CompliancePortalException e) {</span>
+<span class="fc" id="L567">			log.debug(&quot; {1}&quot;, e);</span>
+<span class="fc" id="L568">			deviceInfoResponse = new DeviceInfoResponse();</span>
+<span class="fc" id="L569">			deviceInfoResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="fc" id="L570">			deviceInfoResponse.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="fc" id="L571">		}</span>
+<span class="fc" id="L572">		return deviceInfoResponse;</span>
+	}
+
+	/**
+	 * View Account History Details.
+	 *
+	 * @param accountHistoryRequest
+	 *            the request
+	 * @return accountHistoryResponse
+	 */
+	@FunctionsAllowed(functions = { ViewControllerConstant.CAN_MANAGE_EID, 
+			ViewControllerConstant.CAN_MANAGE_BLACKLIST, ViewControllerConstant.CAN_MANAGE_FRAUD,
+			ViewControllerConstant.CAN_MANAGE_SANCTION }, allRequired = false)
+	@PostMapping(value = &quot;/getAccountHistory&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public AccountHistoryResponse getAccountHistory(@RequestBody AccountHistoryRequest accountHistoryRequest) {
+
+<span class="nc" id="L591">		AccountHistoryResponse accountHistoryResponse = null;</span>
+		try {
+<span class="nc" id="L593">			accountHistoryResponse = iRegistrationService.getAccountHistory(accountHistoryRequest);</span>
+<span class="nc" id="L594">		} catch (CompliancePortalException e) {</span>
+<span class="nc" id="L595">			log.debug(&quot; {1}&quot;, e);</span>
+<span class="nc" id="L596">			accountHistoryResponse = new AccountHistoryResponse();</span>
+<span class="nc" id="L597">			accountHistoryResponse.setErrorCode(e.getCompliancePortalErrors().getErrorCode());</span>
+<span class="nc" id="L598">			accountHistoryResponse.setErrorMessage(e.getCompliancePortalErrors().getErrorDescription());</span>
+<span class="nc" id="L599">		}</span>
+<span class="nc" id="L600">		return accountHistoryResponse;</span>
+	}
+
+	@PostMapping(value=&quot;/setPoiExistsFlag&quot;)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ResponseBody
+	public boolean setPoiExistsFlag(@RequestAttribute(&quot;user&quot;) UserProfile user,
+			@RequestBody Contact contact) {
+<span class="nc" id="L609">		boolean poiExists = false;</span>
+		try {
+<span class="nc" id="L611">			poiExists = iRegistrationService.setPoiExistsFlag(user, contact);</span>
+		}
+<span class="nc" id="L613">		catch(Exception e) {</span>
+<span class="nc" id="L614">			log.debug(&quot;Exception in RegistrationController in setPoiExistsFlag() {1}&quot;, e);</span>
+<span class="nc" id="L615">		}</span>
+<span class="nc" id="L616">		return poiExists;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

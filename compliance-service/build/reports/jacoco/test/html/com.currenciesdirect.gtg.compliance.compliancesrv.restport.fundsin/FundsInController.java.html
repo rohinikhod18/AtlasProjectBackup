@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FundsInController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.restport.fundsin</a> &gt; <span class="el_source">FundsInController.java</span></div><h1>FundsInController.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.restport.fundsin;
+
+import javax.annotation.security.RolesAllowed;
+import javax.servlet.http.HttpServletRequest;
+
+import org.keycloak.KeycloakPrincipal;
+import org.keycloak.adapters.RefreshableKeycloakSecurityContext;
+import org.keycloak.representations.AccessToken;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.context.request.async.DeferredResult;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.ReprocessFailedDetails;
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInDeleteRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.whitelist.UdateWhiteListRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsin.response.FundsInCreateResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsin.response.FundsInDeleteResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.restport.BaseController;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.JsonConverterUtil;
+
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponses;
+import io.swagger.annotations.ApiResponse;
+import springfox.documentation.swagger2.annotations.EnableSwagger2;
+
+/**
+ * The Class FundsInController.
+ *
+ * @author manish
+ */
+@Controller
+@EnableSwagger2
+@EnableWebMvc
+
+<span class="nc" id="L56">public class FundsInController extends BaseController {</span>
+
+	/** The Constant LOGGER. */
+<span class="nc" id="L59">	private static final Logger LOGGER = LoggerFactory.getLogger(FundsInController.class);</span>
+
+	/**
+	 * Funds in create.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param fundsInRestPortCreateRequest
+	 *            the funds in rest port create request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Process a Funds-In request. The Funds IN request is validated and checked for the presence of mandatory fields.\n\n&quot; +
+			&quot;Validation Steps:\n\n&quot; + 
+			&quot; 1) When request is received, we get the country code and use it to get the complete name of country.\n\n&quot; + 
+			&quot; 2) then customer type is found.\n\n&quot; + 
+			&quot; 3) mandatory fields are validated whether null or not by passing fields to the isValidObject method.\n\n&quot; + 
+			&quot; 4) paymentTime date is validated whether null or not and format of date if present is checked by passing fields to isDateInFormat method.\n\n&quot; + 
+			&quot; 5) also format of other dates in request is checked in getOptionalDateFields method.\n\n&quot; + 
+			&quot; 6) Payment Method is checked in getPaymentMethod method.\n\n&quot; + 
+			&quot; 7) if payment method is SWITCH/DEBIT then check additional mandatory fields for debit card payment.\n\n&quot;, 
+			value = &quot;Called at the time of a new Funds-In request sent by Titan or Aurora&quot;, 
+			nickname = &quot;fundsInCreate&quot;, 
+			response = FundsInCreateResponse.class)
+	@ApiImplicitParams({
+			@ApiImplicitParam(name = &quot;Authorization&quot;, value = &quot;Add bearer token&quot;, defaultValue = &quot;Bearer &lt;&lt;AbCdEf123456&gt;&gt;&quot;, required = true, dataType = &quot;string&quot;, paramType = &quot;header&quot;) })
+	@RolesAllowed(&quot;compliance_api_access&quot;)
+	@PostMapping(value = &quot;/fundsin&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; fundsInCreate(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;Funds In details JSON object&quot;, required = true) final @RequestBody FundsInCreateRequest fundsInRestPortCreateRequest) {
+<span class="nc" id="L88">		String jsonFundsInRestPortCreateRequest = JsonConverterUtil.convertToJsonWithoutNull(fundsInRestPortCreateRequest);</span>
+<span class="nc" id="L89">		LOGGER.warn(&quot;\n ------- FundsIn Request Start -------- \n  {}&quot;,jsonFundsInRestPortCreateRequest);</span>
+<span class="nc" id="L90">		FundsInCreateRequest fundsInDomainCreateRequest = convertToDomainRequest(fundsInRestPortCreateRequest);</span>
+<span class="nc" id="L91">		fundsInDomainCreateRequest.setType(&quot;FUNDS_IN_ADD&quot;);</span>
+<span class="nc" id="L92">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L93">				ServiceInterfaceType.FUNDSIN, OperationEnum.FUNDS_IN, fundsInDomainCreateRequest.getOrgCode(),</span>
+				fundsInDomainCreateRequest);
+
+<span class="nc" id="L96">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class, httpRequest.getHeader(&quot;user&quot;));</span>
+				
+<span class="nc" id="L98">		AccessToken userToken = new AccessToken();</span>
+<span class="nc" id="L99">		userToken.setPreferredUsername(user.getName());	</span>
+
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;
+<span class="nc" id="L102">			deferredResult = super.executeWorkflow(messageContext, userToken);</span>
+					
+<span class="nc" id="L104">		LOGGER.warn(&quot; \n -----------  FundsIn Request End ---------&quot;);	</span>
+<span class="nc" id="L105">		return deferredResult;</span>
+				
+	}
+
+	/**
+	 * Convert to domain request.
+	 *
+	 * @param fundsInRestPortCreateRequest
+	 *            the funds in rest port create request
+	 * @return the funds in create request
+	 */
+	private FundsInCreateRequest convertToDomainRequest(FundsInCreateRequest fundsInRestPortCreateRequest) {
+		FundsInCreateRequest fundsInDomainCreateRequest;
+<span class="nc" id="L118">		String fundsInRestPortCreateRequestJson = JsonConverterUtil</span>
+<span class="nc" id="L119">				.convertToJsonWithoutNull(fundsInRestPortCreateRequest);</span>
+<span class="nc" id="L120">		fundsInDomainCreateRequest = JsonConverterUtil.convertToObject(FundsInCreateRequest.class,</span>
+				fundsInRestPortCreateRequestJson);
+<span class="nc" id="L122">		fundsInDomainCreateRequest.setCustType(fundsInRestPortCreateRequest.getTrade().getCustType());</span>
+<span class="nc" id="L123">		return fundsInDomainCreateRequest;</span>
+	}
+
+	/**
+	 * Update white list data.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param updateWhiteListData
+	 *            the update white list data
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Called to update white list data when we clear any Funds-In&quot;, 
+			value = &quot;Call this api to update white list data&quot;, 
+			nickname = &quot;updateWhiteListDatafundsIn&quot;)
+	@RolesAllowed(&quot;compliance_api_access&quot;)
+	@ApiResponses(value = { @ApiResponse(response = CustomCheckResponse.class, code = 200, message = &quot;A successful response is an instance of the CustomCheckResponse class.&quot;) })
+	@PostMapping(value = &quot;/updateWhiteListDatafundsIn&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; updateWhiteListData(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;payment id to update whitelist dta from&quot;, required = true) final @RequestBody UdateWhiteListRequest updateWhiteListData) {
+<span class="nc" id="L143">		String jsonUpdateWhiteListData = JsonConverterUtil.convertToJsonWithoutNull(updateWhiteListData);</span>
+<span class="nc" id="L144">		LOGGER.warn(&quot;\n ------- Update fundsIn whiteList data Request Start -------- \n  {}&quot;,jsonUpdateWhiteListData);</span>
+<span class="nc" id="L145">		LOGGER.warn(&quot; \n -----------  Update fundsIn whiteList data Request End ---------&quot;);</span>
+
+<span class="nc" id="L147">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L148">				ServiceInterfaceType.FUNDSIN, OperationEnum.WHITELIST_UPDATE, updateWhiteListData.getOrgCode(),</span>
+				updateWhiteListData);
+
+<span class="nc" id="L151">		KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt; principal = (KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt;) httpRequest</span>
+<span class="nc" id="L152">				.getUserPrincipal();</span>
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;
+<span class="nc bnc" id="L154" title="All 2 branches missed.">		if (null != principal) {</span>
+<span class="nc" id="L155">			deferredResult = super.executeWorkflow(messageContext, principal.getKeycloakSecurityContext().getToken());</span>
+		} else {
+<span class="nc" id="L157">			deferredResult = new DeferredResult&lt;&gt;();</span>
+<span class="nc" id="L158">			BaseResponse baseResponse = new BaseResponse();</span>
+<span class="nc" id="L159">			ResponseEntity&lt;BaseResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(baseResponse, HttpStatus.UNAUTHORIZED);</span>
+<span class="nc" id="L160">			deferredResult.setResult(responseEntity);</span>
+		}
+
+<span class="nc" id="L163">		return deferredResult;</span>
+	}
+
+	/**
+	 * Deletefunds in.
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param fundsInDeleteRequest
+	 *            the funds in delete request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Use to mark a Funds-In as reversed, when we get delete Funds-In request from Titan or Aurora&quot;, 
+			value = &quot;Call this api to delete an onward payment instruction&quot;, 
+			nickname = &quot;deletefundsIn&quot;)
+	@ApiImplicitParams({
+			@ApiImplicitParam(name = &quot;Authorization&quot;, value = &quot;Add bearer token&quot;, defaultValue = &quot;Bearer &lt;&lt;AbCdEf123456&gt;&gt;&quot;, required = true, dataType = &quot;string&quot;, paramType = &quot;header&quot;) })
+	@RolesAllowed(&quot;compliance_api_access&quot;)
+	@ApiResponses(value = { @ApiResponse(response = FundsInDeleteResponse.class, code = 200, message = &quot;A successful response is an instance of the FundsInDeleteResponse class.&quot;) })
+	@PostMapping(value = &quot;/deletefundsIn&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; deletefundsIn(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;delete fundsin request JSON data&quot;, required = true) final @RequestBody FundsInDeleteRequest fundsInDeleteRequest) {
+<span class="nc" id="L185">		String jsonFundsInDeleteRequest = JsonConverterUtil.convertToJsonWithoutNull(fundsInDeleteRequest);</span>
+<span class="nc" id="L186">		LOGGER.warn(&quot;\n ------- Delete FundsIn Request Start -------- \n  {}&quot;,jsonFundsInDeleteRequest);</span>
+<span class="nc" id="L187">		LOGGER.warn(&quot; \n ----------- Delete FundsIn Request End ---------&quot;);</span>
+
+<span class="nc" id="L189">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+<span class="nc" id="L190">				ServiceInterfaceType.FUNDSIN, OperationEnum.DELETE_OPI, fundsInDeleteRequest.getOrgCode(),</span>
+				fundsInDeleteRequest);
+
+<span class="nc" id="L193">		KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt; principal = (KeycloakPrincipal&lt;RefreshableKeycloakSecurityContext&gt;) httpRequest</span>
+<span class="nc" id="L194">				.getUserPrincipal();</span>
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;
+<span class="nc bnc" id="L196" title="All 2 branches missed.">		if (null != principal) {</span>
+<span class="nc" id="L197">			deferredResult = super.executeWorkflow(messageContext, principal.getKeycloakSecurityContext().getToken());</span>
+		} else {
+<span class="nc" id="L199">			deferredResult = new DeferredResult&lt;&gt;();</span>
+<span class="nc" id="L200">			BaseResponse baseResponse = new BaseResponse();</span>
+<span class="nc" id="L201">			ResponseEntity&lt;BaseResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(baseResponse, HttpStatus.UNAUTHORIZED);</span>
+<span class="nc" id="L202">			deferredResult.setResult(responseEntity);</span>
+		}
+
+<span class="nc" id="L205">		return deferredResult;</span>
+	}
+	
+	@ApiOperation(notes = &quot;This API is called when we have a service failure for checks and we want to perform bulk repeat check for failed FundsIn from Compliance portal.\n\n&quot;, 
+			value = &quot;Call this api to recheck a failed Funds-In&quot;, 
+			nickname = &quot;repeatCheckFailedFundsIn&quot;, response = FundsInCreateResponse.class)
+	@ApiResponses(value = { @ApiResponse(response = FundsInCreateResponse.class, code = 200, message = &quot;A successful response is an instance of the FundsInCreateResponse class.&quot;) })
+	@PostMapping(value = &quot;/repeatCheckFailedFundsIn&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; repeatCheckFailedFundsIn(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;payment id to repeat check failed services&quot;, required = true) 
+			final @RequestBody ReprocessFailedDetails fundsInServiceFailedRequest) {
+<span class="nc" id="L216">		String jsonFundsInServiceFailedRequest = JsonConverterUtil.convertToJsonWithoutNull(fundsInServiceFailedRequest);</span>
+<span class="nc" id="L217">		LOGGER.warn(&quot;\n ------- Repeat Check for fundsin failed Services Request Start -------- \n {}&quot;,jsonFundsInServiceFailedRequest);</span>
+<span class="nc" id="L218">		LOGGER.warn(&quot; \n ----------- Repeat Check for fundsin failed Services Request Start ---------&quot;);</span>
+<span class="nc" id="L219">		MessageContext messageContext = buildMessageContext(httpRequest, ServiceTypeEnum.GATEWAY_SERVICE,</span>
+				ServiceInterfaceType.FUNDSIN, OperationEnum.RECHECK_FAILURES, null,
+				fundsInServiceFailedRequest);
+
+<span class="nc" id="L223">		UserProfile user = JsonConverterUtil.convertToObject(UserProfile.class,  httpRequest.getHeader(&quot;user&quot;));</span>
+<span class="nc" id="L224">		AccessToken userToken =  new AccessToken();</span>
+<span class="nc" id="L225">		userToken.setPreferredUsername(user.getName());</span>
+
+<span class="nc" id="L227">		return super.executeWorkflow(messageContext, userToken);</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

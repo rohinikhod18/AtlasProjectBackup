@@ -1,0 +1,2507 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ActivityDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.dbport</a> &gt; <span class="el_source">ActivityDBServiceImpl.java</span></div><h1>ActivityDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.dbport;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.Message;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentInActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDetailDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.PaymentOutActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.activity.ProfileActivityLogDto;
+import com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterOnUpdateResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsInResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fraugster.FraugsterPaymentsOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessageResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.profile.statusupdate.StatusUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringMQServiceResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentInResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceException;
+import com.currenciesdirect.gtg.compliance.compliancesrv.ComplianceReasonCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OnfidoStatusEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceStatus;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.UserProfile;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsin.response.FundsInCreateResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.fundsout.response.FundsOutResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.profile.delete.contact.DeleteContactRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.Account;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.RegistrationServiceRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceAccount;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.ComplianceContact;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.response.RegistrationResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.transactionmonitoringmq.TransactionMonitoringMQRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchangeWrapper;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.util.Constants;
+
+/**
+ * The Class ActivityDBServiceImpl.
+ */
+/**
+ * @author bnt
+ *
+ */
+@SuppressWarnings(&quot;squid:S2095&quot;)
+<span class="fc" id="L73">public class ActivityDBServiceImpl extends AbstractDao {</span>
+
+	/** The Constant IS_BLACKLIST_ELIGIBLE. */
+	private static final String IS_BLACKLIST_ELIGIBLE = &quot;isBlacklistEligible&quot;;
+	
+	/** The Constant IS_COUNTRY_CHECK_ELIGIBLE. */
+	private static final String IS_COUNTRY_CHECK_ELIGIBLE = &quot;isCountryCheckEligible&quot;;
+	
+	/** The Constant IS_FRAUGSTER_ELIGIBLE. */
+	private static final String IS_FRAUGSTER_ELIGIBLE = &quot;isFraugsterEligible&quot;;
+	
+	/** The Constant IS_SANCTION_ELIGIBLE. */
+	private static final String IS_SANCTION_ELIGIBLE = &quot;isSanctionEligible&quot;;
+	/** The Constant LOGGER. */
+<span class="fc" id="L87">	private static final Logger LOGGER = LoggerFactory.getLogger(ActivityDBServiceImpl.class);</span>
+
+	/**
+	 * Business -- 1)Performing sanction update from UI for PFX/CFX 2)Update
+	 * Request can come from Registration/Profile, FundsOut ,FundsIn
+	 * 
+	 * Implementation--- 1)Insert Entry in ProfileActivityLog Table For
+	 * Registration 2)PaymentOutActivityLog For FundsOut and
+	 * PaymentInActivityLog for FundsIn.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createSanctionUpdateActivity(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+		try {
+<span class="nc" id="L106">			MessageExchange messageExchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L107">			SanctionUpdateRequest request = messageExchange.getRequest(SanctionUpdateRequest.class);</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">			if (&quot;profile&quot;.equalsIgnoreCase(request.getResourceType())) {</span>
+<span class="nc" id="L109">				createProfileActivity(message);</span>
+<span class="nc bnc" id="L110" title="All 2 branches missed.">			} else if (&quot;fundsout&quot;.equalsIgnoreCase(request.getResourceType())) {</span>
+<span class="nc" id="L111">				createPaymentOutActivity(message);</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">			} else if (&quot;fundsin&quot;.equalsIgnoreCase(request.getResourceType())) {</span>
+<span class="nc" id="L113">				createPaymentInActivity(message);</span>
+			}
+<span class="nc" id="L115">		} catch (Exception e) {</span>
+<span class="nc" id="L116">			LOGGER.error(&quot;Error in ActivityDBServiceImpl createSanctionUpdateActivity()&quot;, e);</span>
+<span class="nc" id="L117">			message.getPayload().setFailed(true);</span>
+
+<span class="nc" id="L119">		}</span>
+<span class="nc" id="L120">		return message;</span>
+	}
+
+	/**
+	 * Creates the profile activity.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createProfileActivity(Message&lt;MessageContext&gt; message) throws ComplianceException {
+		try {
+<span class="nc" id="L134">			List&lt;ProfileActivityLogDto&gt; profileActivites = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">			for (MessageExchangeWrapper exchange : message.getPayload().getMessageCollection()) {</span>
+<span class="nc" id="L136">				ServiceMessageResponse response = exchange.getMessageExchange().getResponse();</span>
+				@SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L138">				List&lt;ProfileActivityLogDto&gt; activites = (List&lt;ProfileActivityLogDto&gt;) response.getAdditionalAttribute(&quot;profileActivities&quot;);</span>
+<span class="nc bnc" id="L139" title="All 4 branches missed.">				if (activites != null &amp;&amp; !activites.isEmpty()) {</span>
+<span class="nc" id="L140">					profileActivites.addAll(activites);</span>
+				}
+<span class="nc" id="L142">			}</span>
+<span class="nc" id="L143">			insertProfileActivityLogs(profileActivites);</span>
+<span class="nc" id="L144">		} catch (Exception e) {</span>
+<span class="nc" id="L145">			LOGGER.error(Constants.ERROR, e);</span>
+<span class="nc" id="L146">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L147">		}</span>
+<span class="nc" id="L148">		return message;</span>
+	}
+
+	/**
+	 * Creates the payment out activity.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createPaymentOutActivity(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+		try {
+<span class="nc" id="L163">			List&lt;PaymentOutActivityLogDto&gt; profileActivites = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">			for (MessageExchangeWrapper exchange : message.getPayload().getMessageCollection()) {</span>
+<span class="nc" id="L165">				ServiceMessageResponse response = exchange.getMessageExchange().getResponse();</span>
+				@SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L167">				List&lt;PaymentOutActivityLogDto&gt; activites = (List&lt;PaymentOutActivityLogDto&gt;) response</span>
+<span class="nc" id="L168">						.getAdditionalAttribute(&quot;paymentOutActivities&quot;);</span>
+<span class="nc bnc" id="L169" title="All 4 branches missed.">				if (activites != null &amp;&amp; !activites.isEmpty()) {</span>
+<span class="nc" id="L170">					profileActivites.addAll(activites);</span>
+				}
+<span class="nc" id="L172">			}</span>
+<span class="nc" id="L173">			insertPaymentOutActivityLogs(profileActivites);</span>
+<span class="nc" id="L174">		} catch (Exception e) {</span>
+<span class="nc" id="L175">			LOGGER.error(Constants.ERROR, e);</span>
+<span class="nc" id="L176">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L177">		}</span>
+<span class="nc" id="L178">		return message;</span>
+	}
+
+	/**
+	 * Creates the payment in activity.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createPaymentInActivity(Message&lt;MessageContext&gt; message) throws ComplianceException {
+
+		try {
+<span class="nc" id="L193">			List&lt;PaymentInActivityLogDto&gt; profileActivites = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">			for (MessageExchangeWrapper exchange : message.getPayload().getMessageCollection()) {</span>
+<span class="nc" id="L195">				ServiceMessageResponse response = exchange.getMessageExchange().getResponse();</span>
+				@SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L197">				List&lt;PaymentInActivityLogDto&gt; activites = (List&lt;PaymentInActivityLogDto&gt;) response</span>
+<span class="nc" id="L198">						.getAdditionalAttribute(&quot;paymentInActivities&quot;);</span>
+<span class="nc bnc" id="L199" title="All 4 branches missed.">				if (activites != null &amp;&amp; !activites.isEmpty()) {</span>
+<span class="nc" id="L200">					profileActivites.addAll(activites);</span>
+				}
+<span class="nc" id="L202">			}</span>
+<span class="nc" id="L203">			insertPaymentInActivityLogs(profileActivites);</span>
+<span class="nc" id="L204">		} catch (Exception e) {</span>
+<span class="nc" id="L205">			LOGGER.error(Constants.ERROR, e);</span>
+<span class="nc" id="L206">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L207">		}</span>
+<span class="nc" id="L208">		return message;</span>
+	}
+
+	/**
+	 * Insert profile activity logs.
+	 *
+	 * @param profileActivityLogs
+	 *            the profile activity logs
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertProfileActivityLogs(List&lt;ProfileActivityLogDto&gt; profileActivityLogs) throws ComplianceException {
+<span class="nc" id="L221">		PreparedStatement profileActivityStmt = null;</span>
+<span class="nc" id="L222">		Connection profileConnection = null;</span>
+<span class="nc" id="L223">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L225">			profileConnection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L226">			profileActivityStmt = profileConnection.prepareStatement(</span>
+<span class="nc" id="L227">					DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG.getQuery(), Statement.RETURN_GENERATED_KEYS);</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">			for (ProfileActivityLogDto oneLog : profileActivityLogs) {</span>
+
+<span class="nc" id="L230">				profileActivityStmt.setTimestamp(1, oneLog.getTimeStatmp());</span>
+<span class="nc" id="L231">				profileActivityStmt.setNString(2, oneLog.getActivityBy());</span>
+<span class="nc" id="L232">				profileActivityStmt.setNString(3, oneLog.getOrgCode());</span>
+<span class="nc" id="L233">				profileActivityStmt.setInt(4, oneLog.getAccountId());</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">				if (null == oneLog.getContactId()) {</span>
+<span class="nc" id="L235">					profileActivityStmt.setNull(5, java.sql.Types.INTEGER);</span>
+				} else {
+<span class="nc" id="L237">					profileActivityStmt.setInt(5, oneLog.getContactId());</span>
+				}
+<span class="nc" id="L239">				profileActivityStmt.setNString(6, oneLog.getComment());</span>
+<span class="nc" id="L240">				profileActivityStmt.setNString(7, oneLog.getCreatedBy());</span>
+<span class="nc" id="L241">				profileActivityStmt.setTimestamp(8, oneLog.getCreatedOn());</span>
+<span class="nc" id="L242">				profileActivityStmt.setNString(9, oneLog.getUpdatedBy());</span>
+<span class="nc" id="L243">				profileActivityStmt.setTimestamp(10, oneLog.getUpdatedOn());</span>
+				// AT-894 WorkEfficiencyReport
+				// Add ResouceType and ResourceID
+<span class="nc bnc" id="L246" title="All 2 branches missed.">				if (null == oneLog.getContactId()) {</span>
+<span class="nc" id="L247">					profileActivityStmt.setInt(11, 4); // Account</span>
+<span class="nc" id="L248">					profileActivityStmt.setInt(12, oneLog.getAccountId());</span>
+				} else {
+<span class="nc" id="L250">					profileActivityStmt.setInt(11, 3); // Contact</span>
+<span class="nc" id="L251">					profileActivityStmt.setInt(12, oneLog.getContactId());</span>
+				}
+<span class="nc" id="L253">				int updateCount = profileActivityStmt.executeUpdate();</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">				if (updateCount == 0) {</span>
+<span class="nc" id="L255">					throw new ComplianceException(InternalProcessingCode.INV_REQUEST,</span>
+							new Exception(Constants.MISSIG_DATA));
+				}
+<span class="nc" id="L258">				rs = profileActivityStmt.getGeneratedKeys();</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">				if (rs.next()) {</span>
+<span class="nc" id="L260">					oneLog.setId(rs.getInt(1));</span>
+<span class="nc" id="L261">					oneLog.getActivityLogDetailDto().setActivityId(rs.getInt(1));</span>
+				}
+<span class="nc" id="L263">			}</span>
+<span class="nc" id="L264">			insertProfileActivityLogDetail(profileActivityLogs, profileConnection);</span>
+<span class="nc" id="L265">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L266">			throw e;</span>
+<span class="nc" id="L267">		} catch (Exception e) {</span>
+<span class="nc" id="L268">			throw new ComplianceException(InternalProcessingCode.GEN_DECLINE, e);</span>
+		} finally {
+<span class="nc" id="L270">			closeResultset(rs);</span>
+<span class="nc" id="L271">			closePrepareStatement(profileActivityStmt);</span>
+<span class="nc" id="L272">			closeConnection(profileConnection);</span>
+		}
+<span class="nc" id="L274">	}</span>
+
+	/**
+	 * Insert profile activity log detail.
+	 *
+	 * @param profileActivityLogs
+	 *            the profile activity logs
+	 * @param connection
+	 *            the connection
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertProfileActivityLogDetail(List&lt;ProfileActivityLogDto&gt; profileActivityLogs, Connection connection)
+			throws ComplianceException {
+<span class="nc" id="L289">		PreparedStatement profileActivityDtlStmt = null;</span>
+		try {
+<span class="nc" id="L291">			profileActivityDtlStmt = connection</span>
+<span class="nc" id="L292">					.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL.getQuery());</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">			for (ProfileActivityLogDto activityLog : profileActivityLogs) {</span>
+<span class="nc" id="L294">				ActivityLogDetailDto logDetails = activityLog.getActivityLogDetailDto();</span>
+<span class="nc" id="L295">				profileActivityDtlStmt.setInt(1, logDetails.getActivityId());</span>
+<span class="nc" id="L296">				profileActivityDtlStmt.setString(2, logDetails.getActivityType().getModule());</span>
+<span class="nc" id="L297">				profileActivityDtlStmt.setString(3, logDetails.getActivityType().getType());</span>
+<span class="nc" id="L298">				profileActivityDtlStmt.setNString(4, logDetails.getLog());</span>
+<span class="nc" id="L299">				profileActivityDtlStmt.setNString(5, logDetails.getCreatedBy());</span>
+<span class="nc" id="L300">				profileActivityDtlStmt.setTimestamp(6, logDetails.getCreatedOn());</span>
+<span class="nc" id="L301">				profileActivityDtlStmt.setNString(7, logDetails.getUpdatedBy());</span>
+<span class="nc" id="L302">				profileActivityDtlStmt.setTimestamp(8, logDetails.getUpdatedOn());</span>
+<span class="nc" id="L303">				profileActivityDtlStmt.addBatch();</span>
+<span class="nc" id="L304">			}</span>
+<span class="nc" id="L305">			int[] count = profileActivityDtlStmt.executeBatch();</span>
+<span class="nc bnc" id="L306" title="All 2 branches missed.">			for (int c : count) {</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">				if (c == 0) {</span>
+<span class="nc" id="L308">					throw new ComplianceException(InternalProcessingCode.INV_REQUEST,</span>
+							new Exception(Constants.MISSIG_DATA));
+				}
+			}
+
+<span class="nc" id="L313">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L314">			throw e;</span>
+<span class="nc" id="L315">		} catch (Exception e) {</span>
+<span class="nc" id="L316">			throw new ComplianceException(InternalProcessingCode.GEN_DECLINE, e);</span>
+		} finally {
+<span class="nc" id="L318">			closePrepareStatement(profileActivityDtlStmt);</span>
+		}
+<span class="nc" id="L320">	}</span>
+
+	/**
+	 * Insert payment out activity logs.
+	 *
+	 * @param poActivityLogs
+	 *            the po activity logs
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertPaymentOutActivityLogs(List&lt;PaymentOutActivityLogDto&gt; poActivityLogs)
+			throws ComplianceException {
+<span class="nc" id="L333">		PreparedStatement poActivityStmt = null;</span>
+<span class="nc" id="L334">		Connection connection = null;</span>
+<span class="nc" id="L335">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L337">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L338">			poActivityStmt = connection.prepareStatement(DBQueryConstant.INSERT_PAYMENT_OUT_ACTIVITY_LOG.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc bnc" id="L340" title="All 2 branches missed.">			for (PaymentOutActivityLogDto poActivity : poActivityLogs) {</span>
+<span class="nc" id="L341">				poActivityStmt.setInt(1, poActivity.getPaymentOutId());</span>
+<span class="nc" id="L342">				poActivityStmt.setNString(2, poActivity.getActivityBy());</span>
+<span class="nc" id="L343">				poActivityStmt.setTimestamp(3, poActivity.getTimeStatmp());</span>
+<span class="nc" id="L344">				poActivityStmt.setNString(4, poActivity.getComment());</span>
+<span class="nc" id="L345">				poActivityStmt.setNString(5, poActivity.getCreatedBy());</span>
+<span class="nc" id="L346">				poActivityStmt.setTimestamp(6, poActivity.getCreatedOn());</span>
+<span class="nc" id="L347">				poActivityStmt.setInt(7, poActivity.getPaymentOutId());</span>
+<span class="nc" id="L348">				int updateCount = poActivityStmt.executeUpdate();</span>
+<span class="nc bnc" id="L349" title="All 2 branches missed.">				if (updateCount == 0) {</span>
+<span class="nc" id="L350">					throw new ComplianceException(InternalProcessingCode.INV_REQUEST,</span>
+							new Exception(Constants.MISSIG_DATA));
+				}
+<span class="nc" id="L353">				rs = poActivityStmt.getGeneratedKeys();</span>
+<span class="nc bnc" id="L354" title="All 2 branches missed.">				if (rs.next()) {</span>
+<span class="nc" id="L355">					poActivity.setId(rs.getInt(1));</span>
+<span class="nc" id="L356">					poActivity.getActivityLogDetailDto().setActivityId(rs.getInt(1));</span>
+				}
+<span class="nc" id="L358">			}</span>
+<span class="nc" id="L359">			insertPaymentOutActivityLogDetail(poActivityLogs, connection);</span>
+<span class="nc" id="L360">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L361">			throw e;</span>
+<span class="nc" id="L362">		} catch (Exception e) {</span>
+<span class="nc" id="L363">			throw new ComplianceException(InternalProcessingCode.GEN_DECLINE, e);</span>
+		} finally {
+<span class="nc" id="L365">			closeResultset(rs);</span>
+<span class="nc" id="L366">			closePrepareStatement(poActivityStmt);</span>
+<span class="nc" id="L367">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L369">	}</span>
+
+	/**
+	 * Insert payment out activity log detail.
+	 *
+	 * @param poActivityLogs
+	 *            the po activity logs
+	 * @param connection
+	 *            the connection
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertPaymentOutActivityLogDetail(List&lt;PaymentOutActivityLogDto&gt; poActivityLogs, Connection connection)
+			throws ComplianceException {
+<span class="nc" id="L384">		PreparedStatement poActivityDtlStmt = null;</span>
+		try {
+<span class="nc" id="L386">			poActivityDtlStmt = connection</span>
+<span class="nc" id="L387">					.prepareStatement(DBQueryConstant.INSERT_PAYMENT_OUT_ACTIVITY_LOG_DETAIL.getQuery());</span>
+<span class="nc bnc" id="L388" title="All 2 branches missed.">			for (PaymentOutActivityLogDto activityLog : poActivityLogs) {</span>
+<span class="nc" id="L389">				PaymentOutActivityLogDetailDto poActivityDetails = activityLog.getActivityLogDetailDto();</span>
+<span class="nc" id="L390">				poActivityDtlStmt.setInt(1, poActivityDetails.getActivityId());</span>
+<span class="nc" id="L391">				poActivityDtlStmt.setString(2, poActivityDetails.getActivityType().getModule());</span>
+<span class="nc" id="L392">				poActivityDtlStmt.setString(3, poActivityDetails.getActivityType().getType());</span>
+<span class="nc" id="L393">				poActivityDtlStmt.setNString(4, poActivityDetails.getLog());</span>
+<span class="nc" id="L394">				poActivityDtlStmt.setNString(5, poActivityDetails.getCreatedBy());</span>
+<span class="nc" id="L395">				poActivityDtlStmt.setTimestamp(6, poActivityDetails.getCreatedOn());</span>
+<span class="nc" id="L396">				poActivityDtlStmt.addBatch();</span>
+<span class="nc" id="L397">			}</span>
+<span class="nc" id="L398">			int[] count = poActivityDtlStmt.executeBatch();</span>
+<span class="nc bnc" id="L399" title="All 2 branches missed.">			for (int poActivityCount : count) {</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">				if (poActivityCount == 0) {</span>
+<span class="nc" id="L401">					throw new ComplianceException(InternalProcessingCode.INV_REQUEST,</span>
+							new Exception(Constants.MISSIG_DATA));
+				}
+			}
+
+<span class="nc" id="L406">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L407">			throw e;</span>
+<span class="nc" id="L408">		} catch (Exception e) {</span>
+<span class="nc" id="L409">			throw new ComplianceException(InternalProcessingCode.GEN_DECLINE, e);</span>
+		} finally {
+<span class="nc" id="L411">			closePrepareStatement(poActivityDtlStmt);</span>
+		}
+<span class="nc" id="L413">	}</span>
+
+	/**
+	 * Insert payment in activity logs.
+	 *
+	 * @param piActivityLogs
+	 *            the pi activity logs
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertPaymentInActivityLogs(List&lt;PaymentInActivityLogDto&gt; piActivityLogs) throws ComplianceException {
+<span class="nc" id="L425">		PreparedStatement piActivtyStmt = null;</span>
+<span class="nc" id="L426">		Connection connection = null;</span>
+<span class="nc" id="L427">		ResultSet rs = null;</span>
+		try {
+<span class="nc" id="L429">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L430">			piActivtyStmt = connection.prepareStatement(DBQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc bnc" id="L432" title="All 2 branches missed.">			for (PaymentInActivityLogDto activityLog : piActivityLogs) {</span>
+<span class="nc" id="L433">				piActivtyStmt.setInt(1, activityLog.getPaymentInId());</span>
+<span class="nc" id="L434">				piActivtyStmt.setNString(2, activityLog.getActivityBy());</span>
+<span class="nc" id="L435">				piActivtyStmt.setTimestamp(3, activityLog.getTimeStatmp());</span>
+<span class="nc" id="L436">				piActivtyStmt.setNString(4, activityLog.getComment());</span>
+<span class="nc" id="L437">				piActivtyStmt.setNString(5, activityLog.getCreatedBy());</span>
+<span class="nc" id="L438">				piActivtyStmt.setTimestamp(6, activityLog.getCreatedOn());</span>
+<span class="nc" id="L439">				piActivtyStmt.setInt(7, activityLog.getPaymentInId());</span>
+<span class="nc" id="L440">				int updateCount = piActivtyStmt.executeUpdate();</span>
+<span class="nc bnc" id="L441" title="All 2 branches missed.">				if (updateCount == 0) {</span>
+<span class="nc" id="L442">					throw new ComplianceException(InternalProcessingCode.INV_REQUEST,</span>
+							new Exception(Constants.MISSIG_DATA));
+				}
+<span class="nc" id="L445">				rs = piActivtyStmt.getGeneratedKeys();</span>
+<span class="nc bnc" id="L446" title="All 2 branches missed.">				if (rs.next()) {</span>
+<span class="nc" id="L447">					activityLog.setId(rs.getInt(1));</span>
+<span class="nc" id="L448">					activityLog.getActivityLogDetailDto().setActivityId(rs.getInt(1));</span>
+				}
+<span class="nc" id="L450">			}</span>
+<span class="nc" id="L451">			insertPaymentInActivityLogDetail(piActivityLogs, connection);</span>
+<span class="nc" id="L452">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L453">			throw e;</span>
+<span class="nc" id="L454">		} catch (Exception e) {</span>
+<span class="nc" id="L455">			throw new ComplianceException(InternalProcessingCode.GEN_DECLINE, e);</span>
+		} finally {
+<span class="nc" id="L457">			closeResultset(rs);</span>
+<span class="nc" id="L458">			closePrepareStatement(piActivtyStmt);</span>
+<span class="nc" id="L459">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L461">	}</span>
+
+	/**
+	 * Insert payment in activity log detail.
+	 *
+	 * @param activityLogDtos
+	 *            the activity log dtos
+	 * @param connection
+	 *            the connection
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertPaymentInActivityLogDetail(List&lt;PaymentInActivityLogDto&gt; activityLogDtos, Connection connection)
+			throws ComplianceException {
+<span class="nc" id="L476">		PreparedStatement piActivityDtlStmt = null;</span>
+		try {
+<span class="nc" id="L478">			piActivityDtlStmt = connection</span>
+<span class="nc" id="L479">					.prepareStatement(DBQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG_DETAIL.getQuery());</span>
+<span class="nc bnc" id="L480" title="All 2 branches missed.">			for (PaymentInActivityLogDto activityLog : activityLogDtos) {</span>
+<span class="nc" id="L481">				PaymentInActivityLogDetailDto piActivityDetail = activityLog.getActivityLogDetailDto();</span>
+<span class="nc" id="L482">				piActivityDtlStmt.setInt(1, piActivityDetail.getActivityId());</span>
+<span class="nc" id="L483">				piActivityDtlStmt.setString(2, piActivityDetail.getActivityType().getModule());</span>
+<span class="nc" id="L484">				piActivityDtlStmt.setString(3, piActivityDetail.getActivityType().getType());</span>
+<span class="nc" id="L485">				piActivityDtlStmt.setNString(4, piActivityDetail.getLog());</span>
+<span class="nc" id="L486">				piActivityDtlStmt.setNString(5, piActivityDetail.getCreatedBy());</span>
+<span class="nc" id="L487">				piActivityDtlStmt.setTimestamp(6, piActivityDetail.getCreatedOn());</span>
+<span class="nc" id="L488">				piActivityDtlStmt.addBatch();</span>
+<span class="nc" id="L489">			}</span>
+<span class="nc" id="L490">			int[] count = piActivityDtlStmt.executeBatch();</span>
+<span class="nc bnc" id="L491" title="All 2 branches missed.">			for (int c : count) {</span>
+<span class="nc bnc" id="L492" title="All 2 branches missed.">				if (c == 0) {</span>
+<span class="nc" id="L493">					throw new ComplianceException(InternalProcessingCode.INV_REQUEST,</span>
+							new Exception(Constants.MISSIG_DATA));
+				}
+			}
+
+<span class="nc" id="L498">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L499">			throw e;</span>
+<span class="nc" id="L500">		} catch (Exception e) {</span>
+<span class="nc" id="L501">			throw new ComplianceException(InternalProcessingCode.GEN_DECLINE, e);</span>
+		} finally {
+<span class="nc" id="L503">			closePrepareStatement(piActivityDtlStmt);</span>
+		}
+<span class="nc" id="L505">	}</span>
+
+	/**
+	 * Creates the payment IN STP activity.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createSTPPaymentInActivity(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L518">		Connection conn = null;</span>
+		try {
+
+<span class="nc" id="L521">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L522">			FundsInCreateRequest fRequest = (FundsInCreateRequest) exchange.getRequest();</span>
+<span class="nc" id="L523">			FundsInCreateResponse fundsInCreateResponse = (FundsInCreateResponse) message.getPayload()</span>
+<span class="nc" id="L524">					.getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L525">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L526">			insertInPaymetInActivityLogSTP(conn, fundsInCreateResponse, fRequest);</span>
+
+<span class="nc" id="L528">		} catch (Exception e) {</span>
+<span class="nc" id="L529">			LOGGER.error(&quot;Exception in createSTPPaymentInActivity()&quot;, e);</span>
+<span class="nc" id="L530">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L532">			closeConnection(conn);</span>
+		}
+
+<span class="nc" id="L535">		return message;</span>
+
+	}
+
+	/**
+	 * Insert in paymet in activity log STP.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param fundsInCreateResponse
+	 *            the funds in create response
+	 * @param fRequest
+	 *            the f request
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void insertInPaymetInActivityLogSTP(Connection conn, FundsInCreateResponse fundsInCreateResponse,
+			FundsInCreateRequest fRequest) throws ComplianceException {
+
+<span class="nc" id="L554">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L555">		Integer activityId = null;</span>
+		try {
+<span class="nc" id="L557">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L559">			preparedStatment.setInt(1, fRequest.getFundsInId());</span>
+<span class="nc" id="L560">			preparedStatment.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L561">			preparedStatment.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L562">			preparedStatment.setInt(4, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L563">			preparedStatment.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L564">			activityId = getActivityId(preparedStatment, activityId);</span>
+
+<span class="nc" id="L566">			insertInPaymetInActivityLogDetailsSTP(conn, fundsInCreateResponse, activityId);</span>
+
+<span class="nc" id="L568">		} catch (Exception e) {</span>
+<span class="nc" id="L569">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L571">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L573">	}</span>
+
+	/**
+	 * Insert in paymet in activity log details STP.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param fundsInCreateResponse
+	 *            the funds in create response
+	 * @param activityId
+	 *            the activity id
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void insertInPaymetInActivityLogDetailsSTP(Connection conn, FundsInCreateResponse fundsInCreateResponse,
+			Integer activityId) throws ComplianceException {
+
+<span class="nc" id="L590">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="nc" id="L593">			preparedStatment = conn</span>
+<span class="nc" id="L594">					.prepareStatement(DBQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L595">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L596">			preparedStatment.setString(2, Constants.PAYMENT_IN);</span>
+<span class="nc" id="L597">			preparedStatment.setString(3, Constants.PAYMENT_IN_TYPE);</span>
+<span class="nc" id="L598">			preparedStatment.setNString(4, fundsInCreateResponse.getResponseDescription());</span>
+<span class="nc" id="L599">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L600">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L601">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L603" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L604">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L607">		} catch (Exception e) {</span>
+<span class="nc" id="L608">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L610">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L612">	}</span>
+
+	/**
+	 * Creates the payment OUT STP activity.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createSTPPaymentOutActivity(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L625">		Connection conn = null;</span>
+		try {
+
+<span class="nc" id="L628">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L629">			FundsOutRequest fRequest = (FundsOutRequest) exchange.getRequest();</span>
+<span class="nc" id="L630">			FundsOutResponse fundsOutResponse = (FundsOutResponse) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L631">					.getResponse();</span>
+<span class="nc" id="L632">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L633">			insertInPaymetOutActivityLogSTP(conn, fundsOutResponse, fRequest);</span>
+
+<span class="nc" id="L635">		} catch (Exception e) {</span>
+<span class="nc" id="L636">			LOGGER.error(&quot;Exception in createSTPPaymentOutActivity()&quot;, e);</span>
+<span class="nc" id="L637">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L639">			closeConnection(conn);</span>
+		}
+
+<span class="nc" id="L642">		return message;</span>
+
+	}
+
+	/**
+	 * Insert in paymet out activity log STP.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param fundsOutResponse
+	 *            the funds out response
+	 * @param fRequest
+	 *            the f request
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void insertInPaymetOutActivityLogSTP(Connection conn, FundsOutResponse fundsOutResponse,
+			FundsOutRequest fRequest) throws ComplianceException {
+
+<span class="nc" id="L661">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L662">		Integer activityId = null;</span>
+		try {
+<span class="nc" id="L664">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PAYMENT_OUT_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L666">			preparedStatment.setInt(1, fRequest.getFundsOutId());</span>
+<span class="nc" id="L667">			preparedStatment.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L668">			preparedStatment.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L669">			preparedStatment.setInt(4, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L670">			preparedStatment.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L671">			activityId = getActivityId(preparedStatment, activityId);</span>
+
+<span class="nc" id="L673">			insertInPaymetOutActivityLogDetailsSTP(conn, fundsOutResponse, activityId);</span>
+
+<span class="nc" id="L675">		} catch (Exception e) {</span>
+<span class="nc" id="L676">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L678">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L680">	}</span>
+
+	/**
+	 * Insert in paymet out activity log details STP.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param fundsOutResponse
+	 *            the funds out response
+	 * @param activityId
+	 *            the activity id
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void insertInPaymetOutActivityLogDetailsSTP(Connection conn, FundsOutResponse fundsOutResponse,
+			Integer activityId) throws ComplianceException {
+
+<span class="nc" id="L697">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="nc" id="L700">			preparedStatment = conn</span>
+<span class="nc" id="L701">					.prepareStatement(DBQueryConstant.INSERT_PAYMENT_OUT_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L702">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L703">			preparedStatment.setString(2, Constants.PAYMENT_OUT);</span>
+<span class="nc" id="L704">			preparedStatment.setString(3, Constants.PAYMENT_OUT_TYPE);</span>
+<span class="nc" id="L705">			preparedStatment.setNString(4, fundsOutResponse.getResponseDescription());</span>
+<span class="nc" id="L706">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L707">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L708">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L710" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L711">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L714">		} catch (Exception e) {</span>
+<span class="nc" id="L715">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L717">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L719">	}</span>
+
+	/**
+	 * Creates the profile STP activity.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createSTPProfileActivity(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="fc" id="L732">		Connection conn = null;</span>
+		try {
+
+<span class="fc" id="L735">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="fc" id="L736">			RegistrationServiceRequest fRequest = (RegistrationServiceRequest) exchange.getRequest();</span>
+<span class="fc" id="L737">			RegistrationResponse registrationResponse = (RegistrationResponse) message.getPayload()</span>
+<span class="fc" id="L738">					.getGatewayMessageExchange().getResponse();</span>
+<span class="fc" id="L739">			conn = getConnection(Boolean.FALSE);</span>
+<span class="fc" id="L740">			String custType = fRequest.getAccount().getCustType();</span>
+
+<span class="pc bpc" id="L742" title="1 of 2 branches missed.">			if (CustomerTypeEnum.CFX.toString().equalsIgnoreCase(custType)) {</span>
+<span class="nc" id="L743">				insertInCFXProfileActivityLogSTP(conn, registrationResponse, fRequest);</span>
+			} else {
+<span class="fc" id="L745">				insertInPFXProfileActivityLogSTP(conn, registrationResponse, fRequest);</span>
+			}
+
+<span class="nc" id="L748">		} catch (Exception e) {</span>
+<span class="nc" id="L749">			LOGGER.error(&quot;Exception in createSTPProfileActivity()&quot;, e);</span>
+<span class="nc" id="L750">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="fc" id="L752">			closeConnection(conn);</span>
+		}
+
+<span class="fc" id="L755">		return message;</span>
+
+	}
+
+	/**
+	 * Insert in profile activity log STP PFX.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param registrationResponse
+	 *            the registration response
+	 * @param fRequest
+	 *            the f request
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertInPFXProfileActivityLogSTP(Connection conn, RegistrationResponse registrationResponse,
+			RegistrationServiceRequest fRequest) throws ComplianceException {
+
+<span class="fc" id="L775">		PreparedStatement preparedStatment = null;</span>
+<span class="fc" id="L776">		Integer activityId = null;</span>
+<span class="fc" id="L777">		List&lt;ComplianceContact&gt; contactList = registrationResponse.getAccount().getContacts();</span>
+		try {
+<span class="fc" id="L779">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="fc bfc" id="L781" title="All 2 branches covered.">			for (ComplianceContact contact : contactList) {</span>
+<span class="fc" id="L782">				preparedStatment.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L783">				preparedStatment.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="fc" id="L784">				preparedStatment.setInt(3, fRequest.getOrgId());</span>
+<span class="fc" id="L785">				preparedStatment.setInt(4, fRequest.getAccount().getId());</span>
+<span class="fc" id="L786">				preparedStatment.setInt(5, contact.getId());</span>
+<span class="fc" id="L787">				preparedStatment.setInt(6, Constants.DEFAULT_USER);</span>
+<span class="fc" id="L788">				preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L789">				preparedStatment.setInt(8, Constants.DEFAULT_USER);</span>
+<span class="fc" id="L790">				preparedStatment.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="fc" id="L792">				activityId = getActivityId(preparedStatment, activityId);</span>
+<span class="fc" id="L793">				addBlacklistActivity(fRequest,contact);//AT-3492</span>
+<span class="fc" id="L794">				insertInPFXProfileActivityLogDetailsSTP(conn, contact, activityId);</span>
+<span class="fc" id="L795">			}</span>
+<span class="nc" id="L796">		} catch (Exception e) {</span>
+<span class="nc" id="L797">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L799">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="fc" id="L801">	}</span>
+
+	/**
+	 * Insert in profile activity log details STP PFX.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param contact
+	 *            the contact
+	 * @param activityId
+	 *            the activity id
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void insertInPFXProfileActivityLogDetailsSTP(Connection conn, ComplianceContact contact, Integer activityId)
+			throws ComplianceException {
+
+<span class="fc" id="L818">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="fc" id="L821">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="fc" id="L822">			preparedStatment.setInt(1, activityId);</span>
+<span class="fc" id="L823">			preparedStatment.setString(2, Constants.PROFILE_MODULE);</span>
+<span class="fc" id="L824">			preparedStatment.setString(3, Constants.PROFILE_SIGNUP_TYPE);</span>
+<span class="fc" id="L825">			preparedStatment.setNString(4, contact.getResponseDescription());</span>
+<span class="fc" id="L826">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="fc" id="L827">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="fc" id="L828">			preparedStatment.setInt(7, Constants.DEFAULT_USER);</span>
+<span class="fc" id="L829">			preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="fc" id="L831">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="pc bpc" id="L833" title="1 of 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L834">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L837">		} catch (Exception e) {</span>
+<span class="nc" id="L838">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="fc" id="L840">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="fc" id="L842">	}</span>
+
+	/**
+	 * Insert in profile activity log STP CFX.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param registrationResponse
+	 *            the registration response
+	 * @param fRequest
+	 *            the f request
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertInCFXProfileActivityLogSTP(Connection conn, RegistrationResponse registrationResponse,
+			RegistrationServiceRequest fRequest) throws ComplianceException {
+
+<span class="nc" id="L860">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L861">		Integer activityId = null;</span>
+<span class="nc" id="L862">		List&lt;ComplianceContact&gt; contactList = registrationResponse.getAccount().getContacts();</span>
+		try {
+<span class="nc" id="L864">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L866">			preparedStatment.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L867">			preparedStatment.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L868">			preparedStatment.setInt(3, fRequest.getOrgId());</span>
+<span class="nc" id="L869">			preparedStatment.setInt(4, fRequest.getAccount().getId());</span>
+<span class="nc" id="L870">			preparedStatment.setInt(5, contactList.get(0).getId());</span>
+<span class="nc" id="L871">			preparedStatment.setInt(6, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L872">			preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L873">			preparedStatment.setInt(8, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L874">			preparedStatment.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L876">			activityId = getActivityId(preparedStatment, activityId);</span>
+<span class="nc" id="L877">			insertInCFXProfileActivityLogDetailsSTP(conn, contactList, activityId);</span>
+
+<span class="nc" id="L879">		} catch (Exception e) {</span>
+<span class="nc" id="L880">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L882">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L884">	}</span>
+
+	/**
+	 * Insert in profile activity log details STP CFX.
+	 *
+	 * @param conn            the conn
+	 * @param contactList the contact list
+	 * @param activityId            the activity id
+	 * @throws ComplianceException             the compliance exception
+	 */
+	private void insertInCFXProfileActivityLogDetailsSTP(Connection conn, List&lt;ComplianceContact&gt; contactList,
+			Integer activityId) throws ComplianceException {
+
+<span class="nc" id="L897">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="nc" id="L900">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L901">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L902">			preparedStatment.setString(2, Constants.PROFILE_MODULE);</span>
+<span class="nc" id="L903">			preparedStatment.setString(3, Constants.PROFILE_SIGNUP_TYPE);</span>
+<span class="nc" id="L904">			preparedStatment.setNString(4, contactList.get(0).getResponseDescription());</span>
+<span class="nc" id="L905">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L906">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L907">			preparedStatment.setInt(7, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L908">			preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L910">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L912" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L913">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L916">		} catch (Exception e) {</span>
+<span class="nc" id="L917">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L919">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L921">	}</span>
+
+	/**
+	 * Creates the profile update STP activity.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createSTPProfileUpdateActivity(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L934">		Connection conn = null;</span>
+		try {
+
+<span class="nc" id="L937">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L938">			RegistrationServiceRequest fRequest = (RegistrationServiceRequest) exchange.getRequest();</span>
+<span class="nc" id="L939">			RegistrationResponse registrationResponse = (RegistrationResponse) message.getPayload()</span>
+<span class="nc" id="L940">					.getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L941">			conn = getConnection(Boolean.FALSE);</span>
+
+<span class="nc" id="L943">			Boolean isAccountModified = (Boolean) fRequest.getAdditionalAttribute(&quot;isAccountModified&quot;);</span>
+<span class="nc" id="L944">			Boolean isConactModified = (Boolean) fRequest.getAdditionalAttribute(&quot;isContactModified&quot;);</span>
+<span class="nc" id="L945">			Boolean isCompanyModified = (Boolean) fRequest.getAdditionalAttribute(&quot;isCompanyModified&quot;);</span>
+<span class="nc" id="L946">			Boolean isConversionPredictionModified = (Boolean) fRequest</span>
+<span class="nc" id="L947">					.getAdditionalAttribute(&quot;isConversionPredictionModified&quot;);</span>
+<span class="nc" id="L948">			Boolean isCorporateComplianceModified = (Boolean) fRequest</span>
+<span class="nc" id="L949">					.getAdditionalAttribute(&quot;isCorporateComplianceModified&quot;);</span>
+
+<span class="nc" id="L951">			List&lt;String&gt; activityLog = (List&lt;String&gt;) fRequest.getAdditionalAttribute(&quot;activityLog&quot;);</span>
+
+<span class="nc bnc" id="L953" title="All 4 branches missed.">			if (Boolean.TRUE.equals(isAccountModified) || Boolean.TRUE.equals(isCompanyModified) </span>
+<span class="nc bnc" id="L954" title="All 2 branches missed.">					|| Boolean.TRUE.equals(isConversionPredictionModified)</span>
+<span class="nc bnc" id="L955" title="All 2 branches missed.">					|| Boolean.TRUE.equals(isCorporateComplianceModified)) {</span>
+
+<span class="nc" id="L957">				insertInProfileUpdateAccountActivityLogSTP(conn, activityLog, fRequest);</span>
+			}
+
+<span class="nc bnc" id="L960" title="All 2 branches missed.">			if (Boolean.TRUE.equals(isConactModified)) {</span>
+
+<span class="nc" id="L962">				insertInProfileUpdateActivityLogSTP(conn, registrationResponse, activityLog, fRequest);</span>
+<span class="nc" id="L963">				LOGGER.warn(&quot;\n -------Activity details in activity db service impl -------- \n  {}&quot;, activityLog);</span>
+			}
+
+<span class="nc" id="L966">		} catch (Exception e) {</span>
+<span class="nc" id="L967">			LOGGER.error(&quot;Exception in createSTPProfileUpdateActivity()&quot;, e);</span>
+<span class="nc" id="L968">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L970">			closeConnection(conn);</span>
+		}
+
+<span class="nc" id="L973">		return message;</span>
+
+	}
+
+	/**
+	 * Insert in profile update activity log STP.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param registrationResponse
+	 *            the registration response
+	 * @param activityLog
+	 *            the activity log
+	 * @param fRequest
+	 *            the f request
+	 * @param oldContacts
+	 *            the old contacts
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void insertInProfileUpdateActivityLogSTP(Connection conn, RegistrationResponse registrationResponse,
+			List&lt;String&gt; activityLog, RegistrationServiceRequest fRequest)
+			throws ComplianceException {
+
+<span class="nc" id="L997">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L998">		Integer activityId = null;</span>
+<span class="nc" id="L999">		List&lt;ComplianceContact&gt; contacts = registrationResponse.getAccount().getContacts();</span>
+
+		try {
+<span class="nc" id="L1002">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L1004">			preparedStatment.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1005">			preparedStatment.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1006">			preparedStatment.setInt(3, fRequest.getOrgId());</span>
+<span class="nc" id="L1007">			preparedStatment.setInt(4, fRequest.getAccount().getId());</span>
+<span class="nc" id="L1008">			preparedStatment.setInt(5, contacts.get(0).getId());</span>
+<span class="nc" id="L1009">			preparedStatment.setInt(6, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1010">			preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1011">			preparedStatment.setInt(8, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1012">			preparedStatment.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L1014">			activityId = getActivityId(preparedStatment, activityId);</span>
+
+<span class="nc" id="L1016">			insertInProfileUpdateActivityLogDetailsSTP(conn, activityId, activityLog);</span>
+
+<span class="nc" id="L1018">		} catch (Exception e) {</span>
+<span class="nc" id="L1019">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1021">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1023">	}</span>
+
+	/**
+	 * Gets the activity id.
+	 *
+	 * @param preparedStatment
+	 *            the prepared statment
+	 * @param activityId
+	 *            the activity id
+	 * @return the activity id
+	 * @throws SQLException
+	 *             the SQL exception
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private Integer getActivityId(PreparedStatement preparedStatment, Integer activityId)
+			throws SQLException, ComplianceException {
+		ResultSet rs;
+<span class="fc" id="L1041">		Integer updateCount = preparedStatment.executeUpdate();</span>
+<span class="pc bpc" id="L1042" title="1 of 2 branches missed.">		if (updateCount == 0) {</span>
+<span class="nc" id="L1043">			throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+		}
+<span class="fc" id="L1045">		rs = preparedStatment.getGeneratedKeys();</span>
+<span class="pc bpc" id="L1046" title="1 of 2 branches missed.">		if (rs.next()) {</span>
+<span class="fc" id="L1047">			activityId = rs.getInt(1);</span>
+		}
+<span class="fc" id="L1049">		return activityId;</span>
+	}
+
+	/**
+	 * Insert in profile update activity log details STP.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param activityId
+	 *            the activity id
+	 * @param activityLog
+	 *            the activity log
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertInProfileUpdateActivityLogDetailsSTP(Connection conn, Integer activityId,
+			List&lt;String&gt; activityLog) throws ComplianceException {
+<span class="nc" id="L1067">		PreparedStatement preparedStatment = null;</span>
+		try {
+<span class="nc" id="L1069">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc bnc" id="L1070" title="All 2 branches missed.">			for (String log : activityLog) {</span>
+<span class="nc" id="L1071">				preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L1072">				preparedStatment.setString(2, Constants.PROFILE_MODULE);</span>
+<span class="nc" id="L1073">				preparedStatment.setString(3, Constants.PROFILE_UPDATE_TYPE);</span>
+<span class="nc" id="L1074">				preparedStatment.setNString(4, log);</span>
+<span class="nc" id="L1075">				preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1076">				preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1077">				preparedStatment.setInt(7, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1078">				preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L1080">				int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L1082" title="All 2 branches missed.">				if (count == 0) {</span>
+<span class="nc" id="L1083">					throw new ComplianceException(InternalProcessingCode.INV_REQUEST,</span>
+							new Exception(Constants.MISSIG_DATA));
+				}
+<span class="nc" id="L1086">			}</span>
+
+<span class="nc" id="L1088">		} catch (Exception e) {</span>
+<span class="nc" id="L1089">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1091">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1093">	}</span>
+
+	/**
+	 * Insert in profile update account activity log STP.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param activityLog
+	 *            the activity log
+	 * @param fRequest
+	 *            the f request
+	 * @param oldContacts
+	 *            the old contacts
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void insertInProfileUpdateAccountActivityLogSTP(Connection conn, List&lt;String&gt; activityLog,
+			RegistrationServiceRequest fRequest) throws ComplianceException {
+
+<span class="nc" id="L1112">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1113">		Integer activityId = null;</span>
+		try {
+<span class="nc" id="L1115">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L1117">			preparedStatment.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1118">			preparedStatment.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1119">			preparedStatment.setInt(3, fRequest.getOrgId());</span>
+<span class="nc" id="L1120">			preparedStatment.setInt(4, fRequest.getAccount().getId());</span>
+<span class="nc" id="L1121">			preparedStatment.setNull(5, java.sql.Types.INTEGER);</span>
+<span class="nc" id="L1122">			preparedStatment.setInt(6, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1123">			preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1124">			preparedStatment.setInt(8, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1125">			preparedStatment.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L1127">			activityId = getActivityId(preparedStatment, activityId);</span>
+
+<span class="nc" id="L1129">			insertInProfileUpdateAccountActivityLogDetailsSTP(conn, activityId, activityLog);</span>
+
+<span class="nc" id="L1131">		} catch (Exception e) {</span>
+<span class="nc" id="L1132">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1134">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1136">	}</span>
+
+	/**
+	 * Insert in profile update account activity log details STP.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param activityId
+	 *            the activity id
+	 * @param activityLog
+	 *            the activity log
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertInProfileUpdateAccountActivityLogDetailsSTP(Connection conn, Integer activityId,
+			List&lt;String&gt; activityLog) throws ComplianceException {
+<span class="nc" id="L1153">		PreparedStatement preparedStatment = null;</span>
+		try {
+
+<span class="nc" id="L1156">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc bnc" id="L1157" title="All 2 branches missed.">			for (String log : activityLog) {</span>
+<span class="nc" id="L1158">				preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L1159">				preparedStatment.setString(2, Constants.PROFILE_MODULE);</span>
+<span class="nc" id="L1160">				preparedStatment.setString(3, Constants.PROFILE_UPDATE_TYPE);</span>
+<span class="nc" id="L1161">				preparedStatment.setNString(4, log);</span>
+<span class="nc" id="L1162">				preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1163">				preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1164">				preparedStatment.setInt(7, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1165">				preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L1167">				int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L1169" title="All 2 branches missed.">				if (count == 0) {</span>
+<span class="nc" id="L1170">					throw new ComplianceException(InternalProcessingCode.INV_REQUEST,</span>
+							new Exception(Constants.MISSIG_DATA));
+				}
+<span class="nc" id="L1173">			}</span>
+
+<span class="nc" id="L1175">		} catch (Exception e) {</span>
+<span class="nc" id="L1176">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1178">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1180">	}</span>
+
+	/**
+	 * Creates the service failed recheck payment out activity.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createServiceFailedRecheckPaymentOutActivity(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L1193">		Connection conn = null;</span>
+		try {
+
+<span class="nc" id="L1196">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1197">			UserProfile userProfile = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L1198">			FundsOutRequest fRequest = (FundsOutRequest) exchange.getRequest();</span>
+<span class="nc" id="L1199">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1200">			insertServiceFailedRecheckPaymetOutActivityLog(conn, fRequest, userProfile, message);</span>
+
+<span class="nc" id="L1202">		} catch (Exception e) {</span>
+<span class="nc" id="L1203">			LOGGER.error(&quot;Exception in createServiceFailedRecheckPaymentOutActivity()&quot;, e);</span>
+<span class="nc" id="L1204">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L1206">			closeConnection(conn);</span>
+		}
+
+<span class="nc" id="L1209">		return message;</span>
+
+	}
+
+	/**
+	 * Insert service failed recheck paymet out activity log.
+	 *
+	 * @param conn            the conn
+	 * @param fRequest            the f request
+	 * @param userProfile the user profile
+	 * @param message the message
+	 * @throws ComplianceException             the compliance exception
+	 */
+	private void insertServiceFailedRecheckPaymetOutActivityLog(Connection conn, FundsOutRequest fRequest,
+			UserProfile userProfile, Message&lt;MessageContext&gt; message) throws ComplianceException {
+
+<span class="nc" id="L1225">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1226">		Integer activityId = null;</span>
+		try {
+<span class="nc" id="L1228">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PAYMENT_OUT_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L1230">			preparedStatment.setInt(1, fRequest.getFundsOutId());</span>
+<span class="nc" id="L1231">			preparedStatment.setInt(2, userProfile.getUserID());</span>
+<span class="nc" id="L1232">			preparedStatment.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1233">			preparedStatment.setInt(4, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1234">			preparedStatment.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1235">			activityId = getActivityId(preparedStatment, activityId);</span>
+
+<span class="nc" id="L1237">			insertServiceFailedRecheckPaymetOutActivityLogDetails(conn, activityId, message, fRequest, userProfile);</span>
+
+<span class="nc" id="L1239">		} catch (Exception e) {</span>
+<span class="nc" id="L1240">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1242">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1244">	}</span>
+
+	/**
+	 * Insert service failed recheck paymet out activity log details.
+	 *
+	 * @param conn the conn
+	 * @param activityId the activity id
+	 * @param message the message
+	 * @param fRequest the f request
+	 * @param userProfile the user profile
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertServiceFailedRecheckPaymetOutActivityLogDetails(Connection conn, Integer activityId,
+			Message&lt;MessageContext&gt; message, FundsOutRequest fRequest, UserProfile userProfile)
+			throws ComplianceException {
+
+<span class="nc" id="L1260">		FundsOutResponse fundsOutResponse = (FundsOutResponse) message.getPayload().getGatewayMessageExchange()</span>
+<span class="nc" id="L1261">				.getResponse();</span>
+<span class="nc" id="L1262">		insertInPaymetOutActivityLogDetailsSTP(conn, fundsOutResponse, activityId);</span>
+
+<span class="nc bnc" id="L1264" title="All 2 branches missed.">		if ((boolean) fRequest.getAdditionalAttribute(&quot;isCustomCheckEligible&quot;)) {</span>
+<span class="nc" id="L1265">			CustomCheckResponse cResponse = (CustomCheckResponse) message.getPayload()</span>
+<span class="nc" id="L1266">					.getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE).getResponse();</span>
+<span class="nc" id="L1267">			insertBulkRecheckActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_CONTACT, &quot;CUSTOM&quot;,</span>
+<span class="nc" id="L1268">					cResponse.getOverallStatus(), userProfile);</span>
+		}
+
+<span class="nc bnc" id="L1271" title="All 2 branches missed.">		if ((boolean) fRequest.getAdditionalAttribute(IS_BLACKLIST_ELIGIBLE)) {</span>
+<span class="nc" id="L1272">			InternalServiceResponse internalServiceResponse = (InternalServiceResponse) message.getPayload()</span>
+<span class="nc" id="L1273">					.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE).getResponse();</span>
+<span class="nc" id="L1274">			String blacklistStatus = internalServiceResponse.getContacts().get(0).getBlacklist().getStatus();</span>
+<span class="nc" id="L1275">			insertBulkRecheckActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_CONTACT,</span>
+<span class="nc" id="L1276">					ServiceTypeEnum.BLACK_LIST_SERVICE.getShortName(), blacklistStatus, userProfile);</span>
+		}
+
+<span class="nc bnc" id="L1279" title="All 2 branches missed.">		if ((boolean) fRequest.getAdditionalAttribute(IS_COUNTRY_CHECK_ELIGIBLE)) {</span>
+<span class="nc" id="L1280">			InternalServiceResponse internalServiceResponse = (InternalServiceResponse) message.getPayload()</span>
+<span class="nc" id="L1281">					.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE).getResponse();</span>
+<span class="nc" id="L1282">			String countryCheckStatus = internalServiceResponse.getContacts().get(0).getCountryCheck().getStatus();</span>
+<span class="nc" id="L1283">			insertBulkRecheckActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_CONTACT, &quot;COUNTRY&quot;,</span>
+					countryCheckStatus, userProfile);
+		}
+
+<span class="nc bnc" id="L1287" title="All 2 branches missed.">		if ((boolean) fRequest.getAdditionalAttribute(IS_SANCTION_ELIGIBLE)) {</span>
+<span class="nc" id="L1288">			SanctionResponse sanctionResponse = (SanctionResponse) message.getPayload()</span>
+<span class="nc" id="L1289">					.getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE).getResponse();</span>
+<span class="nc" id="L1290">			SanctionContactResponse scResponse = sanctionResponse.getContactResponses().get(0);</span>
+<span class="nc" id="L1291">			SanctionBankResponse sBankResponse = sanctionResponse.getBankResponses().get(0);</span>
+<span class="nc" id="L1292">			SanctionBeneficiaryResponse sBeneResponse = sanctionResponse.getBeneficiaryResponses().get(0);</span>
+<span class="nc" id="L1293">			insertBulkRecheckActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_CONTACT,</span>
+<span class="nc" id="L1294">					ServiceTypeEnum.SANCTION_SERVICE.getShortName(), scResponse.getStatus(), userProfile);</span>
+<span class="nc" id="L1295">			insertBulkRecheckActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_BENEFICIARY,</span>
+<span class="nc" id="L1296">					ServiceTypeEnum.SANCTION_SERVICE.getShortName(), sBeneResponse.getStatus(), userProfile);</span>
+<span class="nc" id="L1297">			insertBulkRecheckActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_BANK,</span>
+<span class="nc" id="L1298">					ServiceTypeEnum.SANCTION_SERVICE.getShortName(), sBankResponse.getStatus(), userProfile);</span>
+		}
+
+<span class="nc bnc" id="L1301" title="All 2 branches missed.">		if ((boolean) fRequest.getAdditionalAttribute(IS_FRAUGSTER_ELIGIBLE)) {</span>
+<span class="nc" id="L1302">			FraugsterPaymentsOutResponse fResponse = (FraugsterPaymentsOutResponse) message.getPayload()</span>
+<span class="nc" id="L1303">					.getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE).getResponse();</span>
+<span class="nc" id="L1304">			insertBulkRecheckActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_CONTACT,</span>
+<span class="nc" id="L1305">					ServiceTypeEnum.FRAUGSTER_SERVICE.getShortName(), fResponse.getStatus(), userProfile);</span>
+		}
+
+<span class="nc" id="L1308">	}</span>
+	
+	private String getServiceFailureChangeString(String entityType,	String serviceType, String serviceStatus) {
+<span class="nc" id="L1311">		return(&quot;For &quot; + entityType + &quot;, After repeat &quot; + serviceType </span>
+				+ &quot; check status changed from SERVICE_FAILURE to &quot; + serviceStatus);
+	}
+
+	/**
+	 * Insert bulk recheck activity log detail.
+	 *
+	 * @param conn the conn
+	 * @param activityId the activity id
+	 * @param entityType the entity type
+	 * @param serviceType the service type
+	 * @param serviceStatus the service status
+	 * @param userProfile the user profile
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertBulkRecheckActivityLogDetail(Connection conn, Integer activityId, String entityType,
+			String serviceType, String serviceStatus, UserProfile userProfile) throws ComplianceException {
+<span class="nc" id="L1328">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="nc" id="L1331">			preparedStatment = conn</span>
+<span class="nc" id="L1332">					.prepareStatement(DBQueryConstant.INSERT_PAYMENT_OUT_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L1333">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L1334">			preparedStatment.setString(2, Constants.PAYMENT_OUT);</span>
+<span class="nc" id="L1335">			preparedStatment.setString(3, Constants.PAYMENT_OUT_TYPE);</span>
+<span class="nc" id="L1336">			preparedStatment.setNString(4, getServiceFailureChangeString(entityType, serviceType, serviceStatus));</span>
+<span class="nc" id="L1337">			preparedStatment.setInt(5, userProfile.getUserID());</span>
+<span class="nc" id="L1338">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1339">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L1341" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L1342">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L1345">		} catch (Exception e) {</span>
+<span class="nc" id="L1346">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1348">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1350">	}</span>
+
+	/**
+	 * Creates the service failed recheck registration activity.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createServiceFailedRecheckRegistrationActivity(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L1361">		Connection conn = null;</span>
+		try {
+
+<span class="nc" id="L1364">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1365">			RegistrationServiceRequest fRequest = (RegistrationServiceRequest) exchange.getRequest();</span>
+<span class="nc" id="L1366">			UserProfile userProfile = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L1367">			RegistrationResponse registrationResponse = (RegistrationResponse) message.getPayload()</span>
+<span class="nc" id="L1368">					.getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L1369">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1370">			Integer accountId = (Integer) fRequest.getAdditionalAttribute(&quot;accountId&quot;);</span>
+<span class="nc bnc" id="L1371" title="All 4 branches missed.">			if (null != accountId &amp;&amp; 0 != accountId) {</span>
+<span class="nc" id="L1372">				insertInServiceFailureRepeatCheckProfileActivityLogSTPForAccount(conn, registrationResponse, fRequest,</span>
+						message, userProfile);
+			} else {
+<span class="nc" id="L1375">				insertInServiceFailureRepeatCheckProfileActivityLogSTPForContact(conn, registrationResponse, fRequest,</span>
+						message, userProfile);
+			}
+
+<span class="nc" id="L1379">		} catch (Exception e) {</span>
+<span class="nc" id="L1380">			LOGGER.error(&quot;Exception in createServiceFailedRecheckRegistrationActivity()&quot;, e);</span>
+<span class="nc" id="L1381">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L1383">			closeConnection(conn);</span>
+		}
+
+<span class="nc" id="L1386">		return message;</span>
+
+	}
+
+	/**
+	 * Insert in service failure repeat check profile activity log STP for contact.
+	 *
+	 * @param conn the conn
+	 * @param registrationResponse the registration response
+	 * @param fRequest the f request
+	 * @param message the message
+	 * @param userProfile the user profile
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertInServiceFailureRepeatCheckProfileActivityLogSTPForContact(Connection conn,
+			RegistrationResponse registrationResponse, RegistrationServiceRequest fRequest,
+			Message&lt;MessageContext&gt; message, UserProfile userProfile) throws ComplianceException {
+
+<span class="nc" id="L1404">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1405">		Integer activityId = null;</span>
+<span class="nc" id="L1406">		List&lt;ComplianceContact&gt; contactList = registrationResponse.getAccount().getContacts();</span>
+		try {
+
+<span class="nc bnc" id="L1409" title="All 2 branches missed.">			for (ComplianceContact contact : contactList) {</span>
+<span class="nc" id="L1410">				Integer contactId = (Integer) fRequest.getAdditionalAttribute(&quot;contactId&quot;);</span>
+<span class="nc bnc" id="L1411" title="All 4 branches missed.">				if (null != contactId &amp;&amp; contactId.equals(contact.getId())) {</span>
+<span class="nc" id="L1412">					preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_STP.getQuery(),</span>
+							Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L1414">					preparedStatment.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1415">					preparedStatment.setInt(2, userProfile.getUserID());</span>
+<span class="nc" id="L1416">					preparedStatment.setInt(3, fRequest.getOrgId());</span>
+<span class="nc" id="L1417">					preparedStatment.setInt(4, fRequest.getAccount().getId());</span>
+<span class="nc" id="L1418">					preparedStatment.setInt(5, contact.getId());</span>
+<span class="nc" id="L1419">					preparedStatment.setInt(6, userProfile.getUserID());</span>
+<span class="nc" id="L1420">					preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1421">					preparedStatment.setInt(8, userProfile.getUserID());</span>
+<span class="nc" id="L1422">					preparedStatment.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L1424">					activityId = getActivityId(preparedStatment, activityId);</span>
+<span class="nc" id="L1425">					insertServiceFailedRecheckRegActivityLogDetailsForContact(conn, activityId, message, fRequest,</span>
+							userProfile, contactList);
+				}
+<span class="nc" id="L1428">			}</span>
+<span class="nc" id="L1429">		} catch (Exception e) {</span>
+<span class="nc" id="L1430">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1432">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1434">	}</span>
+
+	/**
+	 * Insert in service failure repeat check profile activity log STP for account.
+	 *
+	 * @param conn the conn
+	 * @param registrationResponse the registration response
+	 * @param fRequest the f request
+	 * @param message the message
+	 * @param userProfile the user profile
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertInServiceFailureRepeatCheckProfileActivityLogSTPForAccount(Connection conn,
+			RegistrationResponse registrationResponse, RegistrationServiceRequest fRequest,
+			Message&lt;MessageContext&gt; message, UserProfile userProfile) throws ComplianceException {
+
+<span class="nc" id="L1450">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1451">		Integer activityId = null;</span>
+<span class="nc" id="L1452">		ComplianceAccount account = registrationResponse.getAccount();</span>
+		try {
+<span class="nc" id="L1454">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L1456">			preparedStatment.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1457">			preparedStatment.setInt(2, userProfile.getUserID());</span>
+<span class="nc" id="L1458">			preparedStatment.setInt(3, fRequest.getOrgId());</span>
+<span class="nc" id="L1459">			preparedStatment.setInt(4, fRequest.getAccount().getId());</span>
+<span class="nc" id="L1460">			preparedStatment.setString(5, null);</span>
+<span class="nc" id="L1461">			preparedStatment.setInt(6, userProfile.getUserID());</span>
+<span class="nc" id="L1462">			preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1463">			preparedStatment.setInt(8, userProfile.getUserID());</span>
+<span class="nc" id="L1464">			preparedStatment.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1465">			activityId = getActivityId(preparedStatment, activityId);</span>
+<span class="nc" id="L1466">			insertServiceFailedRecheckRegActivityLogDetailsForAccount(conn, activityId, message, fRequest, userProfile,</span>
+					account);
+
+<span class="nc" id="L1469">		} catch (Exception e) {</span>
+<span class="nc" id="L1470">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1472">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1474">	}</span>
+
+	/**
+	 * Insert service failed recheck reg activity log details for account.
+	 *
+	 * @param conn the conn
+	 * @param activityId the activity id
+	 * @param message the message
+	 * @param regServiceRequest the reg service request
+	 * @param userProfile the user profile
+	 * @param account the account
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertServiceFailedRecheckRegActivityLogDetailsForAccount(Connection conn, Integer activityId,
+			Message&lt;MessageContext&gt; message, RegistrationServiceRequest regServiceRequest, UserProfile userProfile,
+			ComplianceAccount account) throws ComplianceException {
+<span class="nc" id="L1490">		MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.KYC_SERVICE);</span>
+<span class="nc" id="L1491">		Integer accountId = (Integer) regServiceRequest.getAdditionalAttribute(&quot;accountId&quot;);</span>
+
+<span class="nc" id="L1493">		insertInCFXProfileActivityLogDetailsSTPforRepeatcheck(conn, account, activityId, accountId);</span>
+
+<span class="nc" id="L1495">		EventServiceLog log = exchange.getEventServiceLog(ServiceTypeEnum.KYC_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+				accountId);
+<span class="nc" id="L1497">		MessageExchange sanctionExchange = message.getPayload().getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE);</span>
+<span class="nc" id="L1498">		EventServiceLog accountSanctionLog = sanctionExchange.getEventServiceLog(ServiceTypeEnum.SANCTION_SERVICE,</span>
+<span class="nc" id="L1499">				EntityEnum.ACCOUNT.name(), accountId);</span>
+<span class="nc" id="L1500">		MessageExchange blackListexchange = message.getPayload()</span>
+<span class="nc" id="L1501">				.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE);</span>
+<span class="nc" id="L1502">		EventServiceLog accountBlackListlog = blackListexchange.getEventServiceLog(ServiceTypeEnum.BLACK_LIST_SERVICE,</span>
+<span class="nc" id="L1503">				EntityEnum.ACCOUNT.name(), accountId);</span>
+
+<span class="nc bnc" id="L1505" title="All 2 branches missed.">		if ((boolean) regServiceRequest.getAdditionalAttribute(&quot;isEidEligible&quot;)) {</span>
+<span class="nc" id="L1506">			insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(conn, activityId, Constants.ENTITY_TYPE_ACCOUNT,</span>
+<span class="nc" id="L1507">					ServiceTypeEnum.KYC_SERVICE.getShortName(), log.getStatus(), userProfile);</span>
+		}
+<span class="nc bnc" id="L1509" title="All 2 branches missed.">		if ((boolean) regServiceRequest.getAdditionalAttribute(IS_SANCTION_ELIGIBLE)) {</span>
+
+<span class="nc" id="L1511">			insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(conn, activityId, Constants.ENTITY_TYPE_ACCOUNT,</span>
+<span class="nc" id="L1512">					ServiceTypeEnum.SANCTION_SERVICE.getShortName(), accountSanctionLog.getStatus(), userProfile);</span>
+		}
+
+<span class="nc bnc" id="L1515" title="All 2 branches missed.">		if ((boolean) regServiceRequest.getAdditionalAttribute(IS_BLACKLIST_ELIGIBLE)) {</span>
+<span class="nc" id="L1516">			insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(conn, activityId, Constants.ENTITY_TYPE_ACCOUNT,</span>
+<span class="nc" id="L1517">					ServiceTypeEnum.BLACK_LIST_SERVICE.getShortName(), accountBlackListlog.getStatus(), userProfile);</span>
+		}
+<span class="nc" id="L1519">	}</span>
+
+	/**
+	 * Insert service failed recheck reg activity log details for contact.
+	 *
+	 * @param conn the conn
+	 * @param activityId the activity id
+	 * @param message the message
+	 * @param regServiceRequest the reg service request
+	 * @param userProfile the user profile
+	 * @param contactList the contact list
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertServiceFailedRecheckRegActivityLogDetailsForContact(Connection conn, Integer activityId,
+			Message&lt;MessageContext&gt; message, RegistrationServiceRequest regServiceRequest, UserProfile userProfile,
+			List&lt;ComplianceContact&gt; contactList) throws ComplianceException {
+<span class="nc" id="L1535">		MessageExchange exchange = message.getPayload().getMessageExchange(ServiceTypeEnum.KYC_SERVICE);</span>
+<span class="nc" id="L1536">		Integer contactId = (Integer) regServiceRequest.getAdditionalAttribute(&quot;contactId&quot;);</span>
+<span class="nc" id="L1537">		ComplianceContact contactToBeRechecked = new ComplianceContact();</span>
+
+<span class="nc bnc" id="L1539" title="All 2 branches missed.">		for (ComplianceContact contact : contactList) {</span>
+<span class="nc bnc" id="L1540" title="All 4 branches missed.">			if (null != contactId &amp;&amp; contactId.equals(contact.getId())) {</span>
+<span class="nc" id="L1541">				insertInPFXProfileActivityLogDetailsSTP(conn, contact, activityId);</span>
+<span class="nc" id="L1542">				contactToBeRechecked = contact;</span>
+<span class="nc" id="L1543">				break;</span>
+			}
+<span class="nc" id="L1545">		}</span>
+<span class="nc" id="L1546">		InternalServiceResponse internalServiceResponse = (InternalServiceResponse) message.getPayload()</span>
+<span class="nc" id="L1547">				.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE).getResponse();</span>
+
+<span class="nc bnc" id="L1549" title="All 2 branches missed.">		if (CustomerTypeEnum.PFX.name().equals(regServiceRequest.getAccount().getCustType())) {</span>
+<span class="nc" id="L1550">			setServiceFailureRepeatCheckProfileActivityLogDetailsSTP(regServiceRequest, userProfile, contactToBeRechecked, internalServiceResponse, conn, activityId, exchange);</span>
+		}
+
+<span class="nc bnc" id="L1553" title="All 2 branches missed.">		if ((boolean) regServiceRequest.getAdditionalAttribute(IS_FRAUGSTER_ELIGIBLE)) {</span>
+<span class="nc" id="L1554">			FraugsterOnUpdateResponse fraugsterOnUpdateResponse = (FraugsterOnUpdateResponse) message.getPayload()</span>
+<span class="nc" id="L1555">					.getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE).getResponse();</span>
+<span class="nc" id="L1556">			insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(conn, activityId, Constants.ENTITY_TYPE_CONTACT,</span>
+<span class="nc" id="L1557">					ServiceTypeEnum.FRAUGSTER_SERVICE.getShortName(), fraugsterOnUpdateResponse.getStatus(),</span>
+					userProfile);
+		}
+
+<span class="nc bnc" id="L1561" title="All 2 branches missed.">		if ((boolean) regServiceRequest.getAdditionalAttribute(IS_BLACKLIST_ELIGIBLE)) {</span>
+<span class="nc" id="L1562">			String blacklistStatusOfContact = internalServiceResponse.getContacts().get(0).getBlacklist().getStatus();</span>
+<span class="nc" id="L1563">			insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(conn, activityId, Constants.ENTITY_TYPE_CONTACT,</span>
+<span class="nc" id="L1564">					ServiceTypeEnum.BLACK_LIST_SERVICE.getShortName(), blacklistStatusOfContact, userProfile);</span>
+		}
+<span class="nc" id="L1566">	}</span>
+
+
+	
+
+	private void setServiceFailureRepeatCheckProfileActivityLogDetailsSTP(RegistrationServiceRequest regServiceRequest, UserProfile userProfile,ComplianceContact contactToBeRechecked,
+			InternalServiceResponse internalServiceResponse ,Connection conn,Integer activityId,MessageExchange exchange ) throws ComplianceException
+	{
+<span class="nc" id="L1574">		EventServiceLog log = exchange.getEventServiceLog(ServiceTypeEnum.KYC_SERVICE, EntityEnum.CONTACT.name(),</span>
+<span class="nc" id="L1575">				contactToBeRechecked.getId());</span>
+<span class="nc bnc" id="L1576" title="All 2 branches missed.">		if ((boolean) regServiceRequest.getAdditionalAttribute(&quot;isEidEligible&quot;)) {</span>
+<span class="nc" id="L1577">			insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(conn, activityId,</span>
+<span class="nc" id="L1578">					Constants.ENTITY_TYPE_CONTACT, ServiceTypeEnum.KYC_SERVICE.getShortName(), log.getStatus(),</span>
+					userProfile);
+		}
+<span class="nc bnc" id="L1581" title="All 2 branches missed.">		if ((boolean) regServiceRequest.getAdditionalAttribute(IS_SANCTION_ELIGIBLE)) {</span>
+<span class="nc" id="L1582">			insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(conn, activityId,</span>
+<span class="nc" id="L1583">					Constants.ENTITY_TYPE_CONTACT, ServiceTypeEnum.SANCTION_SERVICE.getShortName(),</span>
+<span class="nc" id="L1584">					contactToBeRechecked.getSanctionStatus(), userProfile);</span>
+		}
+<span class="nc bnc" id="L1586" title="All 2 branches missed.">		if ((boolean) regServiceRequest.getAdditionalAttribute(&quot;isGlobalCheckEligible&quot;)) {</span>
+<span class="nc" id="L1587">			String globalCheckStatus = internalServiceResponse.getContacts().get(0).getGlobalCheck().getStatus();</span>
+<span class="nc" id="L1588">			insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(conn, activityId,</span>
+<span class="nc" id="L1589">					Constants.ENTITY_TYPE_CONTACT, ServiceTypeEnum.GLOBAL_CHECK_SERVICE.getShortName(),</span>
+					globalCheckStatus, userProfile);
+		}
+<span class="nc bnc" id="L1592" title="All 2 branches missed.">		if ((boolean) regServiceRequest.getAdditionalAttribute(&quot;isIpCheckEligible&quot;)) {</span>
+<span class="nc" id="L1593">			String ipCheckStatus = internalServiceResponse.getContacts().get(0).getIpCheck().getStatus();</span>
+<span class="nc" id="L1594">			insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(conn, activityId,</span>
+<span class="nc" id="L1595">					Constants.ENTITY_TYPE_CONTACT, ServiceTypeEnum.IP_SERVICE.getShortName(), ipCheckStatus,</span>
+					userProfile);
+		}
+
+<span class="nc bnc" id="L1599" title="All 2 branches missed.">		if ((boolean) regServiceRequest.getAdditionalAttribute(IS_COUNTRY_CHECK_ELIGIBLE)) {</span>
+<span class="nc" id="L1600">			String countryCheckStatus = internalServiceResponse.getContacts().get(0).getCountryCheck().getStatus();</span>
+<span class="nc" id="L1601">			insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(conn, activityId,</span>
+<span class="nc" id="L1602">					Constants.ENTITY_TYPE_CONTACT, ServiceTypeEnum.HRC_SERVICE.getShortName(), countryCheckStatus,</span>
+					userProfile);
+		}
+<span class="nc" id="L1605">	}</span>
+	
+	
+	/**
+	 * Insert in CFX profile activity log details ST pfor repeatcheck.
+	 *
+	 * @param conn the conn
+	 * @param account the account
+	 * @param activityId the activity id
+	 * @param contactId the contact id
+	 * @throws ComplianceException the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertInCFXProfileActivityLogDetailsSTPforRepeatcheck(Connection conn, ComplianceAccount account,
+			Integer activityId, Integer contactId) throws ComplianceException {
+
+<span class="nc" id="L1621">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+
+<span class="nc" id="L1625">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L1626">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L1627">			preparedStatment.setString(2, Constants.PROFILE_MODULE);</span>
+<span class="nc" id="L1628">			preparedStatment.setString(3, Constants.PROFILE_SIGNUP_TYPE);</span>
+<span class="nc" id="L1629">			preparedStatment.setNString(4, account.getResponseDescription());</span>
+<span class="nc" id="L1630">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1631">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1632">			preparedStatment.setInt(7, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1633">			preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L1635">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L1637" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L1638">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L1641">		} catch (Exception e) {</span>
+<span class="nc" id="L1642">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1644">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1646">	}</span>
+
+	/**
+	 * Insert service failure repeat check profile activity log details STP.
+	 *
+	 * @param conn the conn
+	 * @param activityId the activity id
+	 * @param entityType the entity type
+	 * @param serviceType the service type
+	 * @param serviceStatus the service status
+	 * @param userProfile the user profile
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertServiceFailureRepeatCheckProfileActivityLogDetailsSTP(Connection conn, Integer activityId,
+			String entityType, String serviceType, String serviceStatus, UserProfile userProfile)
+			throws ComplianceException {
+<span class="nc" id="L1662">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="nc" id="L1665">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L1666">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L1667">			preparedStatment.setString(2, Constants.PROFILE_MODULE);</span>
+<span class="nc" id="L1668">			preparedStatment.setString(3, Constants.PROFILE_SIGNUP_TYPE);</span>
+<span class="nc" id="L1669">			preparedStatment.setNString(4, getServiceFailureChangeString(entityType, serviceType, serviceStatus));</span>
+<span class="nc" id="L1670">			preparedStatment.setInt(5, userProfile.getUserID());</span>
+<span class="nc" id="L1671">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1672">			preparedStatment.setInt(7, userProfile.getUserID());</span>
+<span class="nc" id="L1673">			preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1674">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L1676" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L1677">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L1680">		} catch (Exception e) {</span>
+<span class="nc" id="L1681">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1683">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1685">	}</span>
+
+	/**
+	 * Creates the service failed recheck payment in activity.
+	 *
+	 * @param message
+	 *            the message
+	 * @return the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createServiceFailedRecheckPaymentInActivity(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L1698">		Connection conn = null;</span>
+		try {
+
+<span class="nc" id="L1701">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1702">			FundsInCreateRequest fRequest = (FundsInCreateRequest) exchange.getRequest();</span>
+<span class="nc" id="L1703">			UserProfile userProfile = (UserProfile) message.getHeaders().get(MessageContextHeaders.GATEWAY_USER);</span>
+<span class="nc" id="L1704">			conn = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L1705">			insertServiceFailedRecheckPaymetInActivityLog(conn, fRequest, userProfile, message);</span>
+
+<span class="nc" id="L1707">		} catch (Exception e) {</span>
+<span class="nc" id="L1708">			LOGGER.error(&quot;Exception in createServiceFailedRecheckPaymentInActivity()&quot;, e);</span>
+<span class="nc" id="L1709">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L1711">			closeConnection(conn);</span>
+		}
+
+<span class="nc" id="L1714">		return message;</span>
+
+	}
+
+	/**
+	 * Insert service failed recheck paymet in activity log.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param fRequest
+	 *            the f request
+	 * @param userProfile
+	 *            the user profile
+	 * @param message
+	 *            the message
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void insertServiceFailedRecheckPaymetInActivityLog(Connection conn, FundsInCreateRequest fRequest,
+			UserProfile userProfile, Message&lt;MessageContext&gt; message) throws ComplianceException {
+
+<span class="nc" id="L1735">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1736">		Integer activityId = null;</span>
+		try {
+<span class="nc" id="L1738">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L1740">			preparedStatment.setInt(1, fRequest.getFundsInId());</span>
+<span class="nc" id="L1741">			preparedStatment.setInt(2, userProfile.getUserID());</span>
+<span class="nc" id="L1742">			preparedStatment.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1743">			preparedStatment.setInt(4, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1744">			preparedStatment.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1745">			activityId = getActivityId(preparedStatment, activityId);</span>
+
+<span class="nc" id="L1747">			insertServiceFailedRecheckPaymetInActivityLogDetails(conn, activityId, message, fRequest, userProfile);</span>
+
+<span class="nc" id="L1749">		} catch (Exception e) {</span>
+<span class="nc" id="L1750">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1752">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1754">	}</span>
+
+	/**
+	 * Insert service failed recheck paymet in activity log details.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param activityId
+	 *            the activity id
+	 * @param message
+	 *            the message
+	 * @param fRequest
+	 *            the f request
+	 * @param userProfile
+	 *            the user profile
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void insertServiceFailedRecheckPaymetInActivityLogDetails(Connection conn, Integer activityId,
+			Message&lt;MessageContext&gt; message, FundsInCreateRequest fRequest, UserProfile userProfile)
+			throws ComplianceException {
+
+<span class="nc" id="L1776">		FundsInCreateResponse fundsInCreateResponse = (FundsInCreateResponse) message.getPayload()</span>
+<span class="nc" id="L1777">				.getGatewayMessageExchange().getResponse();</span>
+<span class="nc" id="L1778">		insertInPaymetInActivityLogDetailsSTP(conn, fundsInCreateResponse, activityId);</span>
+
+<span class="nc bnc" id="L1780" title="All 2 branches missed.">		if ((boolean) fRequest.getAdditionalAttribute(&quot;isCustomCheckEligible&quot;)) {</span>
+<span class="nc" id="L1781">			CustomCheckResponse cResponse = (CustomCheckResponse) message.getPayload()</span>
+<span class="nc" id="L1782">					.getMessageExchange(ServiceTypeEnum.CUSTOM_CHECKS_SERVICE).getResponse();</span>
+<span class="nc" id="L1783">			insertBulkRecheckForPaymentInActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_CONTACT, &quot;CUSTOM&quot;,</span>
+<span class="nc" id="L1784">					cResponse.getOverallStatus(), userProfile);</span>
+		}
+
+<span class="nc" id="L1787">		InternalServiceResponse internalServiceResponse = (InternalServiceResponse) message.getPayload()</span>
+<span class="nc" id="L1788">				.getMessageExchange(ServiceTypeEnum.INTERNAL_RULE_SERVICE).getResponse();</span>
+
+<span class="nc bnc" id="L1790" title="All 2 branches missed.">		if ((boolean) fRequest.getAdditionalAttribute(IS_BLACKLIST_ELIGIBLE)) {</span>
+<span class="nc" id="L1791">			String blacklistStatus = internalServiceResponse.getContacts().get(0).getBlacklist().getStatus();</span>
+<span class="nc" id="L1792">			insertBulkRecheckForPaymentInActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_CONTACT,</span>
+<span class="nc" id="L1793">					ServiceTypeEnum.BLACK_LIST_SERVICE.getShortName(), blacklistStatus, userProfile);</span>
+		}
+
+<span class="nc bnc" id="L1796" title="All 2 branches missed.">		if ((boolean) fRequest.getAdditionalAttribute(IS_COUNTRY_CHECK_ELIGIBLE)) {</span>
+<span class="nc" id="L1797">			String countryCheckStatus = internalServiceResponse.getContacts().get(0).getCountryCheck().getStatus();</span>
+<span class="nc" id="L1798">			insertBulkRecheckForPaymentInActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_CONTACT, &quot;COUNTRY&quot;,</span>
+					countryCheckStatus, userProfile);
+		}
+
+<span class="nc bnc" id="L1802" title="All 2 branches missed.">		if ((boolean) fRequest.getAdditionalAttribute(IS_SANCTION_ELIGIBLE)) {</span>
+<span class="nc" id="L1803">			SanctionResponse sanctionResponse = (SanctionResponse) message.getPayload()</span>
+<span class="nc" id="L1804">					.getMessageExchange(ServiceTypeEnum.SANCTION_SERVICE).getResponse();</span>
+<span class="nc" id="L1805">			SanctionContactResponse scResponse = sanctionResponse.getContactResponses().get(0);</span>
+<span class="nc" id="L1806">			insertBulkRecheckForPaymentInActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_CONTACT,</span>
+<span class="nc" id="L1807">					ServiceTypeEnum.SANCTION_SERVICE.getShortName(), scResponse.getStatus(), userProfile);</span>
+		}
+
+<span class="nc bnc" id="L1810" title="All 2 branches missed.">		if ((boolean) fRequest.getAdditionalAttribute(IS_FRAUGSTER_ELIGIBLE)) {</span>
+<span class="nc" id="L1811">			FraugsterPaymentsInResponse fResponse = (FraugsterPaymentsInResponse) message.getPayload()</span>
+<span class="nc" id="L1812">					.getMessageExchange(ServiceTypeEnum.FRAUGSTER_SERVICE).getResponse();</span>
+<span class="nc" id="L1813">			insertBulkRecheckForPaymentInActivityLogDetail(conn, activityId, Constants.ENTITY_TYPE_CONTACT,</span>
+<span class="nc" id="L1814">					ServiceTypeEnum.FRAUGSTER_SERVICE.getShortName(), fResponse.getStatus(), userProfile);</span>
+		}
+
+<span class="nc" id="L1817">	}</span>
+
+	/**
+	 * Insert bulk recheck for payment in activity log detail.
+	 *
+	 * @param conn
+	 *            the conn
+	 * @param activityId
+	 *            the activity id
+	 * @param entityType
+	 *            the entity type
+	 * @param serviceType
+	 *            the service type
+	 * @param serviceStatus
+	 *            the service status
+	 * @param userProfile
+	 *            the user profile
+	 * @throws ComplianceException
+	 *             the compliance exception
+	 */
+	private void insertBulkRecheckForPaymentInActivityLogDetail(Connection conn, Integer activityId, String entityType,
+			String serviceType, String serviceStatus, UserProfile userProfile) throws ComplianceException {
+<span class="nc" id="L1839">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="nc" id="L1842">			preparedStatment = conn</span>
+<span class="nc" id="L1843">					.prepareStatement(DBQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L1844">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L1845">			preparedStatment.setString(2, Constants.PAYMENT_IN);</span>
+<span class="nc" id="L1846">			preparedStatment.setString(3, Constants.PAYMENT_IN_TYPE);</span>
+<span class="nc" id="L1847">			preparedStatment.setNString(4, getServiceFailureChangeString(entityType, serviceType, serviceStatus));</span>
+<span class="nc" id="L1848">			preparedStatment.setInt(5, userProfile.getUserID());</span>
+<span class="nc" id="L1849">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1850">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L1852" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L1853">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L1856">		} catch (Exception e) {</span>
+<span class="nc" id="L1857">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1859">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1861">	}</span>
+	
+	
+	/**
+	 * @param message
+	 * @return
+	 * @throws ComplianceException
+	 */
+	public Message&lt;MessageContext&gt; createUpdateProfileActivityLog(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L1871">		MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1872">		StatusUpdateRequest statusUpdateRequest = exchange.getRequest(StatusUpdateRequest.class);</span>
+<span class="nc" id="L1873">		Account oldAccount = (Account) statusUpdateRequest.getAdditionalAttribute(Constants.FIELD_ACC_ACCOUNT);</span>
+<span class="nc" id="L1874">		String onfidoDocumentResultReason = (String) statusUpdateRequest.getAdditionalAttribute(Constants.ONFIDO_RESULT_REASON);</span>
+<span class="nc" id="L1875">		String onfidoDocumentResult = (String) statusUpdateRequest.getAdditionalAttribute(Constants.ONFIDO_RESULT);</span>
+<span class="nc" id="L1876">		String onfidoDocumentResultDescription = null;</span>
+<span class="nc" id="L1877">		boolean detailsNotMatch = (boolean) statusUpdateRequest.getAdditionalAttribute(&quot;Details_Not_Match&quot;);</span>
+<span class="nc" id="L1878">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L1879">		Connection conn = null;</span>
+<span class="nc" id="L1880">		Integer activityId = null;</span>
+		try {
+<span class="nc" id="L1882">			conn = getConnection(Boolean.TRUE);</span>
+<span class="nc" id="L1883">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_WITH_ORG_ID.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L1885">			preparedStatment.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1886">			preparedStatment.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1887">			preparedStatment.setString(3, statusUpdateRequest.getOrgCode());</span>
+<span class="nc" id="L1888">			preparedStatment.setInt(4, oldAccount.getId());</span>
+<span class="nc" id="L1889">			preparedStatment.setInt(5, oldAccount.getContacts().get(0).getId());</span>
+<span class="nc" id="L1890">			preparedStatment.setInt(6, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1891">			preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1892">			preparedStatment.setInt(8, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1893">			preparedStatment.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L1895">			activityId = getActivityId(preparedStatment, activityId);</span>
+<span class="nc bnc" id="L1896" title="All 2 branches missed.">			if(OnfidoStatusEnum.CLEAR.getOnfidoStatusAsString().equalsIgnoreCase(onfidoDocumentResultReason)</span>
+<span class="nc bnc" id="L1897" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.FAIL.name().equals(onfidoDocumentResult))</span>
+<span class="nc" id="L1898">				onfidoDocumentResultDescription = &quot;POI document verified as Cleared by provider, Contact status updated&quot;;</span>
+<span class="nc bnc" id="L1899" title="All 2 branches missed.">			else if(OnfidoStatusEnum.REJECT.getOnfidoStatusAsString().equalsIgnoreCase(onfidoDocumentResultReason)</span>
+<span class="nc bnc" id="L1900" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.FAIL.name().equals(onfidoDocumentResult))</span>
+<span class="nc" id="L1901">				onfidoDocumentResultDescription = &quot;Contact status not modified, POI document considered by provider as Rejected&quot;;</span>
+<span class="nc bnc" id="L1902" title="All 2 branches missed.">			else if(OnfidoStatusEnum.CAUTION.getOnfidoStatusAsString().equalsIgnoreCase(onfidoDocumentResultReason)</span>
+<span class="nc bnc" id="L1903" title="All 2 branches missed.">					&amp;&amp; ServiceStatus.FAIL.name().equals(onfidoDocumentResult))</span>
+<span class="nc" id="L1904">				onfidoDocumentResultDescription = &quot;Contact status not modified, POI document considered by provider as Caution&quot;;</span>
+<span class="nc bnc" id="L1905" title="All 2 branches missed.">			else if(OnfidoStatusEnum.SUSPECT.getOnfidoStatusAsString().equalsIgnoreCase(onfidoDocumentResultReason)</span>
+<span class="nc bnc" id="L1906" title="All 2 branches missed.">					&amp;&amp; !ServiceStatus.FAIL.name().equals(onfidoDocumentResult))</span>
+<span class="nc" id="L1907">				onfidoDocumentResultDescription = &quot;Contact status not modified, POI document considered by provider as Suspected, 'Onfido Suspect' watchlist added&quot;;</span>
+			else
+<span class="nc" id="L1909">				onfidoDocumentResultDescription = &quot;Contact status not modified, POI document verified as &quot;+onfidoDocumentResultReason+&quot;, Other Services checks are failed&quot;;</span>
+			
+<span class="nc bnc" id="L1911" title="All 2 branches missed.">			if(OnfidoStatusEnum.CONSIDER.getOnfidoStatusAsString().equalsIgnoreCase(onfidoDocumentResultReason))</span>
+<span class="nc" id="L1912">				onfidoDocumentResultDescription = &quot;Contact status not modified, POI document verified as &quot;+onfidoDocumentResultReason+&quot;, Sub-result not found&quot;;</span>
+			
+<span class="nc bnc" id="L1914" title="All 2 branches missed.">			if(detailsNotMatch) {</span>
+<span class="nc" id="L1915">				onfidoDocumentResultDescription = &quot;Contact status not modified, Contact details doest not match with POI document, POI document verified as &quot;+onfidoDocumentResultReason;</span>
+			}
+
+<span class="nc" id="L1918">			createUpdateProfileActivityLogDetailsSTP(conn, activityId,onfidoDocumentResultDescription);</span>
+
+<span class="nc" id="L1920">		} catch (Exception e) {</span>
+<span class="nc" id="L1921">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1923">			closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L1924">			closeConnection(conn);</span>
+		}
+
+<span class="nc" id="L1927">		return message;</span>
+
+	}
+
+	/**
+	 * @param conn
+	 * @param activityId
+	 * @throws ComplianceException
+	 */
+	private void createUpdateProfileActivityLogDetailsSTP(Connection conn, Integer activityId,String onfidoDocumentResultDescription)
+			throws ComplianceException {
+
+<span class="nc" id="L1939">		PreparedStatement preparedStatment = null;</span>
+		try {
+<span class="nc" id="L1941">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L1942">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L1943">			preparedStatment.setString(2, Constants.PROFILE_MODULE);</span>
+<span class="nc" id="L1944">			preparedStatment.setString(3, Constants.PROFILE_UPDATE_TYPE);</span>
+<span class="nc" id="L1945">			preparedStatment.setNString(4, onfidoDocumentResultDescription);</span>
+<span class="nc" id="L1946">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1947">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L1948">			preparedStatment.setInt(7, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L1949">			preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L1951">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L1953" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L1954">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L1957">		} catch (Exception e) {</span>
+<span class="nc" id="L1958">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L1960">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L1962">	}</span>
+	
+	/**
+	 * Creates the STP delete contacte activity.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	@SuppressWarnings(&quot;unchecked&quot;)
+	public Message&lt;MessageContext&gt; createSTPDeleteContactActivity(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L1974">		Connection conn = null;</span>
+		try {
+
+<span class="nc" id="L1977">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L1978">			DeleteContactRequest deleteContactRequest = (DeleteContactRequest)exchange.getRequest();</span>
+<span class="nc" id="L1979">			RegistrationServiceRequest regRequest = (RegistrationServiceRequest) deleteContactRequest.getAdditionalAttribute(&quot;regRequest&quot;);</span>
+<span class="nc" id="L1980">			conn = getConnection(Boolean.FALSE);</span>
+			
+<span class="nc bnc" id="L1982" title="All 2 branches missed.">			if(!CustomerTypeEnum.PFX.name().equalsIgnoreCase(regRequest.getAccount().getCustType())) {</span>
+<span class="nc" id="L1983">				List&lt;String&gt; activityLog = (List&lt;String&gt;) deleteContactRequest.getAdditionalAttribute(&quot;activityLog&quot;);</span>
+<span class="nc" id="L1984">				insertInDeleteContactActivityLogSTP(conn, activityLog, deleteContactRequest);</span>
+			}
+<span class="nc" id="L1986">		} catch (Exception e) {</span>
+<span class="nc" id="L1987">			LOGGER.error(&quot;Exception in createSTPDeleteContactActivity()&quot;, e);</span>
+<span class="nc" id="L1988">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L1990">			closeConnection(conn);</span>
+		}
+
+<span class="nc" id="L1993">		return message;</span>
+
+	}
+
+	/**
+	 * Insert in delete contact activity log STP.
+	 *
+	 * @param conn the conn
+	 * @param activityLog the activity log
+	 * @param deleteContactRequest the delete contact request
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertInDeleteContactActivityLogSTP(Connection conn, List&lt;String&gt; activityLog,
+			DeleteContactRequest deleteContactRequest) throws ComplianceException {
+<span class="nc" id="L2007">		RegistrationServiceRequest regRequest = (RegistrationServiceRequest)deleteContactRequest.getAdditionalAttribute(&quot;regRequest&quot;);</span>
+<span class="nc" id="L2008">		Account account = regRequest.getAccount();</span>
+<span class="nc" id="L2009">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L2010">		Integer activityId = null;</span>
+		try {
+<span class="nc" id="L2012">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L2014">			preparedStatment.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2015">			preparedStatment.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2016">			preparedStatment.setInt(3, deleteContactRequest.getOrgId());</span>
+<span class="nc" id="L2017">			preparedStatment.setInt(4, account.getId());</span>
+<span class="nc" id="L2018">			preparedStatment.setNull(5, java.sql.Types.INTEGER);</span>
+<span class="nc" id="L2019">			preparedStatment.setInt(6, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2020">			preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2021">			preparedStatment.setInt(8, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2022">			preparedStatment.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2024">			activityId = getActivityId(preparedStatment, activityId);</span>
+
+<span class="nc" id="L2026">			insertInDeleteContactActivityLogDetailsSTP(conn, activityId, activityLog);</span>
+
+<span class="nc" id="L2028">		} catch (Exception e) {</span>
+<span class="nc" id="L2029">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L2031">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L2033">	}</span>
+	
+
+	/**
+	 * Insert in delete contact activity log details STP.
+	 *
+	 * @param conn the conn
+	 * @param activityId the activity id
+	 * @param activityLog the activity log
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertInDeleteContactActivityLogDetailsSTP(Connection conn, Integer activityId,
+			List&lt;String&gt; activityLog) throws ComplianceException {
+<span class="nc" id="L2046">		PreparedStatement preparedStatment = null;</span>
+		try {
+
+<span class="nc" id="L2049">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc bnc" id="L2050" title="All 2 branches missed.">			for (String log : activityLog) {</span>
+<span class="nc" id="L2051">				preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L2052">				preparedStatment.setString(2, Constants.PROFILE_MODULE);</span>
+<span class="nc" id="L2053">				preparedStatment.setString(3, Constants.PROFILE_DELETE_CONTACT_TYPE);</span>
+<span class="nc" id="L2054">				preparedStatment.setNString(4, log);</span>
+<span class="nc" id="L2055">				preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2056">				preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2057">				preparedStatment.setInt(7, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2058">				preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2060">				int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L2062" title="All 2 branches missed.">				if (count == 0) {</span>
+<span class="nc" id="L2063">					closePrepareStatement(preparedStatment);</span>
+<span class="nc" id="L2064">					throw new ComplianceException(InternalProcessingCode.INV_REQUEST,</span>
+							new Exception(Constants.MISSIG_DATA));
+				}
+<span class="nc" id="L2067">			}</span>
+<span class="nc" id="L2068">		} catch (Exception e) {</span>
+<span class="nc" id="L2069">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L2071">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L2073">	}</span>
+	
+	/**
+	 * AT-3492
+	 * Adds the blacklist activity.
+	 *
+	 * @param fRequest the f request
+	 * @param contact the contact
+	 */
+	private void addBlacklistActivity(RegistrationServiceRequest fRequest,ComplianceContact contact) {
+<span class="fc" id="L2083">		boolean addBlackistactivity = false;</span>
+<span class="pc bpc" id="L2084" title="1 of 2 branches missed.">		if(null != fRequest.getAdditionalAttribute(Constants.ADD_BLACKLIST_ACTIVITY_LOG_FOR_EU))</span>
+<span class="nc" id="L2085">			addBlackistactivity = (boolean) fRequest.getAdditionalAttribute(Constants.ADD_BLACKLIST_ACTIVITY_LOG_FOR_EU);</span>
+<span class="pc bpc" id="L2086" title="3 of 4 branches missed.">		if(addBlackistactivity &amp;&amp; contact.getCrc()==ComplianceReasonCode.KYC_POI) {</span>
+<span class="nc" id="L2087">			String contactResDescr = contact.getResponseDescription();</span>
+<span class="nc" id="L2088">			contactResDescr = &quot;Black Listed Customer information &quot; + contactResDescr;</span>
+<span class="nc" id="L2089">			contact.setResponseDescription(contactResDescr);</span>
+		}
+<span class="fc" id="L2091">	}</span>
+	
+	/**
+	 * Creates the STP transaction monitoring MQ activity log.
+	 *
+	 * @param message the message
+	 * @return the message
+	 * @throws ComplianceException the compliance exception
+	 */
+	public Message&lt;MessageContext&gt; createSTPTransactionMonitoringMQActivityLog(Message&lt;MessageContext&gt; message)
+			throws ComplianceException {
+<span class="nc" id="L2102">		Connection conn = null;</span>
+		try {
+
+<span class="nc" id="L2105">			MessageExchange exchange = message.getPayload().getGatewayMessageExchange();</span>
+<span class="nc" id="L2106">			TransactionMonitoringMQRequest transactionMonitoringMQRequest = (TransactionMonitoringMQRequest) exchange.getRequest();</span>
+<span class="nc" id="L2107">			MessageExchange msgExchange = message.getPayload()</span>
+<span class="nc" id="L2108">					.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_MQ_RESEND);</span>
+<span class="nc" id="L2109">			TransactionMonitoringMQServiceResponse response = (TransactionMonitoringMQServiceResponse) msgExchange.getResponse();;</span>
+<span class="nc" id="L2110">			conn = getConnection(Boolean.FALSE);</span>
+			
+<span class="nc bnc" id="L2112" title="All 2 branches missed.">			if (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.SIGN_UP) || </span>
+<span class="nc bnc" id="L2113" title="All 2 branches missed.">			transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.UPDATE) ||</span>
+<span class="nc bnc" id="L2114" title="All 2 branches missed.">			transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.ADD_CONTACT)) {</span>
+<span class="nc" id="L2115">				insertTMMQProfileActivityLogSTP(conn, response, transactionMonitoringMQRequest);</span>
+<span class="nc bnc" id="L2116" title="All 2 branches missed.">			} else if(transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_in&quot;) </span>
+<span class="nc bnc" id="L2117" title="All 2 branches missed.">						|| transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_in_update&quot;)) {</span>
+<span class="nc" id="L2118">				insertTMMQPaymentInActivityLogs(response, transactionMonitoringMQRequest);</span>
+<span class="nc bnc" id="L2119" title="All 2 branches missed.">			} else if(transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_out&quot;) </span>
+<span class="nc bnc" id="L2120" title="All 2 branches missed.">						 || transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(&quot;payment_out_update&quot;)) {</span>
+<span class="nc" id="L2121">				insertTMMQPaymentOutActivityLogs(response, transactionMonitoringMQRequest);</span>
+			}
+
+<span class="nc" id="L2124">		} catch (Exception e) {</span>
+<span class="nc" id="L2125">			LOGGER.error(&quot;Exception in createSTPTransactionMonitoringMQActivityLog()&quot;, e);</span>
+<span class="nc" id="L2126">			message.getPayload().setFailed(true);</span>
+		} finally {
+<span class="nc" id="L2128">			closeConnection(conn);</span>
+		}
+
+<span class="nc" id="L2131">		return message;</span>
+	}
+	
+	/**
+	 * Insert TMMQ profile activity log STP.
+	 *
+	 * @param conn the conn
+	 * @param response the response
+	 * @param transactionMonitoringMQRequest the transaction monitoring MQ request
+	 * @throws ComplianceException the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertTMMQProfileActivityLogSTP(Connection conn, TransactionMonitoringMQServiceResponse response,
+			TransactionMonitoringMQRequest transactionMonitoringMQRequest) throws ComplianceException {
+
+<span class="nc" id="L2146">		PreparedStatement preparedStatment = null;</span>
+<span class="nc" id="L2147">		Integer activityId = null;</span>
+		try {
+<span class="nc" id="L2149">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_TM_MQ_PROFILE_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+<span class="nc" id="L2151">			preparedStatment.setTimestamp(1, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2152">			preparedStatment.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2153">			preparedStatment.setString(3, transactionMonitoringMQRequest.getOrgCode());</span>
+<span class="nc" id="L2154">			preparedStatment.setInt(4, transactionMonitoringMQRequest.getAccountID());</span>
+<span class="nc bnc" id="L2155" title="All 4 branches missed.">			if(transactionMonitoringMQRequest.getContactID() != null &amp;&amp; (transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.SIGN_UP) ||</span>
+<span class="nc bnc" id="L2156" title="All 2 branches missed.">					transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.UPDATE) ||</span>
+<span class="nc bnc" id="L2157" title="All 2 branches missed.">					transactionMonitoringMQRequest.getRequestType().equalsIgnoreCase(Constants.ADD_CONTACT))) {</span>
+<span class="nc" id="L2158">				preparedStatment.setInt(5, transactionMonitoringMQRequest.getContactID());</span>
+			}else {
+<span class="nc" id="L2160">				preparedStatment.setNull(5, Types.INTEGER);</span>
+			}
+<span class="nc" id="L2162">			preparedStatment.setInt(6, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2163">			preparedStatment.setTimestamp(7, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2164">			preparedStatment.setInt(8, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2165">			preparedStatment.setTimestamp(9, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2167">			activityId = getActivityId(preparedStatment, activityId);</span>
+<span class="nc" id="L2168">			insertTMMQProfileActivityLogDetailsSTP(conn, activityId);</span>
+
+<span class="nc" id="L2170">		} catch (Exception e) {</span>
+<span class="nc" id="L2171">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L2173">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L2175">	}</span>
+	
+	/**
+	 * Insert TMMQ profile activity log details STP.
+	 *
+	 * @param conn the conn
+	 * @param transactionMonitoringMQRequest the transaction monitoring MQ request
+	 * @param activityId the activity id
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertTMMQProfileActivityLogDetailsSTP(Connection conn, Integer activityId) throws ComplianceException {
+
+<span class="nc" id="L2187">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="nc" id="L2190">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PROFILE_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L2191">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L2192">			preparedStatment.setString(2, Constants.PROFILE_MODULE);</span>
+<span class="nc" id="L2193">			preparedStatment.setString(3, Constants.PROFILE_SIGNUP_TYPE);</span>
+<span class="nc" id="L2194">			preparedStatment.setNString(4, &quot;Resend Transaction Monitoring SignUp&quot;);</span>
+<span class="nc" id="L2195">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2196">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2197">			preparedStatment.setInt(7, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2198">			preparedStatment.setTimestamp(8, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2200">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L2202" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L2203">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L2206">		} catch (Exception e) {</span>
+<span class="nc" id="L2207">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L2209">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L2211">	}</span>
+	
+	/**
+	 * Insert TMMQ payment in activity logs.
+	 *
+	 * @param response the response
+	 * @param transactionMonitoringMQRequest the transaction monitoring MQ request
+	 * @throws ComplianceException the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertTMMQPaymentInActivityLogs(TransactionMonitoringMQServiceResponse response,
+			TransactionMonitoringMQRequest transactionMonitoringMQRequest) throws ComplianceException {
+<span class="nc" id="L2223">		TransactionMonitoringPaymentInResponse payInResponse = response.getTransactionMonitoringPaymentInResponse();</span>
+<span class="nc" id="L2224">		PreparedStatement piActivtyStmt = null;</span>
+<span class="nc" id="L2225">		Connection connection = null;</span>
+<span class="nc" id="L2226">		ResultSet rs = null;</span>
+<span class="nc" id="L2227">		Integer activityId = null;</span>
+		try {
+<span class="nc" id="L2229">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L2230">			piActivtyStmt = connection.prepareStatement(DBQueryConstant.INSERT_TM_MQ_PAYMENT_IN_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+			
+<span class="nc" id="L2233">				piActivtyStmt.setInt(1, transactionMonitoringMQRequest.getPaymentInID());</span>
+<span class="nc" id="L2234">				piActivtyStmt.setInt(2, transactionMonitoringMQRequest.getCreatedBy());</span>
+<span class="nc" id="L2235">				piActivtyStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2236">				piActivtyStmt.setInt(4, transactionMonitoringMQRequest.getCreatedBy());</span>
+<span class="nc" id="L2237">				piActivtyStmt.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+				
+<span class="nc" id="L2239">				activityId = getActivityId(piActivtyStmt, activityId);</span>
+				
+<span class="nc" id="L2241">				insertTMMQPaymentInActivityLogDetailsSTP(connection, activityId, payInResponse);</span>
+<span class="nc" id="L2242">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L2243">			throw e;</span>
+<span class="nc" id="L2244">		} catch (Exception e) {</span>
+<span class="nc" id="L2245">			throw new ComplianceException(InternalProcessingCode.GEN_DECLINE, e);</span>
+		} finally {
+<span class="nc" id="L2247">			closeResultset(rs);</span>
+<span class="nc" id="L2248">			closePrepareStatement(piActivtyStmt);</span>
+<span class="nc" id="L2249">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L2251">	}</span>
+	
+	/**
+	 * Insert TMMQ payment in activity log details STP.
+	 *
+	 * @param conn the conn
+	 * @param activityId the activity id
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertTMMQPaymentInActivityLogDetailsSTP(Connection conn, Integer activityId, TransactionMonitoringPaymentInResponse response) throws ComplianceException {
+
+<span class="nc" id="L2262">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="nc" id="L2265">			String reasonDiscription = &quot;Resend Transaction Monitoring PaymentIn. &quot;;</span>
+<span class="nc bnc" id="L2266" title="All 4 branches missed.">			if(response.getResponseDescription() != null &amp;&amp; !response.getResponseDescription().isEmpty()) {</span>
+<span class="nc" id="L2267">				reasonDiscription += response.getResponseDescription();</span>
+			}
+			
+<span class="nc" id="L2270">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L2271">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L2272">			preparedStatment.setString(2, &quot;PAYMENT_IN&quot;);</span>
+<span class="nc" id="L2273">			preparedStatment.setString(3, Constants.PAYMENT_IN_TYPE);</span>
+<span class="nc" id="L2274">			preparedStatment.setNString(4, reasonDiscription);</span>
+<span class="nc" id="L2275">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2276">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2278">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L2280" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L2281">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L2284">		} catch (Exception e) {</span>
+<span class="nc" id="L2285">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L2287">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L2289">	}</span>
+	
+	/**
+	 * Insert TMMQ payment out activity logs.
+	 *
+	 * @param response the response
+	 * @param transactionMonitoringMQRequest the transaction monitoring MQ request
+	 * @throws ComplianceException the compliance exception
+	 */
+	@SuppressWarnings(&quot;resource&quot;)
+	private void insertTMMQPaymentOutActivityLogs(TransactionMonitoringMQServiceResponse response,
+			TransactionMonitoringMQRequest transactionMonitoringMQRequest) throws ComplianceException {
+<span class="nc" id="L2301">		TransactionMonitoringPaymentOutResponse payOutresponse = response.getTransactionMonitoringPaymentOutResponse();</span>
+<span class="nc" id="L2302">		PreparedStatement poActivtyStmt = null;</span>
+<span class="nc" id="L2303">		Connection connection = null;</span>
+<span class="nc" id="L2304">		ResultSet rs = null;</span>
+<span class="nc" id="L2305">		Integer activityId = null;</span>
+		try {
+<span class="nc" id="L2307">			connection = getConnection(Boolean.FALSE);</span>
+<span class="nc" id="L2308">			poActivtyStmt = connection.prepareStatement(DBQueryConstant.INSERT_TM_MQ_PAYMENT_OUT_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+			
+<span class="nc" id="L2311">			poActivtyStmt.setInt(1, transactionMonitoringMQRequest.getPaymentOutID());</span>
+<span class="nc" id="L2312">			poActivtyStmt.setInt(2, transactionMonitoringMQRequest.getCreatedBy());</span>
+<span class="nc" id="L2313">			poActivtyStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2314">			poActivtyStmt.setInt(4, transactionMonitoringMQRequest.getCreatedBy());</span>
+<span class="nc" id="L2315">			poActivtyStmt.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+				
+<span class="nc" id="L2317">				activityId = getActivityId(poActivtyStmt, activityId);</span>
+				
+<span class="nc" id="L2319">				insertTMMQPaymentOutActivityLogDetailsSTP(connection, activityId, payOutresponse);</span>
+<span class="nc" id="L2320">		} catch (ComplianceException e) {</span>
+<span class="nc" id="L2321">			throw e;</span>
+<span class="nc" id="L2322">		} catch (Exception e) {</span>
+<span class="nc" id="L2323">			throw new ComplianceException(InternalProcessingCode.GEN_DECLINE, e);</span>
+		} finally {
+<span class="nc" id="L2325">			closeResultset(rs);</span>
+<span class="nc" id="L2326">			closePrepareStatement(poActivtyStmt);</span>
+<span class="nc" id="L2327">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L2329">	}</span>
+	
+	/**
+	 * Insert TMMQ payment out activity log details STP.
+	 *
+	 * @param conn the conn
+	 * @param activityId the activity id
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertTMMQPaymentOutActivityLogDetailsSTP(Connection conn, Integer activityId, TransactionMonitoringPaymentOutResponse response) throws ComplianceException {
+
+<span class="nc" id="L2340">		PreparedStatement preparedStatment = null;</span>
+
+		try {
+<span class="nc" id="L2343">			String reasonDiscription = &quot;Resend Transaction Monitoring PaymentOut. &quot;;</span>
+<span class="nc bnc" id="L2344" title="All 4 branches missed.">			if(response.getResponseDescription() != null &amp;&amp; !response.getResponseDescription().isEmpty()) {</span>
+<span class="nc" id="L2345">				reasonDiscription += response.getResponseDescription();</span>
+			}
+			
+<span class="nc" id="L2348">			preparedStatment = conn.prepareStatement(DBQueryConstant.INSERT_PAYMENT_OUT_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L2349">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L2350">			preparedStatment.setString(2, &quot;PAYMENT_OUT&quot;);</span>
+<span class="nc" id="L2351">			preparedStatment.setString(3, Constants.PAYMENT_OUT_TYPE);</span>
+<span class="nc" id="L2352">			preparedStatment.setNString(4, reasonDiscription);</span>
+<span class="nc" id="L2353">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2354">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2356">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L2358" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L2359">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L2362">		} catch (Exception e) {</span>
+<span class="nc" id="L2363">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L2365">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L2367">	}</span>
+	
+	/**
+	 * Insert intuition payment in status update activity log.
+	 *
+	 * @param connection the connection
+	 * @param paymentInId the paymentInId
+	 * @throws ComplianceException the compliance exception
+	 */
+	//AT-4749
+	public void insertIntuitionPaymentInStatusUpdateActivityLog(Connection connection, Integer paymentInId)
+			throws ComplianceException {
+<span class="nc" id="L2379">		PreparedStatement piActivtyStmt = null;</span>
+<span class="nc" id="L2380">		ResultSet rs = null;</span>
+<span class="nc" id="L2381">		Integer activityId = null;</span>
+
+		try {
+<span class="nc" id="L2384">			piActivtyStmt = connection.prepareStatement(DBQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+
+<span class="nc" id="L2387">			piActivtyStmt.setInt(1, paymentInId);</span>
+<span class="nc" id="L2388">			piActivtyStmt.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2389">			piActivtyStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2390">			piActivtyStmt.setInt(4, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2391">			piActivtyStmt.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2393">			activityId = getActivityId(piActivtyStmt, activityId);</span>
+<span class="nc" id="L2394">			insertPaymentIntuitionStatusUpdateActivityLogDetails(connection, activityId);</span>
+<span class="nc" id="L2395">		} catch (Exception e) {</span>
+<span class="nc" id="L2396">			throw new ComplianceException(InternalProcessingCode.GEN_DECLINE, e);</span>
+		} finally {
+<span class="nc" id="L2398">			closeResultset(rs);</span>
+<span class="nc" id="L2399">			closePrepareStatement(piActivtyStmt);</span>
+		}
+<span class="nc" id="L2401">	}</span>
+
+	/**
+	 * Insert payment intuition status update activity log details.
+	 *
+	 * @param connection the connection
+	 * @param activityId the activity id
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertPaymentIntuitionStatusUpdateActivityLogDetails(Connection connection, Integer activityId)
+			throws ComplianceException {
+<span class="nc" id="L2412">		PreparedStatement preparedStatment = null;</span>
+		try {
+
+<span class="nc" id="L2415">			preparedStatment = connection</span>
+<span class="nc" id="L2416">					.prepareStatement(DBQueryConstant.INSERT_PAYMENT_IN_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L2417">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L2418">			preparedStatment.setString(2, &quot;PAYMENT_IN&quot;);</span>
+<span class="nc" id="L2419">			preparedStatment.setString(3, Constants.PAYMENT_IN_TYPE);</span>
+<span class="nc" id="L2420">			preparedStatment.setNString(4, &quot;Intuition Status Update Payment In Call back&quot;);</span>
+<span class="nc" id="L2421">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2422">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2424">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L2426" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L2427">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L2430">		} catch (Exception e) {</span>
+<span class="nc" id="L2431">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L2433">			closePrepareStatement(preparedStatment);</span>
+		}
+<span class="nc" id="L2435">	}</span>
+	
+	/**
+	 * Insert intuition payment out status update activity log.
+	 *
+	 * @param connection the connection
+	 * @param paymentOutId the paymentOutId
+	 * @throws ComplianceException the compliance exception
+	 */
+	//AT-4749
+	public void insertIntuitionPaymentOutStatusUpdateActivityLog(Connection connection, Integer paymentOutId)
+			throws ComplianceException {
+<span class="nc" id="L2447">		PreparedStatement piActivtyStmt = null;</span>
+<span class="nc" id="L2448">		ResultSet rs = null;</span>
+<span class="nc" id="L2449">		Integer activityId = null;</span>
+
+		try {
+<span class="nc" id="L2452">			piActivtyStmt = connection.prepareStatement(DBQueryConstant.INSERT_PAYMENT_OUT_ACTIVITY_LOG_STP.getQuery(),</span>
+					Statement.RETURN_GENERATED_KEYS);
+
+<span class="nc" id="L2455">			piActivtyStmt.setInt(1, paymentOutId);</span>
+<span class="nc" id="L2456">			piActivtyStmt.setInt(2, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2457">			piActivtyStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));</span>
+<span class="nc" id="L2458">			piActivtyStmt.setInt(4, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2459">			piActivtyStmt.setTimestamp(5, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2461">			activityId = getActivityId(piActivtyStmt, activityId);</span>
+<span class="nc" id="L2462">			insertPaymentOutIntuitionStatusUpdateActivityLogDetails(connection, activityId);</span>
+<span class="nc" id="L2463">		} catch (Exception e) {</span>
+<span class="nc" id="L2464">			throw new ComplianceException(InternalProcessingCode.GEN_DECLINE, e);</span>
+		} finally {
+<span class="nc" id="L2466">			closeResultset(rs);</span>
+<span class="nc" id="L2467">			closePrepareStatement(piActivtyStmt);</span>
+		}
+<span class="nc" id="L2469">	}</span>
+
+	/**
+	 * Insert payment out intuition status update activity log details.
+	 *
+	 * @param connection the connection
+	 * @param activityId the activity id
+	 * @throws ComplianceException the compliance exception
+	 */
+	private void insertPaymentOutIntuitionStatusUpdateActivityLogDetails(Connection connection, Integer activityId) throws ComplianceException {
+<span class="nc" id="L2479">		PreparedStatement preparedStatment = null;</span>
+		try {
+
+<span class="nc" id="L2482">			preparedStatment = connection</span>
+<span class="nc" id="L2483">					.prepareStatement(DBQueryConstant.INSERT_PAYMENT_OUT_ACTIVITY_LOG_DETAIL_STP.getQuery());</span>
+<span class="nc" id="L2484">			preparedStatment.setInt(1, activityId);</span>
+<span class="nc" id="L2485">			preparedStatment.setString(2, &quot;PAYMENT_OUT&quot;);</span>
+<span class="nc" id="L2486">			preparedStatment.setString(3, Constants.PAYMENT_OUT_TYPE);</span>
+<span class="nc" id="L2487">			preparedStatment.setNString(4, &quot;Intuition Status Update Payment Out Call back&quot;);</span>
+<span class="nc" id="L2488">			preparedStatment.setInt(5, Constants.DEFAULT_USER);</span>
+<span class="nc" id="L2489">			preparedStatment.setTimestamp(6, new Timestamp(System.currentTimeMillis()));</span>
+
+<span class="nc" id="L2491">			int count = preparedStatment.executeUpdate();</span>
+
+<span class="nc bnc" id="L2493" title="All 2 branches missed.">			if (count == 0) {</span>
+<span class="nc" id="L2494">				throw new ComplianceException(InternalProcessingCode.INV_REQUEST, new Exception(Constants.MISSIG_DATA));</span>
+			}
+
+<span class="nc" id="L2497">		} catch (Exception e) {</span>
+<span class="nc" id="L2498">			throw new ComplianceException(InternalProcessingCode.INTERNAL_SERVER_ERROR, e);</span>
+		} finally {
+<span class="nc" id="L2500">			closePrepareStatement(preparedStatment);</span>
+		}
+		
+<span class="nc" id="L2503">	}</span>
+	
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>KafkaDataLakeController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.restport.kafkatxdatalake</a> &gt; <span class="el_source">KafkaDataLakeController.java</span></div><h1>KafkaDataLakeController.java</h1><pre class="source lang-java linenums">/**
+ * 
+ */
+package com.currenciesdirect.gtg.compliance.compliancesrv.restport.kafkatxdatalake;
+
+import javax.annotation.security.RolesAllowed;
+import javax.servlet.http.HttpServletRequest;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.context.request.async.DeferredResult;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.base.BaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInBaseRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInCreateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsin.request.FundsInTrade;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.fundsout.request.FundsOutUpdateRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessage;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.ServiceInterfaceType;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.kafkatxdatalake.DataLakeTxResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.kafkatxdatalake.KafkaFailedRetryRequest;
+import com.currenciesdirect.gtg.compliance.compliancesrv.kafkatxdatalake.service.KafkaRetryFailedTxExecutorService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.kafkatxdatalake.service.KafkaRetryFailedTxService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.kafkatxdatalake.service.KafkaTxExecutorService;
+import com.currenciesdirect.gtg.compliance.compliancesrv.restport.BaseController;
+
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import springfox.documentation.swagger2.annotations.EnableSwagger2;
+
+/**
+ * @author prashant.verma
+ */
+
+@Controller
+@EnableSwagger2
+@EnableWebMvc
+
+<span class="nc" id="L52">public class KafkaDataLakeController extends BaseController {</span>
+
+	
+	/** The Constant LOGGER. */
+<span class="nc" id="L56">	private static final Logger LOGGER = LoggerFactory.getLogger(KafkaDataLakeController.class);</span>
+
+	@Autowired
+	KafkaRetryFailedTxService kafkaRetryFailedTxService;
+	
+	@Autowired
+	KafkaRetryFailedTxExecutorService kafkaRetryFailedTxExecutorService;
+	
+	@Autowired
+	KafkaTxExecutorService kafkaTxExecutorService;
+	
+	/**
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param ids
+	 *            comma separated message ids to trigger failed kafka request
+	 * @param startDate
+	 *            start date of failed requests to trigger failed kafka request
+	 * @param endDate
+	 *            end date of failed requests to trigger failed kafka request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Trigger failed kafka request based on message ids or startdate and end date.\n\n&quot;
+			+ &quot;Date format for startdate and end date should be dd/MM/yyyy&quot;, 
+			value = &quot;Called manually to retry failed kafka requests and can be used as a bulk operation.&quot;, 
+			nickname = &quot;retryFailedKafkaRequests&quot;, 
+			response = DataLakeTxResponse.class)
+	@ApiImplicitParams({
+			@ApiImplicitParam(name = &quot;Authorization&quot;, value = &quot;Add bearer token&quot;, defaultValue = &quot;Bearer &lt;&lt;AbCdEf123456&gt;&gt;&quot;, required = true, dataType = &quot;string&quot;, paramType = &quot;header&quot;) })
+	@RolesAllowed(&quot;compliance_api_access&quot;)
+	@PostMapping(value = &quot;/producedatalaketxmessage&quot;, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; produceDatalakeTxMessage(final HttpServletRequest httpRequest,
+			final @RequestParam String operation, final @RequestParam String  serviceType, final @RequestParam String  transactionId, final @RequestParam String  tradePaymentId) {
+
+<span class="nc" id="L91">		LOGGER.info(&quot;\n ------- ProduceDatalakeTxMessage Request Start -------- \n&quot;);</span>
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;		
+		ServiceMessage messageRequest;
+<span class="nc bnc" id="L94" title="All 6 branches missed.">		if(operation!=null &amp;&amp; serviceType!=null &amp;&amp; tradePaymentId!=null) {</span>
+<span class="nc" id="L95">			OperationEnum operationEnum = OperationEnum.valueOf(operation);</span>
+<span class="nc" id="L96">			ServiceInterfaceType serviceTypeValue = ServiceInterfaceType.valueOf(serviceType);</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">			if(serviceTypeValue.equals(ServiceInterfaceType.FUNDSIN)) {</span>
+<span class="nc" id="L98">				FundsInCreateRequest fundInRequest = new FundsInCreateRequest();</span>
+<span class="nc" id="L99">				FundsInTrade trade = new FundsInTrade();</span>
+<span class="nc" id="L100">				trade.setPaymentFundsInId(Integer.valueOf(tradePaymentId));</span>
+<span class="nc" id="L101">				fundInRequest.setTrade(trade);</span>
+<span class="nc" id="L102">				messageRequest= fundInRequest;</span>
+<span class="nc" id="L103">			}else {</span>
+<span class="nc" id="L104">				FundsOutUpdateRequest fundOutRequest = new FundsOutUpdateRequest();</span>
+<span class="nc" id="L105">				fundOutRequest.setPaymentFundsoutId(Integer.valueOf(tradePaymentId));</span>
+<span class="nc" id="L106">				messageRequest= fundOutRequest;				</span>
+			}
+			
+<span class="nc" id="L109">			kafkaTxExecutorService.executeKafkaTx(operationEnum, serviceTypeValue, transactionId, messageRequest);</span>
+			
+<span class="nc" id="L111">			deferredResult = new DeferredResult&lt;&gt;();</span>
+<span class="nc" id="L112">			BaseResponse baseResponse = new BaseResponse();</span>
+<span class="nc" id="L113">			ResponseEntity&lt;BaseResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(baseResponse, HttpStatus.ACCEPTED);</span>
+<span class="nc" id="L114">			deferredResult.setResult(responseEntity);</span>
+<span class="nc" id="L115">		}else {</span>
+<span class="nc" id="L116">			deferredResult = new DeferredResult&lt;&gt;();</span>
+<span class="nc" id="L117">			BaseResponse baseResponse = new BaseResponse();</span>
+<span class="nc" id="L118">			ResponseEntity&lt;BaseResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(baseResponse, HttpStatus.BAD_REQUEST);</span>
+<span class="nc" id="L119">			deferredResult.setResult(responseEntity);</span>
+		}
+<span class="nc" id="L121">		LOGGER.info(&quot; \n -----------  ProduceDatalakeTxMessage Request End ---------&quot;);</span>
+	
+<span class="nc" id="L123">		return deferredResult;</span>
+	}
+	
+	/**
+	 *
+	 * @param httpRequest
+	 *            the http request
+	 * @param ids
+	 *            comma separated message ids to trigger failed kafka request
+	 * @param startDate
+	 *            start date of failed requests to trigger failed kafka request
+	 * @param endDate
+	 *            end date of failed requests to trigger failed kafka request
+	 * @return the deferred result
+	 */
+	@ApiOperation(notes = &quot;Trigger failed kafka request based on message ids or startdate and end date.\n\n&quot;
+			+ &quot;Date format for startdate and end date should be dd/MM/yyyy&quot;, 
+			value = &quot;Called manually to retry failed kafka requests and can be used as a bulk operation.&quot;, 
+			nickname = &quot;retryFailedKafkaRequests&quot;, 
+			response = DataLakeTxResponse.class)
+	@ApiImplicitParams({
+			@ApiImplicitParam(name = &quot;Authorization&quot;, value = &quot;Add bearer token&quot;, defaultValue = &quot;Bearer &lt;&lt;AbCdEf123456&gt;&gt;&quot;, required = true, dataType = &quot;string&quot;, paramType = &quot;header&quot;) })
+	@RolesAllowed(&quot;compliance_api_access&quot;)
+	@PostMapping(value = &quot;/retrytxdatalaketx&quot;, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public DeferredResult&lt;ResponseEntity&gt; retryFailedKafkaRequests(final HttpServletRequest httpRequest,
+			@ApiParam(value = &quot;KafkaFailedRetry request JSON data&quot;, required = true) final @RequestBody KafkaFailedRetryRequest kafkaFailedRetryRequest) {
+
+<span class="nc" id="L150">		LOGGER.info(&quot;\n ------- RetryTxDataLake Request Start -------- \n&quot;);</span>
+		DeferredResult&lt;ResponseEntity&gt; deferredResult;
+<span class="nc" id="L152">		DataLakeTxResponse dataLakeTxValidationResponse = kafkaRetryFailedTxService.validateRetryTxFailedRequest(kafkaFailedRetryRequest);</span>
+		
+<span class="nc bnc" id="L154" title="All 4 branches missed.">		if(dataLakeTxValidationResponse!=null &amp;&amp; dataLakeTxValidationResponse.getStatus()) {</span>
+			
+<span class="nc" id="L156">			kafkaRetryFailedTxExecutorService.executeKafkaFailedTx(kafkaFailedRetryRequest);</span>
+			
+<span class="nc" id="L158">			deferredResult = new DeferredResult&lt;&gt;();</span>
+<span class="nc" id="L159">			BaseResponse baseResponse = new BaseResponse();</span>
+<span class="nc" id="L160">			ResponseEntity&lt;BaseResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(baseResponse, HttpStatus.ACCEPTED);</span>
+<span class="nc" id="L161">			deferredResult.setResult(responseEntity);</span>
+<span class="nc" id="L162">		}else {</span>
+<span class="nc" id="L163">			deferredResult = new DeferredResult&lt;&gt;();</span>
+<span class="nc" id="L164">			BaseResponse baseResponse = new BaseResponse();</span>
+<span class="nc" id="L165">			ResponseEntity&lt;BaseResponse&gt; responseEntity = new ResponseEntity&lt;&gt;(baseResponse, HttpStatus.BAD_REQUEST);</span>
+<span class="nc" id="L166">			deferredResult.setResult(responseEntity);</span>
+		}
+<span class="nc" id="L168">		LOGGER.info(&quot; \n -----------  RetryTxDataLake Request End ---------&quot;);</span>
+	
+<span class="nc" id="L170">		return deferredResult;</span>
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

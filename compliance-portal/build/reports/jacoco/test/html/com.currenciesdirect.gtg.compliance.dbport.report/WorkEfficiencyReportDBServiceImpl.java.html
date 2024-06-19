@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WorkEfficiencyReportDBServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-portal</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.dbport.report</a> &gt; <span class="el_source">WorkEfficiencyReportDBServiceImpl.java</span></div><h1>WorkEfficiencyReportDBServiceImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.dbport.report;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import com.currenciesdirect.gtg.compliance.core.domain.Constants;
+import com.currenciesdirect.gtg.compliance.core.domain.Page;
+import com.currenciesdirect.gtg.compliance.core.domain.QueueType;
+import com.currenciesdirect.gtg.compliance.core.domain.report.WorkEfficiencyReportData;
+import com.currenciesdirect.gtg.compliance.core.domain.report.WorkEfficiencyReportDto;
+import com.currenciesdirect.gtg.compliance.core.domain.report.WorkEfficiencyReportSearchCriteria;
+import com.currenciesdirect.gtg.compliance.core.report.IWorkEfficiencyReportDBService;
+import com.currenciesdirect.gtg.compliance.dbport.AbstractDao;
+import com.currenciesdirect.gtg.compliance.dbport.FilterQueryBuilder;
+import com.currenciesdirect.gtg.compliance.dbport.enums.CustomerTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.UserLockResourceTypeEnum;
+import com.currenciesdirect.gtg.compliance.dbport.enums.WorkEfficiencySlaEnum;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalErrors;
+import com.currenciesdirect.gtg.compliance.exception.CompliancePortalException;
+import com.currenciesdirect.gtg.compliance.util.DateTimeFormatter;
+import com.currenciesdirect.gtg.compliance.util.SearchCriteriaUtil;
+
+/**
+ * The Class WorkEfficiencyReportDBServiceImpl.
+ */
+@Component(&quot;workEfficiencyReportDBServiceImpl&quot;)
+<span class="fc" id="L34">public class WorkEfficiencyReportDBServiceImpl extends AbstractDao implements IWorkEfficiencyReportDBService {</span>
+
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IWorkEfficiencyReportDBService#getWorkEfficiencyReport()
+	 */
+	@Override
+	public WorkEfficiencyReportDto getWorkEfficiencyReport(WorkEfficiencyReportSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+<span class="fc" id="L43">		WorkEfficiencyReportDto workEfficiencyReportDto = new WorkEfficiencyReportDto();</span>
+<span class="fc" id="L44">		List&lt;WorkEfficiencyReportData&gt; workEfficiencyReportList = null;</span>
+<span class="fc" id="L45">		Connection connection = null;</span>
+<span class="fc" id="L46">		PreparedStatement prepareStatement = null;</span>
+<span class="fc" id="L47">		ResultSet resultSet = null;</span>
+
+		try {
+<span class="fc" id="L50">			int offset = SearchCriteriaUtil.getPageOffsetRows(searchCriteria);</span>
+<span class="fc" id="L51">			int rowsToFetch = SearchCriteriaUtil.getPageSize();</span>
+<span class="fc" id="L52">			String fromTo = DateTimeFormatter.parseDate(searchCriteria.getFilter().getFromTo()); // currentDate</span>
+<span class="fc" id="L53">			String dateFrom = DateTimeFormatter.parseDate(searchCriteria.getFilter().getDateFrom()); // pastDate</span>
+<span class="fc" id="L54">			searchCriteria.getFilter().setQueueType(null);</span>
+<span class="fc" id="L55">			FilterQueryBuilder queryBuilder = new WorkEfficiencyReportFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L56">					WorkEfficiencyReportQueryConstant.GET_WORK_EFFICIENCY_REPORT_ON_LOAD_INNER_QUERY.getQuery());</span>
+<span class="fc" id="L57">			String query = queryBuilder.getQuery();</span>
+<span class="fc" id="L58">			query = WorkEfficiencyReportQueryConstant.GET_WORK_EFFICIENCY_REPORT_ON_LOAD.getQuery()</span>
+<span class="fc" id="L59">					.replace(Constants.INNER_QUERY, query);</span>
+<span class="fc" id="L60">			connection = getConnection(Boolean.TRUE);</span>
+<span class="pc bpc" id="L61" title="3 of 4 branches missed.">			if (fromTo.compareTo(dateFrom) &gt; 0 || fromTo.compareTo(dateFrom) == 0) {</span>
+<span class="fc" id="L62">				prepareStatement = connection.prepareStatement(query);</span>
+<span class="fc" id="L63">				prepareStatement.setInt(1, offset);</span>
+<span class="fc" id="L64">				prepareStatement.setInt(2, rowsToFetch);</span>
+<span class="fc" id="L65">				prepareStatement.setString(3, dateFrom);</span>
+<span class="fc" id="L66">				prepareStatement.setString(4, fromTo);</span>
+<span class="fc" id="L67">				resultSet = prepareStatement.executeQuery();</span>
+				// False means queueType is null which is set to &quot;All&quot;
+<span class="fc" id="L69">				workEfficiencyReportList = getWorkEfficiencyData(resultSet);</span>
+<span class="fc" id="L70">				workEfficiencyReportDto.setWorkEfficiencyReportData(workEfficiencyReportList);</span>
+
+<span class="fc" id="L72">				Page page = getPaginationData(searchCriteria, workEfficiencyReportDto);</span>
+<span class="fc" id="L73">				workEfficiencyReportDto.setPage(page);</span>
+<span class="fc" id="L74">				List&lt;String&gt; userNameList = getUserNameList(connection);</span>
+<span class="fc" id="L75">				workEfficiencyReportDto.setUserNameList(userNameList);</span>
+<span class="fc" id="L76">				workEfficiencyReportDto.setQueueList(QueueType.getQueueTypeValues());</span>
+
+<span class="fc" id="L78">			} else {</span>
+<span class="nc" id="L79">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_FROMTO_LESS_THAN_DATEFROM);</span>
+			}
+
+<span class="nc" id="L82">		} catch (CompliancePortalException cp) {</span>
+<span class="nc" id="L83">			throw cp;</span>
+<span class="fc" id="L84">		} catch (Exception e) {</span>
+<span class="fc" id="L85">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L87">			closeResultset(resultSet);</span>
+<span class="fc" id="L88">			closePrepareStatement(prepareStatement);</span>
+<span class="fc" id="L89">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L91">		return workEfficiencyReportDto;</span>
+	}
+	
+	/**
+	 * @param resultSet
+	 * @param callFrom
+	 * @return
+	 * @throws SQLException
+	 */
+	public List&lt;WorkEfficiencyReportData&gt; getWorkEfficiencyData(ResultSet resultSet) throws SQLException {
+<span class="fc" id="L101">		List&lt;WorkEfficiencyReportData&gt; workEfficiencyReportList = new ArrayList&lt;&gt;();</span>
+		
+<span class="fc bfc" id="L103" title="All 2 branches covered.">			while (resultSet.next()){</span>
+<span class="fc" id="L104">					WorkEfficiencyReportData workEfficiencyReportData = new WorkEfficiencyReportData();</span>
+<span class="fc" id="L105">					workEfficiencyReportData.setUserName(resultSet.getString(&quot;SSOUserID&quot;));</span>
+<span class="fc" id="L106">					workEfficiencyReportData.setQueueType(UserLockResourceTypeEnum.getUiStatusFromDatabaseStatusWithUIFormat(resultSet.getInt(&quot;ResourceType&quot;)));</span>
+<span class="fc" id="L107">					workEfficiencyReportData.setAccountType(CustomerTypeEnum.getUiStatusFromDatabaseStatus(resultSet.getInt(&quot;AccType&quot;)));</span>
+<span class="fc" id="L108">					workEfficiencyReportData.setLockedRecords(resultSet.getInt(&quot;LockedRecords&quot;));</span>
+<span class="fc" id="L109">					workEfficiencyReportData.setReleasedRecords(resultSet.getInt(&quot;ReleasedRecords&quot;));</span>
+<span class="fc" id="L110">					Double minutes = (double) resultSet.getInt(&quot;seconds&quot;);</span>
+<span class="fc" id="L111">					DecimalFormat df = new DecimalFormat(&quot;#.##&quot;);</span>
+					//Double hours = Double.valueOf(df.format(minutes)); //Convert it into Hours
+<span class="fc" id="L113">					workEfficiencyReportData.setSeconds(Double.valueOf(df.format(minutes/60)));</span>
+					
+<span class="fc" id="L115">					workEfficiencyReportData.setSlaValue(SearchCriteriaUtil.getSlaPropertyValues(</span>
+<span class="fc" id="L116">							WorkEfficiencySlaEnum.getSlaPropertyFromSlaValue(workEfficiencyReportData.getAccountType()</span>
+<span class="fc" id="L117">							+&quot;_&quot;+workEfficiencyReportData.getQueueType())));</span>
+					
+<span class="pc bpc" id="L119" title="2 of 4 branches missed.">					if (workEfficiencyReportData.getSeconds() != null &amp;&amp; workEfficiencyReportData.getSeconds() &gt; 0 ){</span>
+<span class="nc" id="L120">						Double percentEfficiency =  (workEfficiencyReportData.getSlaValue()*100)/workEfficiencyReportData.getSeconds();</span>
+<span class="nc" id="L121">						workEfficiencyReportData.setPercentEfficiency(Double.valueOf(df.format(percentEfficiency)));</span>
+<span class="nc" id="L122">					}else {</span>
+<span class="fc" id="L123">						workEfficiencyReportData.setPercentEfficiency(0.00);</span>
+					}
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">					if (workEfficiencyReportData.getReleasedRecords().compareTo(0) &gt; 0){</span>
+<span class="nc" id="L126">						Double timeEfficiency = workEfficiencyReportData.getSeconds()/workEfficiencyReportData.getReleasedRecords();</span>
+<span class="nc" id="L127">						timeEfficiency = Double.valueOf(df.format(timeEfficiency));</span>
+<span class="nc" id="L128">						workEfficiencyReportData.setTimeEfficiency(timeEfficiency);</span>
+<span class="nc" id="L129">					}else {</span>
+<span class="fc" id="L130">						workEfficiencyReportData.setTimeEfficiency(0.00);</span>
+					}
+<span class="fc" id="L132">					workEfficiencyReportData.setTotalRows(resultSet.getInt(&quot;totalrows&quot;));</span>
+<span class="fc" id="L133">			    workEfficiencyReportList.add(workEfficiencyReportData);</span>
+<span class="fc" id="L134">			}</span>
+<span class="fc" id="L135">		return workEfficiencyReportList;</span>
+	}
+
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.IWorkEfficiencyReportDBService#getWorkEfficiencyReportWithCriteria(com.currenciesdirect.gtg.compliance.core.domain.report.WorkEfficiencyReportSearchCriteria)
+	 */
+	@Override
+	public WorkEfficiencyReportDto getWorkEfficiencyReportWithCriteria(WorkEfficiencyReportSearchCriteria searchCriteria) throws CompliancePortalException {
+		
+<span class="fc" id="L144">		WorkEfficiencyReportDto workEfficiencyReportDto = new WorkEfficiencyReportDto();</span>
+<span class="fc" id="L145">		List&lt;WorkEfficiencyReportData&gt; workEfficiencyReportList = null;</span>
+<span class="fc" id="L146">		Connection connection = null;</span>
+<span class="fc" id="L147">		PreparedStatement prepareStatement = null;</span>
+<span class="fc" id="L148">		ResultSet resultSet = null;</span>
+
+		try {	
+<span class="fc" id="L151">			     int offset = SearchCriteriaUtil.getPageOffsetRows(searchCriteria);</span>
+<span class="fc" id="L152">			     int rowsToFetch = SearchCriteriaUtil.getPageSize();</span>
+<span class="fc" id="L153">				 String fromTo = DateTimeFormatter.parseDate(searchCriteria.getFilter().getFromTo()); //pastdate</span>
+<span class="fc" id="L154">				 String dateFrom =DateTimeFormatter.parseDate(searchCriteria.getFilter().getDateFrom()); //currentDate</span>
+				 
+<span class="fc" id="L156">				 FilterQueryBuilder queryBuilder = new WorkEfficiencyReportFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="fc" id="L157">						WorkEfficiencyReportQueryConstant.GET_WORK_EFFICIENCY_REPORT_ON_LOAD_INNER_QUERY.getQuery());</span>
+<span class="fc" id="L158">				 String query = queryBuilder.getQuery();</span>
+<span class="fc" id="L159">			     query = WorkEfficiencyReportQueryConstant.GET_WORK_EFFICIENCY_REPORT_ON_LOAD.getQuery().replace(Constants.INNER_QUERY, query);</span>
+<span class="fc" id="L160">				 connection = getConnection(Boolean.TRUE);</span>
+<span class="pc bpc" id="L161" title="3 of 4 branches missed.">				 if(fromTo.compareTo(dateFrom) &gt; 0 || fromTo.compareTo(dateFrom) == 0){</span>
+<span class="fc" id="L162">					prepareStatement = connection.prepareStatement(query);</span>
+<span class="fc" id="L163">					prepareStatement.setInt(1, offset);</span>
+<span class="fc" id="L164">					prepareStatement.setInt(2, rowsToFetch);</span>
+<span class="fc" id="L165">					prepareStatement.setString(3, dateFrom);</span>
+<span class="fc" id="L166">					prepareStatement.setString(4, fromTo);</span>
+<span class="fc" id="L167">					resultSet = prepareStatement.executeQuery();</span>
+<span class="fc" id="L168">					workEfficiencyReportList = getWorkEfficiencyData(resultSet);</span>
+<span class="fc" id="L169">					workEfficiencyReportDto.setWorkEfficiencyReportData(workEfficiencyReportList);</span>
+				
+<span class="fc" id="L171">				  Page page = getPaginationData(searchCriteria,workEfficiencyReportDto);</span>
+<span class="fc" id="L172">				  workEfficiencyReportDto.setPage(page);</span>
+				  
+<span class="fc" id="L174">				}else {</span>
+<span class="nc" id="L175">						throw new CompliancePortalException(CompliancePortalErrors.ERROR_FROMTO_LESS_THAN_DATEFROM);</span>
+			    }
+		}
+<span class="nc" id="L178">		catch (CompliancePortalException cp) {</span>
+<span class="nc" id="L179">			throw cp;</span>
+		}
+<span class="fc" id="L181">		catch (Exception e) {</span>
+<span class="fc" id="L182">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L184">			closeResultset(resultSet);</span>
+<span class="fc" id="L185">			closePrepareStatement(prepareStatement);</span>
+<span class="fc" id="L186">			closeConnection(connection);</span>
+		}
+<span class="fc" id="L188">	return workEfficiencyReportDto;</span>
+	}
+	
+	/**
+	 * @param connection
+	 * @param searchCriteria
+	 * @param workEfficiencyReportDto
+	 * @param countQuery
+	 * @param callfrom
+	 * @return
+	 * @throws CompliancePortalException
+	 */
+	private Page getPaginationData(WorkEfficiencyReportSearchCriteria searchCriteria,
+			WorkEfficiencyReportDto workEfficiencyReportDto) {
+<span class="fc" id="L202">		Integer totalRows = 0;</span>
+<span class="fc" id="L203">		workEfficiencyReportDto.getWorkEfficiencyReportData();</span>
+<span class="pc bpc" id="L204" title="1 of 2 branches missed.">		if(null != workEfficiencyReportDto.getWorkEfficiencyReportData() &amp;&amp; </span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">				!workEfficiencyReportDto.getWorkEfficiencyReportData().isEmpty()){</span>
+<span class="fc" id="L206">			totalRows = workEfficiencyReportDto.getWorkEfficiencyReportData().get(0).getTotalRows();</span>
+		}
+<span class="fc" id="L208">		Integer pageSize = SearchCriteriaUtil.getPageSize(); // maxRow</span>
+<span class="fc" id="L209">		int minRowNum = SearchCriteriaUtil.getMinRowNumber(searchCriteria);</span>
+<span class="fc" id="L210">		Integer totalRecords = totalRows;</span>
+<span class="fc" id="L211">		Integer totalPages = null;</span>
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">		if (totalRecords != null) {</span>
+<span class="fc" id="L213">			totalPages = totalRecords / pageSize;</span>
+<span class="pc bpc" id="L214" title="1 of 2 branches missed.">			if (totalRecords % pageSize != 0) {</span>
+<span class="nc" id="L215">				totalPages += 1;</span>
+			}
+		}
+
+<span class="fc" id="L219">		Page page = new Page();</span>
+<span class="pc bpc" id="L220" title="1 of 2 branches missed.">		if (totalRecords == 0) {</span>
+<span class="fc" id="L221">			page.setMinRecord(0);</span>
+		} else {
+<span class="nc" id="L223">			page.setMinRecord(minRowNum);</span>
+		}
+<span class="fc" id="L225">		page.setMaxRecord(minRowNum + workEfficiencyReportDto.getWorkEfficiencyReportData().size() - 1);</span>
+<span class="fc" id="L226">		page.setTotalRecords(totalRecords);</span>
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">		if (page.getTotalRecords() == 0) {</span>
+<span class="fc" id="L228">			page.setMinRecord(0);</span>
+		}
+<span class="fc" id="L230">		page.setCurrentPage(1);</span>
+<span class="fc" id="L231">		page.setTotalPages(totalPages);</span>
+<span class="fc" id="L232">		page.setPageSize(pageSize);</span>
+<span class="fc" id="L233">		return page;</span>
+	}
+
+	/**
+	 * @param connection
+	 * @param dateFrom
+	 * @param fromTo
+	 * @return
+	 * @throws CompliancePortalException
+	 */
+	public List&lt;String&gt; getUserNameList(Connection connection) throws CompliancePortalException{
+		
+<span class="fc" id="L245">		List&lt;String&gt; userNameList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L246">		PreparedStatement statement = null;</span>
+<span class="fc" id="L247">		ResultSet rs = null;</span>
+		
+		try {
+<span class="fc" id="L250">			statement = connection.prepareStatement(WorkEfficiencyReportQueryConstant.GET_USERNAME_FOR_WORK_EFFICIENCY_REPORT.getQuery());</span>
+<span class="fc" id="L251">			rs = statement.executeQuery();</span>
+<span class="pc bpc" id="L252" title="1 of 2 branches missed.">			while (rs.next()) {</span>
+<span class="nc" id="L253">				userNameList.add(rs.getString(&quot;SSOUserID&quot;));</span>
+			}
+<span class="nc" id="L255">		}catch (Exception e) {</span>
+<span class="nc" id="L256">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="fc" id="L258">				closeResultset(rs);</span>
+<span class="fc" id="L259">				closePrepareStatement(statement);</span>
+		}
+<span class="fc" id="L261">		return userNameList;</span>
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.report.IWorkEfficiencyReportDBService#getWorkEfficiencyReportInExcelFormat(com.currenciesdirect.gtg.compliance.core.domain.report.WorkEfficiencyReportSearchCriteria)
+	 */
+	@Override
+	public WorkEfficiencyReportDto getWorkEfficiencyReportInExcelFormat(WorkEfficiencyReportSearchCriteria searchCriteria)
+			throws CompliancePortalException {
+<span class="nc" id="L270">		WorkEfficiencyReportDto workEfficiencyReportDto = new WorkEfficiencyReportDto();</span>
+<span class="nc" id="L271">		List&lt;WorkEfficiencyReportData&gt; workEfficiencyReportList = null;</span>
+<span class="nc" id="L272">		Connection connection = null;</span>
+<span class="nc" id="L273">		PreparedStatement prepareStatement = null;</span>
+<span class="nc" id="L274">		ResultSet resultSet = null;</span>
+
+		try {
+<span class="nc" id="L277">			String fromTo = DateTimeFormatter.parseDate(searchCriteria.getFilter().getFromTo()); // currentDate</span>
+<span class="nc" id="L278">			String dateFrom = DateTimeFormatter.parseDate(searchCriteria.getFilter().getDateFrom()); // pastDate</span>
+<span class="nc" id="L279">			searchCriteria.getFilter().setQueueType(null);</span>
+<span class="nc" id="L280">			FilterQueryBuilder queryBuilder = new WorkEfficiencyReportFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="nc" id="L281">					WorkEfficiencyReportQueryConstant.GET_WORK_EFFICIENCY_REPORT_ON_DOWNLOAD_INNER_QUERY.getQuery());</span>
+<span class="nc" id="L282">			String query = queryBuilder.getQuery();</span>
+<span class="nc" id="L283">			query = WorkEfficiencyReportQueryConstant.GET_WORK_EFFICIENCY_REPORT_ON_DOWNLOAD.getQuery()</span>
+<span class="nc" id="L284">					.replace(Constants.INNER_QUERY, query);</span>
+<span class="nc" id="L285">			connection = getConnection(Boolean.TRUE);</span>
+<span class="nc bnc" id="L286" title="All 4 branches missed.">			if (fromTo.compareTo(dateFrom) &gt; 0 || fromTo.compareTo(dateFrom) == 0) {</span>
+<span class="nc" id="L287">				prepareStatement = connection.prepareStatement(query);</span>
+<span class="nc" id="L288">				prepareStatement.setString(1, dateFrom);</span>
+<span class="nc" id="L289">				prepareStatement.setString(2, fromTo);</span>
+<span class="nc" id="L290">				resultSet = prepareStatement.executeQuery();</span>
+				// False means queueType is null which is set to &quot;All&quot;
+<span class="nc" id="L292">				workEfficiencyReportList = getWorkEfficiencyData(resultSet);</span>
+<span class="nc" id="L293">				workEfficiencyReportDto.setWorkEfficiencyReportData(workEfficiencyReportList);</span>
+
+<span class="nc" id="L295">				Page page = getPaginationData(searchCriteria, workEfficiencyReportDto);</span>
+<span class="nc" id="L296">				workEfficiencyReportDto.setPage(page);</span>
+<span class="nc" id="L297">				List&lt;String&gt; userNameList = getUserNameList(connection);</span>
+<span class="nc" id="L298">				workEfficiencyReportDto.setUserNameList(userNameList);</span>
+<span class="nc" id="L299">				workEfficiencyReportDto.setQueueList(QueueType.getQueueTypeValues());</span>
+
+<span class="nc" id="L301">			} else {</span>
+<span class="nc" id="L302">				throw new CompliancePortalException(CompliancePortalErrors.ERROR_FROMTO_LESS_THAN_DATEFROM);</span>
+			}
+
+<span class="nc" id="L305">		} catch (CompliancePortalException cp) {</span>
+<span class="nc" id="L306">			throw cp;</span>
+<span class="nc" id="L307">		} catch (Exception e) {</span>
+<span class="nc" id="L308">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L310">			closeResultset(resultSet);</span>
+<span class="nc" id="L311">			closePrepareStatement(prepareStatement);</span>
+<span class="nc" id="L312">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L314">		return workEfficiencyReportDto;</span>
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.currenciesdirect.gtg.compliance.core.report.IWorkEfficiencyReportDBService#getWorkEfficiencyReportWithCriteriaInExcelFormat(com.currenciesdirect.gtg.compliance.core.domain.report.WorkEfficiencyReportSearchCriteria)
+	 */
+	@Override
+	public WorkEfficiencyReportDto getWorkEfficiencyReportWithCriteriaInExcelFormat(WorkEfficiencyReportSearchCriteria searchCriteria) throws CompliancePortalException {
+		
+<span class="nc" id="L323">		WorkEfficiencyReportDto workEfficiencyReportDto = new WorkEfficiencyReportDto();</span>
+<span class="nc" id="L324">		List&lt;WorkEfficiencyReportData&gt; workEfficiencyReportList = null;</span>
+<span class="nc" id="L325">		Connection connection = null;</span>
+<span class="nc" id="L326">		PreparedStatement prepareStatement = null;</span>
+<span class="nc" id="L327">		ResultSet resultSet = null;</span>
+
+		try {	
+<span class="nc" id="L330">			     String fromTo = DateTimeFormatter.parseDate(searchCriteria.getFilter().getFromTo()); //pastdate</span>
+<span class="nc" id="L331">				 String dateFrom =DateTimeFormatter.parseDate(searchCriteria.getFilter().getDateFrom()); //currentDate</span>
+				 
+<span class="nc" id="L333">				 FilterQueryBuilder queryBuilder = new WorkEfficiencyReportFilterQueryBuilder(searchCriteria.getFilter(),</span>
+<span class="nc" id="L334">						WorkEfficiencyReportQueryConstant.GET_WORK_EFFICIENCY_REPORT_ON_DOWNLOAD_INNER_QUERY.getQuery());</span>
+<span class="nc" id="L335">				 String query = queryBuilder.getQuery();</span>
+<span class="nc" id="L336">			     query = WorkEfficiencyReportQueryConstant.GET_WORK_EFFICIENCY_REPORT_ON_DOWNLOAD.getQuery().replace(Constants.INNER_QUERY, query);</span>
+<span class="nc" id="L337">				 connection = getConnection(Boolean.TRUE);</span>
+<span class="nc bnc" id="L338" title="All 4 branches missed.">				 if(fromTo.compareTo(dateFrom) &gt; 0 || fromTo.compareTo(dateFrom) == 0){</span>
+<span class="nc" id="L339">					prepareStatement = connection.prepareStatement(query);</span>
+<span class="nc" id="L340">					prepareStatement.setString(1, dateFrom);</span>
+<span class="nc" id="L341">					prepareStatement.setString(2, fromTo);</span>
+<span class="nc" id="L342">					resultSet = prepareStatement.executeQuery();</span>
+<span class="nc" id="L343">					workEfficiencyReportList = getWorkEfficiencyData(resultSet);</span>
+<span class="nc" id="L344">					workEfficiencyReportDto.setWorkEfficiencyReportData(workEfficiencyReportList);</span>
+				
+<span class="nc" id="L346">				  Page page = getPaginationData(searchCriteria,workEfficiencyReportDto);</span>
+<span class="nc" id="L347">				  workEfficiencyReportDto.setPage(page);</span>
+				  
+<span class="nc" id="L349">				}else {</span>
+<span class="nc" id="L350">						throw new CompliancePortalException(CompliancePortalErrors.ERROR_FROMTO_LESS_THAN_DATEFROM);</span>
+			    }
+		}
+<span class="nc" id="L353">		catch (CompliancePortalException cp) {</span>
+<span class="nc" id="L354">			throw cp;</span>
+		}
+<span class="nc" id="L356">		catch (Exception e) {</span>
+<span class="nc" id="L357">			throw new CompliancePortalException(CompliancePortalErrors.ERROR_WHILE_FETCHING_DATA, e);</span>
+		} finally {
+<span class="nc" id="L359">			closeResultset(resultSet);</span>
+<span class="nc" id="L360">			closePrepareStatement(prepareStatement);</span>
+<span class="nc" id="L361">			closeConnection(connection);</span>
+		}
+<span class="nc" id="L363">	return workEfficiencyReportDto;</span>
+	}
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,110 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+
+	<int:channel id="FUNDSOUT.REPEAT_CHECK_STATUS_UPDATE.in.channel" />
+	
+	<int:chain
+		id="fundsout.intuition.initChain"
+		input-channel="FUNDSOUT.REPEAT_CHECK_STATUS_UPDATE.in.channel"
+		output-channel="INTUITIONUPDATE_PAYMENT_OUT.RESPONSE">
+		<int:header-enricher id="fundsout.HeaderEnricher">
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+		</int:header-enricher>
+		
+		<int:service-activator
+			id="fundsout.intuition.dataEnrich"
+			ref="fundsout.intuition.dataEnricher"
+			method="enrichDataForPaymentOut" />
+			
+		<int:service-activator
+			id="fundsout.createEvent"
+			ref="eventDBServiceImpl" 
+			method="createEvent" />	
+		
+		<int:transformer
+			ref="fundsout.transactionMonitoringTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsout.TRANSACTIONMONITORING"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('TRANSACTION_MONITORING_FUNDSOUT_SERVICE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).TRANSACTION_MONITORING_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentsOutRequest"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse" />
+		</int:service-activator>
+		<int:transformer
+			ref="fundsout.transactionMonitoringTransformer"
+			method="transformResponse" />
+			
+		<int:service-activator
+			id="fundsout.SAVE.EVENT.SERVICE"
+			ref="eventDBServiceImpl"
+			method="createTransactionMonitoringEventSerivceLog">
+		</int:service-activator>
+		
+		<!-- <int:service-activator
+			ref="fundsout.RulesService"
+			method="processForManualUpdate">
+		</int:service-activator> -->
+		
+		<int:service-activator
+			ref="fundsOutDBService"
+			method="updateAccountIntuitionClientRiskLevel">
+		</int:service-activator>
+		
+		<int:service-activator id="fundsout.kafkaTxExecutor" ref="kafkaTxExecutorServiceImpl" method="executeKafkaTx" />
+		
+	</int:chain>
+		
+	<int:chain
+		input-channel="INTUITIONUPDATE_PAYMENT_OUT.RESPONSE"
+		output-channel="nullChannel">
+		<int:service-activator id="intuitionStatusResponse"
+			ref="updatePaymentOutStatusResponse" method="processForFundsOut" />
+		
+		<int:filter  discard-channel="INTUITIONUPDATE_INTUITION.ERROR.CHANNEL" expression="!payload.isFailed()" />
+	</int:chain>
+		
+	<int:chain
+	input-channel="INTUITIONUPDATE_INTUITION.ERROR.CHANNEL"
+	output-channel="nullChannel">
+		<int:service-activator
+			ref="fundsOutErrorHandler"
+			method="logError" />
+	</int:chain>
+		
+	<bean id="fundsout.intuition.dataEnricher"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.DataEnricher"/>
+		
+	<bean id="updatePaymentOutStatusResponse"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring.TransactionMonitoringUpdateStatusResponse" />
+	
+	<bean id="fundsOutErrorHandler"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.core.fundsout.FundsOutErrorHandler"/>
+</beans>

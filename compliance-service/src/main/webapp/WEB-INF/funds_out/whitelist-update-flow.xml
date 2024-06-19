@@ -1,0 +1,96 @@
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd 
+http://www.springframework.org/schema/integration 
+http://www.springframework.org/schema/integration/spring-integration.xsd 
+http://www.springframework.org/schema/task 
+http://www.springframework.org/schema/task/spring-task.xsd 
+http://www.springframework.org/schema/context 
+http://www.springframework.org/schema/context/spring-context.xsd 
+http://www.springframework.org/schema/integration/http
+http://www.springframework.org/schema/integration/http/spring-integration-http.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+	<context:component-scan
+		base-package="com.currenciesdirect.gtg.compliance.compliancesrv" />
+	<int:channel id="FUNDSOUT.WHITELIST_UPDATE.in.channel" />
+	<int:channel id="FUNDSOUT.WHITELISTUPDATE.RESPONSE" />
+	<int:channel id="FUNDSOUT.WHITELIST.UPDATE.CHANNEL" />
+	
+	<int:chain
+		id="fundsout.updateWhiteListServcie"
+		input-channel="FUNDSOUT.WHITELIST_UPDATE.in.channel">
+		<int:header-enricher>
+			<int:header
+				name="correlationID"
+				expression="T(java.util.UUID).randomUUID()" />
+			<int:header
+				name="username"
+				expression="headers['username']" />
+		</int:header-enricher>
+		<int:service-activator
+			id="fundsout.whiteList.dataEnrich"
+			ref="fundsout.dataEnricher"
+			method="enrichWhiteListData" />
+			
+		<int:service-activator
+			id="fundsout.updateWhitelist.DataValidator"
+			ref="fundsout.DataValidator"
+			method="process" />
+		<int:router
+			id="whiteListUpdateValidation"
+			expression="payload.getValidationResult()">
+			<int:mapping
+				value="FAIL"
+				channel="FUNDSOUT.WHITELISTUPDATE.RESPONSE" />
+			<int:mapping
+				value="SUCCESS"
+				channel="FUNDSOUT.WHITELIST.UPDATE.CHANNEL" />
+		</int:router>
+	</int:chain>
+	
+	<int:chain
+		id="fundsout.whiteListUpdateChannel"
+		input-channel="FUNDSOUT.WHITELIST.UPDATE.CHANNEL"
+		output-channel="FUNDSOUT.WHITELISTUPDATE.RESPONSE">
+		<int:transformer
+			ref="whiteListUpdateTransformer"
+			method="transformRequest" />
+		<int:service-activator
+			id="fundsout.upd.CustomChecks"
+			method="sendRequest">
+			<bean
+				class="com.currenciesdirect.gtg.compliance.compliancesrv.util.HttpClientPool"
+				p:urlBase="#{providerProperties.getEndPointUrl('WHITELIST_UPDATE')}"
+				p:method="POST"
+				p:serviceType="#{T(com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum).CUSTOM_CHECKS_SERVICE}"
+				p:requestClass="com.currenciesdirect.gtg.compliance.commons.domain.whitelist.AccountWhiteList"
+				p:responseClass="com.currenciesdirect.gtg.compliance.commons.domain.customchecks.response.CustomCheckResponse" />
+		</int:service-activator>
+		
+		<int:transformer
+			ref="whiteListUpdateTransformer"
+			method="transformResponse" />
+	</int:chain>
+	
+	<int:chain
+		input-channel="FUNDSOUT.WHITELISTUPDATE.RESPONSE"
+		output-channel="nullChannel">
+		<int:service-activator
+			id="WHITELISTUPDATE.RES"
+			ref="fundsout.replyHandler"
+			method="process" />
+	</int:chain>
+
+	<bean
+		id="whiteListUpdateTransformer"
+		class="com.currenciesdirect.gtg.compliance.compliancesrv.transformer.fundsout.WhiteListTransformer" />
+
+</beans>

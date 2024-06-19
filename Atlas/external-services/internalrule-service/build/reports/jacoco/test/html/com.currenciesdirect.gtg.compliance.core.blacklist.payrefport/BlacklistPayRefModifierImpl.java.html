@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BlacklistPayRefModifierImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">internalrule-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.core.blacklist.payrefport</a> &gt; <span class="el_source">BlacklistPayRefModifierImpl.java</span></div><h1>BlacklistPayRefModifierImpl.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.core.blacklist.payrefport;
+
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.Invocation.Builder;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
+import org.jboss.resteasy.client.jaxrs.ResteasyClient;
+import org.jboss.resteasy.client.jaxrs.ResteasyWebTarget;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.BlacklistPayrefContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.internalruleservice.InternalServiceRequestData;
+import com.currenciesdirect.gtg.compliance.core.blacklist.payref.IBlacklistPayref;
+import com.currenciesdirect.gtg.compliance.exception.BlacklistPayrefErrors;
+import com.currenciesdirect.gtg.compliance.exception.BlacklistPayrefException;
+import com.currenciesdirect.gtg.compliance.util.Constants;
+
+
+
+
+<span class="nc" id="L21">public class BlacklistPayRefModifierImpl implements IBlacklistPayref</span>
+{
+	/** The Constant LOG. */
+<span class="nc" id="L24">	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(BlacklistPayRefModifierImpl.class);</span>
+
+	/** The resteasy client handler. */
+<span class="nc" id="L27">	private ResteasyClientHandler resteasyClientHandler=ResteasyClientHandler.getInstance();</span>
+	
+	/** The iblacklistpayref. */
+<span class="nc" id="L30">	private static IBlacklistPayref iblacklistpayref = null;</span>
+	
+	/**
+	 * Gets the single instance of BlacklistPayRefModifierImpl.
+	 *
+	 * @return single instance of BlacklistPayRefModifierImpl
+	 */
+	public static IBlacklistPayref getInstance() {
+<span class="nc bnc" id="L38" title="All 2 branches missed.">		if (iblacklistpayref == null) {</span>
+<span class="nc" id="L39">			iblacklistpayref = new BlacklistPayRefModifierImpl();</span>
+		}
+<span class="nc" id="L41">		return iblacklistpayref;</span>
+	}
+	
+	/**
+	 * Do pay ref payments out check.
+	 *
+	 * @param request the request
+	 * @param blacklistPayrefProviderProperty the blacklist payref provider property
+	 * @return the blacklist payref contact response
+	 * @throws BlacklistPayrefException the blacklist payref exception
+	 */
+	@SuppressWarnings(&quot;null&quot;)
+	public BlacklistPayrefContactResponse doPayRefPaymentsOutCheck(InternalServiceRequestData request,
+			BlacklistPayrefProviderProperty blacklistPayrefProviderProperty)throws BlacklistPayrefException {
+<span class="nc" id="L55">		BlacklistPayrefContactResponse blacklistPayrefContactResponse= new BlacklistPayrefContactResponse();</span>
+<span class="nc" id="L56">		ResteasyClient client = null;</span>
+<span class="nc" id="L57">		ProviderBlacklistPayrefRequest providerblacklistPayRefRequest=new ProviderBlacklistPayrefRequest();</span>
+<span class="nc" id="L58">		Response response = null;</span>
+<span class="nc" id="L59">		ProviderBlackPayrefResponse providerBlackPayrefResponse= new ProviderBlackPayrefResponse();</span>
+<span class="nc" id="L60">		int fixedThreshold = blacklistPayrefProviderProperty.getFixedThreshold();</span>
+		try
+		{
+<span class="nc" id="L63">			LOG.debug(&quot;Payment Reference Port STARTED : doPayRefPaymentsOutCheck() &quot;);</span>
+<span class="nc" id="L64">			client = resteasyClientHandler.getRetEasyClient();</span>
+<span class="nc" id="L65">			providerblacklistPayRefRequest.setPaymentReference(request.getPayementRefernce());</span>
+<span class="nc" id="L66">			providerblacklistPayRefRequest = ObjectUtils.replaceEmptyWithNull(providerblacklistPayRefRequest, ProviderBlacklistPayrefRequest.class);</span>
+<span class="nc" id="L67">			ResteasyWebTarget target1 = client.target(blacklistPayrefProviderProperty.getEndPointUrl());</span>
+<span class="nc" id="L68">			Builder clientrequest = target1.request();</span>
+<span class="nc" id="L69">			LOG.warn(&quot;\n ---Payment reference request---&quot;, providerblacklistPayRefRequest);</span>
+<span class="nc" id="L70">			response = clientrequest.post(Entity.entity(providerblacklistPayRefRequest, MediaType.APPLICATION_JSON));</span>
+<span class="nc" id="L71">			LOG.warn(&quot;\n ---Payment reference response---&quot;, response);</span>
+<span class="nc" id="L72">			providerBlackPayrefResponse=handleBlacklistPayrefServerTansactionResponse(response);</span>
+<span class="nc" id="L73">			transformBlacklistPayrefResponse(blacklistPayrefContactResponse, providerBlackPayrefResponse, fixedThreshold);</span>
+<span class="nc" id="L74">		}catch(BlacklistPayrefException e)</span>
+		{
+<span class="nc" id="L76">			LOG.error(&quot;Exception in BlacklistPayRefModifierImpl doPayRefPaymentsOutCheck(): &quot;, e);</span>
+<span class="nc" id="L77">		} catch (Exception exception) {</span>
+<span class="nc" id="L78">			throw exception;</span>
+		}
+		finally {
+<span class="nc bnc" id="L81" title="All 2 branches missed.">			if (response != null) {</span>
+<span class="nc" id="L82">				response.close();</span>
+			}
+		}
+<span class="nc" id="L85">		return blacklistPayrefContactResponse;</span>
+	}
+	
+	/**
+	 * Transform blacklist payref response.
+	 *
+	 * @param blacklistPayrefContactResponse the blacklist payref contact response
+	 * @param providerBlackPayrefResponse the provider black payref response
+	 * @param fixedThreshold the fixed threshold
+	 * @throws BlacklistPayrefException the blacklist payref exception
+	 */
+	private void transformBlacklistPayrefResponse(
+			BlacklistPayrefContactResponse blacklistPayrefContactResponse,
+			ProviderBlackPayrefResponse providerBlackPayrefResponse, int fixedThreshold)throws BlacklistPayrefException
+	{
+<span class="nc" id="L100">		blacklistPayrefContactResponse.setPaymentReference(providerBlackPayrefResponse.getPaymentReference());</span>
+<span class="nc" id="L101">		blacklistPayrefContactResponse.setRequestId(providerBlackPayrefResponse.getRequestId());</span>
+<span class="nc" id="L102">		blacklistPayrefContactResponse.setSanctionText(providerBlackPayrefResponse.getSanctionText());</span>
+<span class="nc" id="L103">		blacklistPayrefContactResponse.setTokenSetRatio(providerBlackPayrefResponse.getTokenSetRatio());</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">		if(providerBlackPayrefResponse.getTokenSetRatio() &gt;= fixedThreshold){</span>
+<span class="nc" id="L105">			blacklistPayrefContactResponse.setStatus(Constants.FAIL);</span>
+		}else{
+<span class="nc" id="L107">			blacklistPayrefContactResponse.setStatus(Constants.PASS);</span>
+		}
+<span class="nc" id="L109">	}</span>
+
+	/**
+	 * Handle blacklist payref server tansaction response.
+	 *
+	 * @param response the response
+	 * @return the provider black payref response
+	 * @throws BlacklistPayrefException the blacklist payref exception
+	 */
+	private ProviderBlackPayrefResponse handleBlacklistPayrefServerTansactionResponse(Response response) throws BlacklistPayrefException
+	{
+<span class="nc" id="L120">		ProviderBlackPayrefResponse providerBlackPayrefResponse=null;</span>
+		
+<span class="nc bnc" id="L122" title="All 2 branches missed.">		if (null != response) {</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">			if (response.getStatus() == 200) {</span>
+<span class="nc" id="L124">				providerBlackPayrefResponse = response.readEntity(ProviderBlackPayrefResponse.class);</span>
+<span class="nc" id="L125">				LOG.warn(&quot;\n ---Payment reference response---&quot;, providerBlackPayrefResponse);</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">			} else if (response.getStatus() == 500) {</span>
+<span class="nc" id="L127">				throw new BlacklistPayrefException(BlacklistPayrefErrors.BLACKLISTPAYREF_SERVER_GENERIC_EXCEPTION);</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">			} else if (response.getStatus() == 400) {</span>
+<span class="nc" id="L129">				providerBlackPayrefResponse = response.readEntity(ProviderBlackPayrefResponse.class);</span>
+			}
+			else {
+<span class="nc" id="L132">				throw new BlacklistPayrefException(BlacklistPayrefErrors.FAILED);</span>
+			}
+		}
+<span class="nc" id="L135">		return providerBlackPayrefResponse;</span>
+	}
+
+	
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

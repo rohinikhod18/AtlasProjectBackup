@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TransactionMonitoringUpdateStatusResponse.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">compliance-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring</a> &gt; <span class="el_source">TransactionMonitoringUpdateStatusResponse.java</span></div><h1>TransactionMonitoringUpdateStatusResponse.java</h1><pre class="source lang-java linenums">package com.currenciesdirect.gtg.compliance.compliancesrv.core.transactionmonitoring;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.Message;
+import org.springframework.web.context.request.async.DeferredResult;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.msg.ServiceMessageResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringAccountSignupResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentInResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringPaymentOutResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.transactionmonitoring.TransactionMonitoringSignupResponse;
+import com.currenciesdirect.gtg.compliance.compliancesrv.InternalProcessingCode;
+import com.currenciesdirect.gtg.compliance.compliancesrv.MessageContextHeaders;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.EntityEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.core.OperationEnum;
+import com.currenciesdirect.gtg.compliance.compliancesrv.domain.reg.EventServiceLog;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageContext;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.MessageExchange;
+import com.currenciesdirect.gtg.compliance.compliancesrv.msg.ServiceTypeEnum;
+
+<span class="nc" id="L24">public class TransactionMonitoringUpdateStatusResponse {</span>
+	/** The Constant LOGGER. */
+<span class="nc" id="L26">	private static final Logger LOGGER = LoggerFactory.getLogger(TransactionMonitoringUpdateStatusResponse.class);</span>
+
+	/**
+	 * Process.
+	 *
+	 * @param message the message
+	 * @return the message
+	 */
+	@SuppressWarnings(&quot;unchecked&quot;)
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; process(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="nc" id="L38">			if (message.getHeaders().get(MessageContextHeaders.GATEWAY_OPERATION)</span>
+<span class="nc bnc" id="L39" title="All 2 branches missed.">					.equals(OperationEnum.UPDATE_ACCOUNT.name())</span>
+<span class="nc" id="L40">					|| message.getHeaders().get(MessageContextHeaders.GATEWAY_OPERATION)</span>
+<span class="nc bnc" id="L41" title="All 2 branches missed.">							.equals(OperationEnum.REPEAT_CHECK_STATUS_UPDATE.name())) {</span>
+
+<span class="nc" id="L43">				MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L44">						.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L45">				TransactionMonitoringSignupResponse response = exchange</span>
+<span class="nc" id="L46">						.getResponse(TransactionMonitoringSignupResponse.class);</span>
+<span class="nc" id="L47">				TransactionMonitoringAccountSignupResponse accResponse = response</span>
+<span class="nc" id="L48">						.getTransactionMonitoringAccountSignupResponse();</span>
+<span class="nc" id="L49">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L50">						ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L51">						accResponse.getAccountId());</span>
+				
+
+<span class="nc bnc" id="L54" title="All 2 branches missed.">				if (InternalProcessingCode.INV_REQUEST.name().equals(accResponse.getErrorCode())) {</span>
+<span class="nc" id="L55">					DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message</span>
+<span class="nc" id="L56">							.getHeaders().get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+
+<span class="nc" id="L58">					ResponseEntity&lt;EventServiceLog&gt; responseEntity = new ResponseEntity&lt;&gt;(eventServiceLog,</span>
+							HttpStatus.BAD_REQUEST);
+
+<span class="nc" id="L61">					deferredResult.setResult(responseEntity);</span>
+<span class="nc" id="L62">				} else {</span>
+<span class="nc" id="L63">					DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message</span>
+<span class="nc" id="L64">							.getHeaders().get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+
+<span class="nc" id="L66">					ResponseEntity&lt;EventServiceLog&gt; responseEntity = new ResponseEntity&lt;&gt;(eventServiceLog,</span>
+							HttpStatus.OK);
+
+<span class="nc" id="L69">					deferredResult.setResult(responseEntity);</span>
+				}
+<span class="nc" id="L71">				return message;</span>
+			} else {
+<span class="nc" id="L73">				LOGGER.warn(&quot;TransactionMonitoringSignupResponse Response : NO RESPONSE &quot;);</span>
+			}
+<span class="nc" id="L75">		} catch (Exception e) {</span>
+<span class="nc" id="L76">			LOGGER.error(&quot;Exception in TransactionMonitoringUpdateStatusResponse process(): &quot;, e);</span>
+<span class="nc" id="L77">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L78">		}</span>
+<span class="nc" id="L79">		return message;</span>
+	}
+	
+	
+	@SuppressWarnings(&quot;unchecked&quot;)
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; processForFundsIn(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="nc" id="L87">			if (message.getHeaders().get(MessageContextHeaders.GATEWAY_OPERATION)</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">					.equals(OperationEnum.REPEAT_CHECK_STATUS_UPDATE.name())) {</span>
+
+<span class="nc" id="L90">				MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L91">						.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L92">				TransactionMonitoringPaymentInResponse response = exchange</span>
+<span class="nc" id="L93">						.getResponse(TransactionMonitoringPaymentInResponse.class);</span>
+<span class="nc" id="L94">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L95">						ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L96">						response.getId());</span>
+				
+
+<span class="nc bnc" id="L99" title="All 2 branches missed.">				if (InternalProcessingCode.INV_REQUEST.name().equals(response.getErrorCode())) {</span>
+<span class="nc" id="L100">					DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message</span>
+<span class="nc" id="L101">							.getHeaders().get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+
+<span class="nc" id="L103">					ResponseEntity&lt;EventServiceLog&gt; responseEntity = new ResponseEntity&lt;&gt;(eventServiceLog,</span>
+							HttpStatus.BAD_REQUEST);
+
+<span class="nc" id="L106">					deferredResult.setResult(responseEntity);</span>
+<span class="nc" id="L107">				} else {</span>
+<span class="nc" id="L108">					DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message</span>
+<span class="nc" id="L109">							.getHeaders().get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+
+<span class="nc" id="L111">					ResponseEntity&lt;EventServiceLog&gt; responseEntity = new ResponseEntity&lt;&gt;(eventServiceLog,</span>
+							HttpStatus.OK);
+
+<span class="nc" id="L114">					deferredResult.setResult(responseEntity);</span>
+				}
+<span class="nc" id="L116">				return message;</span>
+			} else {
+<span class="nc" id="L118">				LOGGER.warn(&quot;TransactionMonitoringPaymentInResponse Response : NO RESPONSE &quot;);</span>
+			}
+<span class="nc" id="L120">		} catch (Exception e) {</span>
+<span class="nc" id="L121">			LOGGER.error(&quot;Exception in TransactionMonitoringUpdateStatusResponse processFundsIn(): &quot;, e);</span>
+<span class="nc" id="L122">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L123">		}</span>
+<span class="nc" id="L124">		return message;</span>
+	}
+	
+	@SuppressWarnings(&quot;unchecked&quot;)
+	@org.springframework.integration.annotation.ServiceActivator
+	public Message&lt;MessageContext&gt; processForFundsOut(Message&lt;MessageContext&gt; message) {
+		try {
+<span class="nc" id="L131">			if (message.getHeaders().get(MessageContextHeaders.GATEWAY_OPERATION)</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">					.equals(OperationEnum.REPEAT_CHECK_STATUS_UPDATE.name())) {</span>
+
+<span class="nc" id="L134">				MessageExchange exchange = message.getPayload()</span>
+<span class="nc" id="L135">						.getMessageExchange(ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE);</span>
+<span class="nc" id="L136">				TransactionMonitoringPaymentOutResponse response = exchange</span>
+<span class="nc" id="L137">						.getResponse(TransactionMonitoringPaymentOutResponse.class);</span>
+<span class="nc" id="L138">				EventServiceLog eventServiceLog = exchange.getEventServiceLog(</span>
+<span class="nc" id="L139">						ServiceTypeEnum.TRANSACTION_MONITORING_SERVICE, EntityEnum.ACCOUNT.name(),</span>
+<span class="nc" id="L140">						response.getId());</span>
+				
+
+<span class="nc bnc" id="L143" title="All 2 branches missed.">				if (InternalProcessingCode.INV_REQUEST.name().equals(response.getErrorCode())) {</span>
+<span class="nc" id="L144">					DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message</span>
+<span class="nc" id="L145">							.getHeaders().get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+
+<span class="nc" id="L147">					ResponseEntity&lt;EventServiceLog&gt; responseEntity = new ResponseEntity&lt;&gt;(eventServiceLog,</span>
+							HttpStatus.BAD_REQUEST);
+
+<span class="nc" id="L150">					deferredResult.setResult(responseEntity);</span>
+<span class="nc" id="L151">				} else {</span>
+<span class="nc" id="L152">					DeferredResult&lt;ResponseEntity&lt;?&gt;&gt; deferredResult = (DeferredResult&lt;ResponseEntity&lt;?&gt;&gt;) message</span>
+<span class="nc" id="L153">							.getHeaders().get(MessageContextHeaders.GATEWAY_RESPONSE_OBJECT);</span>
+
+<span class="nc" id="L155">					ResponseEntity&lt;EventServiceLog&gt; responseEntity = new ResponseEntity&lt;&gt;(eventServiceLog,</span>
+							HttpStatus.OK);
+
+<span class="nc" id="L158">					deferredResult.setResult(responseEntity);</span>
+				}
+<span class="nc" id="L160">				return message;</span>
+			} else {
+<span class="nc" id="L162">				LOGGER.warn(&quot;TransactionMonitoringPaymentOutResponse Response : NO RESPONSE &quot;);</span>
+			}
+<span class="nc" id="L164">		} catch (Exception e) {</span>
+<span class="nc" id="L165">			LOGGER.error(&quot;Exception in TransactionMonitoringUpdateStatusResponse processFundsOut(): &quot;, e);</span>
+<span class="nc" id="L166">			message.getPayload().setFailed(true);</span>
+<span class="nc" id="L167">		}</span>
+<span class="nc" id="L168">		return message;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

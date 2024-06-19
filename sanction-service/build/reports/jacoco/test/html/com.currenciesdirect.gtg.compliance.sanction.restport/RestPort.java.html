@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RestPort.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">sanction-service</a> &gt; <a href="index.source.html" class="el_package">com.currenciesdirect.gtg.compliance.sanction.restport</a> &gt; <span class="el_source">RestPort.java</span></div><h1>RestPort.java</h1><pre class="source lang-java linenums">/*******************************************************************************
+ * 
+ * Copyright 2017 Currencies Direct Ltd, United Kingdom
+ * 
+ * Compliance: RestPort.java
+ ******************************************************************************/
+package com.currenciesdirect.gtg.compliance.sanction.restport;
+
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.HeaderParam;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBankResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBaseResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionBeneficiaryResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionContactResponse;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionRequest;
+import com.currenciesdirect.gtg.compliance.commons.domain.sanction.SanctionResponse;
+import com.currenciesdirect.gtg.compliance.commons.util.ObjectCloner;
+import com.currenciesdirect.gtg.compliance.sanction.core.IService;
+import com.currenciesdirect.gtg.compliance.sanction.core.ServiceImpl;
+import com.currenciesdirect.gtg.compliance.sanction.exception.SanctionException;
+import com.currenciesdirect.gtg.compliance.sanction.util.Constants;
+
+/**
+ * The Class RestPort.
+ */
+@Path(&quot;/&quot;)
+<span class="nc" id="L43">public class RestPort {</span>
+
+	/** The Constant LOG. */
+<span class="nc" id="L46">	private static final Logger LOG = LoggerFactory.getLogger(RestPort.class);</span>
+	
+	/** The i service. */
+<span class="nc" id="L49">	private IService iService = ServiceImpl.getInstance();</span>
+
+
+	
+	/**
+	 * Gets the scanction details.
+	 *
+	 * @param correlationId the correlation id
+	 * @param sanctionRequest            the sanction request
+	 * @return the scanction details
+	 * @throws SanctionException             the sanction exception
+	 */
+	@POST
+	@Path(&quot;/checkSanctions&quot;)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Response checkFundoutSanctions(@HeaderParam(&quot;correlationId&quot;) String correlationId,
+			SanctionRequest sanctionRequest) throws SanctionException {
+<span class="nc" id="L67">		SanctionResponse sanctionResponse = new SanctionResponse();</span>
+<span class="nc" id="L68">		SanctionRequest copiedsanctionRequest = null;</span>
+		try {
+<span class="nc" id="L70">			copiedsanctionRequest = (SanctionRequest) ObjectCloner.deepCopy(sanctionRequest);</span>
+<span class="nc" id="L71">			updateOfacAndWcOfRequest(sanctionRequest);</span>
+<span class="nc" id="L72">			sanctionResponse = iService.getSanctionDetails(copiedsanctionRequest);</span>
+<span class="nc" id="L73">			updateWCAndOfacValues(sanctionResponse);</span>
+<span class="nc" id="L74">		} catch (SanctionException sanctionException) {</span>
+<span class="nc" id="L75">			logDebug(sanctionException);</span>
+<span class="nc" id="L76">			sanctionResponse = createServiceFailureResponse(sanctionRequest);</span>
+<span class="nc" id="L77">			sanctionResponse.setErrorCode(sanctionException.getSanctionErrors().getErrorCode());</span>
+<span class="nc" id="L78">			sanctionResponse.setErrorDescription(sanctionException.getSanctionErrors().getErrorDescription());</span>
+<span class="nc" id="L79">			return Response.ok().entity(sanctionResponse).build();</span>
+<span class="nc" id="L80">		} catch (Exception e) {</span>
+<span class="nc" id="L81">			LOG.error(&quot;Error while geting sanction details : getScanctionDetails() &quot;, e);</span>
+<span class="nc" id="L82">			sanctionResponse.setErrorCode(&quot;0999&quot;);</span>
+<span class="nc" id="L83">			sanctionResponse.setErrorDescription(&quot;Generic Exception&quot;);</span>
+<span class="nc" id="L84">			sanctionResponse = createServiceFailureResponse(sanctionRequest);</span>
+<span class="nc" id="L85">			return Response.ok().entity(sanctionResponse).build();</span>
+<span class="nc" id="L86">		}</span>
+<span class="nc" id="L87">		return Response.status(200).entity(sanctionResponse).build(); </span>
+	}
+	
+	/**
+	 * Update WC and ofac values.
+	 *
+	 * @param sanctionResponse the sanction response
+	 */
+	private void updateWCAndOfacValues(SanctionResponse sanctionResponse) {
+<span class="nc" id="L96">		List&lt;SanctionContactResponse&gt; contactResponse = sanctionResponse.getContactResponses();</span>
+<span class="nc" id="L97">		List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponse = sanctionResponse.getBeneficiaryResponses();</span>
+<span class="nc" id="L98">		List&lt;SanctionBankResponse&gt; bankResponse = sanctionResponse.getBankResponses();	</span>
+<span class="nc" id="L99">		updateWCAndOfacValuesForContact(contactResponse);</span>
+<span class="nc" id="L100">		updateWCAndOfacValuesForBeneficiary(beneficiaryResponse);</span>
+<span class="nc" id="L101">		updateWCAndOfacValuesForBank(bankResponse);</span>
+		
+<span class="nc" id="L103">	}</span>
+
+	/**
+	 * Update WC and ofac values for bank.
+	 *
+	 * @param bankResponse the bank response
+	 */
+	private void updateWCAndOfacValuesForBank(List&lt;SanctionBankResponse&gt; bankResponse) {
+<span class="nc bnc" id="L111" title="All 2 branches missed.">		if(bankResponse == null) {</span>
+<span class="nc" id="L112">			return;</span>
+		}
+		
+<span class="nc bnc" id="L115" title="All 2 branches missed.">		for(SanctionBankResponse beneficiary : bankResponse) {</span>
+<span class="nc" id="L116">			setWorldCheckValue(beneficiary);</span>
+<span class="nc" id="L117">			setOfacListValue(beneficiary);						</span>
+<span class="nc" id="L118">		}				</span>
+<span class="nc" id="L119">	}</span>
+
+	/**
+	 * Update WC and ofac values for beneficiary.
+	 *
+	 * @param beneficiaryResponse the beneficiary response
+	 */
+	private void updateWCAndOfacValuesForBeneficiary(List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponse) {
+<span class="nc bnc" id="L127" title="All 2 branches missed.">		if(beneficiaryResponse == null) {</span>
+<span class="nc" id="L128">			return;</span>
+		}
+		
+<span class="nc bnc" id="L131" title="All 2 branches missed.">		for(SanctionBeneficiaryResponse beneficiary : beneficiaryResponse) {</span>
+<span class="nc" id="L132">				setWorldCheckValue(beneficiary);</span>
+<span class="nc" id="L133">				setOfacListValue(beneficiary);						</span>
+<span class="nc" id="L134">		}</span>
+		
+<span class="nc" id="L136">	}</span>
+
+	/**
+	 * Update WC and ofac values for contact.
+	 *
+	 * @param contactResponse the contact response
+	 */
+	private void updateWCAndOfacValuesForContact(List&lt;SanctionContactResponse&gt; contactResponse) {
+<span class="nc bnc" id="L144" title="All 2 branches missed.">		if(contactResponse == null) {</span>
+<span class="nc" id="L145">			return;</span>
+		}
+			
+<span class="nc bnc" id="L148" title="All 2 branches missed.">		for(SanctionContactResponse contact : contactResponse) {</span>
+<span class="nc" id="L149">				setWorldCheckValue(contact);</span>
+<span class="nc" id="L150">				setOfacListValue(contact);	</span>
+<span class="nc" id="L151">		}</span>
+			
+<span class="nc" id="L153">	}</span>
+
+	/**
+	 * Sets the ofac list value.
+	 *
+	 * @param base the new ofac list value
+	 */
+	private void setOfacListValue(SanctionBaseResponse base) {
+<span class="nc bnc" id="L161" title="All 2 branches missed.">		if(base == null){</span>
+<span class="nc" id="L162">			return;</span>
+		}
+<span class="nc bnc" id="L164" title="All 4 branches missed.">		if(base.getOfacList() == null || base.getOfacList().trim().isEmpty()) {</span>
+<span class="nc" id="L165">			base.setOfacList(Constants.NOT_AVAILABLE);</span>
+		}
+<span class="nc bnc" id="L167" title="All 2 branches missed.">		if(base.getOfacList().equalsIgnoreCase(Constants.NO_MATCH_FOUND)){</span>
+<span class="nc" id="L168">			base.setOfacList(Constants.SAFE);</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">		} else if(base.getOfacList().equalsIgnoreCase(Constants.MATCH_FOUND)){			</span>
+<span class="nc" id="L170">			base.setOfacList(Constants.CONFIRMED_HIT);</span>
+		}
+<span class="nc" id="L172">	}</span>
+
+	/**
+	 * Sets the world check value.
+	 *
+	 * @param base the new world check value
+	 */
+	private void setWorldCheckValue(SanctionBaseResponse base) {
+<span class="nc bnc" id="L180" title="All 2 branches missed.">		if(base == null){</span>
+<span class="nc" id="L181">			return;</span>
+		}
+<span class="nc bnc" id="L183" title="All 4 branches missed.">		if(base.getWorldCheck() == null || base.getWorldCheck().trim().isEmpty()) {</span>
+<span class="nc" id="L184">			base.setWorldCheck(Constants.NOT_AVAILABLE);</span>
+		}
+<span class="nc bnc" id="L186" title="All 2 branches missed.">		if(base.getWorldCheck().equalsIgnoreCase(Constants.NO_MATCH_FOUND)) {</span>
+<span class="nc" id="L187">			base.setWorldCheck(Constants.SAFE);</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">		} else if(base.getWorldCheck().equalsIgnoreCase(Constants.MATCH_FOUND)) {			</span>
+<span class="nc" id="L189">				base.setWorldCheck(Constants.CONFIRMED_HIT);</span>
+		}
+<span class="nc" id="L191">	}</span>
+	
+	/**
+	 * Update ofac and wc of request.
+	 *
+	 * @param request the request
+	 */
+	private void updateOfacAndWcOfRequest(SanctionRequest request){
+<span class="nc" id="L199">		updateOfacAndWcOfBank(request.getBankRequests());</span>
+<span class="nc" id="L200">		updateOfacAndWcOfContact(request.getContactrequests());</span>
+<span class="nc" id="L201">		updateOfacAndWcOfBeneficiary( request.getBeneficiaryRequests());</span>
+<span class="nc" id="L202">	}</span>
+	
+	
+	/**
+	 * Update ofac and wc of bank.
+	 *
+	 * @param banckRequests the banck requests
+	 */
+	private void updateOfacAndWcOfBank(List&lt;SanctionBankRequest&gt; banckRequests){
+<span class="nc bnc" id="L211" title="All 2 branches missed.">		if(banckRequests == null){</span>
+<span class="nc" id="L212">			return ;</span>
+		}
+<span class="nc bnc" id="L214" title="All 2 branches missed.">		for(SanctionBankRequest bankRequest : banckRequests){</span>
+<span class="nc" id="L215">			bankRequest.setPreviousOfac(updateProvideStatus(bankRequest.getPreviousOfac()));</span>
+<span class="nc" id="L216">			bankRequest.setPreviousWorldCheck(updateProvideStatus(bankRequest.getPreviousWorldCheck()));</span>
+<span class="nc" id="L217">		}</span>
+<span class="nc" id="L218">	}</span>
+	
+	/**
+	 * Update ofac and wc of contact.
+	 *
+	 * @param contactRequests the contact requests
+	 */
+	private void updateOfacAndWcOfContact(List&lt;SanctionContactRequest&gt; contactRequests){
+<span class="nc bnc" id="L226" title="All 2 branches missed.">		if(contactRequests == null){</span>
+<span class="nc" id="L227">			return ;</span>
+		}
+<span class="nc bnc" id="L229" title="All 2 branches missed.">		for(SanctionContactRequest contactRequest : contactRequests){</span>
+<span class="nc" id="L230">			contactRequest.setPreviousOfac(updateProvideStatus(contactRequest.getPreviousOfac()));</span>
+<span class="nc" id="L231">			contactRequest.setPreviousWorldCheck(updateProvideStatus(contactRequest.getPreviousWorldCheck()));</span>
+<span class="nc" id="L232">		}</span>
+<span class="nc" id="L233">	}</span>
+	
+	/**
+	 * Update ofac and wc of beneficiary.
+	 *
+	 * @param beneficiaryRequests the beneficiary requests
+	 */
+	private void updateOfacAndWcOfBeneficiary(List&lt;SanctionBeneficiaryRequest&gt; beneficiaryRequests){
+<span class="nc bnc" id="L241" title="All 2 branches missed.">		if(beneficiaryRequests == null){</span>
+<span class="nc" id="L242">			return ;</span>
+		}
+<span class="nc bnc" id="L244" title="All 2 branches missed.">		for(SanctionBeneficiaryRequest beneficiaryRequest : beneficiaryRequests){</span>
+<span class="nc" id="L245">			beneficiaryRequest.setPreviousOfac(updateProvideStatus(beneficiaryRequest.getPreviousOfac()));</span>
+<span class="nc" id="L246">			beneficiaryRequest.setPreviousWorldCheck(updateProvideStatus(beneficiaryRequest.getPreviousWorldCheck()));</span>
+<span class="nc" id="L247">		}</span>
+<span class="nc" id="L248">	}</span>
+
+	/**
+	 * Update provide status.
+	 *
+	 * @param providerStatus the provider status
+	 * @return the string
+	 */
+	private String updateProvideStatus(String providerStatus) {
+<span class="nc bnc" id="L257" title="All 6 branches missed.">		if(providerStatus == null || providerStatus.trim().isEmpty() || providerStatus.equalsIgnoreCase(Constants.NOT_AVAILABLE)){</span>
+<span class="nc" id="L258">			return providerStatus;</span>
+		}
+<span class="nc bnc" id="L260" title="All 2 branches missed.">		if(providerStatus.equalsIgnoreCase(Constants.SAFE)){</span>
+<span class="nc" id="L261">			return Constants.NO_MATCH_FOUND;</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">		} else if(providerStatus.equalsIgnoreCase(Constants.CONFIRMED_HIT)){</span>
+<span class="nc" id="L263">			return Constants.MATCH_FOUND;</span>
+		} 
+<span class="nc" id="L265">		return providerStatus;</span>
+	}
+
+	/**
+	 * Log debug.
+	 *
+	 * @param exception the exception
+	 */
+	private void logDebug(Throwable exception) {
+<span class="nc" id="L274">		LOG.debug(&quot;Error in class RestPort  :&quot;, exception);</span>
+<span class="nc" id="L275">	}</span>
+	
+	/**
+	 * Creates the service failure response.
+	 *
+	 * @param sanctionRequest the sanction request
+	 * @return the sanction response
+	 */
+	private SanctionResponse createServiceFailureResponse(SanctionRequest sanctionRequest){
+<span class="nc" id="L284">		SanctionResponse response=new SanctionResponse();</span>
+<span class="nc" id="L285">		  List&lt;SanctionContactResponse&gt; contactResponsesList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L286">		  List&lt;SanctionBeneficiaryResponse&gt; beneficiaryResponsesList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L287">		  List&lt;SanctionBankResponse&gt; bankResponsesList = new ArrayList&lt;&gt;();</span>
+		  
+<span class="nc bnc" id="L289" title="All 4 branches missed.">		  if(null != sanctionRequest.getContactrequests() &amp;&amp; !sanctionRequest.getContactrequests().isEmpty()){</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">			  for(SanctionContactRequest contactRequest : sanctionRequest.getContactrequests()){</span>
+<span class="nc" id="L291">				  SanctionContactResponse contactResponse = new SanctionContactResponse();</span>
+<span class="nc" id="L292">				  contactResponse.setContactId(contactRequest.getContactId());</span>
+<span class="nc" id="L293">				  contactResponse.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L294">				  contactResponse.setSanctionId(contactRequest.getSanctionId());</span>
+<span class="nc" id="L295">				  contactResponsesList.add(contactResponse);</span>
+<span class="nc" id="L296">				  response.setContactResponses(contactResponsesList);</span>
+<span class="nc" id="L297">			  }</span>
+		  }
+		  
+<span class="nc bnc" id="L300" title="All 4 branches missed.">		  if(null != sanctionRequest.getBankRequests() &amp;&amp; !sanctionRequest.getBankRequests().isEmpty()){</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">			  for(SanctionBankRequest bankRequest : sanctionRequest.getBankRequests()){</span>
+<span class="nc" id="L302">				  SanctionBankResponse bankResponses = new SanctionBankResponse();</span>
+<span class="nc" id="L303">				  bankResponses.setBankID(bankRequest.getBankId());</span>
+<span class="nc" id="L304">				  bankResponses.setSanctionId(bankRequest.getSanctionId());</span>
+<span class="nc" id="L305">				  bankResponses.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L306">				  bankResponsesList.add(bankResponses);</span>
+<span class="nc" id="L307">				  response.setBankResponses(bankResponsesList);</span>
+<span class="nc" id="L308">			  }</span>
+		  }
+		  
+<span class="nc bnc" id="L311" title="All 4 branches missed.">		  if(null != sanctionRequest.getBeneficiaryRequests() &amp;&amp; !sanctionRequest.getBeneficiaryRequests().isEmpty()){</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">			  for(SanctionBeneficiaryRequest beneficiaryRequest : sanctionRequest.getBeneficiaryRequests()){</span>
+<span class="nc" id="L313">				  SanctionBeneficiaryResponse beneficiaryResponses = new SanctionBeneficiaryResponse();</span>
+<span class="nc" id="L314">				  beneficiaryResponses.setBeneficiaryId(beneficiaryRequest.getBeneficiaryId());</span>
+<span class="nc" id="L315">				  beneficiaryResponses.setSanctionId(beneficiaryRequest.getSanctionId());</span>
+<span class="nc" id="L316">				  beneficiaryResponses.setStatus(Constants.SERVICE_FAILURE);</span>
+<span class="nc" id="L317">				  beneficiaryResponsesList.add(beneficiaryResponses);</span>
+<span class="nc" id="L318">				  response.setBeneficiaryResponses(beneficiaryResponsesList);</span>
+<span class="nc" id="L319">			  }</span>
+		  }
+<span class="nc" id="L321">		  response.setErrorCode(&quot;0999&quot;);</span>
+<span class="nc" id="L322">		  response.setErrorDescription(&quot;Generic Exception&quot;);</span>
+		  
+<span class="nc" id="L324">		return response;</span>
+		
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>
